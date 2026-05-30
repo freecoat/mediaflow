@@ -76,8 +76,8 @@
           </td>
           <td><span class="text-xs text-muted">{{ TYPE_LABEL[r.type.value] if r.type else '—' }}</span></td>
           <td>{{ r.role or '—' }}</td>
-          <td class="mono text-sm">{% if r.daily_rate %}€ {{ '{:,.0f}'.format(r.daily_rate) }}{% else %}—{% endif %}</td>
-          <td class="mono text-sm">{% if r.hourly_rate %}€ {{ '{:,.0f}'.format(r.hourly_rate) }}{% else %}—{% endif %}</td>
+          <td class="mono text-sm">{% if r.daily_rate %}€ {{ '{:,.0f}'.format(r.daily_rate)|replace(',', '.') }}{% else %}—{% endif %}</td>
+          <td class="mono text-sm">{% if r.hourly_rate %}€ {{ '{:,.0f}'.format(r.hourly_rate)|replace(',', '.') }}{% else %}—{% endif %}</td>
           <td class="text-xs text-muted">
             {% if r.email %}{{ r.email }}{% endif %}
             {% if r.internal_phone %}<br>int. {{ r.internal_phone }}{% endif %}

@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.143 — export/import capitolati ZIP + multiselect + audit UI Playwright (30 mag 2026)
+
+**Feature: export/import capitolati in ZIP + multiselect** (richiesta Matteo).
+- `GET /delivery-templates/api/export-zip?ids=1,3,5` — esporta uno/più DeliveryTemplate come ZIP (un `.json` per template, shape `_dt_dict` = 8 blocchi + suggested_items + tc/timeline + `manifest.json`). `ids` vuoto = tutti gli attivi. Read-only.
+- `POST /delivery-templates/api/import-zip` — importa capitolati da ZIP (o singoli `.json` da export-json). Conflitti di `code` risolti con suffisso `-IMP`/`-IMP2`… (no overwrite, non distruttivo). Ritorna riepilogo {imported, total, results}. Gate `RequireEditSettings`.
+- Helper `_import_one_template()` ricostruisce il template da dict. NON include i `DeliveryItem` (FK taxonomy non portabili tra installazioni; si ri-derivano via parse).
+- UI `delivery_templates.html`: colonna checkbox + "seleziona tutti i visibili" (rispetta filtro/ricerca) + topbar "📦 Esporta ZIP (n)" / "📥 Importa ZIP". Header checkbox `data-no-sort` (non triggera l'ordinamento).
+- 5 test (`tests/test_capitolati_export_import.py`): reconstruction blocchi, conflict-rename, missing-code error, empty-blocks→None, roundtrip. **129/129 pytest**. Verificato E2E (export 12+manifest, re-import → 12 rinominati).
+
+**Audit UI completo via Playwright** (sweep 19 pagine + flussi core). Esito: **zero errori JS runtime** (nessun ReferenceError/TypeError), app stabile. Fix applicati:
+- **Bug #1 (P2)**: "Esporta ZIP" partiva **2 volte** su un click (`window.location.href`). Riscritto con `fetch`+blob download → 1 sola richiesta. Verificato in browser.
+- **Bug #3 (P2)**: hint account demo nel login mostrava `@Claqo.it`, reali `@mediaflow.it`. Corretto.
+- **Bug #4 (P2)**: `/resources` tariffe in formato inglese (`€ 1,800`) vs italiano. Ora `€ 1.800` (`|replace(',', '.')`).
+- **UX (P1)**: colonna Emittente in `/delivery-templates` non troncata → ellipsis + tooltip (max-width 220px).
+
+**Backlog audit (non fixato, P3/cosmesi)**: `/jobs` bare → 404 JSON (orphan URL, non in nav); titolo tab `/projects/{id}` generico; `/favicon.ico` 404 (probe browser default, il favicon linkato in base.html funziona); casing nomi clienti da AI-enrichment ("fandango SPA"); identità mista MediaFlow/Claqo (rebrand noto). Vedi STATO.md.
+
 ## v3.5.0-alpha.172.142 — multiaudit fix batch A→E: sicurezza + cross-tenant + finance robustezza + test (30 mag 2026)
 
 Esito dell'audit multi-agent (8 dimensioni, finder + verifier adversarial). Implementati i batch A→E concordati. **Single-tenant alpha**: i fix cross-tenant sono debito per la beta multi-tenant, non exploit live; applicati ora perché economici e prevengono voragini in beta.

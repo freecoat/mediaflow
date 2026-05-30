@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.142** — 30 maggio 2026 — multiaudit fix batch A→E (sicurezza + cross-tenant + finance + test)
+**v3.5.0-alpha.172.143** — 30 maggio 2026 — export/import capitolati ZIP + multiselect + audit UI Playwright
+
+### α.172.143 ✅ (export/import capitolati ZIP + multiselect + audit UI)
+- **Feature**: `GET /delivery-templates/api/export-zip?ids=` (ZIP multi-template + manifest) + `POST /api/import-zip` (conflict→`-IMP`, no overwrite). UI: colonna checkbox + select-all + topbar "📦 Esporta ZIP (n)"/"📥 Importa ZIP". NO DeliveryItem nello ZIP (FK taxonomy non portabili). 5 test → **129/129**. Verificato E2E + browser.
+- **Audit UI Playwright** (19 pagine + flussi): **zero errori JS**. Fix: export double-fire→fetch+blob (1 req); login hint @Claqo.it→@mediaflow.it; /resources money IT (€ 1.800); emittente ellipsis+tooltip. Tutti verificati in browser.
+- **Backlog audit (P3/cosmesi)**: /jobs bare 404 JSON, titolo tab project generico, favicon.ico probe 404, casing clienti AI-enrich, identità mista MediaFlow/Claqo (rebrand).
+- **Decisione API leak**: Matteo OK a non ruotare ora (repo private, 1 collaboratore, $15 cap). **Reset completo key in fase beta** [[project_session_30mag2026_multiaudit]].
+
+**Prossimo**: ripresa test estensivi (piano pre-audit) + eventuale browser-test di import-ZIP reale da parte di Matteo.
 
 ### α.172.142 ✅ (multiaudit fix batch A→E)
 Esito audit multi-agent (8 dimensioni, finder+verifier adversarial). Single-tenant alpha → cross-tenant = debito beta, non exploit live; fixati ora perché economici.

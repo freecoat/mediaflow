@@ -437,6 +437,175 @@ async def parse_sample_capitolato(
     return result
 
 
+# ── Export/Import capitolati in ZIP (multi-template) — v3.5.0-alpha.172.143 ──
+# IMPORTANTE: queste rotte DEVONO stare PRIMA di /api/{template_id}, altrimenti
+# FastAPI interpreta "export-zip"/"import-zip" come template_id int → 422.
+# Lo ZIP contiene un .json per template (shape _dt_dict, gli 8 blocchi +
+# suggested_items + tc/timeline) + manifest.json. NON include i DeliveryItem:
+# i loro FK taxonomy (Package/Resolution/...) non sono portabili tra
+# installazioni; si ri-derivano via parse del capitolato.
+
+def _import_one_template(db: Session, data: dict) -> dict:
+    """Ricostruisce un DeliveryTemplate da un dict (shape _dt_dict).
+    On conflict di `code` (anche fra i soft-deleted) → suffisso -IMP/-IMP2…
+    (no overwrite, non distruttivo). Usa db.flush, il commit è del chiamante."""
+    code = (data.get("code") or "").strip().upper()
+    name = (data.get("name") or "").strip()
+    if not code or not name:
+        return {"status": "error", "code": code or "?", "error": "code/name mancante"}
+
+    def _code_taken(c: str) -> bool:
+        return db.query(DeliveryTemplate).execution_options(
+            include_deleted=True
+        ).filter(
+            DeliveryTemplate.tenant_id == current_tenant_id(),
+            DeliveryTemplate.code == c,
+        ).first() is not None
+
+    final_code, n = code, 1
+    while _code_taken(final_code):
+        n += 1
+        final_code = f"{code}-IMP" if n == 2 else f"{code}-IMP{n - 1}"
+    renamed = final_code != code
+
+    def _blk(key):
+        v = data.get(key)
+        return v if isinstance(v, dict) and v else None
+
+    items = data.get("suggested_items")
+    segs = data.get("default_timeline_segments")
+    t = DeliveryTemplate(
+        tenant_id=current_tenant_id(),
+        code=final_code,
+        name=name,
+        broadcaster=(data.get("broadcaster") or None),
+        version=(data.get("version") or "1.0"),
+        description=(data.get("description") or None),
+        video_specs=_blk("video_specs"),
+        audio_specs=_blk("audio_specs"),
+        text_specs=_blk("text_specs"),
+        head_format=_blk("head_format"),
+        textless_format=_blk("textless_format"),
+        naming_convention=_blk("naming_convention"),
+        archive_specs=_blk("archive_specs"),
+        metadata_requirements=_blk("metadata_requirements"),
+        suggested_items=items if isinstance(items, list) and items else None,
+        source_document_name=data.get("source_document_name"),
+        ai_generated=bool(data.get("ai_generated", False)),
+        ai_confidence=data.get("ai_confidence"),
+        default_tc_start=data.get("default_tc_start"),
+        default_program_start=data.get("default_program_start"),
+        default_timeline_segments=segs if isinstance(segs, list) and segs else None,
+        is_active=True,
+    )
+    db.add(t)
+    db.flush()
+    return {
+        "status": "renamed" if renamed else "created",
+        "code": final_code,
+        "orig_code": code if renamed else None,
+        "name": name, "id": t.id,
+    }
+
+
+@router.get("/api/export-zip")
+async def export_templates_zip(ids: str = "", db: Session = Depends(get_db)):
+    """Esporta capitolati come ZIP (un .json per template + manifest.json).
+    `ids` = CSV di id (es. "1,3,5"); vuoto = tutti gli attivi del tenant.
+    Read-only."""
+    import io
+    import zipfile
+    import json as _json
+    from datetime import datetime as _dtm
+    from fastapi.responses import Response
+
+    q = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    )
+    id_list = [int(x) for x in ids.split(",") if x.strip().isdigit()]
+    if id_list:
+        q = q.filter(DeliveryTemplate.id.in_(id_list))
+    else:
+        q = q.filter(DeliveryTemplate.is_active == True)  # noqa: E712
+    templates = q.order_by(DeliveryTemplate.code).all()
+    if not templates:
+        raise HTTPException(404, "Nessun template da esportare")
+
+    buf = io.BytesIO()
+    used: set[str] = set()
+    manifest = {
+        "schema": "claqo.delivery_templates.v1",
+        "exported_at": _dtm.utcnow().isoformat() + "Z",
+        "count": len(templates),
+        "templates": [],
+    }
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for t in templates:
+            data = _dt_dict(t)
+            data.pop("id", None)
+            data.pop("created_at", None)
+            base = (t.code or f"template-{t.id}").replace("/", "-").replace(" ", "_")
+            fname, k = f"{base}.json", 2
+            while fname in used:
+                fname = f"{base}-{k}.json"
+                k += 1
+            used.add(fname)
+            zf.writestr(fname, _json.dumps(data, indent=2, ensure_ascii=False, default=str))
+            manifest["templates"].append({"file": fname, "code": t.code, "name": t.name})
+        zf.writestr("manifest.json", _json.dumps(manifest, indent=2, ensure_ascii=False))
+
+    stamp = _dtm.utcnow().strftime("%Y%m%d")
+    fn = f"capitolati-{len(templates)}-{stamp}.zip"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fn}"'},
+    )
+
+
+@router.post("/api/import-zip", dependencies=[RequireEditSettings])
+async def import_templates_zip(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Importa capitolati da uno ZIP (prodotto da export-zip, o singoli .json
+    da export-json). Ogni .json ≠ manifest.json = un DeliveryTemplate.
+    Conflitti di code → suffisso -IMP (no overwrite). Ritorna riepilogo."""
+    import io
+    import zipfile
+    import json as _json
+
+    if not file.filename:
+        raise HTTPException(400, "Nome file mancante")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "File vuoto")
+
+    results: list[dict] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            names = [
+                n for n in zf.namelist()
+                if n.lower().endswith(".json")
+                and n.rsplit("/", 1)[-1] != "manifest.json"
+                and not n.endswith("/")
+            ]
+            if not names:
+                raise HTTPException(400, "ZIP senza file .json di template")
+            for nm in names:
+                try:
+                    data = _json.loads(zf.read(nm).decode("utf-8"))
+                except Exception as e:
+                    results.append({"status": "error", "code": nm, "error": f"JSON non valido: {e}"})
+                    continue
+                payloads = data if isinstance(data, list) else [data]
+                for p in payloads:
+                    if isinstance(p, dict):
+                        results.append(_import_one_template(db, p))
+    except zipfile.BadZipFile:
+        raise HTTPException(400, "Il file non è un archivio ZIP valido")
+    db.commit()
+    ok = sum(1 for r in results if r.get("status") in ("created", "renamed"))
+    return {"imported": ok, "total": len(results), "results": results}
+
+
 # v3.5.0-alpha.128 — get_template spostato DOPO sample-files/parse-sample
 # per evitare path conflict con /api/{template_id} che catturava "sample-files".
 @router.get("/api/{template_id}")

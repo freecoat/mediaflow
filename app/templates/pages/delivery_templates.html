@@ -8,6 +8,10 @@
   <!-- v3.5.0-alpha.172.123 (Tier 3 Bundle D) -->
   <button class="btn btn-ghost btn-sm" onclick="openSearchItemsModal()" title="Cerca DeliveryItem cross-template">🔍 Cerca items</button>
   <button class="btn btn-ghost btn-sm" onclick="openDiffTemplatesModal()" title="Confronta 2 template affiancati">⚖ Diff template</button>
+  <!-- v3.5.0-alpha.172.143 — export/import capitolati in ZIP (multi) -->
+  <button class="btn btn-ghost btn-sm" id="btn-export-zip" onclick="exportSelectedZip()" title="Esporta in ZIP i capitolati selezionati (o tutti gli attivi se nessuna selezione)">📦 Esporta ZIP<span id="sel-count-badge" style="margin-left:4px;"></span></button>
+  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('zip-import-input').click()" title="Importa capitolati da un archivio ZIP (export-zip o singoli .json)">📥 Importa ZIP</button>
+  <input type="file" id="zip-import-input" accept=".zip,application/zip" style="display:none" onchange="importZip(this)">
   <button class="btn btn-primary btn-sm" onclick="openImportModal()">
     <i data-lucide="upload"></i> Importa capitolato
   </button>
@@ -78,6 +82,7 @@
     <table class="mf-sortable">
       <thead>
         <tr>
+          <th style="width:32px;" data-no-sort="true"><input type="checkbox" id="dt-select-all" onclick="toggleSelectAll(this)" title="Seleziona tutti i visibili"></th>
           <th data-i18n="col.code">Codice</th>
           <th data-i18n="col.name">Nome</th>
           <th data-i18n="col.issuer">Emittente</th>
@@ -90,15 +95,16 @@
       </thead>
       <tbody id="dt-tbody">
         {% if not templates %}
-        <tr><td colspan="8" class="text-muted" style="text-align:center; padding:30px;">
+        <tr><td colspan="9" class="text-muted" style="text-align:center; padding:30px;">
           Nessun template. Importa un capitolato con il bottone in alto, oppure crea uno manuale.
         </td></tr>
         {% endif %}
         {% for t in templates %}
         <tr data-tid="{{ t.id }}" data-search="{{ (t.code ~ ' ' ~ t.name)|lower }}" data-broadcaster="{{ t.broadcaster or '' }}" data-active="{{ '1' if t.is_active else '0' }}" style="{{ 'opacity:0.5;' if not t.is_active else '' }}">
+          <td class="no-sort"><input type="checkbox" class="dt-row-check" value="{{ t.id }}" onchange="updateSelCount()"></td>
           <td class="mono text-sm">{{ t.code }}{% if not t.is_active %} <span class="badge" style="background:rgba(239,68,68,0.18); color:#fca5a5; font-size:10px;">inattivo</span>{% endif %}</td>
           <td>{{ t.name }}</td>
-          <td style="color:var(--text2);">{{ t.broadcaster or '—' }}</td>
+          <td style="color:var(--text2); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ t.broadcaster or '' }}">{{ t.broadcaster or '—' }}</td>
           <td class="mono text-sm">{{ t.version }}</td>
           <td class="text-right mono text-sm" style="color:var(--text2);">{{ items_count.get(t.id, 0) }}</td>
           <td class="text-sm" style="color:var(--text2);">
@@ -2426,6 +2432,85 @@ async function duplicateTemplate(tid, code) {
     setTimeout(() => window.location.reload(), 600);
   } catch (e) {
     toast(e.message || 'Errore duplicazione', 'error');
+  }
+}
+
+// ── v3.5.0-alpha.172.143 — export/import capitolati ZIP + multiselect ──
+function _checkedTemplateIds() {
+  return Array.from(document.querySelectorAll('.dt-row-check:checked')).map(c => c.value);
+}
+function updateSelCount() {
+  const n = _checkedTemplateIds().length;
+  const badge = document.getElementById('sel-count-badge');
+  if (badge) badge.textContent = n ? ` (${n})` : '';
+  // sincronizza il check "seleziona tutti"
+  const all = document.getElementById('dt-select-all');
+  if (all) {
+    const visible = Array.from(document.querySelectorAll('.dt-row-check'))
+      .filter(c => c.closest('tr') && c.closest('tr').style.display !== 'none');
+    const checked = visible.filter(c => c.checked);
+    all.checked = visible.length > 0 && checked.length === visible.length;
+    all.indeterminate = checked.length > 0 && checked.length < visible.length;
+  }
+}
+function toggleSelectAll(cb) {
+  // seleziona solo le righe attualmente VISIBILI (rispetta filtro/ricerca)
+  document.querySelectorAll('.dt-row-check').forEach(c => {
+    const tr = c.closest('tr');
+    if (tr && tr.style.display !== 'none') c.checked = cb.checked;
+  });
+  updateSelCount();
+}
+async function exportSelectedZip() {
+  const ids = _checkedTemplateIds();
+  let url = '/delivery-templates/api/export-zip';
+  if (ids.length) {
+    url += '?ids=' + encodeURIComponent(ids.join(','));
+  } else {
+    if (!confirm('Nessun capitolato selezionato.\nEsportare TUTTI i template attivi in un unico ZIP?')) return;
+  }
+  // v3.5.0-alpha.172.143 — fetch+blob (1 sola richiesta; window.location.href
+  // partiva 2 volte su alcune configurazioni → audit bug #1).
+  try {
+    const r = await fetch(url);
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || ('HTTP ' + r.status));
+    }
+    const blob = await r.blob();
+    const dispo = r.headers.get('Content-Disposition') || '';
+    const m = dispo.match(/filename="?([^"]+)"?/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = m ? m[1] : 'capitolati.zip';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  } catch (e) {
+    toast(e.message || 'Errore export ZIP', 'error');
+  }
+}
+async function importZip(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const fd = new FormData();
+  fd.append('file', f);
+  try {
+    toast('Importazione ZIP in corso…', 'info', 2000);
+    const r = await fetch('/delivery-templates/api/import-zip', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+    const renamed = (data.results || []).filter(x => x.status === 'renamed');
+    const errors = (data.results || []).filter(x => x.status === 'error');
+    let msg = `✓ Importati ${data.imported}/${data.total} capitolati`;
+    if (renamed.length) msg += ` · ${renamed.length} rinominati (-IMP, code già esistente)`;
+    if (errors.length) msg += ` · ${errors.length} errori`;
+    toast(msg, errors.length ? 'warning' : 'success', 6000);
+    setTimeout(() => window.location.reload(), 1200);
+  } catch (e) {
+    toast(e.message || 'Errore import ZIP', 'error', 6000);
+  } finally {
+    input.value = '';  // reset per re-import dello stesso file
   }
 }
 </script>
