@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.144 — fix cosmetici da audit UI (30 mag 2026)
+
+Chiusi 3 dei finding P3/cosmesi dell'audit Playwright. Tutti verificati (curl/browser).
+- **`/jobs` nudo → 404 JSON**: aggiunta rotta `GET /jobs/` → redirect 302 a `/cost-report` (i job si gestiscono lì; URL diretto/segnalibro non dà più errore). Verificato: `/jobs` → follow → `/cost-report` 200.
+- **Titolo tab `/projects/{id}` generico** ("Progetto — Claqo"): `renderProject()` ora setta `document.title` = `{code} · {title} — Claqo`. Verificato browser: "GLO · Gomorra - Le Origini — Claqo".
+- **`/favicon.ico` 404 su ogni pagina** (probe browser default): aggiunta rotta `GET /favicon.ico` → redirect 301 all'icona app SVG (già linkata in base.html). Verificato 301→svg 200.
+
+**Non fixato (per scelta)**: casing nomi clienti AI-enrich ("fandango SPA") — title-casing automatico romperebbe acronimi/brand (RAI, A24); è dato sorgente. Identità mista MediaFlow/Claqo = rebrand, effort separato già tracciato [[project_rebrand_claqo]].
+
 ## v3.5.0-alpha.172.143 — export/import capitolati ZIP + multiselect + audit UI Playwright (30 mag 2026)
 
 **Feature: export/import capitolati in ZIP + multiselect** (richiesta Matteo).

@@ -36,6 +36,13 @@ from app.services.tenant_guard import scoped, fetch_or_404
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+# v3.5.0-alpha.172.144 — /jobs nudo non ha lista propria (i job si gestiscono
+# nel Cost Report). Redirect per evitare il 404 JSON su URL diretto/segnalibro.
+@router.get("/")
+async def jobs_index():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/cost-report", status_code=302)
+
 
 def _tpl():
     from app.main import templates

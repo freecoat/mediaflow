@@ -2099,10 +2099,18 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.143", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.144", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+
+# v3.5.0-alpha.172.144 — i browser richiedono /favicon.ico di default → era 404
+# su ogni pagina (audit). Redirect all'icona app SVG (già in PUBLIC_PATHS).
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/static/img/claqo-app-icon.svg", status_code=301)
 # v3.5.0-alpha.51 — Mount /uploads per servire allegati copilot (immagini
 # caricate vengono linkate via URL pubblico). Cleanup auto > 7 giorni
 # (vedi copilot_attachments.cleanup_old_attachments).

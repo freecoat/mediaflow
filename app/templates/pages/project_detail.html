@@ -713,6 +713,8 @@ async function loadProject() {
 function renderProject() {
   const p = currentProject;
   document.getElementById('breadcrumb-title').textContent = p.title;
+  // v3.5.0-alpha.172.144 — titolo tab col nome progetto (era generico)
+  document.title = (p.code ? p.code + ' · ' : '') + (p.title || 'Progetto') + ' — Claqo';
   document.getElementById('p-code').textContent = p.code;
   document.getElementById('p-title').textContent = p.title;
   document.getElementById('p-status-badge').innerHTML = statusBadge(p.status);

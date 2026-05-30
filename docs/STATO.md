@@ -8,7 +8,10 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.143** — 30 maggio 2026 — export/import capitolati ZIP + multiselect + audit UI Playwright
+**v3.5.0-alpha.172.144** — 30 maggio 2026 — fix cosmetici da audit UI
+
+### α.172.144 ✅ (fix cosmetici audit UI)
+3 finding P3 chiusi (verificati curl/browser): `/jobs` nudo → redirect a `/cost-report` (era 404 JSON); titolo tab `/projects/{id}` = `{code} · {title} — Claqo` (era generico); `/favicon.ico` → redirect 301 a icona SVG (era 404 ogni pagina). NON fixati per scelta: casing clienti AI (title-case romperebbe RAI/A24), identità MediaFlow/Claqo (rebrand). 129/129 test.
 
 ### α.172.143 ✅ (export/import capitolati ZIP + multiselect + audit UI)
 - **Feature**: `GET /delivery-templates/api/export-zip?ids=` (ZIP multi-template + manifest) + `POST /api/import-zip` (conflict→`-IMP`, no overwrite). UI: colonna checkbox + select-all + topbar "📦 Esporta ZIP (n)"/"📥 Importa ZIP". NO DeliveryItem nello ZIP (FK taxonomy non portabili). 5 test → **129/129**. Verificato E2E + browser.
