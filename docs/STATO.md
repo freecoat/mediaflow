@@ -8,7 +8,10 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.138** — 29 maggio 2026 — F3.2+F3.3: pipeline deliverables COMPLETA
+**v3.5.0-alpha.172.139** — 30 maggio 2026 — hotfix Copilot 500 (price_list None in build_context)
+
+### α.172.139 ✅ (hotfix: Copilot 500 su voci listino senza price_list)
+Ogni messaggio Copilot con provider tool-use crashava 500 → frontend `JSON.parse: unexpected character at line 1 column 1` (plain-text `Internal Server Error` di Starlette, nessun exception handler custom in app/). Root cause: `ai_context.build_context()` formattava `€{it.price_list:.0f}` senza guardia None; le 66 voci-bucket della migrazione α.172.135 (211 DeliveryItem → 66 bucket) hanno `price_list=None` → `TypeError`. Prompt-indipendente (tutto il Copilot rotto, non solo "Crea Progetto"). Fix `ai_context.py:266`: `€n/d` per voci senza prezzo listino (non €0). Verificato repro diretto `build_system_prompt` → OK len=29080. **Test browser Matteo pendente.**
 
 ### α.172.138 ✅ (F3.2 booking file-type + F3.3 QC compare, pipeline F1+F2+F3 chiusa)
 **F3.2**: booking modal planning mostra badge tipo file (package|container da spec_json) su ogni deliverable. Endpoint bookings/deliverables arricchito `file_type`+`delivery_item_name`. **F3.3 lazy bridge** (no Asset placeholder, scelta esplicita): `qc_specs_compare.build_expected()` (attese live da DeliveryItem: risoluzione/codec family/HDR/audio channel-count) + `compare_to_actual()` (report per-campo match/mismatch/unknown, codec fuzzy, audio multiset) + `run_deliverable_qc_compare()` salva in qc_report_json. Auto-run al link asset (non bloccante) + endpoint `POST /jobs/api/deliverables/{id}/qc-compare`. 6 test, 103/103. Smoke E2E OK (mismatch res+audio, match codec fuzzy).

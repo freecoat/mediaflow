@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.139 — hotfix: copilot 500 su voci listino senza price_list (30 mag 2026)
+
+**Bug**: ogni messaggio al Copilot con provider tool-use (Claude/OpenAI/Gemini) ritornava 500 → il frontend riceveva il plain-text `Internal Server Error` di Starlette e falliva con `JSON.parse: unexpected character at line 1 column 1`. Sintomo emerso provando "Crea Progetto", ma il crash era **prompt-indipendente**: tutto il Copilot era rotto.
+
+**Root cause**: `ai_context.build_context()` (vista d'insieme, sez. VOCI LISTINO ATTIVE) formattava `€{it.price_list:.0f}` senza guardia None. Dopo la pipeline listino-bucket (F1-F3) 66/98 voci attive sono deliverable/format con `price_list=None` (prezzati per bucket/quote, non a listino) → `TypeError: unsupported format string passed to NoneType.__format__` → eccezione non gestita (nessun exception handler custom in app/) → 500.
+
+**Fix** (`app/services/ai_context.py:266`): `price_str = f"€{it.price_list:.0f}" if it.price_list is not None else "€n/d"`. Mostra `€n/d` per voci senza prezzo di listino — **non** `€0` (l'AI proporrebbe righe a prezzo zero). Verifica: repro diretto `build_system_prompt(use_tools=True)` passava da TypeError a `OK len=29080`.
+
 ## v3.5.0-alpha.172.138 — F3.2+F3.3 pipeline deliverables: booking file-type + QC compare specs (29 mag 2026)
 
 Chiude F3 (pipeline Capitolato→Listino→Quote→Planning→Asset).

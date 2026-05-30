@@ -263,7 +263,11 @@ def build_context(db: Session,
             cat_name = it.category.name if it.category else "—"
             kws = ", ".join((it.keywords or [])[:5]) if it.keywords else ""
             kws_part = f" | kw: {kws}" if kws else ""
-            overview.append(f"  {it.id} | {it.name} | {cat_name} | {it.unit} | €{it.price_list:.0f}{kws_part}")
+            # price_list può essere None per voci deliverable/bucket (prezzate
+            # per bucket/quote, non a listino): NON formattare None con :.0f
+            # (TypeError) e NON mostrare €0 (l'AI proporrebbe righe a prezzo zero).
+            price_str = f"€{it.price_list:.0f}" if it.price_list is not None else "€n/d"
+            overview.append(f"  {it.id} | {it.name} | {cat_name} | {it.unit} | {price_str}{kws_part}")
         if n_items > PRICELIST_LIMIT:
             overview.append(f"  …(altre {n_items - PRICELIST_LIMIT} voci omesse — chiedi all'utente se serve cercare oltre)")
 
