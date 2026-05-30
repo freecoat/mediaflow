@@ -346,7 +346,7 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
       - number: auto-generato Q-{anno}-NNN se non specificato
       - title: titolo del progetto se non specificato
       - issue_date: oggi se non specificato
-      - valid_until: oggi+30 giorni se non specificato
+      - valid_until: issue_date+14 giorni (2 settimane) se non specificato
     """
     from datetime import date as date_type, timedelta
     from app.models import QuoteLine, PriceLevel
@@ -392,13 +392,14 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
     if issue_date.year < today.year - 1:
         issue_date = today
 
+    # v3.5.0-alpha.172.140 — Validità default 2 settimane (allineato a create_quote).
     valid_raw = data.get("valid_until")
     try:
-        valid_until = date_type.fromisoformat(valid_raw) if valid_raw else issue_date + timedelta(days=30)
+        valid_until = date_type.fromisoformat(valid_raw) if valid_raw else issue_date + timedelta(days=14)
     except (ValueError, TypeError):
-        valid_until = issue_date + timedelta(days=30)
+        valid_until = issue_date + timedelta(days=14)
     if valid_until <= issue_date:
-        valid_until = issue_date + timedelta(days=30)
+        valid_until = issue_date + timedelta(days=14)
 
     q = Quote(
         number=number, title=title,

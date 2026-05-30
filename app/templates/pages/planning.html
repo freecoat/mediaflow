@@ -4784,6 +4784,10 @@ function tlIncrementalRemoveAssignments(assignmentIds) {
 
   document.addEventListener('mf:ai-action-applied', async (ev) => {
     try {
+      // v3.5.0-alpha.172.140 — Pagina con refresh in-place (timeline
+      // incrementale): reclama la responsabilità così copilot.js NON fa il
+      // reload globale (drawer resta aperto). Sincrono, prima di await.
+      if (ev.detail) ev.detail.handled = true;
       // Solo se siamo sulla pagina planning (host esiste + timeline montata).
       if (!document.getElementById('tl-host') || !window._tlInstance) return;
       const detail = ev && ev.detail || {};

@@ -786,13 +786,27 @@
         // L'evento porta `detail = {actionId, actionType, result}`.
         try {
           const action = _findAction(actionId);
-          document.dispatchEvent(new CustomEvent('mf:ai-action-applied', {
-            detail: {
-              actionId,
-              actionType: action ? action.action_type : null,
-              result: res.result || null,
-            },
-          }));
+          // v3.5.0-alpha.172.140 — `handled` flag: una pagina con refresh
+          // mirato (quotes/planning) lo setta true per RECLAMARE la
+          // responsabilità del refresh e sopprimere il reload globale (così
+          // il drawer resta aperto e il dialogo continua). Le pagine senza
+          // listener lasciano handled=false → reload soft (vedi sotto).
+          const detail = {
+            actionId,
+            actionType: action ? action.action_type : null,
+            result: res.result || null,
+            handled: false,
+          };
+          // dispatchEvent è sincrono: i listener di pagina settano
+          // detail.handled prima che ritorni.
+          document.dispatchEvent(new CustomEvent('mf:ai-action-applied', { detail }));
+          // Non reloadare se il batch multi-azione non è finito (ci sono
+          // altre card da applicare o il loop è ancora sospeso).
+          const cont = res && res.continuation;
+          const moreWork = !!(cont && ((cont.actions && cont.actions.length) || cont.still_pending));
+          if (!detail.handled && !moreWork) {
+            setTimeout(() => { window.location.reload(); }, 700);
+          }
         } catch(_) { /* fail-safe */ }
       }
       handleContinuation(res && res.continuation);

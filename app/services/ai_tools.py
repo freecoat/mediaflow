@@ -132,7 +132,7 @@ TOOLS: list[dict] = [
         "category": "mutation",
         "description": (
             "Crea una nuova quotazione. Richiede un progetto: `project_id` (PK) o `project_code`. "
-            "Auto-genera il numero (Q-{anno}-NNN), default issue_date=oggi, valid_until=+30gg, "
+            "Auto-genera il numero (Q-{anno}-NNN), default issue_date=oggi, valid_until=+14gg (2 settimane), "
             "vat_rate=22. Se l'utente cita righe ('5gg color, 4h QC'), inseriscile in `lines` "
             "per creare quote+righe in singolo turno. Ogni riga DOVREBBE legarsi al listino "
             "via `price_item_id` quando un match esiste (anche per voci appena create con "

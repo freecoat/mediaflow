@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.140 — auto-refresh post-azione AI + validità quote 2 settimane + numero quote auto da projects (30 mag 2026)
+
+Tre richieste da Matteo (batch UX/quote).
+
+**1 — Auto-refresh pagina dopo azione AI applicata (globale).** Finora solo `/quotes` e `/planning` si aggiornavano in-place dopo un Apply dal copilot; altre pagine (es. project_detail) restavano stale fino a F5 manuale. Ora `copilotApply` (copilot.js) usa un contratto `detail.handled`: le pagine con refresh mirato lo settano `true` (reclamando la responsabilità, niente reload, drawer resta aperto → il dialogo AI continua); le pagine **senza** listener lasciano `handled=false` → reload soft automatico dopo 700ms. Guard `moreWork`: niente reload se il batch multi-azione non è finito (altre card da applicare o loop sospeso). Listener `quotes.html` + `planning.html` aggiornati per settare `handled=true`. Scelta UX confermata da Matteo (fallback intelligente vs reload secco).
+
+**2 — Validità default quote = 2 settimane.** Prima `valid_until` poteva restare vuoto (None) o defaultava +30gg lato AI. Ora default **issue_date+14gg** in tutti i path: `create_quote` (fallback server, source of truth), `_h_propose_quote` (AI), prefill UI editabile (project_detail), + schema tool aggiornato.
+
+**3 — Numero quote auto da naming convention anche da /projects.** La creazione quote da project_detail aveva il campo numero come input libero obbligatorio (nessun autogen NumberingConfig, a differenza di `/quotes`). Ora `create_quote` ha `number` **opzionale**: se vuoto → `_next_quote_number_progressive()` (naming convention, source of truth lato server). Il modal project_detail prefilla il numero via `/settings/api/numbering/quote/preview` (come `/quotes`) con hint pattern, campo editabile. Verificato: autogen `Q-2026-009-v1`, validità +14gg.
+
 ## v3.5.0-alpha.172.139 — hotfix: copilot 500 su voci listino senza price_list (30 mag 2026)
 
 **Bug**: ogni messaggio al Copilot con provider tool-use (Claude/OpenAI/Gemini) ritornava 500 → il frontend riceveva il plain-text `Internal Server Error` di Starlette e falliva con `JSON.parse: unexpected character at line 1 column 1`. Sintomo emerso provando "Crea Progetto", ma il crash era **prompt-indipendente**: tutto il Copilot era rotto.

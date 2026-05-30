@@ -8,7 +8,10 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.139** — 30 maggio 2026 — hotfix Copilot 500 (price_list None in build_context)
+**v3.5.0-alpha.172.140** — 30 maggio 2026 — auto-refresh AI + validità 2 sett + numero quote auto da projects
+
+### α.172.140 ✅ (3 richieste Matteo: UX copilot + quote)
+**1 Auto-refresh post-azione AI (globale)**: `copilotApply` contratto `detail.handled` — pagine con refresh mirato (quotes/planning) settano `handled=true` (no reload, drawer aperto, dialogo continua); pagine senza listener → reload soft 700ms. Guard `moreWork` (no reload a metà batch multi-azione). **2 Validità quote default +14gg** in tutti i path (create_quote server fallback + `_h_propose_quote` AI + prefill UI + schema tool). **3 Numero quote auto da naming convention anche da /projects**: `create_quote.number` opzionale → `_next_quote_number_progressive()` se vuoto; project_detail prefilla via `/settings/api/numbering/quote/preview` (come /quotes). Verificato unit: autogen `Q-2026-009-v1`, +14gg. JS node-check + Jinja parse OK. **Test browser Matteo pendente** (item 1 reload + item 3 prefill).
 
 ### α.172.139 ✅ (hotfix: Copilot 500 su voci listino senza price_list)
 Ogni messaggio Copilot con provider tool-use crashava 500 → frontend `JSON.parse: unexpected character at line 1 column 1` (plain-text `Internal Server Error` di Starlette, nessun exception handler custom in app/). Root cause: `ai_context.build_context()` formattava `€{it.price_list:.0f}` senza guardia None; le 66 voci-bucket della migrazione α.172.135 (211 DeliveryItem → 66 bucket) hanno `price_list=None` → `TypeError`. Prompt-indipendente (tutto il Copilot rotto, non solo "Crea Progetto"). Fix `ai_context.py:266`: `€n/d` per voci senza prezzo listino (non €0). Verificato repro diretto `build_system_prompt` → OK len=29080. **Test browser Matteo pendente.**

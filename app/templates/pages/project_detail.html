@@ -8,7 +8,7 @@
   {% if can_view_finance(request.state.current_user) %}
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-edit-project')">✎ Modifica</button>
   <button class="btn btn-secondary btn-sm" onclick="projectCrossCheck(this)" title="Verifica info progetto vs IMDB/BoxOffice/Variety">🔍 Cross-check</button>
-  <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-quote')">+ Nuova quotazione</button>
+  <button class="btn btn-primary btn-sm" onclick="openNewQuoteModal()">+ Nuova quotazione</button>
   {% endif %}
 {% endblock %}
 
@@ -66,7 +66,7 @@
     <div id="no-quotes" class="hidden" style="text-align:center;padding:40px 20px;">
       <div style="font-size:30px;margin-bottom:10px;opacity:0.3;">📝</div>
       <div class="text-muted text-sm mb-2">Nessuna quotazione per questo progetto</div>
-      <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-quote')">+ Crea prima quotazione</button>
+      <button class="btn btn-primary btn-sm" onclick="openNewQuoteModal()">+ Crea prima quotazione</button>
     </div>
   </div>
 </div>
@@ -550,8 +550,9 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Numero *</label>
-          <input class="form-input" id="nq-number" placeholder="es. Q-2025-001-v1">
+          <label class="form-label">Numero</label>
+          <input class="form-input" id="nq-number" placeholder="auto da convenzione">
+          <div class="form-hint" id="nq-number-hint" style="font-size:11px; color:var(--text-muted); margin-top:3px;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">Versione</label>
@@ -1197,16 +1198,51 @@ document.addEventListener('input', (e) => {
   }
 });
 
+// v3.5.0-alpha.172.140 — Prefill modal nuova quote: numero auto da naming
+// convention (riusa /settings/api/numbering/quote/preview come /quotes),
+// data emissione=oggi, validità=oggi+14gg (2 settimane). Il numero resta
+// editabile; se svuotato il server lo auto-genera comunque.
+async function openNewQuoteModal() {
+  const today = new Date();
+  const iso = d => d.toISOString().slice(0, 10);
+  document.getElementById('nq-date').value = iso(today);
+  const v = new Date(today); v.setDate(v.getDate() + 14);
+  document.getElementById('nq-valid').value = iso(v);
+  const numInput = document.getElementById('nq-number');
+  const hint = document.getElementById('nq-number-hint');
+  if (numInput) numInput.value = '';
+  if (hint) hint.textContent = '';
+  openModal('modal-new-quote');
+  try {
+    const projCode = currentProject && currentProject.code ? currentProject.code : null;
+    const cliCode = currentProject && currentProject.client && currentProject.client.name
+      ? currentProject.client.name.slice(0, 8).toUpperCase() : null;
+    const fd = new FormData();
+    if (projCode) fd.append('project_code', projCode);
+    if (cliCode) fd.append('client_code', cliCode);
+    const r = await fetch('/settings/api/numbering/quote/preview', {
+      method: 'POST', credentials: 'same-origin', body: fd,
+    });
+    if (!r.ok) return;
+    const prev = await r.json();
+    if (numInput && prev.preview && !numInput.value.trim()) numInput.value = prev.preview;
+    if (hint && prev.format) {
+      hint.textContent = `Pattern attivo: ${prev.format}` + (prev.preview ? ` (es. ${prev.preview})` : '') + '. Modificabile.';
+    }
+  } catch (_) { /* prefill best-effort: il server auto-genera se vuoto */ }
+}
+
 async function createQuote() {
   const number = document.getElementById('nq-number').value.trim();
   const date = document.getElementById('nq-date').value;
-  if (!number || !date) {
-    toast('Compila numero e data', 'error');
+  if (!date) {
+    toast('Compila la data di emissione', 'error');
     return;
   }
   try {
     const fd = new FormData();
-    fd.append('number', number);
+    // Numero opzionale: se vuoto il server lo genera da naming convention.
+    if (number) fd.append('number', number);
     fd.append('project_id', PROJECT_ID);
     fd.append('client_id', currentProject.client.id);
     fd.append('title', currentProject.title);

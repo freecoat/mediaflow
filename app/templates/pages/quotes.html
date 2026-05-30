@@ -3848,6 +3848,10 @@ document.getElementById('nq-date').value = new Date().toISOString().slice(0,10);
 // che tocca le quote (creazione, riga aggiunta, sconto, ecc.). Vedi
 // dispatch in `static/js/copilot.js:copilotApply`.
 document.addEventListener('mf:ai-action-applied', (e) => {
+  // v3.5.0-alpha.172.140 — Questa pagina ha refresh in-place (loaders SPA):
+  // reclama la responsabilità così copilot.js NON fa il reload globale e il
+  // drawer resta aperto. Sincrono: settato prima che dispatchEvent ritorni.
+  if (e.detail) e.detail.handled = true;
   const at = e.detail?.actionType || '';
   const quoteRelevant = at.includes('quote') || at === 'propose_new_item_and_line';
   if (!quoteRelevant) return;

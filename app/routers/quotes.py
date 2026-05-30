@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Response
 from fastapi.responses import HTMLResponse
 from typing import Optional, List
-from datetime import date
+from datetime import date, timedelta
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
@@ -864,7 +864,7 @@ async def reverse_attach(
 
 @router.post("/api", dependencies=[RequireEditQuotes])
 async def create_quote(
-    number: str = Form(...),
+    number: Optional[str] = Form(None),
     project_id: int = Form(...),
     title: str = Form(...),
     issue_date: date = Form(...),
@@ -885,6 +885,16 @@ async def create_quote(
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(404, "Progetto non trovato")
+    # v3.5.0-alpha.172.140 — Numero auto da naming convention (NumberingConfig)
+    # se non fornito: la creazione da /projects non prefilla il campo numero.
+    # Source of truth lato server → ogni path (manuale, projects, futuro) eredita
+    # la convenzione senza duplicare logica nel client.
+    if not number or not str(number).strip():
+        _cli = db.query(Client).filter(Client.id == project.client_id).first()
+        number = _next_quote_number_progressive(db, project=project, client=_cli)
+    # v3.5.0-alpha.172.140 — Validità default = 2 settimane se non specificata.
+    if valid_until is None:
+        valid_until = issue_date + timedelta(days=14)
     # v3.5.0-alpha.137 — Currency setup: default = tenant base, fx_rate fixed snapshot
     from app.models import Tenant
     from app.services.fx import get_fx_rate
