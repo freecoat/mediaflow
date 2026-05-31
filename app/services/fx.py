@@ -122,6 +122,36 @@ def refresh_fx_rate(db: Session, from_ccy: str, to_ccy: str) -> Optional[float]:
     return fresh
 
 
+def _fetch_frankfurter_on(from_ccy: str, to_ccy: str, on_date) -> Optional[float]:
+    """Tasso BCE storico per una data specifica. Endpoint frankfurter /{YYYY-MM-DD}."""
+    ds = on_date.isoformat()
+    url = f"https://api.frankfurter.app/{ds}?from={from_ccy.upper()}&to={to_ccy.upper()}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "MediaFlow/3.5"})
+        with urllib.request.urlopen(req, timeout=DEFAULT_TIMEOUT_S) as r:
+            if r.status != 200:
+                log.warning(f"FX historical HTTP {r.status} {from_ccy}->{to_ccy} {ds}")
+                return None
+            data = json.loads(r.read().decode("utf-8"))
+            rate = data.get("rates", {}).get(to_ccy.upper())
+            return float(rate) if rate is not None else None
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
+        log.warning(f"FX historical error {from_ccy}->{to_ccy} {ds}: {e}")
+        return None
+    except Exception as e:
+        log.exception(f"FX historical unexpected {from_ccy}->{to_ccy} {ds}: {e}")
+        return None
+
+
+def get_fx_rate_on(db: Session, from_ccy: str, to_ccy: str, on_date) -> Optional[float]:
+    """Tasso BCE alla data `on_date` (per conversione legale all'emissione fattura,
+    art. 13 c.4 DPR 633/72). Non usa la cache single-row (storico per-data).
+    None se provider fail."""
+    if from_ccy.upper() == to_ccy.upper():
+        return 1.0
+    return _fetch_frankfurter_on(from_ccy, to_ccy, on_date)
+
+
 def convert(amount: float, from_ccy: str, to_ccy: str, db: Session) -> Optional[float]:
     """Converte amount via cached rate. None se provider fail e no cache.
 
