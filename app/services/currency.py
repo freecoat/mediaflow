@@ -41,6 +41,31 @@ def format_money(amount_base: float, ccy: str, fx_rate_to_base: float) -> str:
     return f"{s} {symbol(ccy)}"
 
 
+def freeze_invoice_fx(db, inv, base: str):
+    """Congela sull'Invoice il tasso BCE della data di emissione (issue_date).
+
+    Conversione legale art. 13 c.4 DPR 633/72. Imposta `fx_rate_to_base` (=
+    quanti `base` per 1 unità della valuta della fattura) e `fx_rate_fixed_at`
+    (timestamp del congelamento). Per fatture in valuta base è un no-op che
+    fissa rate=1.0 (nessuna chiamata di rete). Solleva HTTPException 422 se il
+    tasso non è disponibile e la valuta != base.
+    """
+    from fastapi import HTTPException
+    from app.services import fx
+    from app.services.clock import now_utc
+    ccy = (getattr(inv, "currency", None) or base).upper()
+    if ccy == base.upper():
+        inv.fx_rate_to_base = 1.0
+        inv.fx_rate_fixed_at = now_utc()
+        return
+    d = getattr(inv, "issue_date", None) or now_utc().date()
+    rate = fx.get_fx_rate_on(db, ccy, base, d)
+    if rate is None:
+        raise HTTPException(422, "Tasso di cambio non disponibile per la data di emissione")
+    inv.fx_rate_to_base = rate
+    inv.fx_rate_fixed_at = now_utc()
+
+
 def disclaimer(base: str, ccy: str, rate: float, date_str: str, *, emitted: bool = False) -> str:
     """Testo disclaimer legale (tenant IT). Centralizzato per adattamento futuro
     a mercati esteri."""

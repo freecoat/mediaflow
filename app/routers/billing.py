@@ -1221,7 +1221,13 @@ async def emit_invoice(
         tenant_rea_snap=(tenant_obj.rea_number if tenant_obj else None),
         tenant_fiscal_capital_snap=(tenant_obj.fiscal_capital if tenant_obj else None),
         tenant_fiscal_regime_snap=(tenant_obj.fiscal_regime if tenant_obj else None),
+        # v3.5.0-alpha.172 (currency Task 9) — fattura da batch project-level:
+        # valuta ambigua (più quote/job). Default valuta base.
+        currency=((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper(),
     )
+    # v3.5.0-alpha.172 (currency Task 9) — congela tasso BCE data emissione.
+    from app.services.currency import freeze_invoice_fx
+    freeze_invoice_fx(db, invoice, ((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper())
     db.add(invoice)
     db.flush()
 
@@ -1455,7 +1461,13 @@ async def compose_invoice_from_batches(
         tenant_rea_snap=(tenant_obj.rea_number if tenant_obj else None),
         tenant_fiscal_capital_snap=(tenant_obj.fiscal_capital if tenant_obj else None),
         tenant_fiscal_regime_snap=(tenant_obj.fiscal_regime if tenant_obj else None),
+        # v3.5.0-alpha.172 (currency Task 9) — fattura aggregata multi-batch
+        # project-level: valuta ambigua. Default valuta base.
+        currency=((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper(),
     )
+    # v3.5.0-alpha.172 (currency Task 9) — congela tasso BCE data emissione.
+    from app.services.currency import freeze_invoice_fx
+    freeze_invoice_fx(db, invoice, ((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper())
     db.add(invoice)
     db.flush()
 
@@ -1761,7 +1773,13 @@ async def emit_closing_invoice(
         tenant_rea_snap=(tenant_obj.rea_number if tenant_obj else None),
         tenant_fiscal_capital_snap=(tenant_obj.fiscal_capital if tenant_obj else None),
         tenant_fiscal_regime_snap=(tenant_obj.fiscal_regime if tenant_obj else None),
+        # v3.5.0-alpha.172 (currency Task 9) — fattura di chiusura project-level:
+        # valuta ambigua. Default valuta base.
+        currency=((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper(),
     )
+    # v3.5.0-alpha.172 (currency Task 9) — congela tasso BCE data emissione.
+    from app.services.currency import freeze_invoice_fx
+    freeze_invoice_fx(db, invoice, ((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper())
     db.add(invoice)
     db.flush()
 
@@ -2478,6 +2496,12 @@ async def storno_invoice(
         tenant_rea_snap=src.tenant_rea_snap,
         tenant_fiscal_capital_snap=src.tenant_fiscal_capital_snap,
         tenant_fiscal_regime_snap=src.tenant_fiscal_regime_snap,
+        # v3.5.0-alpha.172 (currency Task 9) — la NC storna la fattura sorgente
+        # AL TASSO ORIGINALE (non si ri-congela alla data della NC): lo storno
+        # deve essere numericamente equivalente all'originale in valuta cliente.
+        currency=(getattr(src, "currency", None) or "EUR"),
+        fx_rate_to_base=(getattr(src, "fx_rate_to_base", None) or 1.0),
+        fx_rate_fixed_at=getattr(src, "fx_rate_fixed_at", None),
     )
     db.add(nc)
     db.flush()

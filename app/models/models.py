@@ -2420,6 +2420,16 @@ class Invoice(Base):
     tenant_fiscal_regime_snap: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
     # v3.5.0-alpha.66.20 — pagamenti denormalizzati
     amount_paid: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    # v3.5.0-alpha.172 (currency Task 9) — Valuta di esposizione + tasso congelato.
+    # Gli importi (subtotal/total/lines) restano SEMPRE in valuta BASE (EUR).
+    # `currency` è la valuta di DISPLAY/PDF (eredita dalla quote se derivata).
+    # All'emissione si congela il tasso BCE della data di emissione su
+    # `fx_rate_to_base` (= quanti base per 1 unità `currency`) + timestamp in
+    # `fx_rate_fixed_at`. Conversione legale art. 13 c.4 DPR 633/72.
+    # Quando currency == base: fx_rate_to_base = 1.0 (nessuna chiamata di rete).
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="EUR", server_default="EUR")
+    fx_rate_to_base: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1.0")
+    fx_rate_fixed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # v3.5.0-alpha.112 — Fattura di chiusura progetto.
     # Quando True, è l'ultima fattura del Project: il PDF include sezione
     # riepilogo di tutte le fatture precedenti del progetto. L'emissione

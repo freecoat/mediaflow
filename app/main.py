@@ -375,6 +375,10 @@ def _auto_migrate_columns():
             ("tenant_rea_snap",             "VARCHAR(40) NULL"),
             ("tenant_fiscal_capital_snap",  "VARCHAR(80) NULL"),
             ("tenant_fiscal_regime_snap",   "VARCHAR(8) NULL"),
+            # v3.5.0-alpha.172 (currency Task 9) — valuta display + tasso congelato emissione
+            ("currency",                    "VARCHAR(3) NOT NULL DEFAULT 'EUR'"),
+            ("fx_rate_to_base",             "REAL NOT NULL DEFAULT 1.0"),
+            ("fx_rate_fixed_at",            "DATETIME NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in i_alter:

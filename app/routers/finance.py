@@ -30,6 +30,12 @@ def _tpl():
     return templates
 
 
+def _tenant_base_currency(db: Session) -> str:
+    """Valuta base del tenant corrente (default EUR se non configurata)."""
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    return (getattr(t, "default_currency", None) or "EUR").upper() if t else "EUR"
+
+
 # ── Pagine HTML ───────────────────────────────────────────────────────
 
 
@@ -280,13 +286,23 @@ async def create_invoice(
     if jcl_id:
         inv_notes = (inv_notes + (" · " if inv_notes else "")
                      + f"Lavorazione JCL #{jcl_id}").strip()
+    # v3.5.0-alpha.172 (currency Task 9) — valuta + freeze tasso emissione.
+    base = _tenant_base_currency(db)
+    ccy = base
+    if quote_id:
+        q = db.query(Quote).filter(Quote.id == quote_id).first()
+        if q and getattr(q, "currency", None):
+            ccy = q.currency.upper()
     inv = Invoice(
         tenant_id=current_tenant_id(),  # v3.5.0-alpha.172.37 Sprint 3.E
         number=num, client_id=client_id,
         project_id=project_id, quote_id=quote_id, job_id=job_id,
         issue_date=issue_date, due_date=due_date,
         vat_rate=vat_rate, notes=(inv_notes or None),
+        currency=ccy,
     )
+    from app.services.currency import freeze_invoice_fx
+    freeze_invoice_fx(db, inv, base)
     db.add(inv)
     db.commit()
     db.refresh(inv)
@@ -677,7 +693,13 @@ async def create_advance_payment(
         tenant_phone_snap=(tenant_obj.phone if tenant_obj else None),
         tenant_iban_snap=(tenant_obj.iban if tenant_obj else None),
         tenant_sdi_snap=(tenant_obj.sdi_code if tenant_obj else None),
+        # v3.5.0-alpha.172 (currency Task 9) — acconto project-level: valuta
+        # ambigua (progetto può avere più quote A/B/C). Default valuta base.
+        currency=((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper(),
     )
+    # v3.5.0-alpha.172 (currency Task 9) — congela tasso BCE data emissione.
+    from app.services.currency import freeze_invoice_fx
+    freeze_invoice_fx(db, inv, ((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper())
     db.add(inv)
     db.flush()
     line = InvoiceLine(
@@ -1410,7 +1432,13 @@ async def emit_invoice_from_advance(
         tenant_phone_snap=(tenant_obj.phone if tenant_obj else None),
         tenant_iban_snap=(tenant_obj.iban if tenant_obj else None),
         tenant_sdi_snap=(tenant_obj.sdi_code if tenant_obj else None),
+        # v3.5.0-alpha.172 (currency Task 9) — acconto project-level: valuta
+        # ambigua (progetto può avere più quote A/B/C). Default valuta base.
+        currency=((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper(),
     )
+    # v3.5.0-alpha.172 (currency Task 9) — congela tasso BCE data emissione.
+    from app.services.currency import freeze_invoice_fx
+    freeze_invoice_fx(db, inv, ((tenant_obj.default_currency if tenant_obj else None) or "EUR").upper())
     db.add(inv)
     db.flush()
     # v3.5.0-alpha.166 — Fattura acconto itemizzata: N InvoiceLine, una per
