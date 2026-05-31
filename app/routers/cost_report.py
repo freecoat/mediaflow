@@ -19,7 +19,7 @@ from app.models import (
 from app.services.booking_cost import compute_assignment_breakdown, BookingBreakdown
 from app.services.working_hours import get_holidays
 from app.services.pdf_export import generate_client_cost_report_pdf
-from app.services.cost_line_sync import is_time_based_unit
+from app.services.cost_line_sync import is_time_based_unit, hours_per_unit
 from app.context import current_tenant_id
 from app.services.tenant_guard import scoped
 from app.services.rbac import requires_permission
@@ -997,7 +997,7 @@ async def job_cost_report(job_id: int, db: Session = Depends(get_db)):
                 "pending_overtime_hours": round(pending_ot_by_jcl.get(l.id, 0.0), 2),
                 "pending_overtime_amount": round(
                     (pending_ot_by_jcl.get(l.id, 0.0)
-                     / (HOURS_PER_DAY if (l.unit or "").lower() in ("day","giorno","giornate","giornata","d") else 1.0)
+                     / (hours_per_unit(l.unit) or 1.0)
                      * (l.unit_price or 0.0))
                     if getattr(job, "weighted_revenue", False) else 0.0,
                     2,

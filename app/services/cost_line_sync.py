@@ -32,8 +32,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 HOURS_PER_DAY = 8.0
+# v3.5.0-alpha.172.151 — Unità "turno" (richiesta Matteo): 1 turno = 3 ore.
+# Utile soprattutto al reparto Suono ma trattata in modo generico come
+# qualunque unità temporale (entra nella mappa canonica HOURS_PER_UNIT).
+HOURS_PER_SHIFT = 3.0
 TIME_UNITS_HOUR = {"hr", "ore", "hour", "h"}
 TIME_UNITS_DAY = {"day", "giorno", "giornate", "giornata", "d"}
+TIME_UNITS_SHIFT = {"turno", "turni", "trn", "shift"}
 # v3.5.0-alpha.171 (CR-2) — Distinzione umana / non-umana per regola
 # "billable hours". Quando 1 booking ha sia sala che persona, le ore
 # fatturate al cliente sono quelle della persona (override umana); se
@@ -46,7 +51,24 @@ HUMAN_RESOURCE_TYPES = {"person_internal", "person_freelance", "person"}
 # forfait) NON mostrano ore al cliente — il loro hardcost interno è il
 # costo orario delle risorse che le hanno prodotte (ore booking
 # attribuite × Resource.internal_cost_hourly).
-TIME_UNITS = TIME_UNITS_HOUR | TIME_UNITS_DAY
+TIME_UNITS = TIME_UNITS_HOUR | TIME_UNITS_DAY | TIME_UNITS_SHIFT
+
+# Mappa canonica ore-per-unità: SINGLE SOURCE per ogni conversione tempo↔quantità
+# (cost line qty, reverse quote, monte ore cost report, OT pending). Aggiungere
+# qui una nuova unità temporale la propaga ovunque.
+HOURS_PER_UNIT = {
+    **{u: 1.0 for u in TIME_UNITS_HOUR},
+    **{u: HOURS_PER_DAY for u in TIME_UNITS_DAY},
+    **{u: HOURS_PER_SHIFT for u in TIME_UNITS_SHIFT},
+}
+
+
+def hours_per_unit(unit: Optional[str]) -> Optional[float]:
+    """Ore corrispondenti a 1 unità (es. day→8, turno→3, hr→1). None se
+    l'unità NON è temporale (pc/TB/shot/...) — il chiamante decide il fallback."""
+    if not unit:
+        return None
+    return HOURS_PER_UNIT.get(unit.strip().lower())
 
 
 def _count_jcl_matching_resources(db, *, job_id, project_id, invoices) -> int:
@@ -96,6 +118,9 @@ _UNIT_TO_NATURE = {
     "hr": "time_based", "ore": "time_based", "hour": "time_based",
     "h": "time_based", "day": "time_based", "giorno": "time_based",
     "giornate": "time_based", "giornata": "time_based", "d": "time_based",
+    # turno = 3 ore (v3.5.0-alpha.172.151)
+    "turno": "time_based", "turni": "time_based", "trn": "time_based",
+    "shift": "time_based",
     # deliverable_qty
     "pc": "deliverable_qty", "lot": "deliverable_qty",
     "shot": "deliverable_qty", "version": "deliverable_qty",
@@ -276,11 +301,10 @@ def _qty_from_hours(unit: str, total_hours: float, n_bookings: int) -> float:
     v3.5.0-alpha.13: per unità non temporali (pc/lump/fix/lot/shot/version/
     allow/TB/GB) usiamo il count dei booking, non le ore.
     """
-    u = (unit or "").strip().lower()
-    if u in TIME_UNITS_HOUR:
-        return round(total_hours, 2)
-    if u in TIME_UNITS_DAY:
-        return round(total_hours / HOURS_PER_DAY, 4)
+    f = hours_per_unit(unit)
+    if f:
+        # round 2 per le ore (back-compat), 4 per day/turno (frazioni più fini)
+        return round(total_hours / f, 2 if f == 1.0 else 4)
     return float(n_bookings)
 
 

@@ -34,17 +34,21 @@ WORKING_HOURS_PER_DAY = 8.0
 def compute_quantity_from_hours(hours: float, unit: str) -> float:
     """Converte ore-persona in quantità coerente con l'unità del listino.
 
-    - "day" → ore / 8 (giornata standard)
-    - "hour" / "h" → ore così come sono
+    - "day"   → ore / 8 (giornata standard)
+    - "turno" → ore / 3
+    - "hour"  → ore così come sono
     - altrimenti → 1.0 (one-shot deliverable, l'utente potrà aggiustare)
+
+    v3.5.0-alpha.172.151 — usa la mappa canonica `cost_line_sync.HOURS_PER_UNIT`
+    (single source) invece di una tabella duplicata: aggiungere unità temporali
+    lì le propaga anche qui.
     """
     if hours <= 0:
         return 1.0
-    u = (unit or "day").strip().lower()
-    if u in ("hour", "hours", "h", "ora", "ore"):
-        return round(hours, 2)
-    if u in ("day", "days", "d", "giorno", "giorni"):
-        return round(hours / WORKING_HOURS_PER_DAY, 2)
+    from app.services.cost_line_sync import hours_per_unit
+    f = hours_per_unit(unit)
+    if f:
+        return round(hours / f, 2)
     return 1.0
 
 

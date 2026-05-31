@@ -38,7 +38,7 @@
         <span>🔍</span>
         <input type="text" id="search-items" placeholder="Cerca per nome, descrizione o keyword…" oninput="renderItems()">
       </div>
-      <div class="tabs" style="margin:0;" title="1 turno = 8 ore. Cambia solo la visualizzazione, il prezzo memorizzato resta invariato.">
+      <div class="tabs" style="margin:0;" title="1 giornata = 8 ore. Cambia solo la visualizzazione, il prezzo memorizzato resta invariato.">
         <div class="tab active" id="view-day" onclick="setViewMode('day')" data-i18n="pricelist.per_day">€/Giorno</div>
         <div class="tab" id="view-hour" onclick="setViewMode('hour')" data-i18n="pricelist.per_hour">€/Ora</div>
       </div>
@@ -256,6 +256,7 @@
           <select class="form-select" id="it-unit" onchange="updateItemNatureBadge()">
             <optgroup label="Lavorazione (a tempo)">
               <option value="day">day</option>
+              <option value="turno">turno (3h)</option>
               <option value="hr">hr</option>
             </optgroup>
             <optgroup label="Consegna">
@@ -323,7 +324,7 @@
 {% block scripts %}
 <script>
 let allItems = [], allCats = [], activeCat = null;
-let viewMode = 'day'; // 'day' | 'hour'  — 1 turno = 8 ore
+let viewMode = 'day'; // 'day' | 'hour'  — 1 giornata = 8 ore
 const HOURS_PER_DAY = 8;
 
 // v3.5.0-alpha.172.39 (Sprint 4.A) — rimosso fmtCurrency locale (shadow del
@@ -513,6 +514,7 @@ const UNIT_NATURE_MAP = {
   hr: 'time_based', ore: 'time_based', hour: 'time_based', h: 'time_based',
   day: 'time_based', giorno: 'time_based', giornate: 'time_based',
   giornata: 'time_based', d: 'time_based',
+  turno: 'time_based', turni: 'time_based', trn: 'time_based', shift: 'time_based',
   pc: 'deliverable_qty', lot: 'deliverable_qty',
   shot: 'deliverable_qty', version: 'deliverable_qty',
   tb: 'deliverable_volume', gb: 'deliverable_volume',

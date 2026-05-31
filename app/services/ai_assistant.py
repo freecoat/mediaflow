@@ -452,7 +452,7 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
 
             raw_unit = (ld.get("unit") or "").strip()
             unit = raw_unit or (pi.unit if pi else "day")
-            if unit not in ("day", "hour", "flat"):
+            if unit not in ("day", "turno", "hour", "hr", "flat"):
                 unit = pi.unit if pi else "day"
 
             raw_price = ld.get("unit_price")

@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.151 — nuova unità "turno" = 3 ore (31 mag 2026)
+
+Richiesta Matteo: unità **turno** (3 ore), utile soprattutto al reparto Suono
+ma trattata in modo generico come qualunque unità temporale.
+
+- **Source of truth**: `cost_line_sync.HOURS_PER_UNIT` (mappa canonica
+  ore↔unità) + `hours_per_unit(unit)`. `turno`/`turni`/`trn`/`shift` = 3.0.
+  `_qty_from_hours`, `is_time_based_unit`, `_UNIT_TO_NATURE` (turno→time_based)
+  ora derivano dalla mappa → aggiungere unità lì le propaga ovunque.
+- **Dedup conversioni**: `reverse_quote.compute_quantity_from_hours` e
+  `cost_report.py` (OT pending) usano ora `hours_per_unit()` invece di tabelle
+  day/else hardcoded (un turno qui era erroneamente trattato come 1h).
+- **UI**: opzione "turno (3h)" nei dropdown unità di `/pricelist` e `/quotes`;
+  badge nature JS + conversione prezzo JS (`HOURS_PER_UNIT_JS`) generalizzate
+  (day↔turno↔hr scalano sulle ore).
+- **AI**: `turno` aggiunto agli enum unit (ai_tools ×2), alla validazione
+  (ai_assistant) e ai prompt docs (ai_context).
+- **Cleanup terminologico**: la copy usava "turno" col significato di
+  "giornata 8h" (`/pricelist` tooltip, `/quotes` "day (turno 8h)") → corretta
+  in "giornata" per non confondere con la nuova unità da 3h.
+- Test `tests/test_unit_turno.py` (27 casi: hours_per_unit, _qty_from_hours,
+  unit_nature, reverse_quote). 217/217 pytest. JS servito `node --check` OK.
+
 ## v3.5.0-alpha.172.150 — reparti + prezzi voci-bucket Deliveries (31 mag 2026)
 
 Richiesta Matteo: assegnare reparto + prezzi (media nazionale IT) alle 66

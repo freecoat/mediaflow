@@ -730,7 +730,8 @@
               <div class="form-group al-fg-unit">
                 <label class="form-label">Unità</label>
                 <select class="form-select" id="al-unit" onchange="convertPriceOnUnitChange()">
-                  <option value="day">day (turno 8h)</option>
+                  <option value="day">day (giornata 8h)</option>
+                  <option value="turno">turno (3h)</option>
                   <option value="hr" data-i18n="quotes.hr_short">hr (ora)</option>
                   <option value="pc">pc (pezzo)</option>
                   <option value="min">min (minuto prodotto)</option>
@@ -3427,20 +3428,28 @@ function pickPriceItem(id) {
   filterPricelist();
 }
 
+// v3.5.0-alpha.172.151 — ore-per-unità (mirror di cost_line_sync.HOURS_PER_UNIT).
+// Conversione prezzo generica tra unità temporali: prezzo scala con le ore.
+const HOURS_PER_UNIT_JS = {
+  hr: 1, ore: 1, hour: 1, h: 1,
+  day: 8, giorno: 8, giornate: 8, giornata: 8, d: 8,
+  turno: 3, turni: 3, trn: 3, shift: 3,
+};
 function convertPriceOnUnitChange() {
-  // Converte day↔hour mantenendo il prezzo equivalente a 8h. Per altre unità no-op.
+  // Converte tra unità temporali (day↔turno↔hr) mantenendo il prezzo
+  // equivalente in ore. Per unità non-temporali (pc/TB...) no-op manuale.
   const baseUnit = document.getElementById('al-base-unit').value;
   const basePrice = parseFloat(document.getElementById('al-base-price').value || 0);
   if (!basePrice) return;
   const newUnit = document.getElementById('al-unit').value;
-  if (baseUnit === 'day' && newUnit === 'hr') {
-    document.getElementById('al-price').value = (basePrice / HOURS_PER_DAY).toFixed(2);
-  } else if (baseUnit === 'hr' && newUnit === 'day') {
-    document.getElementById('al-price').value = (basePrice * HOURS_PER_DAY).toFixed(2);
+  const bf = HOURS_PER_UNIT_JS[baseUnit], nf = HOURS_PER_UNIT_JS[newUnit];
+  if (bf && nf) {
+    // prezzo/unità = prezzo/ora × ore-per-unità → scala con il rapporto ore
+    document.getElementById('al-price').value = (basePrice * (nf / bf)).toFixed(2);
   } else if (baseUnit === newUnit) {
     document.getElementById('al-price').value = basePrice.toFixed(2);
   }
-  // se cambio ad altre unità, lascio il prezzo manuale
+  // se cambio ad altre unità (non-temporali), lascio il prezzo manuale
 }
 
 async function addLine() {

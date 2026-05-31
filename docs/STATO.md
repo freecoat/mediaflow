@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.150** — 31 maggio 2026 — reparti + prezzi voci-bucket Deliveries
+**v3.5.0-alpha.172.151** — 31 maggio 2026 — nuova unità "turno" = 3 ore
+
+### α.172.151 ✅ (unità "turno" = 3 ore — richiesta Matteo)
+Generica (utile a Suono). Source of truth `cost_line_sync.HOURS_PER_UNIT` + `hours_per_unit()`: turno/turni/trn/shift=3.0. `_qty_from_hours`/`is_time_based_unit`/`_UNIT_TO_NATURE` derivano dalla mappa. Dedup conversioni: `reverse_quote` + `cost_report` (OT pending) ora usano `hours_per_unit()` (prima day/else hardcoded → turno=1h errato). UI: option "turno (3h)" in /pricelist+/quotes, badge+conversione prezzo JS (`HOURS_PER_UNIT_JS`). AI: enum/validazione/docs. Cleanup terminologico: copy "turno"(=8h giornata) → "giornata". 27 test → **217/217**. JS servito node --check OK.
+
+**Prossimo**: push 6 commit (.146→.151 → in realtà .147-.151) + ZIP quando Matteo OK · test copilot Gomorra lato Matteo.
 
 ### α.172.150 ✅ (reparti + prezzi Deliveries — richiesta Matteo)
 66 voci-bucket cat "Deliveries" (erano dept+prezzo None): AUDIO→Suono(3) 19 voci, VIDEO+SOTTOTITOLI+altro(KDM/ISO/Document)→DI(1) 47 voci. Prezzi 3 livelli (mastering/delivery fee, no grading/mix): DCP 2K 1200/4K 1800, IMF 1500, MXF HD 450/UHD 700, MP4 180, ProRes 422 350/422UHD 550/4444 750/XQ 900, ImgSeq 900, SD 250, Subtitle 120, KDM 80, ISO 150, Document 0; FullMix 600, stem 250, M&E 450, StemsBundle 700, OptAudio 350, DM&E 18/min. Script `scripts/migrate_deliveries_pricing.py` idempotente + 29 test. Snapshot pre-apply salvato. 190/190.
