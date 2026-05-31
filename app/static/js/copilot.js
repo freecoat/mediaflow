@@ -362,7 +362,9 @@
   function render() {
     const wrap = document.getElementById("cp-messages");
     if (!state.messages.length) {
-      // Lascia il messaggio di benvenuto
+      // Nuova conversazione: svuota il contenitore e ripristina il benvenuto
+      wrap.innerHTML = '<div class="cp-empty" id="cp-welcome"></div>';
+      _renderWelcome();
       return;
     }
     const html = [];
