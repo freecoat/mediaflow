@@ -4,3 +4,143 @@
 {% block content %}
   <div id="m-oggi-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
 {% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+
+  async function loadOggi() {
+    var root = document.getElementById("m-oggi-root");
+    if (!root) return;
+
+    // ── 1. unread-count badge ────────────────────────────────
+    try {
+      var countData = await mapi("GET", "/notifications/api/unread-count");
+      // countData.total  countData.action_required
+      var total = (countData && countData.total) ? countData.total : 0;
+      var badgeHtml = total > 0
+        ? '<a href="/m/notifiche" class="m-btn" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">'
+          + '<span>Notifiche</span>'
+          + '<span class="m-badge" style="background:#6272f5;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;">'
+          + mEsc(String(total))
+          + '</span></a>'
+        : '';
+      if (badgeHtml) {
+        var badgeEl = document.createElement("div");
+        badgeEl.innerHTML = badgeHtml;
+        root.insertBefore(badgeEl, root.firstChild);
+      }
+    } catch (e) {
+      // badge non critica, ignora errori silenziosamente
+    }
+
+    // ── 2. stato timbratura (ultimi punch di oggi) ──────────
+    var punchSection = document.createElement("div");
+    punchSection.className = "m-card";
+    var punchState = "OUT";
+    try {
+      var punches = await mapi("GET", "/hr/api/punches");
+      // punches è array; ogni item ha: id, start_datetime, end_datetime, kind, kind_label, resource_name
+      // Stato corrente: se l'ultimo punch ha end_datetime null → IN, altrimenti OUT
+      if (Array.isArray(punches) && punches.length > 0) {
+        var last = punches[punches.length - 1];
+        // start_datetime, end_datetime (null se ancora aperto)
+        if (last.end_datetime === null || last.end_datetime === undefined) {
+          punchState = "IN";
+        } else {
+          punchState = "OUT";
+        }
+        var lastKind = last.kind_label ? mEsc(last.kind_label) : mEsc(last.kind || "Turno");
+        var lastStart = last.start_datetime ? mFmtTime(last.start_datetime) : "";
+        var lastEnd = last.end_datetime ? mFmtTime(last.end_datetime) : "–";
+        punchSection.innerHTML =
+          '<div class="m-card-title" style="margin-bottom:8px;">Timbratura</div>'
+          + '<div style="margin-bottom:10px;font-size:14px;color:#8a90a2;">'
+          + 'Ultimo: ' + lastKind + ' ' + mEsc(lastStart) + ' → ' + mEsc(lastEnd)
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:10px;">'
+          + '<span style="font-size:22px;font-weight:700;color:' + (punchState === "IN" ? "#4ade80" : "#f87171") + ';">'
+          + mEsc(punchState)
+          + '</span>'
+          + '<a href="/m/timbra" class="m-btn m-btn-primary" style="flex:1;text-align:center;line-height:48px;text-decoration:none;">'
+          + 'Timbra'
+          + '</a>'
+          + '</div>';
+      } else {
+        punchSection.innerHTML =
+          '<div class="m-card-title" style="margin-bottom:8px;">Timbratura</div>'
+          + '<div style="color:#8a90a2;font-size:14px;margin-bottom:10px;">Nessuna timbratura oggi.</div>'
+          + '<a href="/m/timbra" class="m-btn m-btn-primary" style="display:block;text-align:center;line-height:48px;text-decoration:none;">'
+          + 'Timbra'
+          + '</a>';
+      }
+    } catch (e) {
+      punchSection.innerHTML =
+        '<div class="m-card-title">Timbratura</div>'
+        + '<div class="m-empty">Impossibile caricare timbratura.</div>'
+        + '<a href="/m/timbra" class="m-btn" style="display:block;text-align:center;line-height:48px;text-decoration:none;">Vai a Timbra</a>';
+    }
+
+    // ── 3. booking di oggi ───────────────────────────────────
+    var bookSection = document.createElement("div");
+    try {
+      var bookings = await mapi("GET", "/planning/api/my-bookings?today_only=true");
+      // ogni booking ha:
+      //   assignment_id, booking_id
+      //   title            — stringa già formattata (titolo booking/assegnazione)
+      //   start            — ISO datetime (start_datetime dell'assignment)
+      //   end              — ISO datetime (end_datetime dell'assignment)
+      //   duration_minutes — intero
+      //   job_id, job_code, job_title
+      //   cost_line_description
+      //   kind, status, priority, execution_status, overtime_status
+      //   notes
+      if (Array.isArray(bookings) && bookings.length > 0) {
+        var listEl = mEl("div", "m-list");
+        bookings.forEach(function (b) {
+          var timeStr = mFmtTime(b.start) + " – " + mFmtTime(b.end);
+          var jobLabel = b.job_title
+            ? mEsc(b.job_title) + (b.job_code ? ' <span style="color:#8a90a2;font-size:12px;">[' + mEsc(b.job_code) + ']</span>' : "")
+            : "";
+          var execBadge = "";
+          if (b.execution_status && b.execution_status !== "planned") {
+            execBadge = ' <span style="font-size:11px;background:#262a36;padding:2px 6px;border-radius:6px;">' + mEsc(b.execution_status) + '</span>';
+          }
+          var noteHtml = b.notes
+            ? '<div style="color:#8a90a2;font-size:12px;margin-top:4px;">' + mEsc(b.notes) + '</div>'
+            : "";
+          var item = mEl("div", "m-list-item");
+          item.innerHTML =
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+            + '<div style="font-size:13px;color:#8a90a2;">' + mEsc(timeStr) + '</div>'
+            + '<div>' + execBadge + '</div>'
+            + '</div>'
+            + '<div class="m-card-title" style="margin-top:4px;">' + mEsc(b.title) + '</div>'
+            + (jobLabel ? '<div style="margin-top:2px;font-size:13px;">' + jobLabel + '</div>' : "")
+            + (b.cost_line_description ? '<div style="color:#8a90a2;font-size:12px;">' + mEsc(b.cost_line_description) + '</div>' : "")
+            + noteHtml;
+          listEl.appendChild(item);
+        });
+        bookSection.appendChild(mEl("div", "m-card-title", "Lavori di oggi"));
+        bookSection.appendChild(listEl);
+      } else {
+        bookSection.innerHTML = '<div class="m-empty">Nessun lavoro oggi.</div>';
+      }
+    } catch (e) {
+      bookSection.innerHTML = '<div class="m-empty">Impossibile caricare i lavori.</div>';
+    }
+
+    // ── assemble ─────────────────────────────────────────────
+    root.innerHTML = "";
+    root.appendChild(punchSection);
+    root.appendChild(bookSection);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", loadOggi);
+  } else {
+    loadOggi();
+  }
+}());
+</script>
+{% endblock %}

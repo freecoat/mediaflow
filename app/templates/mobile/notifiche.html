@@ -4,3 +4,152 @@
 {% block content %}
   <div id="m-notifiche-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
 {% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  var root = document.getElementById('m-notifiche-root');
+
+  /* ---- render principale ---- */
+  function renderNotifiche(items) {
+    root.textContent = '';
+
+    /* bottone "Segna tutte lette" */
+    var btnAll = mEl('button', 'm-btn m-btn-block');
+    btnAll.textContent = '✓ Segna tutte lette';
+    btnAll.style.marginBottom = '14px';
+    btnAll.addEventListener('click', function () {
+      btnAll.disabled = true;
+      mapi('POST', '/notifications/api/mark-all-read')
+        .then(function () {
+          mToast('Tutte le notifiche segnate come lette');
+          loadNotifiche();
+        })
+        .catch(function (err) {
+          mToast('Errore: ' + err.message);
+          btnAll.disabled = false;
+        });
+    });
+    root.appendChild(btnAll);
+
+    /* lista notifiche */
+    if (!items || items.length === 0) {
+      var empty = mEl('div', 'm-empty');
+      var emptyIcon = mEl('span', 'm-empty-icon');
+      emptyIcon.textContent = '🔔';
+      var emptyText = document.createTextNode('Nessuna notifica');
+      empty.appendChild(emptyIcon);
+      empty.appendChild(emptyText);
+      root.appendChild(empty);
+      return;
+    }
+
+    var list = mEl('div', 'm-list');
+
+    items.forEach(function (n) {
+      var item = mEl('div', 'm-list-item' + (n.is_read ? '' : ' m-notif-unread'));
+      item.style.cursor = 'pointer';
+      item.dataset.id = n.id;
+
+      /* dot indicatore non letto */
+      var dotWrap = mEl('div', 'm-notif-dot-wrap');
+      if (!n.is_read) {
+        var dot = mEl('span', 'm-notif-dot');
+        dotWrap.appendChild(dot);
+      }
+      item.appendChild(dotWrap);
+
+      /* contenuto */
+      var content = mEl('div', 'm-list-item-content');
+
+      var titleRow = mEl('div', 'm-list-item-title');
+      titleRow.textContent = n.title || '—';
+      content.appendChild(titleRow);
+
+      if (n.body) {
+        var body = mEl('div', 'm-list-item-sub');
+        body.textContent = n.body;
+        content.appendChild(body);
+      }
+
+      item.appendChild(content);
+
+      /* data + badge severity */
+      var right = mEl('div', 'm-list-item-right');
+      right.style.display = 'flex';
+      right.style.flexDirection = 'column';
+      right.style.alignItems = 'flex-end';
+      right.style.gap = '4px';
+
+      var dateSpan = mEl('span', '');
+      dateSpan.textContent = mFmtDate(n.created_at);
+      right.appendChild(dateSpan);
+
+      if (n.severity && n.severity !== 'info') {
+        var severityClass = n.severity === 'error' ? 'm-badge m-badge-danger'
+          : n.severity === 'warning' ? 'm-badge m-badge-warn'
+          : n.severity === 'success' ? 'm-badge m-badge-success'
+          : 'm-badge';
+        var badge = mEl('span', severityClass);
+        badge.textContent = n.severity;
+        right.appendChild(badge);
+      }
+
+      item.appendChild(right);
+
+      /* tap → segna letto */
+      item.addEventListener('click', function () {
+        if (n.is_read) return;
+        mapi('POST', '/notifications/api/' + n.id + '/read')
+          .then(function () { loadNotifiche(); })
+          .catch(function (err) { mToast('Errore: ' + err.message); });
+      });
+
+      list.appendChild(item);
+    });
+
+    root.appendChild(list);
+  }
+
+  /* ---- caricamento ---- */
+  function loadNotifiche() {
+    var loading = mEl('div', 'm-loading');
+    loading.textContent = 'Caricamento…';
+    root.textContent = '';
+    root.appendChild(loading);
+    mapi('GET', '/notifications/api/list?limit=50')
+      .then(function (data) { renderNotifiche(data); })
+      .catch(function (err) {
+        var errEl = mEl('div', 'm-empty');
+        errEl.textContent = 'Impossibile caricare le notifiche. ' + err.message;
+        root.textContent = '';
+        root.appendChild(errEl);
+      });
+  }
+
+  document.addEventListener('DOMContentLoaded', loadNotifiche);
+}());
+</script>
+<style>
+  /* stile notifiche non lette + dot indicatore */
+  .m-notif-unread {
+    background: rgba(98, 114, 245, 0.07);
+    border-left: 3px solid var(--m-accent);
+  }
+  .m-notif-dot-wrap {
+    width: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .m-notif-dot {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--m-accent);
+  }
+</style>
+{% endblock %}

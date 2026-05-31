@@ -4,3 +4,196 @@
 {% block content %}
   <div id="m-timbra-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
 {% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── stato modulo ── */
+  var _punches = [];
+  var _loading = false;
+
+  /* ── helpers locali ── */
+  function isoNow() {
+    /* ISO 8601 locale senza offset — FastAPI lo accetta come naive datetime */
+    var d = new Date();
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+      + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function lastPunch() {
+    if (!_punches.length) return null;
+    return _punches[_punches.length - 1];
+  }
+
+  function isCurrentlyIn() {
+    var p = lastPunch();
+    return p !== null && (p.end_datetime === null || p.end_datetime === undefined || p.end_datetime === '');
+  }
+
+  /* ── render principale ── */
+  function render() {
+    var root = document.getElementById('m-timbra-root');
+    if (!root) return;
+    root.innerHTML = '';
+
+    /* ── card stato + bottone ── */
+    var card = mEl('div', 'm-card m-timbra-hero');
+
+    var currently = isCurrentlyIn();
+    var last = lastPunch();
+
+    /* Riga stato — DOM puro, niente innerHTML con dati */
+    var statusDiv = mEl('div', 'm-timbra-status');
+    if (currently && last) {
+      var badgeIn = mEl('span', 'm-badge m-badge-in');
+      badgeIn.textContent = 'IN';
+      var dalleTxt = document.createTextNode(' dalle ');
+      var dalleStrong = mEl('strong');
+      dalleStrong.textContent = mFmtTime(last.start_datetime);
+      statusDiv.appendChild(badgeIn);
+      statusDiv.appendChild(dalleTxt);
+      statusDiv.appendChild(dalleStrong);
+    } else if (last) {
+      var badgeOut = mEl('span', 'm-badge m-badge-out');
+      badgeOut.textContent = 'OUT';
+      var refDt = last.end_datetime || last.start_datetime;
+      var dallTxt = document.createTextNode(" dall'");
+      var dallStrong = mEl('strong');
+      dallStrong.textContent = mFmtDate(refDt) + ' ' + mFmtTime(refDt);
+      statusDiv.appendChild(badgeOut);
+      statusDiv.appendChild(dallTxt);
+      statusDiv.appendChild(dallStrong);
+    } else {
+      var noTimbSpan = mEl('span', 'm-muted');
+      noTimbSpan.textContent = 'Nessuna timbratura oggi';
+      statusDiv.appendChild(noTimbSpan);
+    }
+    card.appendChild(statusDiv);
+
+    /* Bottone grande */
+    var btn = mEl('button', 'm-btn m-btn-primary m-btn-lg m-timbra-btn');
+    if (currently) {
+      btn.textContent = 'Timbra USCITA';
+      btn.classList.add('m-btn-danger');
+      btn.addEventListener('click', function () { doUscita(last.id); });
+    } else {
+      btn.textContent = 'Timbra ENTRATA';
+      btn.addEventListener('click', function () {
+        var rid = (last && last.resource_id) ? last.resource_id : 0;
+        doEntrata(rid);
+      });
+    }
+    card.appendChild(btn);
+    root.appendChild(card);
+
+    /* ── lista timbrature recenti ── */
+    var section = mEl('div', 'm-section');
+    var heading = mEl('div', 'm-section-title', 'Timbrature recenti');
+    section.appendChild(heading);
+
+    if (!_punches.length) {
+      section.appendChild(mEl('div', 'm-empty', 'Nessuna timbratura registrata.'));
+    } else {
+      var list = mEl('div', 'm-list');
+      /* mostra in ordine cronologico inverso (più recente prima) */
+      var slice = _punches.slice().reverse().slice(0, 20);
+      slice.forEach(function (p) {
+        var item = mEl('div', 'm-list-item m-timbra-item');
+
+        /* badge tipo — textContent evita XSS */
+        var badgeCls = p.kind === 'shift' ? 'm-badge-shift'
+                     : p.kind === 'break_' ? 'm-badge-break'
+                     : p.kind === 'overtime' ? 'm-badge-ot'
+                     : 'm-badge-other';
+        var badge = mEl('span', 'm-badge ' + badgeCls);
+        badge.textContent = p.kind_label || p.kind || '';
+        item.appendChild(badge);
+
+        /* data e ora entrata */
+        var timeSpan = mEl('span', 'm-timbra-time');
+        timeSpan.textContent = mFmtDate(p.start_datetime) + ' ' + mFmtTime(p.start_datetime);
+        item.appendChild(timeSpan);
+
+        /* freccia + uscita se presente */
+        if (p.end_datetime) {
+          var arrow = mEl('span', 'm-timbra-arrow', ' → ');
+          var endSpan = mEl('span', 'm-timbra-time');
+          endSpan.textContent = mFmtTime(p.end_datetime);
+          item.appendChild(arrow);
+          item.appendChild(endSpan);
+          if (p.duration_h !== null && p.duration_h !== undefined) {
+            var durSpan = mEl('span', 'm-timbra-dur');
+            durSpan.textContent = ' (' + String(p.duration_h) + 'h)';
+            item.appendChild(durSpan);
+          }
+        } else {
+          var inProgress = mEl('span', 'm-timbra-inprogress', ' — in corso');
+          item.appendChild(inProgress);
+        }
+
+        list.appendChild(item);
+      });
+      section.appendChild(list);
+    }
+    root.appendChild(section);
+  }
+
+  /* ── azioni ── */
+  async function doEntrata(resourceId) {
+    if (_loading) return;
+    _loading = true;
+    try {
+      var fd = new FormData();
+      fd.append('resource_id', String(resourceId));
+      fd.append('start_datetime', isoNow());
+      fd.append('kind', 'shift');
+      await mapi('POST', '/hr/api/punches', fd);
+      mToast('Entrata registrata');
+      await loadTimbra();
+    } catch (err) {
+      mToast('Errore: ' + (err.message || 'impossibile timbrare'));
+    } finally {
+      _loading = false;
+    }
+  }
+
+  async function doUscita(punchId) {
+    if (_loading) return;
+    _loading = true;
+    try {
+      var fd = new FormData();
+      fd.append('end_datetime', isoNow());
+      await mapi('PUT', '/hr/api/punches/' + punchId, fd);
+      mToast('Uscita registrata');
+      await loadTimbra();
+    } catch (err) {
+      mToast('Errore: ' + (err.message || 'impossibile timbrare'));
+    } finally {
+      _loading = false;
+    }
+  }
+
+  /* ── caricamento ── */
+  async function loadTimbra() {
+    var root = document.getElementById('m-timbra-root');
+    if (!root) return;
+    try {
+      _punches = await mapi('GET', '/hr/api/punches');
+      render();
+    } catch (err) {
+      if (err.message === 'auth') return;
+      root.textContent = '';
+      var errDiv = mEl('div', 'm-empty');
+      errDiv.textContent = 'Errore caricamento: ' + (err.message || 'sconosciuto');
+      root.appendChild(errDiv);
+    }
+  }
+
+  /* ── init ── */
+  window.loadTimbra = loadTimbra;
+  document.addEventListener('DOMContentLoaded', loadTimbra);
+})();
+</script>
+{% endblock %}

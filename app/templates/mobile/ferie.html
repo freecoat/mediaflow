@@ -2,5 +2,213 @@
 {% block title %}Ferie — Claqo{% endblock %}
 {% block topbar %}Ferie e assenze{% endblock %}
 {% block content %}
-  <div id="m-ferie-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
+  <div id="m-ferie-root" class="m-section">
+    <div class="m-loading">Caricamento…</div>
+  </div>
+  <div class="m-section" id="m-ferie-form-section" style="display:none">
+    <div class="m-card">
+      <div class="m-form-title">Nuova richiesta</div>
+      <form id="m-ferie-form" onsubmit="submitFerie(event)">
+        <input type="hidden" id="m-ferie-resource-id" name="resource_id" value="">
+        <div class="m-form-group">
+          <label class="m-label" for="m-ferie-kind">Tipo</label>
+          <select id="m-ferie-kind" name="kind" class="m-select" required>
+            <option value="vacation">Ferie</option>
+            <option value="sick">Malattia</option>
+            <option value="permit_rol">Permesso ROL</option>
+            <option value="recovery">Recupero ore</option>
+            <option value="other">Altro permesso</option>
+          </select>
+        </div>
+        <div class="m-form-group">
+          <label class="m-label" for="m-ferie-from">Dal</label>
+          <input type="date" id="m-ferie-from" name="start_date" class="m-input" required>
+        </div>
+        <div class="m-form-group">
+          <label class="m-label" for="m-ferie-to">Al</label>
+          <input type="date" id="m-ferie-to" name="end_date" class="m-input" required>
+        </div>
+        <div class="m-form-group">
+          <label class="m-label" for="m-ferie-note">Note (opzionale)</label>
+          <textarea id="m-ferie-note" name="reason" class="m-textarea" rows="3" placeholder="Motivo o note aggiuntive…"></textarea>
+        </div>
+        <div id="m-ferie-form-error" class="m-form-error" style="display:none"></div>
+        <button type="submit" class="m-btn m-btn-primary" id="m-ferie-submit">Invia richiesta</button>
+      </form>
+    </div>
+  </div>
+  <div class="m-section" id="m-ferie-nores-section" style="display:none">
+    <div class="m-card">
+      <p class="m-empty">Nessuna risorsa collegata al tuo utente. Contatta un amministratore.</p>
+    </div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  // ── Stato globale per questa pagina ──────────────────────────
+  var _resourceId = null;
+
+  // ── Badge stato approvazione ─────────────────────────────────
+  var STATUS_LABEL = {
+    pending:  'In attesa',
+    approved: 'Approvata',
+    rejected: 'Rifiutata'
+  };
+  var STATUS_CLASS = {
+    pending:  'm-badge-warn',
+    approved: 'm-badge-ok',
+    rejected: 'm-badge-err'
+  };
+
+  // ── Etichette tipo assenza ────────────────────────────────────
+  var KIND_LABEL = {
+    vacation:   'Ferie',
+    sick:       'Malattia',
+    holiday:    'Festività',
+    permit_rol: 'Permesso ROL',
+    recovery:   'Recupero ore',
+    other:      'Permesso'
+  };
+
+  // ── Helper: formatta un range di date ────────────────────────
+  function fmtRange(start, end) {
+    var s = mFmtDate(start);
+    var e = mFmtDate(end);
+    return s === e ? s : (s + ' → ' + e);
+  }
+
+  // ── Render lista richieste ────────────────────────────────────
+  function renderList(items) {
+    var root = document.getElementById('m-ferie-root');
+    if (!items || items.length === 0) {
+      root.innerHTML = '<div class="m-empty">Nessuna richiesta trovata.</div>';
+      return;
+    }
+    var html = '<div class="m-list">';
+    for (var i = 0; i < items.length; i++) {
+      var u = items[i];
+      var status = u.status || 'pending';
+      var statusLabel = STATUS_LABEL[status] || mEsc(status);
+      var statusCls   = STATUS_CLASS[status]  || 'm-badge-warn';
+      var kindLabel   = KIND_LABEL[u.kind]    || mEsc(u.kind || '');
+      var periodo     = fmtRange(u.start_date, u.end_date);
+      var rejection = '';
+      if (status === 'rejected' && u.rejection_reason) {
+        rejection = '<div class="m-item-sub">' + mEsc(u.rejection_reason) + '</div>';
+      }
+      html +=
+        '<div class="m-list-item">' +
+          '<div class="m-item-row">' +
+            '<span class="m-item-kind">' + mEsc(kindLabel) + '</span>' +
+            '<span class="m-badge ' + statusCls + '">' + mEsc(statusLabel) + '</span>' +
+          '</div>' +
+          '<div class="m-item-periodo">' + mEsc(periodo) + '</div>' +
+          (u.reason ? '<div class="m-item-sub">' + mEsc(u.reason) + '</div>' : '') +
+          rejection +
+        '</div>';
+    }
+    html += '</div>';
+    root.innerHTML = html;
+  }
+
+  // ── Risolve resource_id: da lista assenze, poi da punches ─────
+  function resolveResourceId(items) {
+    if (items && items.length > 0 && items[0].resource_id) {
+      return Promise.resolve(items[0].resource_id);
+    }
+    // Fallback: prova a ricavarlo dall'ultimo punch dell'utente
+    return mapi('GET', '/hr/api/punches').then(function (punches) {
+      if (punches && punches.length > 0 && punches[0].resource_id) {
+        return punches[0].resource_id;
+      }
+      return null;
+    }).catch(function () { return null; });
+  }
+
+  // ── Imposta la data odierna come default nei campi data ───────
+  function setDefaultDates() {
+    var today = new Date().toISOString().slice(0, 10);
+    var fromEl = document.getElementById('m-ferie-from');
+    var toEl   = document.getElementById('m-ferie-to');
+    if (fromEl && !fromEl.value) fromEl.value = today;
+    if (toEl   && !toEl.value)   toEl.value   = today;
+  }
+
+  // ── Caricamento principale ────────────────────────────────────
+  function loadFerie() {
+    mapi('GET', '/planning/api/my-unavailabilities')
+      .then(function (items) {
+        renderList(items);
+        return resolveResourceId(items);
+      })
+      .then(function (rid) {
+        _resourceId = rid;
+        if (!rid) {
+          document.getElementById('m-ferie-nores-section').style.display = '';
+          return;
+        }
+        document.getElementById('m-ferie-resource-id').value = String(rid);
+        setDefaultDates();
+        document.getElementById('m-ferie-form-section').style.display = '';
+      })
+      .catch(function (err) {
+        document.getElementById('m-ferie-root').innerHTML =
+          '<div class="m-empty">Errore caricamento: ' + mEsc(String(err)) + '</div>';
+      });
+  }
+
+  // ── Submit nuova richiesta ────────────────────────────────────
+  window.submitFerie = function (e) {
+    e.preventDefault();
+    var form    = document.getElementById('m-ferie-form');
+    var errBox  = document.getElementById('m-ferie-form-error');
+    var btn     = document.getElementById('m-ferie-submit');
+    errBox.style.display = 'none';
+    errBox.textContent   = '';
+
+    var fd = new FormData(form);
+
+    // Validazione client-side minima
+    var fromVal = fd.get('start_date');
+    var toVal   = fd.get('end_date');
+    if (fromVal && toVal && toVal < fromVal) {
+      errBox.textContent   = 'La data "Al" deve essere uguale o successiva alla data "Dal".';
+      errBox.style.display = '';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = 'Invio…';
+
+    mapi('POST', '/planning/api/unavailabilities', fd)
+      .then(function () {
+        mToast('Richiesta inviata con successo.');
+        form.reset();
+        setDefaultDates();
+        document.getElementById('m-ferie-resource-id').value = String(_resourceId || '');
+        // Ricarica la lista
+        var root = document.getElementById('m-ferie-root');
+        root.innerHTML = '<div class="m-loading">Aggiornamento…</div>';
+        return mapi('GET', '/planning/api/my-unavailabilities');
+      })
+      .then(function (items) {
+        renderList(items);
+      })
+      .catch(function (err) {
+        errBox.textContent   = 'Errore: ' + String(err);
+        errBox.style.display = '';
+      })
+      .finally(function () {
+        btn.disabled    = false;
+        btn.textContent = 'Invia richiesta';
+      });
+  };
+
+  // ── Avvio ─────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', loadFerie);
+}());
+</script>
 {% endblock %}
