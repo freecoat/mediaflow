@@ -1,6 +1,169 @@
 {% extends "mobile/base_mobile.html" %}
 {% block title %}Assegnazioni — Claqo{% endblock %}
 {% block topbar %}Miei lavori{% endblock %}
+
 {% block content %}
-  <div id="m-assegnazioni-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
+  <div id="m-assegnazioni-root" class="m-section">
+    <div class="m-loading">Caricamento…</div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  // Legge risposta risposta_status e restituisce etichetta + classe CSS
+  function _responseLabel(rs) {
+    if (rs === 'accepted') return { label: 'Accettato', cls: 'badge-accepted' };
+    if (rs === 'rejected') return { label: 'Rifiutato', cls: 'badge-rejected' };
+    return { label: 'In attesa', cls: 'badge-pending' };
+  }
+
+  // Raggruppa lista booking per data (YYYY-MM-DD estratta da .start)
+  function _groupByDay(bookings) {
+    const map = new Map();
+    for (const b of bookings) {
+      const day = b.start ? b.start.substring(0, 10) : '—';
+      if (!map.has(day)) map.set(day, []);
+      map.get(day).push(b);
+    }
+    return map;
+  }
+
+  // Formatta data giorno YYYY-MM-DD → "ven 01/06"
+  function _fmtDay(iso) {
+    if (!iso || iso === '—') return iso;
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  }
+
+  async function _respond(bookingId, action, cardEl) {
+    const fd = new FormData();
+    fd.append('action', action);
+    try {
+      const res = await mapi('POST', '/planning/api/my-bookings/' + bookingId + '/respond', fd);
+      mToast(action === 'accept' ? 'Assegnazione accettata' : 'Assegnazione rifiutata');
+      // Aggiorna badge inline senza reload completo
+      const badge = cardEl.querySelector('.m-response-badge');
+      const info = _responseLabel(res.status);
+      if (badge) {
+        badge.textContent = info.label;
+        badge.className = 'm-response-badge ' + info.cls;
+      }
+      // Nascondi i bottoni azione dopo la risposta
+      const actions = cardEl.querySelector('.m-assign-actions');
+      if (actions) actions.style.display = 'none';
+    } catch (e) {
+      mToast('Errore: ' + (e.message || 'Impossibile inviare risposta'));
+    }
+  }
+
+  function _renderCard(b) {
+    const card = document.createElement('div');
+    card.className = 'm-card m-assign-card';
+
+    // Header: orario + badge risposta
+    const header = document.createElement('div');
+    header.className = 'm-assign-header';
+
+    const time = document.createElement('span');
+    time.className = 'm-assign-time';
+    time.textContent = mFmtTime(b.start) + ' – ' + mFmtTime(b.end);
+
+    const info = _responseLabel(b.response_status || null);
+    const badge = document.createElement('span');
+    badge.className = 'm-response-badge ' + info.cls;
+    badge.textContent = info.label;
+
+    header.appendChild(time);
+    header.appendChild(badge);
+    card.appendChild(header);
+
+    // Titolo job
+    const title = document.createElement('div');
+    title.className = 'm-assign-title';
+    title.textContent = b.job_title || b.title || '—';
+    card.appendChild(title);
+
+    // Job code + esecuzione
+    if (b.job_code || b.execution_status) {
+      const sub = document.createElement('div');
+      sub.className = 'm-assign-sub';
+      const parts = [];
+      if (b.job_code) parts.push(b.job_code);
+      if (b.execution_status && b.execution_status !== 'planned') parts.push(b.execution_status);
+      sub.textContent = parts.join(' · ');
+      card.appendChild(sub);
+    }
+
+    // Note opzionali
+    if (b.notes) {
+      const notes = document.createElement('div');
+      notes.className = 'm-assign-notes';
+      notes.textContent = b.notes;
+      card.appendChild(notes);
+    }
+
+    // Bottoni accetta/rifiuta (solo se non già risposto)
+    if (!b.response_status || b.response_status === null) {
+      const actions = document.createElement('div');
+      actions.className = 'm-assign-actions';
+
+      const btnAccept = document.createElement('button');
+      btnAccept.className = 'm-btn m-btn-accept';
+      btnAccept.textContent = 'Accetta';
+      btnAccept.addEventListener('click', () => _respond(b.booking_id, 'accept', card));
+
+      const btnReject = document.createElement('button');
+      btnReject.className = 'm-btn m-btn-reject';
+      btnReject.textContent = 'Rifiuta';
+      btnReject.addEventListener('click', () => _respond(b.booking_id, 'reject', card));
+
+      actions.appendChild(btnAccept);
+      actions.appendChild(btnReject);
+      card.appendChild(actions);
+    }
+
+    return card;
+  }
+
+  async function loadAssegnazioni() {
+    const root = document.getElementById('m-assegnazioni-root');
+    try {
+      const bookings = await mapi('GET', '/planning/api/my-bookings');
+      root.innerHTML = '';
+
+      if (!bookings || bookings.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'm-empty';
+        empty.textContent = 'Nessuna assegnazione.';
+        root.appendChild(empty);
+        return;
+      }
+
+      const grouped = _groupByDay(bookings);
+      for (const [day, items] of grouped) {
+        // Intestazione giorno
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'm-day-header';
+        dayHeader.textContent = _fmtDay(day);
+        root.appendChild(dayHeader);
+
+        for (const b of items) {
+          root.appendChild(_renderCard(b));
+        }
+      }
+    } catch (e) {
+      if (e.message !== 'auth') {
+        root.innerHTML = '';
+        const err = document.createElement('div');
+        err.className = 'm-empty';
+        err.textContent = 'Errore nel caricamento: ' + (e.message || 'Riprova.');
+        root.appendChild(err);
+      }
+    }
+  }
+
+  loadAssegnazioni();
+})();
+</script>
 {% endblock %}

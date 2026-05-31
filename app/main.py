@@ -474,6 +474,11 @@ def _auto_migrate_columns():
             print("[auto-migrate] booking_assignments.cost_rate_snap mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE booking_assignments ADD COLUMN cost_rate_snap FLOAT NULL"))
+        # v3.5.0-alpha.172.147 — BookingAssignment.response_status (risposta staff accetta/rifiuta)
+        if "response_status" not in bacols:
+            print("[auto-migrate] booking_assignments.response_status mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE booking_assignments ADD COLUMN response_status VARCHAR(16) NULL"))
     # v3.5.0-alpha.113 — SupplierInvoice.resource_id + Resource.supplier_id +
     # Client.admin_email (intestazione fattura)
     if "supplier_invoices" in insp.get_table_names():

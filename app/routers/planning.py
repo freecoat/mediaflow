@@ -4147,6 +4147,60 @@ async def my_bookings(
     return out
 
 
+@router.post("/api/my-bookings/{booking_id}/respond")
+async def respond_my_booking(
+    booking_id: int,
+    request: Request,
+    action: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Staff accetta o rifiuta la PROPRIA assegnazione (mobile PWA).
+
+    Gate di sicurezza: verifica che il booking abbia un BookingAssignment
+    con resource_id legato all'utente loggato. 403 se non è sua assegnazione.
+    action ∈ {accept, reject} — 400 altrimenti.
+    Persiste response_status sull'assignment: "accepted" / "rejected".
+    """
+    # v3.5.0-alpha.172.147
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Non autenticato")
+
+    # Valida action PRIMA di query DB (fail fast)
+    action = action.strip().lower()
+    if action not in ("accept", "reject"):
+        raise HTTPException(status_code=400, detail="action deve essere 'accept' o 'reject'")
+
+    # Risolve resource_id del user corrente (ownership scope)
+    rid = scope_resource_id(db, user)
+    if rid is None:
+        raise HTTPException(status_code=403, detail="Nessuna risorsa associata al tuo utente")
+
+    # Verifica che il booking esista + appartenga al tenant
+    b = db.query(Booking).filter(
+        Booking.id == booking_id,
+        Booking.tenant_id == current_tenant_id(),
+    ).first()
+    if not b:
+        raise HTTPException(status_code=404, detail="Booking non trovato")
+
+    # Cerca l'assignment dell'utente su questo booking (ownership check)
+    assignment = db.query(BookingAssignment).filter(
+        BookingAssignment.booking_id == booking_id,
+        BookingAssignment.resource_id == rid,
+    ).first()
+    if assignment is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Non sei assegnato a questo booking",
+        )
+
+    new_status = "accepted" if action == "accept" else "rejected"
+    assignment.response_status = new_status
+    db.commit()
+    return {"ok": True, "status": new_status}
+
+
 # ─────────────────────────────────────────────────────────────
 # v3.5.0-alpha.172.3 Restructure Sprint 3 — Booking link Deliverable (M:N)
 # Pivot booking_deliverables. Permette ad un booking di servire N

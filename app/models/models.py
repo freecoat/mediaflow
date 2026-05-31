@@ -2169,6 +2169,9 @@ class BookingAssignment(Base):
     # se NULL. Garantisce stabilità storica: cambio rate Resource non rotrocede su
     # assignment già esistenti (= match fatture passive + cashflow storici preservati).
     cost_rate_snap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # v3.5.0-alpha.172.147 — Risposta staff all'assegnazione (mobile PWA accetta/rifiuta).
+    # NULL = nessuna risposta ancora; "accepted" / "rejected" dopo azione staff.
+    response_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     booking: Mapped["Booking"] = relationship(back_populates="assignments")
     resource: Mapped["Resource"] = relationship(back_populates="booking_assignments")
 
