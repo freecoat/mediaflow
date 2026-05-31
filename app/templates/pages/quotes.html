@@ -1337,8 +1337,9 @@ function _refreshQuoteTabSummary(lines) {
   if (elAll) elAll.textContent = String(nAll);
   if (elJcl) elJcl.textContent = String(nJcl);
   if (elDel) elDel.textContent = String(nDel);
-  if (subJcl) subJcl.textContent = sJcl > 0 ? (' · ' + fmtCurrency(sJcl)) : '';
-  if (subDel) subDel.textContent = sDel > 0 ? (' · ' + fmtCurrency(sDel)) : '';
+  const cb = (currentQuote && currentQuote.currency_block) || {currency:'EUR', live_rate:1.0};
+  if (subJcl) subJcl.textContent = sJcl > 0 ? (' · ' + mfFormatMoney(sJcl, cb.currency, cb.live_rate)) : '';
+  if (subDel) subDel.textContent = sDel > 0 ? (' · ' + mfFormatMoney(sDel, cb.currency, cb.live_rate)) : '';
 }
 const SL = { draft:'Bozza', sent:'Inviata', approved:'Approvata', rejected:'Rifiutata', expired:'Scaduta', superseded:'Sostituita' };
 const HOURS_PER_DAY = 8;
