@@ -2703,12 +2703,32 @@ async def convert_to_job_legacy(
 @router.get("/api/{quote_id}/pdf")
 async def quote_pdf(quote_id: int, db: Session = Depends(get_db)):
     from app.services.quote_pdf import generate_quote_pdf
+    from app.models import Tenant
+    from app.services import fx, currency as cur
+    from app.services.clock import now_utc
     q = db.query(Quote).options(
         joinedload(Quote.client),
         joinedload(Quote.lines).joinedload(QuoteLine.price_item).joinedload(PriceItem.category),
     ).filter(Quote.id == quote_id).first()
     if not q: raise HTTPException(404)
-    pdf = generate_quote_pdf(q)
+
+    # Calcola contesto valuta display (live al momento della stampa)
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    base_ccy = (tenant.default_currency if tenant else None) or "EUR"
+    quote_ccy = (q.currency or base_ccy).upper()
+    pdf_ccy = None
+    pdf_rate = 1.0
+    pdf_disclaimer = None
+    if quote_ccy != base_ccy.upper():
+        live_rate = fx.get_fx_rate(db, quote_ccy, base_ccy)
+        if live_rate:
+            pdf_ccy = quote_ccy
+            pdf_rate = live_rate
+            pdf_disclaimer = cur.disclaimer(
+                base_ccy, quote_ccy, live_rate,
+                now_utc().strftime("%d/%m/%Y"))
+
+    pdf = generate_quote_pdf(q, ccy=pdf_ccy, rate=pdf_rate, disclaimer=pdf_disclaimer)
     filename = f"quote_{q.number.replace('/', '-')}.pdf"
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})

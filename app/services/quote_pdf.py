@@ -37,9 +37,19 @@ def _p(text, size=9, color=DARK, bold=False, align=TA_LEFT, leading=None):
         alignment=align, leading=leading or (size + 3)))
 
 
-def _fmt(n):
+def _fmt(n, sym="€"):
     if n is None: return "—"
-    return f"€ {n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    formatted = f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{sym} {formatted}"
+
+
+def _conv(n, rate: float, sym: str):
+    """Converte un importo BASE in valuta display e lo formatta."""
+    if n is None: return "—"
+    from app.services.currency import to_display
+    converted = to_display(float(n), rate)
+    formatted = f"{converted:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{sym} {formatted}"
 
 
 def _fmt_date(d):
@@ -91,7 +101,28 @@ def _get_tenant_info(quote):
             "show_powered_by": True, "logo_path": None, "document_header": ""}
 
 
-def generate_quote_pdf(quote) -> bytes:
+def generate_quote_pdf(quote, *, ccy: str = None, rate: float = 1.0,
+                       disclaimer: str = None) -> bytes:
+    """Genera PDF quotazione.
+
+    Parametri opzionali per valuta display:
+    - ccy: codice ISO valuta display (es. "USD"). None o uguale alla valuta base → EUR, nessuna conversione.
+    - rate: fx_rate_to_base (quanti EUR per 1 ccy). Usato da to_display(amount_base, rate).
+    - disclaimer: testo legale da aggiungere in calce. None → nessun disclaimer.
+
+    Backward-compatible: senza parametri si comporta esattamente come prima.
+    """
+    from app.services.currency import symbol as ccy_symbol
+    _foreign = bool(ccy and ccy.upper() not in ("EUR", "") and rate and rate != 1.0)
+    _sym = ccy_symbol(ccy) if _foreign else "€"
+    _rate = rate if (_foreign and rate and rate > 0) else 1.0
+
+    def _m(n):
+        """Formatta importo: converte se valuta estera, altrimenti formato base."""
+        if _foreign:
+            return _conv(n, _rate, _sym)
+        return _fmt(n)
+
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
         leftMargin=14*mm, rightMargin=14*mm, topMargin=14*mm, bottomMargin=14*mm,
@@ -218,13 +249,14 @@ def generate_quote_pdf(quote) -> bytes:
 
     # ── Tabella righe quotazione ──────────────────────────────
     col_w = [62*mm, 16*mm, 14*mm, 24*mm, 18*mm, 28*mm]
+    _ccy_label = _sym if _foreign else "€"
     header_row = [
         _p("Descrizione", 8, WHITE, bold=True),
         _p("Q.tà", 8, WHITE, bold=True, align=TA_RIGHT),
         _p("Unità", 8, WHITE, bold=True, align=TA_RIGHT),
-        _p("Prezzo/Un. €", 8, WHITE, bold=True, align=TA_RIGHT),
+        _p(f"Prezzo/Un. {_ccy_label}", 8, WHITE, bold=True, align=TA_RIGHT),
         _p("Sconto %", 8, WHITE, bold=True, align=TA_RIGHT),
-        _p("Totale €", 8, WHITE, bold=True, align=TA_RIGHT),
+        _p(f"Totale {_ccy_label}", 8, WHITE, bold=True, align=TA_RIGHT),
     ]
     rows = [header_row]
     style_cmds = [
@@ -278,7 +310,7 @@ def generate_quote_pdf(quote) -> bytes:
                     _p(f"  Subtotale sezione {current_section}", 8, GRAY,
                        bold=True, align=TA_RIGHT),
                     _p(""), _p(""), _p(""), _p(""),
-                    _p(_fmt(section_accum), 8, GRAY, bold=True, align=TA_RIGHT),
+                    _p(_m(section_accum), 8, GRAY, bold=True, align=TA_RIGHT),
                 ])
                 style_cmds.append(("SPAN", (0, sub_i), (4, sub_i)))
                 style_cmds.append(("LINEABOVE", (0, sub_i), (-1, sub_i),
@@ -309,9 +341,9 @@ def generate_quote_pdf(quote) -> bytes:
                               ParagraphStyle("x2", fontSize=8, fontName="Helvetica", leading=11)),
                 _p(f"{line.quantity:g}", 8, align=TA_RIGHT),
                 _p(line.unit, 8, align=TA_RIGHT),
-                _p(_fmt(line.unit_price), 8, align=TA_RIGHT),
+                _p(_m(line.unit_price), 8, align=TA_RIGHT),
                 _p(disc_str, 8, align=TA_RIGHT, color=ROSE if line.line_discount_pct else GRAY),
-                _p(_fmt(line.total), 8, DARK, bold=True, align=TA_RIGHT),
+                _p(_m(line.total), 8, DARK, bold=True, align=TA_RIGHT),
             ])
             section_accum += (line.total or 0.0)
             if section_first_idx < 0:
@@ -324,7 +356,7 @@ def generate_quote_pdf(quote) -> bytes:
         rows.append([
             _p(f"Subtotale {cat}", 8, DARK, bold=True, align=TA_RIGHT),
             _p(""), _p(""), _p(""), _p(""),
-            _p(_fmt(cat_subtotal), 8, DARK, bold=True, align=TA_RIGHT),
+            _p(_m(cat_subtotal), 8, DARK, bold=True, align=TA_RIGHT),
         ])
         style_cmds.append(("SPAN", (0, sub_idx), (4, sub_idx)))
         style_cmds.append(("BACKGROUND", (0, sub_idx), (-1, sub_idx), LIGHT))
@@ -338,7 +370,7 @@ def generate_quote_pdf(quote) -> bytes:
             rows.append([
                 _p(f"Sconto categoria ({cd*100:.1f}%)", 8, ROSE, align=TA_RIGHT),
                 _p(""), _p(""), _p(""), _p(""),
-                _p("−" + _fmt(disc_amount), 8, ROSE, bold=True, align=TA_RIGHT),
+                _p("−" + _m(disc_amount), 8, ROSE, bold=True, align=TA_RIGHT),
             ])
             style_cmds.append(("SPAN", (0, d_idx), (4, d_idx)))
             style_cmds.append(("BACKGROUND", (0, d_idx), (-1, d_idx), ROSE_BG))
@@ -356,29 +388,29 @@ def generate_quote_pdf(quote) -> bytes:
 
     totals_rows = [
         [_p("Totale lordo", 9, GRAY, align=TA_RIGHT),
-         _p(_fmt(quote.subtotal_gross), 9, GRAY, align=TA_RIGHT)],
+         _p(_m(quote.subtotal_gross), 9, GRAY, align=TA_RIGHT)],
     ]
     if line_cat_disc_total > 0.005:
         totals_rows.append(
             [_p("Sconti voci + categorie", 9, ROSE, align=TA_RIGHT),
-             _p("−" + _fmt(line_cat_disc_total), 9, ROSE, align=TA_RIGHT)]
+             _p("−" + _m(line_cat_disc_total), 9, ROSE, align=TA_RIGHT)]
         )
     totals_rows.append(
         [_p("Subtotale", 9, DARK, bold=True, align=TA_RIGHT),
-         _p(_fmt(quote.subtotal), 9, DARK, bold=True, align=TA_RIGHT)]
+         _p(_m(quote.subtotal), 9, DARK, bold=True, align=TA_RIGHT)]
     )
     if pkg_pct > 0.05:
         totals_rows.append(
             [_p(f"Sconto pacchetto ({pkg_pct:.1f}%)", 9, ROSE, align=TA_RIGHT),
-             _p("−" + _fmt(pkg_amount), 9, ROSE, align=TA_RIGHT)]
+             _p("−" + _m(pkg_amount), 9, ROSE, align=TA_RIGHT)]
         )
     totals_rows.extend([
         [_p("Totale netto (base IVA)", 9, DARK, bold=True, align=TA_RIGHT),
-         _p(_fmt(quote.total_after_discount), 9, DARK, bold=True, align=TA_RIGHT)],
+         _p(_m(quote.total_after_discount), 9, DARK, bold=True, align=TA_RIGHT)],
         [_p(f"IVA {quote.vat_rate:.0f}%", 9, GRAY, align=TA_RIGHT),
-         _p(_fmt(vat_amount), 9, GRAY, align=TA_RIGHT)],
+         _p(_m(vat_amount), 9, GRAY, align=TA_RIGHT)],
         [_p("TOTALE (IVA inclusa)", 12, WHITE, bold=True, align=TA_RIGHT),
-         _p(_fmt(quote.total_with_vat), 12, WHITE, bold=True, align=TA_RIGHT)],
+         _p(_m(quote.total_with_vat), 12, WHITE, bold=True, align=TA_RIGHT)],
     ])
     last = len(totals_rows) - 1
     tt = Table(totals_rows, colWidths=[62*mm, 38*mm])
@@ -439,10 +471,10 @@ def generate_quote_pdf(quote) -> bytes:
                                        fontName="Helvetica", leading=11)),
                 _p(f"{line.quantity:g}", 8, align=TA_RIGHT),
                 _p(line.unit, 8, align=TA_RIGHT),
-                _p(_fmt(line.unit_price), 8, align=TA_RIGHT),
+                _p(_m(line.unit_price), 8, align=TA_RIGHT),
                 _p(disc_str, 8, align=TA_RIGHT,
                    color=ROSE if line.line_discount_pct else GRAY),
-                _p(_fmt(line.total), 8, AMBER, bold=True, align=TA_RIGHT),
+                _p(_m(line.total), 8, AMBER, bold=True, align=TA_RIGHT),
             ])
         # subtotale opzionale
         opt_subtotal = sum((l.total or 0.0) for l in optional_lines)
@@ -450,7 +482,7 @@ def generate_quote_pdf(quote) -> bytes:
         opt_rows.append([
             _p("Totale optional", 9, AMBER, bold=True, align=TA_RIGHT),
             _p(""), _p(""), _p(""), _p(""),
-            _p("+" + _fmt(opt_subtotal), 9, AMBER, bold=True, align=TA_RIGHT),
+            _p("+" + _m(opt_subtotal), 9, AMBER, bold=True, align=TA_RIGHT),
         ])
         opt_style.append(("SPAN", (0, sub_i), (4, sub_i)))
         opt_style.append(("LINEABOVE", (0, sub_i), (-1, sub_i), 0.5, AMBER))
@@ -478,6 +510,11 @@ def generate_quote_pdf(quote) -> bytes:
         "Si applicano le nostre Condizioni Generali di Vendita.  ·  "
         "Spese di spedizione, corriere e trasferte non sono incluse e verranno fatturate separatamente.",
         7, GRAY, align=TA_CENTER))
+    # ── Disclaimer valuta estera (in calce, solo se presente) ──
+    if disclaimer:
+        story.append(Spacer(1, 3*mm))
+        story.append(_p(disclaimer, 7, GRAY, align=TA_LEFT))
+
     # v3.5.0-alpha.66.13 — Footer branding "powered by" toggleable
     if tenant.get("show_powered_by", True):
         story.append(Spacer(1, 1*mm))
