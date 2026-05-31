@@ -177,6 +177,12 @@ scarica XML SDI (EUR) + PDF (USD) + disclaimer.
 
 ## 12. Fuori scope (debito futuro)
 
+- **Scope attuale: solo tenant italiani** (base EUR, contesto fiscale IT). Confermato Matteo.
+- **Disclaimer per mercati esteri**: il testo §5 cita la norma italiana (art. 13 DPR
+  633/72). Per tenant/mercati esteri andrà adattato (riferimenti normativi locali, lingua,
+  eventuale Divisa estera). Da prevedere quando si aprirà a tenant non-IT. Il testo del
+  disclaimer è quindi parametrizzato/centralizzato in `currency.disclaimer()` così da poter
+  variare per locale in futuro senza toccare i call-site.
 - XML SDI in valuta estera (Divisa estera) + flusso esterometro/TD17-19 cross-border.
 - Tenant base ≠ EUR con regole fiscali non-IT (la logica SDI assume base EUR / contesto IT).
 - Hedging / tassi forward / multi-rate per riga.
