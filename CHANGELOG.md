@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.159 — Mobile v2 Fase A: foundation look + drawer nav (31 mag 2026)
+
+Prima fase dell'espansione mobile (da companion spartano a livello intermedio). Look curato
++ navigazione scalabile. Subagent-driven 3 task. **290/290** test. Spec/piano in `docs/superpowers/`.
+
+- **Navigazione drawer** (`base_mobile.html`): rimossa bottom tab bar; header con ☰ + titolo +
+  azione notifiche; drawer laterale slide-in (overlay, Escape, 5 voci operative con icone lucide
+  + logout). Helper JS `mDrawerOpen/Close/Toggle`.
+- **Design system v2** (`mobile.css`, [frontend-design]): dark "ink-indigo" affinato — tokens
+  (spaziatura/raggi/ombre/tipografia), componenti rifiniti (card/list/badge semantici/button/form/
+  skeleton), drawer styles, micro-interazioni, reduced-motion. **90 classi preservate** (zero
+  rotture al render JS esistente). Icone lucide al posto delle emoji.
+- **Schermate** (5): adottano i componenti + skeleton loading + icone lucide (`createIcons()`
+  dopo i render dinamici). Nessun cambio dati/logica.
+- Decomposizione iniziativa mobile-v2: A (questa) → B consultazione entità → C azioni →
+  D copilot/planning. Editor pesanti (quote righe/timeline/listino) restano desktop.
+
 ## v3.5.0-alpha.172.158 — Versione mobile PWA (staff operativo) (31 mag 2026)
 
 Prima versione mobile: PWA companion per lo staff, area `/m/*` dedicata (template lean,

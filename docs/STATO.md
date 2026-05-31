@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.158** — 31 maggio 2026 — Versione mobile PWA (staff operativo)
+**v3.5.0-alpha.172.159** — 31 maggio 2026 — Mobile v2 Fase A (foundation look + drawer nav)
+
+### α.172.159 ✅ (Mobile v2 Fase A — foundation, subagent-driven 3 task)
+Espansione mobile (Matteo: v1 spartano+limitato → livello intermedio). Fase A = look + nav. Drawer laterale (☰, sostituisce tab bar) + design system v2 (`mobile.css` [frontend-design], dark ink-indigo, tokens+componenti+skeleton, 90 classi preservate) + 5 schermate con icone lucide. **290/290** test, E2E ok. **Iniziativa mobile-v2 in 4 fasi**: A look/nav ✅ · B consultazione entità (Agenda/Progetti/Quote/Clienti/Finance) · C azioni · D copilot/planning. Editor pesanti → desktop. Spec/piani in `docs/superpowers/` (2026-05-31-mobile-v2-faseA + mobile-pwa-staff).
+
+**Prossimo**: restart server :9000 (tunnel) col nuovo look per test Matteo; poi Fase B. Restart :8000 di Matteo per currency/backlog/mobile backend.
+
+### α.172.158 ✅ — Versione mobile PWA staff (vedi sotto)
 
 ### α.172.158 ✅ (MOBILE PWA staff — feature nuova, subagent-driven 10 task TDD)
 Area `/m/*` dedicata (template lean `templates/mobile/`, riusa endpoint JSON esistenti). Scaffold (router mobile + base_mobile + tab bar + mobile.css/js) + PWA (manifest+sw+icone) + 5 schermate (Oggi/Timbra/Notifiche/Ferie/Assegnazioni) + endpoint `POST /planning/api/my-bookings/{id}/respond` (accetta/rifiuta, ownership 403, `BookingAssignment.response_status`+auto-migrate). Auth via middleware globale (no-auth→redirect login, verificato E2E). **288/288** test. E2E: /m/* 200, asset PWA 200, redirect no-auth ok.
