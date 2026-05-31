@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.153** — 31 maggio 2026 — label unità "trn 3h"
+**v3.5.0-alpha.172.154** — 31 maggio 2026 — conversione qty/prezzo trn su cambio unità
+
+### α.172.154 ✅ (conversione qty/prezzo anche per trn — bug Matteo)
+`saveLineField` (quotes.html, cambio unità inline riga salvata) era hardcoded day↔hr (`factor=HOURS_PER_DAY`) → trn non convertiva qty+prezzo. Generalizzato via `HOURS_PER_UNIT_JS`: factor=ore(old)/ore(new), qty*=factor, price/=factor, totale invariato. Copre day↔trn↔hr + legacy turno; non-temporali nessuna conversione. Solo template (hard refresh). NB: 2 conversioni JS distinte — `convertPriceOnUnitChange` (add-line, solo prezzo, già generalizzato .151) e `saveLineField` (inline riga salvata, qty+prezzo, .154).
+
+**Prossimo**: push commit .147-.154 + ZIP quando Matteo OK.
+
+### α.172.153 ✅ — label unità "trn 3h" (vedi sotto)
 
 ### α.172.153 ✅ (label "trn 3h" — richiesta Matteo)
 4 dropdown ora `value="trn"` + label "trn 3h" (era value="turno"/"turno (3h)"). `trn` già canonico in tutto il backend; "turno" resta alias retrocompat (inline edit preseleziona trn anche su legacy "turno"). Solo template → hard refresh, no restart. Server :8000 ora gira .152 (riavviato da Matteo) → auto-reload serve .153 template; codice Python resta .152 fino a prossimo restart (irrilevante: trn già supportato in .151).

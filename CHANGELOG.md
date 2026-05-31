@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.154 — conversione qty/prezzo su cambio unità anche per trn (31 mag 2026)
+
+Matteo: "trn non converte la quantità come day e hr". La conversione inline su
+cambio unità di una riga salvata (`saveLineField`, quotes.html) era hardcoded
+**solo day↔hr** (`factor = HOURS_PER_DAY`). Cambiando in trn qty+prezzo non si
+convertivano. Generalizzata via `HOURS_PER_UNIT_JS`: `factor = ore(old)/ore(new)`,
+`qty *= factor`, `unit_price /= factor` → totale invariato. Copre day↔trn↔hr
+(e legacy "turno"); unità non-temporali (pc/TB) nessuna conversione. Es:
+2 day × €1500 → 5,33 trn × €562,50 (= €3000). Solo template → hard refresh.
+
 ## v3.5.0-alpha.172.153 — label unità "trn 3h" (31 mag 2026)
 
 Matteo: abbreviare in "trn 3h". I 4 dropdown ora usano `value="trn"` + label

@@ -2908,19 +2908,20 @@ async function saveLineField(el) {
   const field = el.dataset.field;
   let value = el.value;
 
-  // Conversione automatica day↔hr: cambiando unit, qty e unit_price si convertono
-  // simmetricamente (1 giornata = 8 ore) così il totale resta invariato. Esempio:
-  // 2 day × €1500 = €3000  →  16 hr × €187.50 = €3000.
+  // Conversione automatica tra unità temporali (day↔trn↔hr): cambiando unit,
+  // qty e unit_price si convertono simmetricamente sulle ore così il totale
+  // resta invariato. factor = ore(old)/ore(new) → qty *= factor, price /= factor.
+  // Esempi: 2 day × €1500 = €3000 → 16 hr × €187.50 (factor 8) → 5.33 trn × €562.50
+  // (factor 8/3). Per unità non-temporali (pc/TB...) nessuna conversione.
+  // v3.5.0-alpha.172.154 — generalizzato via HOURS_PER_UNIT_JS (era solo day↔hr).
   let extraUpdates = {};
   if (field === 'unit') {
     const line = currentQuote.lines.find(l => l.id == lineId);
     if (line) {
-      const oldUnit = line.unit;
-      const newUnit = value;
-      let factor = null; // qty *= factor, price /= factor
-      if (oldUnit === 'day' && newUnit === 'hr') factor = HOURS_PER_DAY;
-      else if (oldUnit === 'hr' && newUnit === 'day') factor = 1 / HOURS_PER_DAY;
-      if (factor !== null) {
+      const bf = HOURS_PER_UNIT_JS[(line.unit || '').toLowerCase()];
+      const nf = HOURS_PER_UNIT_JS[(value || '').toLowerCase()];
+      if (bf && nf && bf !== nf) {
+        const factor = bf / nf; // qty *= factor, price /= factor
         const oldQty = parseFloat(line.quantity || 0);
         const oldPrice = parseFloat(line.unit_price || 0);
         extraUpdates.quantity = +(oldQty * factor).toFixed(4);
