@@ -45,6 +45,30 @@ def _resolve_item_unit_price(item, price_level) -> float:
         return 0.0
     return float(chosen)
 
+
+def _currency_block_for_quote(db, quote) -> dict:
+    """Blocco valuta per il payload quote: valuta target + tasso LIVE corrente
+    (indicativo) + disclaimer. Importi restano in base; il frontend converte."""
+    from app.services import fx, currency as cur
+    from app.models import Tenant as _Tenant
+    tenant = db.query(_Tenant).filter(_Tenant.id == current_tenant_id()).first()
+    base = (tenant.default_currency if tenant else "EUR").upper()
+    ccy = (getattr(quote, "currency", None) or base).upper()
+    if ccy == base:
+        return {
+            "currency": base, "base_currency": base, "live_rate": 1.0,
+            "symbol": cur.symbol(base), "disclaimer": None, "rate_available": True,
+        }
+    live = fx.get_fx_rate(db, ccy, base)  # quanti base per 1 ccy
+    today = now_utc().strftime("%d/%m/%Y")
+    disc = cur.disclaimer(base, ccy, live, today) if live is not None else None
+    return {
+        "currency": ccy, "base_currency": base, "live_rate": live,
+        "symbol": cur.symbol(ccy), "disclaimer": disc,
+        "rate_available": live is not None,
+    }
+
+
 # v3.5.0-alpha.66.14.5 — Dependency riusabile per i mutator quote.
 # Sostituisce i check inline `if not has_permission(user, "edit_quotes")` e
 # li applica anche agli 11 mutator che ne erano sprovvisti (audit HIGH #4).
@@ -997,6 +1021,7 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "currency": getattr(q, "currency", "EUR"),
         "fx_rate_to_base": getattr(q, "fx_rate_to_base", 1.0),
         "fx_rate_fixed_at": q.fx_rate_fixed_at.isoformat() if getattr(q, "fx_rate_fixed_at", None) else None,
+        "currency_block": _currency_block_for_quote(db, q),
         # v3.5.0-alpha.139 — Termini di acconto definiti in quote
         "advance_schedules": _get_schedules_serialized(db, q.id),
         "generated_from_deliverables": q.generated_from_deliverables,
@@ -1251,7 +1276,7 @@ async def update_quote(
             rate = (refresh_fx_rate(db, target_ccy, base_ccy) if want_refresh
                     else get_fx_rate(db, target_ccy, base_ccy))
             if rate is None:
-                raise HTTPException(503, f"Tasso FX {target_ccy}->{base_ccy} non disponibile (provider down)")
+                raise HTTPException(422, "Tasso di cambio non disponibile, riprova più tardi")
             q.currency = target_ccy
             q.fx_rate_to_base = rate
             q.fx_rate_fixed_at = now_utc()
