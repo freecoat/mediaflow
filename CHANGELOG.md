@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.152 — "turno" anche nei dropdown mancanti (31 mag 2026)
+
+Follow-up .151 (Matteo: "non vedo l'unità nel menu della voce di quotazione né
+nel modal voce listino"). Coperti i dropdown unità rimasti senza turno:
+
+- `/quotes` — **select inline di edit riga** (JS-built nella tabella quote,
+  era separato dal pannello "Aggiungi voce" già fixato in .151).
+- `/quotes` — `_lineNature()` JS: aggiunto turno/turni/trn/shift alla lista
+  time_based (badge nature corretto sulle righe in turni).
+- `/job_detail` — select `#ex-unit` (aggiunta cost line manuale).
+
+NB operativo: i template hanno auto_reload in dev → le opzioni compaiono con
+hard refresh SENZA restart. Ma la **logica** turno=3h (conversione ore↔qty,
+nature, prezzo) richiede il backend ≥.151 → **restart server** (l'istanza in
+esecuzione era ancora α.172.72: template freschi ma codice Python vecchio).
+
 ## v3.5.0-alpha.172.151 — nuova unità "turno" = 3 ore (31 mag 2026)
 
 Richiesta Matteo: unità **turno** (3 ore), utile soprattutto al reparto Suono

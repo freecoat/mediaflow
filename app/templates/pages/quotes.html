@@ -1307,7 +1307,7 @@ function _lineNature(l) {
   // Fallback solo se backend non ha popolato il campo (es. quote pre-restructure).
   if (l && l.unit_nature) return l.unit_nature;
   const u = (l && l.unit || '').trim().toLowerCase();
-  if (['hr','ore','hour','h','day','giorno','giornate','giornata','d'].includes(u)) return 'time_based';
+  if (['hr','ore','hour','h','day','giorno','giornate','giornata','d','turno','turni','trn','shift'].includes(u)) return 'time_based';
   if (['pc','lot','shot','version'].includes(u)) return 'deliverable_qty';
   if (['tb','gb'].includes(u)) return 'deliverable_volume';
   if (['allow','lump','fix','min'].includes(u)) return 'manual_allow';
@@ -2250,6 +2250,7 @@ function renderLineRow(l) {
           <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;min-width:70px;width:auto;">
             <optgroup label="Lavorazione (a tempo)">
               <option value="day"${l.unit==='day'?' selected':''}>day</option>
+              <option value="turno"${l.unit==='turno'?' selected':''}>turno (3h)</option>
               <option value="hr"${l.unit==='hr'?' selected':''}>hr</option>
             </optgroup>
             <optgroup label="Consegna">

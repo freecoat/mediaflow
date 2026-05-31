@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.151** — 31 maggio 2026 — nuova unità "turno" = 3 ore
+**v3.5.0-alpha.172.152** — 31 maggio 2026 — "turno" nei dropdown mancanti
+
+### α.172.152 ✅ (turno nei dropdown rimasti — follow-up Matteo)
+.151 aveva coperto solo pannello add-line (#al-unit) + pricelist (#it-unit). Aggiunti: /quotes select **inline edit riga** (L2252, JS-built) + `_lineNature` JS time-list + /job_detail `#ex-unit`. NB: template auto_reload in dev → opzioni visibili con hard refresh; logica turno=3h richiede **restart server** (l'istanza :8000 girava ancora α.172.72 — template freschi, Python vecchio).
+
+**Prossimo**: restart server :8000 (carica backend .152) + push commit .147-.152 + ZIP quando Matteo OK.
+
+### α.172.151 ✅ — nuova unità "turno" = 3 ore (vedi sotto)
 
 ### α.172.151 ✅ (unità "turno" = 3 ore — richiesta Matteo)
 Generica (utile a Suono). Source of truth `cost_line_sync.HOURS_PER_UNIT` + `hours_per_unit()`: turno/turni/trn/shift=3.0. `_qty_from_hours`/`is_time_based_unit`/`_UNIT_TO_NATURE` derivano dalla mappa. Dedup conversioni: `reverse_quote` + `cost_report` (OT pending) ora usano `hours_per_unit()` (prima day/else hardcoded → turno=1h errato). UI: option "turno (3h)" in /pricelist+/quotes, badge+conversione prezzo JS (`HOURS_PER_UNIT_JS`). AI: enum/validazione/docs. Cleanup terminologico: copy "turno"(=8h giornata) → "giornata". 27 test → **217/217**. JS servito node --check OK.
