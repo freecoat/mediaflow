@@ -715,6 +715,18 @@ function escapeHtml(s) {
 function fmtCurrency(n) {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n || 0);
 }
+
+// Conversione/format valuta (mirror app/services/currency.py). amountBase è in
+// valuta BASE; rate = fx_rate_to_base (quanti base per 1 valuta cliente).
+// Display in valuta cliente = base / rate. v3.5.0-alpha.172.x
+window.mfFormatMoney = function(amountBase, ccy, rate) {
+  const r = (rate && rate > 0) ? rate : 1.0;
+  const v = (Number(amountBase) || 0) / r;
+  const s = v.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const sym = ({EUR: '€', USD: '$', GBP: '£', CHF: 'CHF'})[(ccy || '').toUpperCase()] || (ccy || '').toUpperCase();
+  return `${s} ${sym}`;
+};
+
 function fmtDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('it-IT');
