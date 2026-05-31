@@ -14,6 +14,7 @@ API principali:
 Convenzione: rate è "quanti to_ccy per 1 from_ccy". Es. rate(USD,EUR)=0.92
 significa 1 USD = 0.92 EUR.
 """
+from app.services.clock import now_utc
 from datetime import datetime, timedelta
 from typing import Optional
 import urllib.request
@@ -64,12 +65,12 @@ def _upsert_rate(db: Session, from_ccy: str, to_ccy: str, rate: float) -> FXRate
     ).first()
     if existing:
         existing.rate = rate
-        existing.fetched_at = datetime.utcnow()
+        existing.fetched_at = now_utc()
         db.commit()
         return existing
     row = FXRate(
         from_currency=from_u, to_currency=to_u,
-        rate=rate, fetched_at=datetime.utcnow(),
+        rate=rate, fetched_at=now_utc(),
         provider="frankfurter",
     )
     db.add(row)
@@ -93,7 +94,7 @@ def get_fx_rate(
         FXRate.from_currency == from_u,
         FXRate.to_currency == to_u,
     ).first()
-    cutoff = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+    cutoff = now_utc() - timedelta(minutes=max_age_minutes)
     if existing and existing.fetched_at >= cutoff:
         return existing.rate
     # Refresh

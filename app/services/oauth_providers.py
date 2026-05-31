@@ -16,6 +16,7 @@ Scope di default:
 Refresh token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 import os
 import json
@@ -185,7 +186,7 @@ def save_token(db: Session, user_id: int, provider: str, token_response: dict,
     refresh = token_response.get("refresh_token")  # opzionale
     expires_in = token_response.get("expires_in", 3600)
     scope = token_response.get("scope")
-    expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
+    expires_at = now_utc() + timedelta(seconds=int(expires_in))
 
     existing = db.query(UserOAuthToken).filter(
         UserOAuthToken.user_id == user_id,
@@ -200,7 +201,7 @@ def save_token(db: Session, user_id: int, provider: str, token_response: dict,
         existing.scopes = scope
         if account_email:
             existing.account_email = account_email
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = now_utc()
         return existing
     row = UserOAuthToken(
         user_id=user_id, provider=provider,

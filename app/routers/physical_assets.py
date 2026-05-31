@@ -12,6 +12,7 @@ Pattern d'uso:
   consegnata esternamente (flag ortogonali).
 - Lega a JobDeliverable quando rappresenta "il file/supporto finale".
 """
+from app.services.clock import now_utc
 from datetime import datetime, date, time
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
@@ -566,7 +567,7 @@ async def delete_physical_asset(
     if hard:
         db.delete(a)
     else:
-        a.deleted_at = datetime.utcnow()
+        a.deleted_at = now_utc()
     db.commit()
     return {"ok": True, "id": asset_id, "hard": hard}
 
@@ -933,7 +934,7 @@ def _next_ddt_number(db: Session, project_code: Optional[str] = None) -> str:
     """Auto-incrementale 'DDT-YYYY-NNN' per tenant.
     v3.5.0-alpha.116: cabling NumberingConfig "ddt". Variabili supportate:
     YYYY/.../NNN/PROJECT_CODE. Fallback legacy."""
-    year = datetime.utcnow().year
+    year = now_utc().year
     # Try NumberingConfig first
     try:
         from app.services.numbering import gen_doc_code
@@ -1017,7 +1018,7 @@ async def create_movement(
         physical_asset_id=asset_id,
         movement_type=mt,
         delivery_note_number=delivery_note_number,
-        movement_date=movement_date or datetime.utcnow(),
+        movement_date=movement_date or now_utc(),
         expected_return_date=expected_return_date,
         from_party=(from_party or "").strip() or None,
         from_address=(from_address or "").strip() or None,
@@ -1076,7 +1077,7 @@ async def confirm_movement(
     if m.confirmed_at:
         return {"ok": True, "already_confirmed": True, "at": str(m.confirmed_at)[:19]}
     user = getattr(request.state, "current_user", None)
-    m.confirmed_at = datetime.utcnow()
+    m.confirmed_at = now_utc()
     m.confirmed_by_user_id = user.id if user else None
     m.confirmed_by_name = (confirmed_by_name or "").strip() or None
     # Aggiorna logistics_status finale
@@ -1295,7 +1296,7 @@ async def remove_content(
     if not m: raise HTTPException(404)
     if m.removed_at: return {"ok": True, "already_removed": True}
     user = getattr(request.state, "current_user", None)
-    m.removed_at = datetime.utcnow()
+    m.removed_at = now_utc()
     m.removed_by_user_id = user.id if user else None
     db.commit()
     return {"ok": True, "removed_at": str(m.removed_at)[:19]}
@@ -1484,7 +1485,7 @@ def _next_batch_code(db: Session, project_code: Optional[str] = None) -> str:
     """v3.5.0-alpha.116: cabling NumberingConfig "ingest_batch".
     Variabili supportate: YYYY/.../NNN/PROJECT_CODE. Fallback legacy."""
     from app.models import IngestBatch
-    year = datetime.utcnow().year
+    year = now_utc().year
     # Try NumberingConfig
     try:
         from app.services.numbering import gen_doc_code
@@ -1724,7 +1725,7 @@ async def create_shipment(
             ingest_batch_id=batch.id,
             movement_type=mt,
             delivery_note_number=ddt,
-            movement_date=datetime.utcnow(),
+            movement_date=now_utc(),
             from_party=(from_party or "").strip() or None,
             from_address=(from_address or "").strip() or None,
             from_contact=(from_contact or "").strip() or None,
@@ -1745,7 +1746,7 @@ async def create_shipment(
             ingest_batch_id=batch.id,
             movement_type=mt,
             delivery_note_number=ddt,
-            movement_date=datetime.utcnow(),
+            movement_date=now_utc(),
             from_party=(from_party or "").strip() or None,
             from_address=(from_address or "").strip() or None,
             from_contact=(from_contact or "").strip() or None,
@@ -1884,7 +1885,7 @@ async def create_digital_ingest(
         ingest_batch_id=ingest_batch_id,
         movement_type=mt,
         delivery_note_number=delivery_note_number,
-        movement_date=datetime.utcnow(),
+        movement_date=now_utc(),
         from_party=(from_party or "").strip() or None,
         to_party=(to_party or "").strip() or None,
         client_id=client_id,

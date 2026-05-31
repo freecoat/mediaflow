@@ -8,6 +8,7 @@ NB: write-off cliente NON è qui — resta in LossEntry (single source of truth)
 Reportistica P&L aggrega LossEntry + OverheadCost via UNION.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 from typing import Optional
 from datetime import date, datetime
@@ -381,7 +382,7 @@ async def delete_overhead(oc_id: int, db: Session = Depends(get_db)):
     ).first()
     if not oc:
         raise HTTPException(404, "OverheadCost non trovata")
-    oc.deleted_at = datetime.utcnow()
+    oc.deleted_at = now_utc()
     db.commit()
     return {"ok": True, "id": oc_id}
 

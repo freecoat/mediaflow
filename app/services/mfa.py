@@ -13,6 +13,7 @@ Flow:
   5. disable_mfa(user, code) → richiede OTP per confermare.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import io
 from datetime import datetime
 from typing import Optional, Tuple
@@ -95,7 +96,7 @@ def confirm_setup(user, code: str) -> bool:
     """Verify primo OTP dopo setup. Se OK enables MFA."""
     if verify_user_otp(user, code):
         user.mfa_enabled = True
-        user.mfa_enabled_at = datetime.utcnow()
+        user.mfa_enabled_at = now_utc()
         return True
     return False
 

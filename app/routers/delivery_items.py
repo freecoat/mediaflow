@@ -13,6 +13,7 @@ Endpoint:
 - GET    /delivery-taxonomy                       — vocabolario completo per dropdown UI
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import json
 import logging
 from typing import Optional
@@ -966,7 +967,7 @@ async def export_taxonomy(db: Session = Depends(get_db)):
     """Esporta TUTTA la taxonomy custom del tenant (no preset globali) come JSON."""
     out = {"tenant_id": current_tenant_id(), "exported_at": None, "entities": {}}
     from datetime import datetime as _dt
-    out["exported_at"] = _dt.utcnow().isoformat()
+    out["exported_at"] = now_utc().isoformat()
     for kind, Model in _ENTITY_MAP.items():
         rows = (
             db.query(Model)

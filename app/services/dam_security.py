@@ -11,6 +11,7 @@ Watermark video / PDF / DCP: scope futuro (richiede ffmpeg / PDF libs).
 Per ora solo immagini con PIL già usato per thumbnail.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import io
 import os
 import secrets
@@ -58,7 +59,7 @@ def apply_watermark_image(
     w, h = img.size
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    ts = ts or datetime.utcnow()
+    ts = ts or now_utc()
     label = f"{user_email or 'anonymous'} · {ts.strftime('%Y-%m-%d %H:%M:%S')} UTC"
     if extra:
         label += f" · {extra}"
@@ -168,7 +169,7 @@ def apply_watermark_pdf(
         import fitz  # PyMuPDF
     except Exception:
         return None
-    ts = ts or datetime.utcnow()
+    ts = ts or now_utc()
     label = f"{user_email or 'anonymous'} · {ts.strftime('%Y-%m-%d %H:%M:%S')} UTC"
     if extra:
         label += f" · {extra}"

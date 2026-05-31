@@ -15,6 +15,7 @@ Endpoint:
   - POST   /planning/api/unavailabilities/{u_id}/reject
   - DELETE /planning/api/unavailabilities/{u_id}
 """
+from app.services.clock import now_utc
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from typing import Optional
 from datetime import date as _date, datetime, time as _time, timedelta as _td
@@ -286,7 +287,7 @@ async def create_unavailability(
         status=status,
         requested_by_user_id=user.id if user else None,
         approved_by_user_id=user.id if (user and is_elevated(user)) else None,
-        approved_at=datetime.utcnow() if status == UnavailabilityStatus.approved else None,
+        approved_at=now_utc() if status == UnavailabilityStatus.approved else None,
     )
     db.add(u)
     db.commit()
@@ -360,7 +361,7 @@ async def approve_unavailability(u_id: int, request: Request, db: Session = Depe
         )
     u.status = UnavailabilityStatus.approved
     u.approved_by_user_id = user.id
-    u.approved_at = datetime.utcnow()
+    u.approved_at = now_utc()
     u.rejection_reason = None
     db.commit()
     db.refresh(u)
@@ -402,7 +403,7 @@ async def reject_unavailability(
         raise HTTPException(404, "Richiesta non trovata")
     u.status = UnavailabilityStatus.rejected
     u.approved_by_user_id = user.id
-    u.approved_at = datetime.utcnow()
+    u.approved_at = now_utc()
     u.rejection_reason = rejection_reason
     db.commit()
     db.refresh(u)

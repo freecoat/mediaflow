@@ -14,6 +14,7 @@ Trigger detect: chiamata manuale via `POST /finance/api/anomalies/detect`,
 oppure invocato da hook (es. dopo emit invoice → rileva extra_after_billed).
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 from datetime import date, datetime
 from typing import Optional
@@ -61,7 +62,7 @@ def _upsert(
         )
         .first()
     )
-    now = datetime.utcnow()
+    now = now_utc()
     if existing:
         existing.last_seen_at = now
         existing.amount = amount
@@ -441,7 +442,7 @@ def detect_cost_estimate_vs_real_drift(db: Session, threshold_pct: float = 15.0)
         )
         .all()
     )
-    now = datetime.utcnow()
+    now = now_utc()
     for e in stale:
         if e.source_id in detected_jcl_ids:
             continue

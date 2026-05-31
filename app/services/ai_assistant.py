@@ -20,6 +20,7 @@ Capability mutation supportate (lista canonica in `_ACTION_HANDLERS`):
 - web_search               — Tavily (read-only)
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import json
 import logging
 import re
@@ -1699,7 +1700,7 @@ def _h_analyze_conflicts(db: Session, data: dict) -> dict:
     days = int(data.get("days") or 14)
     project_id = data.get("project_id")
     department_id = data.get("department_id")
-    now = _dt.utcnow()
+    now = now_utc()
     end = now + _td(days=days)
     q = db.query(BookingAssignment).join(Booking).filter(
         Booking.tenant_id == CURRENT_TENANT,

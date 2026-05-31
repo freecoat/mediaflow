@@ -16,6 +16,7 @@ storage, dailies, crew, process). Schema flessibile JSON.
 - `GET    /public/tech-sheet/{edit_token}/state` — polling updated_at + recent logs
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 from datetime import datetime, timedelta
 import secrets
 import re
@@ -138,7 +139,7 @@ def _serialize(ts: ProjectTechSheet, project: Optional[Project] = None) -> dict:
 def _is_token_alive(ts: ProjectTechSheet) -> bool:
     if not ts.is_public_enabled or not ts.public_token:
         return False
-    if ts.expires_at and ts.expires_at < datetime.utcnow():
+    if ts.expires_at and ts.expires_at < now_utc():
         return False
     return True
 
@@ -146,7 +147,7 @@ def _is_token_alive(ts: ProjectTechSheet) -> bool:
 def _is_edit_token_alive(ts: ProjectTechSheet) -> bool:
     if not ts.is_public_edit_enabled or not ts.edit_token:
         return False
-    if ts.edit_expires_at and ts.edit_expires_at < datetime.utcnow():
+    if ts.edit_expires_at and ts.edit_expires_at < now_utc():
         return False
     return True
 
@@ -203,7 +204,7 @@ async def update_tech_sheet(
         new_status = payload["status"]
         if new_status == "approved" and ts.status != "approved":
             ts.approved_by_user_id = user.id if user else None
-            ts.approved_at = datetime.utcnow()
+            ts.approved_at = now_utc()
         elif new_status != "approved":
             ts.approved_by_user_id = None
             ts.approved_at = None
@@ -256,9 +257,9 @@ async def publish_tech_sheet(
     if rotate_token or not ts.public_token:
         ts.public_token = secrets.token_urlsafe(32)
     ts.is_public_enabled = True
-    ts.published_at = datetime.utcnow()
+    ts.published_at = now_utc()
     if expires_days and int(expires_days) > 0:
-        ts.expires_at = datetime.utcnow() + timedelta(days=int(expires_days))
+        ts.expires_at = now_utc() + timedelta(days=int(expires_days))
     else:
         ts.expires_at = None
     db.commit(); db.refresh(ts)
@@ -318,9 +319,9 @@ async def publish_tech_sheet_edit(
     if rotate_token or not ts.edit_token:
         ts.edit_token = secrets.token_urlsafe(32)
     ts.is_public_edit_enabled = True
-    ts.edit_published_at = datetime.utcnow()
+    ts.edit_published_at = now_utc()
     if expires_days and int(expires_days) > 0:
-        ts.edit_expires_at = datetime.utcnow() + timedelta(days=int(expires_days))
+        ts.edit_expires_at = now_utc() + timedelta(days=int(expires_days))
     else:
         ts.edit_expires_at = None
     db.commit(); db.refresh(ts)
@@ -401,7 +402,7 @@ async def public_tech_sheet(
     if not ts or not _is_token_alive(ts):
         return _tpl().TemplateResponse(
             "pages/tech_sheet_public_error.html",
-            {"request": request, "reason": "expired" if (ts and ts.expires_at and ts.expires_at < datetime.utcnow()) else "not_found"},
+            {"request": request, "reason": "expired" if (ts and ts.expires_at and ts.expires_at < now_utc()) else "not_found"},
             status_code=410 if ts else 404,
         )
     project = ts.project
@@ -428,7 +429,7 @@ async def public_tech_sheet_edit(
         joinedload(ProjectTechSheet.delivery_template),
     ).filter(ProjectTechSheet.edit_token == edit_token).first()
     if not ts or not _is_edit_token_alive(ts):
-        reason = "expired" if (ts and ts.edit_expires_at and ts.edit_expires_at < datetime.utcnow()) else "not_found"
+        reason = "expired" if (ts and ts.edit_expires_at and ts.edit_expires_at < now_utc()) else "not_found"
         return _tpl().TemplateResponse(
             "pages/tech_sheet_public_error.html",
             {"request": request, "reason": reason},

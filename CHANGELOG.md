@@ -1,5 +1,27 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.149 — sweep datetime.utcnow → now_utc (31 mag 2026)
+
+Chiuso il debito beta `datetime.utcnow()` ×111 (deprecato in Python 3.12+,
+ritorna naive). Nuovo helper centralizzato `app/services/clock.py`:
+
+    now_utc() == datetime.now(timezone.utc).replace(tzinfo=None)
+
+Semantica **identica** (resta naive: tutte le colonne/comparazioni del
+codebase sono naive) → zero cambio di comportamento, ma niente più warning
+e niente rischio di mischiare datetime aware/naive. `clock.py` non importa
+nulla da `app.*` → usabile da `models.py` (`default=now_utc`) senza cicli.
+
+- 45 file aggiornati (39 via sweep `datetime.utcnow`→`now_utc` + 6 con alias
+  locali `_dt/_dtm/_dt2.utcnow()`). Import `from app.services.clock import now_utc`
+  inserito dopo docstring/`from __future__` via AST.
+- Verifica: 0 call-site `utcnow` residui in `app/` (restano solo i riferimenti
+  in docstring di `clock.py`). Warning pytest 1362 → 15 (0 da utcnow). 161/161.
+
+Debito #3 ancora aperto (scelta Matteo / fase beta): rebuild UNIQUE composito
+su DB esistente (`migrate_tenant_unique.py --rebuild-unique`); `delivery_portals.py`
+service orphan (feature roadmap da cablare).
+
 ## v3.5.0-alpha.172.148 — test estensivi fasi 7-12 + regressione anomaly cascade (31 mag 2026)
 
 Verifica E2E (pivot API/curl, server :8770 su snapshot di lavoro) delle fasi

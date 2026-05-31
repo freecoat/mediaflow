@@ -8,6 +8,7 @@ booking = intenzione di pianificazione, time_punch = presenza effettiva.
 MVP: CRUD + lista filtrabile + totali per kind. Aggregazioni avanzate (report
 mensile, costo orario × ore, esportazione cedolino) in iterazione successiva.
 """
+from app.services.clock import now_utc
 from datetime import date, datetime, time, timedelta
 from typing import Optional
 
@@ -1412,7 +1413,7 @@ def _build_xlsx(header: list[str], rows: list[list], title: str) -> bytes:
     ws.title = "Dettaglio"
     ws.append([title])
     ws["A1"].font = Font(bold=True, size=14, color="6272F5")
-    ws.append([f"Generato: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"])
+    ws.append([f"Generato: {now_utc().strftime('%Y-%m-%d %H:%M UTC')}"])
     ws.append([])
     ws.append(header)
     header_row = ws.max_row

@@ -2,6 +2,7 @@
 Router listino prezzi — CRUD categorie e voci.
 Fase 1-bis: aggiunti department_id e keywords su PriceItem.
 """
+from app.services.clock import now_utc
 import json
 from datetime import datetime
 from pathlib import Path
@@ -315,7 +316,7 @@ async def export_pricelist(db: Session = Depends(get_db)):
     )
     payload = {
         "version": EXPORT_VERSION,
-        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "exported_at": now_utc().isoformat() + "Z",
         "tenant_id": current_tenant_id(),
         "categories": [
             {
@@ -344,7 +345,7 @@ async def export_pricelist(db: Session = Depends(get_db)):
         ],
     }
     body = json.dumps(payload, ensure_ascii=False, indent=2)
-    filename = f"mediaflow_listino_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    filename = f"mediaflow_listino_{now_utc().strftime('%Y%m%d_%H%M%S')}.json"
     return Response(
         content=body,
         media_type="application/json",
@@ -396,7 +397,7 @@ async def export_pricelist_csv(db: Session = Depends(get_db)):
     for r in rows:
         w.writerow(r)
     body = "﻿" + buf.getvalue()  # BOM così Excel apre correttamente UTF-8
-    filename = f"mediaflow_listino_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"mediaflow_listino_{now_utc().strftime('%Y%m%d_%H%M%S')}.csv"
     return Response(
         content=body, media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
@@ -437,7 +438,7 @@ async def export_pricelist_xlsx(db: Session = Depends(get_db)):
     ws.freeze_panes = "A2"
     buf = io.BytesIO()
     wb.save(buf)
-    filename = f"mediaflow_listino_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"mediaflow_listino_{now_utc().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return Response(
         content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -810,7 +811,7 @@ async def upload_snapshot(
         raise HTTPException(400, f"File non valido: {e}")
     if not isinstance(payload, dict) or "items" not in payload:
         raise HTTPException(400, "File non riconosciuto: manca il campo 'items'")
-    snap_name = (name or "").strip() or f"Importato {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+    snap_name = (name or "").strip() or f"Importato {now_utc().strftime('%Y-%m-%d %H:%M')}"
     snap = plsnap.create_snapshot_record(
         db,
         tenant_id=current_tenant_id(),

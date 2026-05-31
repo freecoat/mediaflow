@@ -16,6 +16,7 @@ Endpoint:
 Niente endpoint mutator: il cliente è SOLO lettore.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
@@ -58,7 +59,7 @@ def _resolve_portal_access(token: Optional[str], db: Session) -> Optional[Client
     ).first()
     if not a:
         return None
-    if a.expires_at and a.expires_at < datetime.utcnow():
+    if a.expires_at and a.expires_at < now_utc():
         return None
     return a
 
@@ -111,7 +112,7 @@ async def create_access(
         if not isinstance(scope, list):
             raise HTTPException(400, "project_scope_json deve essere array")
     token = secrets.token_hex(32)  # 64 hex chars
-    expires = datetime.utcnow() + timedelta(days=max(1, min(expires_days, 365)))
+    expires = now_utc() + timedelta(days=max(1, min(expires_days, 365)))
     user = getattr(request.state, "current_user", None)
     a = ClientPortalAccess(
         tenant_id=current_tenant_id(),
@@ -181,7 +182,7 @@ async def revoke_access(access_id: int, db: Session = Depends(get_db)):
     if not a:
         raise HTTPException(404)
     a.is_active = False
-    a.revoked_at = datetime.utcnow()
+    a.revoked_at = now_utc()
     db.commit()
     return {"ok": True}
 
@@ -210,10 +211,10 @@ async def portal_login(
             {"request": request, "error": "Link non valido o scaduto. Contatta il tuo referente."},
             status_code=401,
         )
-    a.last_seen_at = datetime.utcnow()
+    a.last_seen_at = now_utc()
     db.commit()
     resp = RedirectResponse(url="/portal/", status_code=303)
-    max_age = int((a.expires_at - datetime.utcnow()).total_seconds()) if a.expires_at else 7 * 86400
+    max_age = int((a.expires_at - now_utc()).total_seconds()) if a.expires_at else 7 * 86400
     resp.set_cookie(
         key=PORTAL_COOKIE,
         value=token,
@@ -240,7 +241,7 @@ async def portal_home(request: Request, db: Session = Depends(get_db)):
     a = _resolve_portal_access(token, db)
     if not a:
         return RedirectResponse(url="/portal/login", status_code=303)
-    a.last_seen_at = datetime.utcnow()
+    a.last_seen_at = now_utc()
     db.commit()
     project_ids = _accessible_project_ids(a, db)
     projects = db.query(Project).filter(

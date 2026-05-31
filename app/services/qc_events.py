@@ -26,6 +26,7 @@ Payload suggerito per ogni event_type (dict libero, no validation runtime):
 | qc_reopened            | {reason, previous_qc_number}                               |
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 from datetime import datetime, timedelta
 from typing import Optional, Any
@@ -92,7 +93,7 @@ def _emit(
         event_type=event_type,
         payload_json=payload or {},
         operator_id=operator_id,
-        occurred_at=occurred_at or datetime.utcnow(),
+        occurred_at=occurred_at or now_utc(),
         source=source,
         source_excel_path=source_excel_path,
     )
@@ -188,7 +189,7 @@ def start_qc(
 def _is_stale(extracted_at: Optional[datetime], refresh_days: int) -> bool:
     if extracted_at is None:
         return True
-    return (datetime.utcnow() - extracted_at) > timedelta(days=refresh_days)
+    return (now_utc() - extracted_at) > timedelta(days=refresh_days)
 
 
 def log_error(

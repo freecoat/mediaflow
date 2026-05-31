@@ -12,6 +12,7 @@ Flow F14:
 Permessi: lettura libera, mutator richiedono `edit_settings`.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import json
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
@@ -535,7 +536,7 @@ async def export_templates_zip(ids: str = "", db: Session = Depends(get_db)):
     used: set[str] = set()
     manifest = {
         "schema": "claqo.delivery_templates.v1",
-        "exported_at": _dtm.utcnow().isoformat() + "Z",
+        "exported_at": now_utc().isoformat() + "Z",
         "count": len(templates),
         "templates": [],
     }
@@ -554,7 +555,7 @@ async def export_templates_zip(ids: str = "", db: Session = Depends(get_db)):
             manifest["templates"].append({"file": fname, "code": t.code, "name": t.name})
         zf.writestr("manifest.json", _json.dumps(manifest, indent=2, ensure_ascii=False))
 
-    stamp = _dtm.utcnow().strftime("%Y%m%d")
+    stamp = now_utc().strftime("%Y%m%d")
     fn = f"capitolati-{len(templates)}-{stamp}.zip"
     return Response(
         content=buf.getvalue(),

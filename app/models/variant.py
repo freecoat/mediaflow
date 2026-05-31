@@ -5,6 +5,7 @@ Stack consecutivi possono introdurre v2, v3 con additionalProperties:true che
 mantiene back-compat.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 import enum
 from datetime import datetime
@@ -24,7 +25,7 @@ class VariantSchemaVersion(Base):
     schema_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
 class DeliveryVariantCategory(str, enum.Enum):
@@ -60,5 +61,5 @@ class DeliveryVariant(Base):
         ForeignKey("price_items.id"), nullable=True, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_variant_tenant_code"),)

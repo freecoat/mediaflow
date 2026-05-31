@@ -15,6 +15,7 @@ NOTA: Implementazione MVP. Featurizzazioni avanzate (multi-tape, AssetMembership
 auto-popolato file-by-file, AI matching deliverable per filename) rinviate
 a sprint successivo.
 """
+from app.services.clock import now_utc
 from datetime import datetime
 from typing import Optional
 
@@ -55,7 +56,7 @@ def _spawn_physical_asset_from_parsed(
     Total size + n_files mostrati in descrizione."""
     n_files = parsed["n_files"]
     total_bytes = parsed["total_size_bytes"]
-    label = tape_label or f"LTO {project.code} — {datetime.utcnow().strftime('%Y%m%d-%H%M')}"
+    label = tape_label or f"LTO {project.code} — {now_utc().strftime('%Y%m%d-%H%M')}"
     desc = (
         f"Ingest da {parsed['creator'] or 'MHL/CSV'} (v{parsed['version']}). "
         f"{n_files} file, {total_bytes / 1e12:.2f} TB totali."
@@ -141,11 +142,11 @@ def _process_ingest(
         if (deliverable.quantity_delivered or 0) < (deliverable.quantity_planned or 0):
             deliverable.quantity_delivered = (deliverable.quantity_delivered or 0) + 1.0
             if deliverable.confirmed_at is None:
-                deliverable.confirmed_at = datetime.utcnow()
+                deliverable.confirmed_at = now_utc()
                 deliverable.confirmed_by_user_id = user.id if user else None
             if (deliverable.quantity_delivered or 0) >= (deliverable.quantity_planned or 0):
                 deliverable.status = DeliverableStatus.delivered
-                deliverable.delivered_date = datetime.utcnow().date()
+                deliverable.delivered_date = now_utc().date()
             else:
                 deliverable.status = DeliverableStatus.in_progress
             if not deliverable.physical_asset_id:

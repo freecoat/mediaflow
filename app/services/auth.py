@@ -3,6 +3,7 @@ MediaFlow — servizio autenticazione
 JWT token (PyJWT) + bcrypt password hashing diretto.
 Compatibile Python 3.11+ (incluso 3.14).
 """
+from app.services.clock import now_utc
 from datetime import datetime, timedelta
 from typing import Optional
 import bcrypt
@@ -28,7 +29,7 @@ def hash_password(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Crea JWT token firmato."""
     to_encode = data.copy()
-    expire = datetime.utcnow() + (
+    expire = now_utc() + (
         expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
     )
     to_encode.update({"exp": expire})

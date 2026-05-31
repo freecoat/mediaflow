@@ -23,6 +23,7 @@ il content estratto resta in memoria del client (incluso nei messaggi).
 Per histories durature serve future estensione con AIAttachment model.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 import logging
 import re
@@ -371,7 +372,7 @@ def build_user_content_blocks(
 def cleanup_old_attachments() -> int:
     """Elimina file più vecchi di RETENTION_DAYS giorni. Idempotente.
     Chiamato dal lifespan periodico dell'app. Ritorna conteggio eliminati."""
-    cutoff = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
+    cutoff = now_utc() - timedelta(days=RETENTION_DAYS)
     deleted = 0
     if not ATTACHMENT_DIR.exists():
         return 0

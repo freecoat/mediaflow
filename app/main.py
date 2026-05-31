@@ -1,4 +1,5 @@
 """Claqo v3 — entrypoint FastAPI con AI e gerarchia Client→Project→Quote."""
+from app.services.clock import now_utc
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -1512,7 +1513,7 @@ def _auto_backfill_qc_events_stack2():
             if has_report or has_events:
                 continue
 
-            occurred = d.qc_run_at or d.updated_at or datetime.utcnow()
+            occurred = d.qc_run_at or d.updated_at or now_utc()
             base_payload = dict(d.qc_report_json or {})
             base_payload.setdefault("note", "Legacy backfill da JobDeliverable.qc_substatus")
 
@@ -2099,7 +2100,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.148", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.149", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

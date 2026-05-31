@@ -15,6 +15,7 @@ Convenzioni:
   - payment_status derivato da amount_paid: 0=unpaid, 0<x<total=partial,
     x>=total=paid. Cancelled solo via flag esplicito.
 """
+from app.services.clock import now_utc
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse
 from typing import Optional
@@ -236,7 +237,7 @@ async def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
             f"Impossibile eliminare: {active_invoices} fatture attive. "
             "Cancella o annulla prima le fatture, oppure disattiva il fornitore.",
         )
-    s.deleted_at = datetime.utcnow()
+    s.deleted_at = now_utc()
     db.commit()
     return {"ok": True}
 
@@ -679,7 +680,7 @@ async def delete_supplier_invoice(invoice_id: int, db: Session = Depends(get_db)
         "job_id": i.job_id,
         "job_cost_line_id": i.job_cost_line_id,
     }
-    i.deleted_at = datetime.utcnow()
+    i.deleted_at = now_utc()
     db.commit()
     # Trigger recompute usando snapshot (fattura ora soft-deleted, query
     # cost_external la esclude → JCL ridotte).

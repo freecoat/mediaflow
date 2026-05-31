@@ -7,6 +7,7 @@ Arricchisce dati cliente via AI con tre strategie in cascata:
 3. Fallback "AI knowledge only" — solo training del modello, nessuna ricerca
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import json, logging
 from datetime import datetime
 from typing import Optional
@@ -133,7 +134,7 @@ def _normalize_result(result: dict, web_used: bool) -> dict:
         result["ai_sources"] = json.dumps(result["sources"], ensure_ascii=False)
         del result["sources"]
     result["ai_enriched"] = True
-    result["ai_enriched_at"] = datetime.utcnow().isoformat()
+    result["ai_enriched_at"] = now_utc().isoformat()
     result["web_search_used"] = web_used
     return result
 

@@ -1,4 +1,5 @@
 """Router quotazioni — ora ancorate al Progetto."""
+from app.services.clock import now_utc
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Response
 from fastapi.responses import HTMLResponse
 from typing import Optional, List
@@ -939,7 +940,7 @@ async def create_quote(
             # (UI può segnalare "tasso non disponibile, ricaricare").
             fx_rate, fx_at = 1.0, None
         else:
-            fx_at = _dt.utcnow()
+            fx_at = now_utc()
     q = Quote(
         number=number, project_id=project_id, client_id=project.client_id,
         title=title, issue_date=issue_date, valid_until=valid_until,
@@ -1253,7 +1254,7 @@ async def update_quote(
                 raise HTTPException(503, f"Tasso FX {target_ccy}->{base_ccy} non disponibile (provider down)")
             q.currency = target_ccy
             q.fx_rate_to_base = rate
-            q.fx_rate_fixed_at = _dt.utcnow()
+            q.fx_rate_fixed_at = now_utc()
     _recalc_quote(q)
     db.commit()
     return {

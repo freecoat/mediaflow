@@ -20,6 +20,7 @@ Le azioni rimanda/rivaluta non hanno target (è solo audit del workflow);
 write-off/overhead creano un record concreto e linkano `handled_target_id`.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 from datetime import date, datetime
 from typing import Optional
@@ -256,7 +257,7 @@ def _handle_single(
         # v3.5.0-alpha.114 A8: delego al generatore canonico in overhead._next_code
         # che gestisce soft-delete bypass (era duplicato e poteva divergere).
         from app.routers.overhead import _next_code
-        year = datetime.utcnow().year
+        year = now_utc().year
         code = _next_code(db, year)
         amount_net = float(entry.amount or 0)
         oc = OverheadCost(
@@ -318,12 +319,12 @@ def _handle_single(
 
     entry.status = AnomalyStatus.handled
     entry.handled_action = action
-    entry.handled_at = datetime.utcnow()
+    entry.handled_at = now_utc()
     entry.handled_by_user_id = user_id
     entry.handled_target_kind = target_kind
     entry.handled_target_id = target_id
     if notes:
-        entry.notes = (entry.notes or "") + f"\n[{datetime.utcnow().isoformat()}] {notes}"
+        entry.notes = (entry.notes or "") + f"\n[{now_utc().isoformat()}] {notes}"
 
     return {
         "anomaly_id": entry.id,
@@ -434,10 +435,10 @@ async def dismiss_anomaly(
         raise HTTPException(409, f"Anomalia non è open (status={entry.status.value})")
     user = current_user_optional(request)
     entry.status = AnomalyStatus.dismissed
-    entry.handled_at = datetime.utcnow()
+    entry.handled_at = now_utc()
     entry.handled_by_user_id = user.id if user else None
     if notes:
-        entry.notes = (entry.notes or "") + f"\n[dismiss {datetime.utcnow().isoformat()}] {notes}"
+        entry.notes = (entry.notes or "") + f"\n[dismiss {now_utc().isoformat()}] {notes}"
     db.commit()
     return {"ok": True, "id": entry.id, "status": entry.status.value}
 
@@ -461,7 +462,7 @@ async def reopen_anomaly(
         return {"ok": True, "id": entry.id, "status": "open", "noop": True}
     prev_action = entry.handled_action.value if entry.handled_action else "—"
     entry.notes = (entry.notes or "") + (
-        f"\n[reopen {datetime.utcnow().isoformat()}] precedente: status={entry.status.value} "
+        f"\n[reopen {now_utc().isoformat()}] precedente: status={entry.status.value} "
         f"action={prev_action} target_id={entry.handled_target_id}"
     )
     # v3.5.0-alpha.172.37 (Sprint 3.B BLOCCO 4) — cascade cleanup del target.
@@ -491,7 +492,7 @@ async def reopen_anomaly(
         ).first()
         if oc:
             user = getattr(request.state, "current_user", None)
-            oc.deleted_at = datetime.utcnow()
+            oc.deleted_at = now_utc()
             oc.deleted_by_user_id = user.id if user else None
             cleanup_log = f"OverheadCost#{target_id} soft-deleted"
     if cleanup_log:

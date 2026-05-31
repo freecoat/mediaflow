@@ -17,6 +17,7 @@ Plugin futuri (TODO):
 Auth config Fernet-cifrato via AI_KEY_ENCRYPTION_KEY (riuso α.137).
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 import json
 import logging
@@ -169,14 +170,14 @@ def execute_upload(
     if not upload.file_path:
         upload.status = DeliveryUploadStatus.failed
         upload.error_message = "file_path mancante"
-        upload.completed_at = datetime.utcnow()
+        upload.completed_at = now_utc()
         db.commit()
         return upload
     portal = db.query(DeliveryPortal).filter(DeliveryPortal.id == upload.portal_id).first()
     if not portal:
         upload.status = DeliveryUploadStatus.failed
         upload.error_message = "portale non trovato"
-        upload.completed_at = datetime.utcnow()
+        upload.completed_at = now_utc()
         db.commit()
         return upload
     plugin = get_plugin(portal.plugin_key)
@@ -188,15 +189,15 @@ def execute_upload(
             upload.status = DeliveryUploadStatus.done
             upload.upload_url = remote_url
             upload.progress_pct = 100.0
-            upload.completed_at = datetime.utcnow()
+            upload.completed_at = now_utc()
         else:
             upload.status = DeliveryUploadStatus.failed
             upload.error_message = err or "upload failed senza dettagli"
-            upload.completed_at = datetime.utcnow()
+            upload.completed_at = now_utc()
     except Exception as e:
         upload.status = DeliveryUploadStatus.failed
         upload.error_message = f"plugin exception: {e}"
-        upload.completed_at = datetime.utcnow()
+        upload.completed_at = now_utc()
     db.commit()
     db.refresh(upload)
     return upload

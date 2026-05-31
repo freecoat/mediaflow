@@ -4,6 +4,7 @@ Plugin registry pattern: nuovi extractor si registrano via decorator
 @register_extractor(name, mime_priority). Lookup via mime glob match.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 import fnmatch
 import logging
@@ -58,7 +59,7 @@ def extract_tech_specs(path: str, mime: Optional[str] = None) -> dict:
     if cls is None:
         return {
             "tool": "none",
-            "extracted_at": datetime.utcnow().isoformat() + "Z",
+            "extracted_at": now_utc().isoformat() + "Z",
             "container": None, "video": None, "audio": [],
             "errors": [f"Nessun extractor registrato per mime '{mime}'"],
         }
@@ -66,7 +67,7 @@ def extract_tech_specs(path: str, mime: Optional[str] = None) -> dict:
         inst = cls()
         out = inst.extract(path, mime)
         out.setdefault("tool", cls.name)
-        out.setdefault("extracted_at", datetime.utcnow().isoformat() + "Z")
+        out.setdefault("extracted_at", now_utc().isoformat() + "Z")
         out.setdefault("errors", [])
         out.setdefault("audio", [])
         out.setdefault("video", None)
@@ -76,7 +77,7 @@ def extract_tech_specs(path: str, mime: Optional[str] = None) -> dict:
         logger.exception("extractor %s failed on %s", cls.name, path)
         return {
             "tool": cls.name,
-            "extracted_at": datetime.utcnow().isoformat() + "Z",
+            "extracted_at": now_utc().isoformat() + "Z",
             "container": None, "video": None, "audio": [],
             "errors": [f"extractor exception: {type(e).__name__}: {e}"],
         }

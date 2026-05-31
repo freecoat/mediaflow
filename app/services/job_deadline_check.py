@@ -13,6 +13,7 @@ Soglie default: 7 giorni e 1 giorno. Notifica chi ha `assign_resources`
 (producer/manager/admin/operator → chi gestisce davvero la pianificazione job).
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 from datetime import date, datetime, timedelta
 from typing import List
 
@@ -45,7 +46,7 @@ def check_job_deadlines(db: Session, *, tenant_id: int = 1) -> int:
 
     today = date.today()
     max_horizon = max(t["days"] for t in THRESHOLDS)
-    cutoff_dt = datetime.utcnow() - timedelta(days=DEDUP_WINDOW_DAYS)
+    cutoff_dt = now_utc() - timedelta(days=DEDUP_WINDOW_DAYS)
 
     candidates: List[Job] = (
         db.query(Job)

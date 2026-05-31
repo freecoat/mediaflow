@@ -20,6 +20,7 @@ Uso:
         raise HTTPException(403, "Accesso non autorizzato")
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 from typing import Optional, Set
 from datetime import datetime
 from sqlalchemy.orm import Session
@@ -252,7 +253,7 @@ def log_asset_access(
         ip_address=ip,
         user_agent=ua,
         extra=extra,
-        ts=datetime.utcnow(),
+        ts=now_utc(),
     )
     db.add(log)
     if commit:

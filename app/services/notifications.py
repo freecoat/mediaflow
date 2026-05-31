@@ -15,6 +15,7 @@ Pattern una-row-per-destinatario: più semplice per unread_count, mark_read,
 filtri per-user. Multi-recipient = N rows (peso trascurabile, retention 90gg).
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 from datetime import datetime, timedelta
 from typing import Iterable, List, Optional, Sequence
 
@@ -121,7 +122,7 @@ def mark_read(db: Session, user: User, notification_ids: Iterable[int]) -> int:
             Notification.id.in_(ids),
             Notification.is_read == False,  # noqa: E712
         )
-        .update({"is_read": True, "read_at": datetime.utcnow()}, synchronize_session=False)
+        .update({"is_read": True, "read_at": now_utc()}, synchronize_session=False)
     )
     db.commit()
     return n
@@ -134,7 +135,7 @@ def mark_all_read(db: Session, user: User) -> int:
             Notification.user_id == user.id,
             Notification.is_read == False,  # noqa: E712
         )
-        .update({"is_read": True, "read_at": datetime.utcnow()}, synchronize_session=False)
+        .update({"is_read": True, "read_at": now_utc()}, synchronize_session=False)
     )
     db.commit()
     return n
@@ -151,7 +152,7 @@ def archive(db: Session, user: User, notification_id: int) -> bool:
     n.is_archived = True
     if not n.is_read:
         n.is_read = True
-        n.read_at = datetime.utcnow()
+        n.read_at = now_utc()
     db.commit()
     return True
 
@@ -192,7 +193,7 @@ def cleanup_old(db: Session, days: int = 90) -> int:
     Da chiamare periodicamente (cron / lifespan startup). Non distrugge dati,
     solo flag is_archived=True. Per hard-delete usare un secondo passaggio.
     """
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = now_utc() - timedelta(days=days)
     n = (
         db.query(Notification)
         .filter(

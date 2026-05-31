@@ -32,6 +32,7 @@ La v1.0 (schema legacy senza `departments`) è letta in input ma in output
 esportiamo sempre v1.1.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import json
 from datetime import datetime
 from pathlib import Path
@@ -85,7 +86,7 @@ def build_snapshot_payload(
 
     return {
         "schema_version": CURRENT_SCHEMA_VERSION,
-        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "exported_at": now_utc().isoformat() + "Z",
         "exported_by": exported_by_email,
         "source_app_version": _app_version(),
         "tenant_id": tenant_id,
@@ -178,7 +179,7 @@ def apply_snapshot_payload(
         backup = create_snapshot_record(
             db,
             tenant_id=tenant_id,
-            name=f"Auto-backup pre-replace {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}",
+            name=f"Auto-backup pre-replace {now_utc().strftime('%Y-%m-%d %H:%M:%S')}",
             description="Snapshot automatico creato prima di un restore in modalità 'replace'.",
             kind=PricelistSnapshotKind.auto,
             user_id=auto_backup_user_id,
@@ -385,7 +386,7 @@ def list_snapshots(
 
 
 def soft_delete_snapshot(db: Session, snap: PricelistSnapshot) -> None:
-    snap.deleted_at = datetime.utcnow()
+    snap.deleted_at = now_utc()
 
 
 def restore_deleted_snapshot(db: Session, snap: PricelistSnapshot) -> None:

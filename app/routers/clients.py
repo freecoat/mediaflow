@@ -1,6 +1,7 @@
 """
 Router clienti — CRUD + arricchimento AI via ricerca web.
 """
+from app.services.clock import now_utc
 from difflib import SequenceMatcher
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse
@@ -473,7 +474,7 @@ async def enrich_client_apply(
         setattr(c, k, v)
         applied.append(k)
     c.ai_enriched = True
-    c.ai_enriched_at = datetime.utcnow()
+    c.ai_enriched_at = now_utc()
     db.commit()
     db.refresh(c)
     return {
@@ -530,7 +531,7 @@ async def enrich_client_api(
             setattr(c, field, new_val)
     
     c.ai_enriched = True
-    c.ai_enriched_at = datetime.utcnow()
+    c.ai_enriched_at = now_utc()
     db.commit()
     db.refresh(c)
     
@@ -571,7 +572,7 @@ async def search_and_create(
 
     client = Client(
         tenant_id=current_tenant_id(),
-        name=name, ai_enriched=True, ai_enriched_at=datetime.utcnow(),
+        name=name, ai_enriched=True, ai_enriched_at=now_utc(),
     )
     for field in ("legal_form", "vat_number", "tax_code", "address", "city",
                   "country", "website", "contact_email", "contact_phone",

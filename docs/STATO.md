@@ -8,7 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.148** — 31 maggio 2026 — test estensivi fasi 7-12 + regressione anomaly cascade
+**v3.5.0-alpha.172.149** — 31 maggio 2026 — sweep datetime.utcnow → now_utc
+
+### α.172.149 ✅ (sweep datetime.utcnow → now_utc)
+Chiuso debito `datetime.utcnow` ×111 (deprecato). Helper `app/services/clock.py` → `now_utc()` = `datetime.now(UTC).replace(tzinfo=None)` (naive, semantica identica, no cicli con models). 45 file (39 sweep + 6 alias locali), import via AST. 0 call-site residui (solo docstring clock.py). Warning 1362→15. **161/161**.
+Debito #3 residuo (scelta Matteo/beta): rebuild UNIQUE composito DB esistente · `delivery_portals.py` orphan.
+
+**Prossimo**: test copilot Gomorra lato Matteo (server suo, fix α.146 live) · eventuale push 3 commit (.147/.148/.149) · valutare delivery_portals da cablare.
 
 ### α.172.148 ✅ (test estensivi fasi 7-12 + regressione anomaly cascade)
 Verifica E2E (API/curl, server :8770 su snapshot lavoro). **161/161** test (+3).

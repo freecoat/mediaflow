@@ -7,6 +7,7 @@ In v3.2:
 - ogni risposta della chat può proporre AIAction da confermare manualmente
 - nuovi endpoint per applicare/rifiutare le azioni proposte
 """
+from app.services.clock import now_utc
 from datetime import datetime
 import json
 from typing import Optional
@@ -378,7 +379,7 @@ async def action_apply(
     res = apply_action(db, act)
     if res.get("ok"):
         act.status = "applied"
-        act.applied_at = datetime.utcnow()
+        act.applied_at = now_utc()
         act.result = json.dumps(res.get("result") or {}, ensure_ascii=False)
     else:
         act.status = "failed"
@@ -425,7 +426,7 @@ async def action_reject(
     if act.status != "proposed":
         raise HTTPException(400, f"Azione già in stato {act.status}")
     act.status = "rejected"
-    act.applied_at = datetime.utcnow()
+    act.applied_at = now_utc()
 
     continuation = _maybe_resume_loop(db, act, action_result=None,
                                       rejected=True, applied_ok=False)
@@ -803,7 +804,7 @@ async def ai_usage_stats(
         # Standard user: vede solo i suoi
         user_id = u.id
 
-    cutoff = datetime.utcnow() - timedelta(days=max(1, min(period_days, 365)))
+    cutoff = now_utc() - timedelta(days=max(1, min(period_days, 365)))
     # current_tenant_id() pattern come in altri router (R1 future-ready stub)
     from app.context import current_tenant_id
     base_q = db.query(AIUsageLog).filter(

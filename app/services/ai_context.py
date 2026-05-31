@@ -19,6 +19,7 @@ attuale). Quando R1 sara' completato sara' rimpiazzata da
 current_tenant_id() di app.context.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 from datetime import datetime
 from typing import Optional
@@ -383,7 +384,7 @@ def _build_planning_context(db: Session,
     from datetime import datetime, timedelta
     from sqlalchemy.orm import joinedload as _jl
 
-    today = datetime.utcnow()
+    today = now_utc()
     horizon_14 = today + timedelta(days=14)
     horizon_7 = today + timedelta(days=7)
     deadline_horizon = (today + timedelta(days=30)).date()

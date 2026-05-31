@@ -12,6 +12,7 @@ Il modulo è agnostico al provider concreto: usa l'astrazione
 `AIProvider.chat_with_tools()` definita in `ai_provider.py`.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import json
 import logging
 from typing import Any, Optional
@@ -108,7 +109,7 @@ def _abandon_pending(db: Session, conv: AIConversation, pending: list[dict]) -> 
                                       AIAction.status == "proposed").all()
     for act in rows:
         act.status = "rejected"
-        act.applied_at = _dt.utcnow()
+        act.applied_at = now_utc()
         act.result = json.dumps({
             "abandoned": True,
             "reason": "user_changed_direction",

@@ -25,6 +25,7 @@ RBAC:
 
 Tutti gli endpoint sotto prefix /finance/api/billing.
 """
+from app.services.clock import now_utc
 from datetime import date, datetime
 from typing import Optional
 
@@ -648,7 +649,7 @@ def _transmit_core(
         period_end=period_end,
         notes=notes,
         transmitted_by_user_id=user_id,
-        transmitted_at=datetime.utcnow(),
+        transmitted_at=now_utc(),
     )
     db.add(batch)
     db.flush()
@@ -1081,7 +1082,7 @@ async def approve_batch(batch_id: int, request: Request, db: Session = Depends(g
         raise HTTPException(400, "Batch senza linee, niente da approvare")
     batch.status = BillingBatchStatus.approved
     batch.approved_by_user_id = user.id if user else None
-    batch.approved_at = datetime.utcnow()
+    batch.approved_at = now_utc()
     db.commit()
     db.refresh(batch)
     return _batch_to_dict(batch, with_lines=True)
@@ -1856,7 +1857,7 @@ async def emit_closing_invoice(
 
     # Marca progetto chiuso
     proj.finance_status = "closed"
-    proj.finance_closed_at = datetime.utcnow()
+    proj.finance_closed_at = now_utc()
     proj.finance_closing_invoice_id = invoice.id
 
     try:
@@ -2497,7 +2498,7 @@ async def storno_invoice(
     affected_jcl_ids = set()
     for s in slices:
         if s.voided_at is None:
-            s.voided_at = datetime.utcnow()
+            s.voided_at = now_utc()
             s.voided_by_invoice_id = nc.id
             affected_jcl_ids.add(s.job_cost_line_id)
     # Per ogni JCL toccata, se non ha più slice attive → torna not_billed

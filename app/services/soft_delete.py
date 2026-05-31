@@ -30,6 +30,7 @@ Per le pre-check di unicità su rename/INSERT, usare il helper
 automaticamente.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import logging
 import re
 from contextlib import contextmanager
@@ -267,7 +268,7 @@ def soft_delete_quote(db: Session, quote: Quote, *, user: User,
         # non distingue tra attive e soft-deleted).
         if quote.number and not _BIN_PREFIX_RE.match(quote.number):
             quote.number = _bin_number(quote.id, quote.number)
-        quote.deleted_at         = datetime.utcnow()
+        quote.deleted_at         = now_utc()
         quote.deleted_by_user_id = user.id if user else None
         return {
             "ok":           True,
@@ -431,7 +432,7 @@ def soft_delete_project(db: Session, project: Project, *, user: User,
                 jobs=[{"label": f"{q['number']} — {q['title']}",
                         "id":    q["quote_id"]} for q in blocking_quotes],
             )
-        project.deleted_at         = datetime.utcnow()
+        project.deleted_at         = now_utc()
         project.deleted_by_user_id = user.id if user else None
         return {
             "ok":         True,
@@ -546,7 +547,7 @@ def purge_expired_trash(db: Session, *, retention_days: Optional[int] = None,
         return {"skipped": True, "reason": "retention_days_zero",
                 "retention_days": retention_days}
 
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = now_utc() - timedelta(days=retention_days)
 
     # Quote scadute
     expired_quotes = (db.query(Quote)

@@ -2,6 +2,7 @@
 Router impostazioni — pagina /settings con tema, ordinamento sidebar, account utente,
 e configurazione AI per-utente (provider, api_key cifrata, modello).
 """
+from app.services.clock import now_utc
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Cookie
 from fastapi.responses import HTMLResponse
@@ -221,7 +222,7 @@ async def ai_settings_test(
             max_tokens=10,
             temperature=0.0,
         )
-        row.verified_at = datetime.utcnow()
+        row.verified_at = now_utc()
         row.last_error = None
         db.commit()
         return {"ok": True, "provider_name": prov.name, "sample": (out or "").strip()[:80]}

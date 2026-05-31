@@ -10,6 +10,7 @@ Endpoint:
 - `GET    /hr/api/leave-balance?resource_id=&year=` — saldo dinamico
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 from datetime import date as _date, datetime
 from typing import Optional
 import csv
@@ -72,7 +73,7 @@ async def holidays_page(request: Request, db: Session = Depends(get_db)):
             # α.172.33.1 — Rinominato da is_elevated (collideva con funzione
             # globale Jinja `is_elevated(_user)` chiamata in base.html).
             "user_is_elevated": is_elevated(user),
-            "current_year": datetime.utcnow().year,
+            "current_year": now_utc().year,
         },
     )
 

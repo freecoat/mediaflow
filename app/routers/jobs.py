@@ -14,6 +14,7 @@ Le lavorazioni (`JobCostLine`) sono first-class:
 L'operatore può aggiungere lavorazioni extra a posteriori (cliente chiede
 upres) e il sistema le marca con `is_extra=True` per la rendicontazione.
 """
+from app.services.clock import now_utc
 from datetime import datetime, date
 from typing import Optional
 
@@ -964,11 +965,11 @@ async def update_deliverable(
     if digital_asset_id is not None:
         d.digital_asset_id = digital_asset_id or None
         if digital_asset_id:
-            d.asset_locked_at = datetime.utcnow()
+            d.asset_locked_at = now_utc()
     if physical_asset_id is not None:
         d.physical_asset_id = physical_asset_id or None
         if physical_asset_id:
-            d.asset_locked_at = datetime.utcnow()
+            d.asset_locked_at = now_utc()
 
     db.commit()
     payload = _serialize_deliverable(d)
@@ -1026,7 +1027,7 @@ async def delete_deliverable(
     ).first()
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
-    d.deleted_at = datetime.utcnow()
+    d.deleted_at = now_utc()
     db.commit()
     return {"ok": True, "id": deliverable_id}
 
@@ -1119,14 +1120,14 @@ async def confirm_deliverable_delivery(
 
     # First-time confirmation: popola audit
     if (d.quantity_delivered or 0) <= 0 and d.confirmed_at is None:
-        d.confirmed_at = datetime.utcnow()
+        d.confirmed_at = now_utc()
         d.confirmed_by_user_id = user.id if user else None
 
     d.quantity_delivered = new_qty
     # Update status
     if new_qty >= planned > 0:
         d.status = DeliverableStatus.delivered
-        d.delivered_date = datetime.utcnow().date()
+        d.delivered_date = now_utc().date()
     elif new_qty > 0:
         d.status = DeliverableStatus.in_progress
 

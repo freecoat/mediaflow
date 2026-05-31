@@ -1,6 +1,7 @@
 """
 Router progetti — entità intermedia tra Cliente e Quotazioni/Job.
 """
+from app.services.clock import now_utc
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse
 from typing import Optional
@@ -642,7 +643,7 @@ async def update_milestone(
     if color is not None: m.color = color or None
     if is_completed is not None:
         m.is_completed = bool(is_completed)
-        m.completed_at = _dt.utcnow() if is_completed else None
+        m.completed_at = now_utc() if is_completed else None
     db.commit()
     db.refresh(m)
     return _milestone_dict(m)
@@ -803,7 +804,7 @@ async def revoke_project_access(
     if g.revoked_at:
         return {"ok": True, "already_revoked": True}
     from datetime import datetime as _dt2
-    g.revoked_at = _dt2.utcnow()
+    g.revoked_at = now_utc()
     g.revoked_by_user_id = actor.id if actor else None
     log_asset_access(db, user=actor, action=AssetAccessAction.deny,
                      project_id=project_id, request=request,

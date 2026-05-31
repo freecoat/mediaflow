@@ -15,6 +15,7 @@ Se `password` è fornita, l'archivio è AES-encrypted (pyzipper, ZIP standard
 apribile da 7zip/WinZip con la password). Senza password = ZIP normale.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 import json
 import shutil
@@ -288,7 +289,7 @@ def build_export_zip(
         meta = {
             "app": "Claqo",
             "app_version": app_version,
-            "exported_at": datetime.utcnow().isoformat() + "Z",
+            "exported_at": now_utc().isoformat() + "Z",
             "options": {
                 "include_env": include_env,
                 "include_uploads": include_uploads,

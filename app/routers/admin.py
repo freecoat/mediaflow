@@ -6,6 +6,7 @@ Due aree, accessibili solo a chi ha rispettivamente:
 
 Nessun altro vincolo di tenant qui (siamo single-tenant soft).
 """
+from app.services.clock import now_utc
 from datetime import datetime
 import secrets
 from typing import Optional, List
@@ -229,7 +230,7 @@ async def trigger_deadline_check(
     """
     from app.services.job_deadline_check import check_job_deadlines
     n = check_job_deadlines(db)
-    return {"emitted": n, "checked_at": datetime.utcnow().isoformat()}
+    return {"emitted": n, "checked_at": now_utc().isoformat()}
 
 
 # ── API utenti ─────────────────────────────────────────────────

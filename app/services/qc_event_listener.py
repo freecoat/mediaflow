@@ -13,6 +13,7 @@ Tre responsabilità:
 Init in `app/main.py` lifespan via `init_qc_event_listeners()`.
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 
 from datetime import datetime
 from typing import Optional
@@ -149,7 +150,7 @@ def _apply_event_to_report(sess: Session, ev: QCEvent) -> None:
             if grade and (rep.max_grade is None or grade > rep.max_grade):
                 rep.max_grade = grade
 
-    rep.updated_at = datetime.utcnow()
+    rep.updated_at = now_utc()
 
 
 def _sync_deliverable_bundle_i(sess: Session, ev: QCEvent) -> None:

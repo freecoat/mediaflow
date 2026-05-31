@@ -4,6 +4,7 @@ Gerarchia: Cliente → Progetto → Quotazioni → Job
 Fase 1-bis: aggiunti Tenant, Department, DeliveryTemplate, PriceItem.keywords
 """
 from __future__ import annotations
+from app.services.clock import now_utc
 import enum
 import json
 from datetime import datetime, date, time
@@ -441,7 +442,7 @@ class Role(Base):
     # tranne 'admin' che resta sempre con tutti i permessi.
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
     # v3.5.0-alpha.172.40 (Sprint 5.F BLOCCO 6) — JSON shape validation.
     @validates("permissions")
@@ -477,7 +478,7 @@ class User(Base):
     # Lista di chiavi PERMISSIONS aggiunte al singolo utente sopra quelle del ruolo.
     extra_permissions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Provider AI attivo per questo utente (claude|openai|gemini|perplexity|ollama|None=disabilitato)
     active_ai_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
@@ -521,7 +522,7 @@ class ClientPortalAccess(Base):
     # TUTTI i progetti del client_id).
     project_scope: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Audit
@@ -611,7 +612,7 @@ class Tenant(Base):
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
     departments: Mapped[List["Department"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
     delivery_templates: Mapped[List["DeliveryTemplate"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
@@ -655,7 +656,7 @@ class Department(Base):
     shipping_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     shipping_contact: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="departments")
     resources: Mapped[List["Resource"]] = relationship(back_populates="department")
@@ -711,8 +712,8 @@ class DeliveryTemplate(Base):
     ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
     tenant: Mapped["Tenant"] = relationship(back_populates="delivery_templates")
     audio_config_presets: Mapped[List["AudioConfigPreset"]] = relationship(
@@ -759,8 +760,8 @@ class Package(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class Container(Base):
@@ -779,8 +780,8 @@ class Container(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class VideoCodec(Base):
@@ -799,8 +800,8 @@ class VideoCodec(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class AudioCodec(Base):
@@ -816,8 +817,8 @@ class AudioCodec(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class AudioChannelConfig(Base):
@@ -834,8 +835,8 @@ class AudioChannelConfig(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class AudioMixType(Base):
@@ -850,8 +851,8 @@ class AudioMixType(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class MixStandard(Base):
@@ -870,8 +871,8 @@ class MixStandard(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class Resolution(Base):
@@ -889,8 +890,8 @@ class Resolution(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 class FrameRate(Base):
@@ -907,8 +908,8 @@ class FrameRate(Base):
     is_preset_global: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 # ── DeliveryItem + AudioTrackSpec (M2M) ─────────────────────
@@ -983,8 +984,8 @@ class DeliveryItem(Base):
     pending_review: Mapped[bool] = mapped_column(Boolean, default=False)  # true se parser ha aggiunto FK incerte
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
     audio_tracks: Mapped[List["AudioTrackSpec"]] = relationship(
         back_populates="delivery_item", cascade="all, delete-orphan"
@@ -1015,8 +1016,8 @@ class AudioTrackSpec(Base):
 
     is_optional: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
     delivery_item: Mapped["DeliveryItem"] = relationship(back_populates="audio_tracks")
 
@@ -1041,8 +1042,8 @@ class AudioConfigPreset(Base):
     track_layout: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
     delivery_template: Mapped["DeliveryTemplate"] = relationship(
         back_populates="audio_config_presets"
@@ -1098,8 +1099,8 @@ class PriceItem(Base):
     # in CR (futuro α.164: ripartizione manuale).
     cross_dept: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     additional_department_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
     category: Mapped["PriceCategory"] = relationship(back_populates="items")
     department: Mapped[Optional["Department"]] = relationship(back_populates="price_items")
 
@@ -1134,7 +1135,7 @@ class PricelistSnapshot(Base):
     source_app_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     payload_json: Mapped[dict] = mapped_column(JSON)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
     # Soft-delete (cestino degli snapshot). Recuperabile.
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
 
@@ -1187,8 +1188,8 @@ class Client(Base):
     ai_enriched_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     ai_sources: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # URL sorgenti
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
     
     projects: Mapped[List["Project"]] = relationship(back_populates="client", cascade="all, delete-orphan")
     jobs: Mapped[List["Job"]] = relationship(back_populates="client")
@@ -1242,8 +1243,8 @@ class ClientWork(Base):
     # Marker provenienza: True se il record è stato proposto dall'AI e
     # confermato dall'utente; False se inserito manualmente.
     ai_imported: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
     client: Mapped["Client"] = relationship(back_populates="works")
 
 
@@ -1293,8 +1294,8 @@ class Project(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
     # v3.5.0-alpha.8 — Soft-delete (cestino).
     deleted_at:         Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
@@ -1390,7 +1391,7 @@ class ProjectMilestone(Base):
     # quando is_completed=False)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     project: Mapped["Project"] = relationship(back_populates="milestones")
@@ -1451,7 +1452,7 @@ class Resource(Base):
     annual_leave_days_override: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     monthly_rol_hours_override: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     monthly_permit_hours_override: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     user: Mapped[Optional["User"]] = relationship(back_populates="resources")
     department: Mapped[Optional["Department"]] = relationship(back_populates="resources")
     booking_assignments: Mapped[List["BookingAssignment"]] = relationship(back_populates="resource", cascade="all, delete-orphan")
@@ -1500,7 +1501,7 @@ class ResourcePreset(Base):
     # Lista di Resource.id (JSON). L'ordine viene preservato all'apply.
     resource_ids: Mapped[list] = mapped_column(JSON, default=list)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
 class UnavailabilityKind(str, enum.Enum):
@@ -1540,7 +1541,7 @@ class ResourceUnavailability(Base):
     approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     rejection_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     resource: Mapped["Resource"] = relationship(back_populates="unavailabilities")
 
     @property
@@ -1590,7 +1591,7 @@ class Holiday(Base):
     )
     scope_location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True,
     )
@@ -1659,7 +1660,7 @@ class WorkingHoursPolicy(Base):
     monthly_permit_hours_accrual: Mapped[float] = mapped_column(Float, default=8.0)
     # Soglia ore lavoro/giorno per conversione gg → h (es. ferie godute = 1gg = 8h).
     # Reuso `daily_hours_threshold` per coerenza (già presente sopra).
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
     # v3.5.0-alpha.172.40 (Sprint 5.F BLOCCO 6) — JSON shape validation.
     @validates("overtime_brackets")
@@ -1790,7 +1791,7 @@ class Quote(Base):
     generated_from_deliverables: Mapped[bool] = mapped_column(Boolean, default=False)
     source_document_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     
     # v3.4.39 — Versioning. Una catena di versioni condivide lo stesso "lineage":
     # V1 (root) → V2 (parent_quote_id=V1) → V3 (parent_quote_id=V2). `version` è
@@ -1929,7 +1930,7 @@ class QuoteAdvanceSchedule(Base):
     milestone_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     quote: Mapped["Quote"] = relationship(foreign_keys=[quote_id])
     allocations: Mapped[List["QuoteAdvanceAllocation"]] = relationship(
         back_populates="schedule", cascade="all, delete-orphan"
@@ -1989,7 +1990,7 @@ class Job(Base):
     # `_bookings_hours_cost`). Si abilita su progetti dove il cliente ha
     # accettato addendum di pass-through (rush, urgenze, festivi).
     weighted_revenue: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
     project: Mapped["Project"] = relationship(back_populates="jobs")
     client: Mapped["Client"] = relationship(back_populates="jobs")
@@ -2015,7 +2016,7 @@ class JobResourceAssignment(Base):
     agreed_hourly_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     role_in_project: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     job: Mapped["Job"] = relationship(back_populates="resource_assignments")
     resource: Mapped["Resource"] = relationship(back_populates="job_assignments")
 
@@ -2143,7 +2144,7 @@ class Booking(Base):
     # Snapshot dell'envelope originale prima di adaptive extend, per supportare
     # revert/split su rifiuto overtime (D1).
     original_end_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     job: Mapped[Optional["Job"]] = relationship(back_populates="bookings")
     cost_line: Mapped[Optional["JobCostLine"]] = relationship()
     assignments: Mapped[List["BookingAssignment"]] = relationship(
@@ -2178,7 +2179,7 @@ class BookingChange(Base):
     kind: Mapped[str] = mapped_column(String(16))  # create/update/delete/restore/assignment_*
     summary: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
 
 
 # ── TIMBRATURE / PRESENZE (HR) ─────────────────────────────────
@@ -2207,7 +2208,7 @@ class TimePunch(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Chi ha registrato la timbratura (manager/HR per freelance senza login).
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     resource: Mapped["Resource"] = relationship(back_populates="time_punches")
     job: Mapped[Optional["Job"]] = relationship()
     cost_line: Mapped[Optional["JobCostLine"]] = relationship()
@@ -2226,7 +2227,7 @@ class Timesheet(Base):
     hourly_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_billable: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     user: Mapped["User"] = relationship(back_populates="timesheets")
     job: Mapped["Job"] = relationship(back_populates="timesheets")
 
@@ -2274,7 +2275,7 @@ class Supplier(Base):
     default_payment_terms_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     invoices: Mapped[List["SupplierInvoice"]] = relationship(
         back_populates="supplier", cascade="all, delete-orphan"
@@ -2324,7 +2325,7 @@ class SupplierInvoice(Base):
     amount_paid: Mapped[float] = mapped_column(Float, default=0.0)
     attachment_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     supplier: Mapped["Supplier"] = relationship(back_populates="invoices")
     # v3.5.0-alpha.113 — relationship per joinedload in lista
@@ -2352,7 +2353,7 @@ class SupplierInvoicePayment(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     reference: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     recorded_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     invoice: Mapped["SupplierInvoice"] = relationship(back_populates="payments")
 
 
@@ -2386,7 +2387,7 @@ class Invoice(Base):
     vat_rate: Mapped[float] = mapped_column(Float, default=22.0)
     total: Mapped[float] = mapped_column(Float, default=0.0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     # v3.5.0-alpha.52 — Tipo documento + condizioni pagamento + IBAN snapshot
     doc_type: Mapped[str] = mapped_column(String(8), default="TD01")          # TD01=fattura ord, TD04=NC, TD06=parcella
     payment_method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
@@ -2474,7 +2475,7 @@ class InvoicePayment(Base):
     # Riferimento bancario / TRN (per riconciliazione futura con estratto conto)
     reference: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     recorded_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     invoice: Mapped["Invoice"] = relationship(back_populates="payments")
 
 
@@ -2528,7 +2529,7 @@ class AdvancePayment(Base):
     label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     project: Mapped["Project"] = relationship(foreign_keys=[project_id])
     invoice: Mapped[Optional["Invoice"]] = relationship(foreign_keys=[invoice_id])
     consumptions: Mapped[List["AdvancePaymentConsumption"]] = relationship(
@@ -2634,7 +2635,7 @@ class DeliveryPortal(Base):
     plugin_key: Mapped[str] = mapped_column(String(60), default="generic_http")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_delivery_portal_code"),
     )
@@ -2661,7 +2662,7 @@ class DeliveryUpload(Base):
     progress_pct: Mapped[float] = mapped_column(Float, default=0.0)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     submitted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     portal: Mapped["DeliveryPortal"] = relationship(foreign_keys=[portal_id])
 
@@ -2676,8 +2677,8 @@ class UserOAuthToken(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     scopes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     account_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     __table_args__ = (
         UniqueConstraint("user_id", "provider", name="uq_user_oauth_provider"),
     )
@@ -2696,7 +2697,7 @@ class FXRate(Base):
     from_currency: Mapped[str] = mapped_column(String(3), index=True)
     to_currency: Mapped[str] = mapped_column(String(3), index=True)
     rate: Mapped[float] = mapped_column(Float)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
     provider: Mapped[str] = mapped_column(String(40), default="frankfurter")
 
 
@@ -2720,7 +2721,7 @@ class AdvancePaymentConsumption(Base):
     # Importo scomputato (positivo). InvoiceLine corrispondente ha total negativo.
     amount_consumed: Mapped[float] = mapped_column(Float, default=0.0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     advance_payment: Mapped["AdvancePayment"] = relationship(back_populates="consumptions")
     invoice: Mapped["Invoice"] = relationship(foreign_keys=[invoice_id])
 
@@ -2761,11 +2762,11 @@ class BillingBatch(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Audit
     transmitted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    transmitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    transmitted_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     invoice_id: Mapped[Optional[int]] = mapped_column(ForeignKey("invoices.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     project: Mapped["Project"] = relationship()
     invoice: Mapped[Optional["Invoice"]] = relationship(foreign_keys=[invoice_id])
     lines: Mapped[List["BillingBatchLine"]] = relationship(
@@ -2814,7 +2815,7 @@ class LossEntry(Base):
     reason: Mapped[LossReason] = mapped_column(SAEnum(LossReason), default=LossReason.manager_discount)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     project: Mapped["Project"] = relationship()
     job_cost_line: Mapped[Optional["JobCostLine"]] = relationship(foreign_keys=[job_cost_line_id])
 
@@ -2862,7 +2863,7 @@ class JCLBilledSlice(Base):
     billed_quantity: Mapped[float] = mapped_column(Float, default=0.0)
     billed_amount: Mapped[float] = mapped_column(Float, default=0.0)
     unit_price_snap: Mapped[float] = mapped_column(Float, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     # v3.5.0-alpha.111 — Storno fattura: slice resa nulla da una nota di
     # credito (TD04). Quando popolato, lo slice non blocca più i booking
     # nel periodo: il maturato torna disponibile per nuova fatturazione.
@@ -2926,7 +2927,7 @@ class ProjectAccessGrant(Base):
     granted_by_user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
-    granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    granted_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     revoked_by_user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
@@ -2967,7 +2968,7 @@ class AssetAccessLog(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     extra: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ts: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
 
 
 class Asset(Base):
@@ -3017,7 +3018,7 @@ class Asset(Base):
     delivered_to: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     delivery_method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     delivery_tracking: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     # ── v3.5.0-alpha.172.94 Bundle L Stack 1 — Tech specs cached ──
     # Estratto da tech_specs_extractor service (ffprobe default, MediaInfo/AI
     # vision futuri). Refresh manuale "↻ Riestrai" + auto al QC start se
@@ -3078,7 +3079,7 @@ class AssetMembership(Base):
     checksum: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
     added_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     removed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     removed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -3108,7 +3109,7 @@ class IngestBatch(Base):
     client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
     supplier_id: Mapped[Optional[int]] = mapped_column(ForeignKey("suppliers.id"), nullable=True, index=True)
     delivery_note_number: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
-    batch_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    batch_date: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
     manifest_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # v3.5.0-alpha.93 — Spedizione (vettore + costo + payer)
@@ -3140,7 +3141,7 @@ class IngestBatch(Base):
     auto_billed_jcl_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("job_cost_lines.id"), nullable=True, index=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
@@ -3168,7 +3169,7 @@ class AssetMovement(Base):
     )
     # Bolla di consegna / DDT (Delivery Note)
     delivery_note_number: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)
-    movement_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    movement_date: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
     expected_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     expected_return_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # Mittente / Destinatario (text libero, può linkare a Client/Supplier
@@ -3199,7 +3200,7 @@ class AssetMovement(Base):
     attachment_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     signature_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
@@ -3247,8 +3248,8 @@ class PhysicalAsset(Base):
     last_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     next_verification_due: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     # v3.5.0-alpha.72 — Ownership tracking (TPN: asset cliente vanno
     # tracciati a parte da quelli interni).
@@ -3343,8 +3344,8 @@ class JobDeliverable(Base):
     delivered_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     accepted_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
 
     # ── v3.5.0-alpha.172 Restructure: maturato + billing per deliverable ──
@@ -3453,7 +3454,7 @@ class BookingDeliverable(Base):
         ForeignKey("job_deliverables.id", ondelete="CASCADE"), index=True
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
 class DeliverableAsset(Base):
@@ -3483,7 +3484,7 @@ class DeliverableAsset(Base):
     confirmed_by_user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
-    confirmed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
@@ -3512,7 +3513,7 @@ class DeliverableSpec(Base):
         ForeignKey("delivery_templates.id"), nullable=True
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
 class DeliverableBilledSlice(Base):
@@ -3533,7 +3534,7 @@ class DeliverableBilledSlice(Base):
     billed_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     period_start: Mapped[date] = mapped_column(Date)
     period_end: Mapped[date] = mapped_column(Date)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
 class AdvancePaymentDeliverableAllocation(Base):
@@ -3580,9 +3581,9 @@ class VFXShot(Base):
         ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=now_utc, onupdate=now_utc
     )
 
 
@@ -3606,7 +3607,7 @@ class PricelistUnit(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=100)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
 # ── AI ASSISTANT (storico conversazioni) ─────────────────────
@@ -3620,7 +3621,7 @@ class AIConversation(Base):
     quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"), nullable=True)
     job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     # v3.5.0 — stato del loop tool_use serializzato (lista messages canonica
     # formato Anthropic: blocks misti text/tool_use/tool_result). Persistito
     # SOLO quando il loop si è interrotto in attesa che l'utente applichi una
@@ -3635,7 +3636,7 @@ class AIMessage(Base):
     conversation_id: Mapped[int] = mapped_column(ForeignKey("ai_conversations.id"))
     role: Mapped[str] = mapped_column(String(20))   # user | assistant | system
     content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     conversation: Mapped["AIConversation"] = relationship(back_populates="messages")
 
 
@@ -3657,9 +3658,9 @@ class UserAISettings(Base):
     base_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Ollama
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow,
-                                                 onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc,
+                                                 onupdate=now_utc)
     user: Mapped["User"] = relationship(back_populates="ai_settings")
 
 
@@ -3682,7 +3683,7 @@ class AIAction(Base):
     status: Mapped[str] = mapped_column(String(20), default="proposed")
     # proposed | applied | rejected | failed
     result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     applied_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # v3.5.0 — id del tool_use Anthropic/OpenAI/Gemini che ha generato questa
     # azione, necessario per costruire il tool_result al momento dell'Apply
@@ -3730,7 +3731,7 @@ class AIUsageLog(Base):
     # Errore o stop_reason (es. "end_turn", "tool_use", "max_tokens", "error:...")
     stop_reason: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
 
 
 # ── NOTIFICATIONS (v3.4.27) ──────────────────────────────────
@@ -3759,7 +3760,7 @@ class Notification(Base):
     payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
     actor: Mapped[Optional["User"]] = relationship(foreign_keys=[actor_user_id])
@@ -3806,8 +3807,8 @@ class ProjectTechSheet(Base):
     # general / cameras / audio / looks / storage / dailies / folder_struct / contacts / process / notes
     data: Mapped[dict] = mapped_column(JSON, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
     project: Mapped["Project"] = relationship()
     delivery_template: Mapped[Optional["DeliveryTemplate"]] = relationship()
@@ -3839,7 +3840,7 @@ class TechSheetFieldOption(Base):
     label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # display (default = value)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True,
     )
@@ -3857,7 +3858,7 @@ class TechSheetEditLog(Base):
     section_keys: Mapped[str] = mapped_column(String(500))  # CSV: "cameras,notes"
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     edited_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, index=True)
+        DateTime, default=now_utc, index=True)
 
     tech_sheet: Mapped["ProjectTechSheet"] = relationship(back_populates="edit_logs")
 
@@ -3954,9 +3955,9 @@ class OverheadCost(Base):
     )
     # Audit
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     deleted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     # Relationships
@@ -4055,8 +4056,8 @@ class AnomalyEntry(Base):
 
     amount: Mapped[float] = mapped_column(Float, default=0.0)  # valore monetario in gioco
     description: Mapped[str] = mapped_column(String(500))
-    detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    detected_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
     # Stato + azione
     status: Mapped[AnomalyStatus] = mapped_column(SAEnum(AnomalyStatus), default=AnomalyStatus.open, index=True)
@@ -4110,8 +4111,8 @@ class NumberingConfig(Base):
     current_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     current_seq: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
 
 # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced model.
@@ -4159,7 +4160,7 @@ class QCEvent(Base):
         ForeignKey("users.id"), nullable=True
     )
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, index=True
+        DateTime, default=now_utc, index=True
     )
     # Provenienza: "manual" | "excel_ingest" | "ai_diff" | "legacy_backfill" | "qc_cascade"
     source: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
@@ -4199,7 +4200,7 @@ class QCReport(Base):
         ForeignKey("qc_events.id"), nullable=True
     )
     summary_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=now_utc, onupdate=now_utc
     )
