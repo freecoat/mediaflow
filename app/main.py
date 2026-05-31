@@ -266,6 +266,13 @@ def _auto_migrate_columns():
                 conn.execute(text(
                     "ALTER TABLE time_punches ADD COLUMN break_minutes "
                     "INTEGER NOT NULL DEFAULT 0"))
+    # v3.5.0-alpha.172.147 — Project: episodes_count (numero episodi serie)
+    if "projects" in insp.get_table_names():
+        pcols = {c["name"] for c in insp.get_columns("projects")}
+        if "episodes_count" not in pcols:
+            print("[auto-migrate] projects.episodes_count mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN episodes_count INTEGER NULL"))
     # v3.5.0-alpha.7 — Soft-delete cestino: deleted_at + deleted_by_user_id
     # su Quote. v3.5.0-alpha.8 estende a Project.
     soft_alter = [

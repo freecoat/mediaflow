@@ -1272,7 +1272,11 @@ class Project(Base):
     # Tipologia progetto
     project_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     # feature_film, short_film, series, documentary, spot, music_video, corporate
-    
+
+    # v3.5.0-alpha.172.147 — Numero episodi per progetti di tipo serie.
+    # Non-null > 0 = il progetto è una serie. None = non è una serie.
+    episodes_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
     # Dettagli tecnici del progetto
     length_minutes: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     fps: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)

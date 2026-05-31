@@ -626,6 +626,13 @@
       </div>
       <div class="form-row">
         <div class="form-group">
+          <label class="form-label">Numero episodi (se serie)</label>
+          <input class="form-input" id="e-episodes" type="number" min="1" step="1" placeholder="es. 6">
+          <div class="form-hint">Lascia vuoto se non è una serie</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
           <label class="form-label">Formato consegna</label>
           <input class="form-input" id="e-delivery">
         </div>
@@ -759,6 +766,7 @@ function renderProject() {
   document.getElementById('e-type').value = p.project_type || '';
   document.getElementById('e-length').value = p.length_minutes || '';
   document.getElementById('e-fps').value = p.fps || '';
+  document.getElementById('e-episodes').value = (p.episodes_count != null) ? p.episodes_count : '';
   document.getElementById('e-delivery').value = p.delivery_format || '';
   document.getElementById('e-delivery-date').value = p.delivery_deadline || '';
   document.getElementById('e-director').value = p.director || '';
@@ -830,6 +838,7 @@ function renderJobs(jobs) {
 function renderDetails(p) {
   const tech = [];
   if (p.project_type) tech.push(['Tipo', TYPE_LABELS[p.project_type]]);
+  if (p.episodes_count) tech.push(['Episodi', `${p.episodes_count} ep.`]);
   if (p.length_minutes) tech.push(['Durata', `${p.length_minutes} min`]);
   if (p.fps) tech.push(['FPS', p.fps]);
   if (p.shooting_format) tech.push(['Formato ripresa', p.shooting_format]);
@@ -1273,6 +1282,7 @@ async function saveProject() {
       'delivery_deadline': 'e-delivery-date',
       'director': 'e-director', 'producer': 'e-producer',
       'description': 'e-desc', 'notes': 'e-notes',
+      'episodes_count': 'e-episodes',
     };
     for (const [field, elId] of Object.entries(optionals)) {
       const val = document.getElementById(elId).value;

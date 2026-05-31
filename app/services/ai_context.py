@@ -172,9 +172,10 @@ def build_context(db: Session,
     if project_id:
         p = db.query(Project).filter(Project.id == project_id).first()
         if p:
+            _ep_label = f", {p.episodes_count} episodi" if p.episodes_count else ""
             parts.append(f"""PROGETTO ATTIVO (id={p.id}):
 - Codice: {p.code} | Titolo: {p.title}
-- Tipologia: {p.project_type or 'n/d'} | Cliente: {p.client.name if p.client else 'n/d'}
+- Tipologia: {p.project_type or 'n/d'}{_ep_label} | Cliente: {p.client.name if p.client else 'n/d'}
 - Durata: {p.length_minutes or '?'} min @ {p.fps or '?'} fps
 - Ripresa: {p.shooting_format or 'n/d'} | Consegna: {p.delivery_format or 'n/d'}
 - Regista: {p.director or 'n/d'} | Deadline: {p.delivery_deadline or 'n/d'} | Stato: {p.status}""")
@@ -336,7 +337,8 @@ def build_context(db: Session,
         overview.append("PROGETTI ESISTENTI (id | code | title | client):")
         for p in proj_rows:
             client_name = p.client.name if p.client else "?"
-            overview.append(f"  {p.id} | {p.code} | {p.title} | {client_name}")
+            ep_suffix = f" (serie, {p.episodes_count} episodi)" if getattr(p, "episodes_count", None) else ""
+            overview.append(f"  {p.id} | {p.code} | {p.title}{ep_suffix} | {client_name}")
 
     # Quote attive (per riferimento veloce su quote_id)
     quote_rows = db.query(Quote).order_by(Quote.id.desc()).limit(15).all()

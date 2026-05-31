@@ -79,6 +79,7 @@ async def create_project(
     title: str = Form(...),
     client_id: int = Form(...),
     project_type: Optional[str] = Form(None),
+    episodes_count: Optional[int] = Form(None),
     length_minutes: Optional[float] = Form(None),
     fps: Optional[str] = Form(None),
     shooting_format: Optional[str] = Form(None),
@@ -110,6 +111,7 @@ async def create_project(
     p = Project(
         tenant_id=current_tenant_id(),
         code=code, title=title, client_id=client_id, project_type=project_type,
+        episodes_count=episodes_count,
         length_minutes=length_minutes, fps=fps, shooting_format=shooting_format,
         delivery_format=delivery_format, director=director, producer=producer,
         shoot_start=shoot_start, shoot_end=shoot_end,
@@ -168,6 +170,7 @@ async def get_project(project_id: int, db: Session = Depends(get_db)):
         "client_id": p.client_id,
         "client": {"id": p.client.id, "name": p.client.name} if p.client else None,
         "project_type": p.project_type,
+        "episodes_count": p.episodes_count,
         "length_minutes": p.length_minutes, "fps": p.fps,
         "shooting_format": p.shooting_format, "delivery_format": p.delivery_format,
         "director": p.director, "producer": p.producer, "dop": p.dop,
@@ -208,6 +211,7 @@ async def update_project(
     project_id: int,
     title: Optional[str] = Form(None),
     project_type: Optional[str] = Form(None),
+    episodes_count: Optional[int] = Form(None),
     length_minutes: Optional[float] = Form(None),
     fps: Optional[str] = Form(None),
     shooting_format: Optional[str] = Form(None),
@@ -251,7 +255,7 @@ async def update_project(
         if storage_backend not in valid:
             raise HTTPException(400, f"storage_backend invalido. Valori: {valid}")
         p.storage_backend = storage_backend or None
-    for field in ("title", "project_type", "length_minutes", "fps",
+    for field in ("title", "project_type", "episodes_count", "length_minutes", "fps",
                   "shooting_format", "delivery_format", "director",
                   "producer", "dop", "delivery_deadline",
                   "status", "description", "notes",
