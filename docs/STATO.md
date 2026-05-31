@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.157** — 31 maggio 2026 — Backlog Matteo 7 fix/feature (multiagent)
+**v3.5.0-alpha.172.158** — 31 maggio 2026 — Versione mobile PWA (staff operativo)
+
+### α.172.158 ✅ (MOBILE PWA staff — feature nuova, subagent-driven 10 task TDD)
+Area `/m/*` dedicata (template lean `templates/mobile/`, riusa endpoint JSON esistenti). Scaffold (router mobile + base_mobile + tab bar + mobile.css/js) + PWA (manifest+sw+icone) + 5 schermate (Oggi/Timbra/Notifiche/Ferie/Assegnazioni) + endpoint `POST /planning/api/my-bookings/{id}/respond` (accetta/rifiuta, ownership 403, `BookingAssignment.response_status`+auto-migrate). Auth via middleware globale (no-auth→redirect login, verificato E2E). **288/288** test. E2E: /m/* 200, asset PWA 200, redirect no-auth ok.
+Fuori scope: timeline drag, editing pesante, portale cliente, offline-sync (defer).
+
+**Prossimo**: restart :8000 (auto-migrate Invoice/Project/booking_assignments) + test Matteo (currency+backlog+mobile). Mobile: aprire `/m` da telefono / installare PWA. Eventuale push.
+
+### α.172.157 ✅ — Backlog Matteo 7 fix/feature (vedi sotto)
 
 ### α.172.157 ✅ (backlog Matteo — 3 agenti paralleli + 1)
 Listino: duplica voce + categorie no-troncamento + fix cancellazione (root cause `loadAll active_only=false`). Copilot: dettaglio riga AI ora eredita da PriceItem.description (come picker) + nuova conversazione svuota chat precedente. Progetti: `episodes_count` + auto-migrate + copilot lo legge ovunque. Source-map lucide silenziato. **280/280** test (test_pricelist_backlog 10 + test_project_episodes 7 + test_ai_quote_line_detail 8). Backlog Matteo COMPLETO.

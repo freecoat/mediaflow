@@ -1,5 +1,29 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.158 — Versione mobile PWA (staff operativo) (31 mag 2026)
+
+Prima versione mobile: PWA companion per lo staff, area `/m/*` dedicata (template lean,
+riusa gli endpoint JSON esistenti). Subagent-driven, 10 task TDD. **288/288** test.
+Spec/piano in `docs/superpowers/`.
+
+- **Scaffold** `/m`: router `app/routers/mobile.py` + `templates/mobile/base_mobile.html`
+  (shell standalone, NON base.html desktop) + bottom tab bar (Oggi/Lavori/Timbra/Ferie/Avvisi)
+  + `static/css/mobile.css` (touch-first dark, 419 righe) + `static/js/mobile.js`
+  (`mapi`/`mEsc`/`mToast`/format). Auth: middleware globale protegge `/m/*` (redirect
+  `/auth/login?next=`), verificato E2E.
+- **PWA**: `manifest.json` (start_url `/m`, standalone, theme indaco) + `sw.js` (cache app
+  shell, network+offline-fallback per `/m`, azioni online) + icone 192/512 (dal brand pack).
+- **Schermate** (riuso endpoint esistenti, DOM-safe):
+  - Oggi: mie assegnazioni di oggi + stato timbratura + badge notifiche.
+  - Timbra: punch IN/OUT (start/end_datetime) + storico.
+  - Notifiche: lista + segna letto/tutte lette.
+  - Ferie: mie richieste + nuova (prefix reale `/planning/api`).
+  - Assegnazioni: lista + **accetta/rifiuta** (nuovo `POST /planning/api/my-bookings/{id}/respond`,
+    ownership 403, nuovo campo `BookingAssignment.response_status` + auto-migrate).
+- Fuori scope MVP: timeline drag, quote/listino/finance editing, portale cliente, offline-sync.
+- Test: `test_mobile` (router+manifest), `test_booking_respond` (5: accept/reject/403/400/401).
+- E2E: `/m/*` 200, asset PWA 200, no-auth → redirect login. Companion installabile.
+
 ## v3.5.0-alpha.172.157 — Backlog Matteo: 7 fix/feature (multiagent) (31 mag 2026)
 
 Batch backlog post-valuta, 3 agenti paralleli (file disgiunti) + 1 sequenziale. **280/280** test.
