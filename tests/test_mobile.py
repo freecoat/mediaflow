@@ -14,3 +14,13 @@ def test_mobile_router_registered_in_app():
     import app.main as m
     app_paths = {r.path for r in m.app.routes}
     assert any(p.startswith("/m") for p in app_paths)
+
+
+import json, pathlib
+
+
+def test_manifest_valid():
+    m = json.loads(pathlib.Path("app/static/manifest.json").read_text(encoding="utf-8"))
+    assert m["start_url"] == "/m"
+    assert m["display"] == "standalone"
+    assert any(i["sizes"] == "512x512" for i in m["icons"])
