@@ -26,6 +26,7 @@ from app.routers import (
     tech_sheet_options,  # v3.5.0-alpha.172.34 — Dropdown options scheda tecnica + seed Netflix
     qc,  # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced workflow
     delivery_items,  # v3.5.0-alpha.172.114 (Tier 2.1) — DeliveryItem + taxonomy router
+    mobile as mobile_router,  # v3.5.0-alpha.172.158 — PWA companion staff /m
 )
 
 
@@ -2444,6 +2445,7 @@ app.include_router(ingest_deliverables_router.router)
 # Bundle L Stack 1 Task 14 — Delivery variants CRUD minimal
 from app.routers.delivery_variants import router as delivery_variants_router
 app.include_router(delivery_variants_router)
+app.include_router(mobile_router.router)  # v3.5.0-alpha.172.158 — PWA companion staff /m
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#6272f5">
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <title>{% block title %}Claqo{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/mobile.css?v={{ app_version }}">
+</head>
+<body>
+  <header class="m-top">
+    <span class="m-top-title">{% block topbar %}Claqo{% endblock %}</span>
+  </header>
+  <main class="m-main" id="m-main">
+    {% block content %}{% endblock %}
+  </main>
+  <nav class="m-tabbar">
+    <a href="/m" class="m-tab {% if active=='oggi' %}active{% endif %}"><span>🏠</span>Oggi</a>
+    <a href="/m/assegnazioni" class="m-tab {% if active=='assegnazioni' %}active{% endif %}"><span>📋</span>Lavori</a>
+    <a href="/m/timbra" class="m-tab {% if active=='timbra' %}active{% endif %}"><span>⏱</span>Timbra</a>
+    <a href="/m/ferie" class="m-tab {% if active=='ferie' %}active{% endif %}"><span>🌴</span>Ferie</a>
+    <a href="/m/notifiche" class="m-tab {% if active=='notifiche' %}active{% endif %}"><span>🔔</span>Avvisi</a>
+  </nav>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/static/sw.js').catch(()=>{}));
+    }
+  </script>
+  <script src="/static/js/mobile.js?v={{ app_version }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
