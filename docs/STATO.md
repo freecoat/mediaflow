@@ -8,7 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.154** — 31 maggio 2026 — conversione qty/prezzo trn su cambio unità
+**v3.5.0-alpha.172.156** — 31 maggio 2026 — Conversione valuta completa (quote + fattura)
+
+### α.172.155–156 ✅ (CONVERSIONE VALUTA COMPLETA — feature grossa, subagent-driven 12 task TDD)
+Modello **base-anchored**: importi DB in valuta base (EUR); conversione $/£/CHF **live indicativa** su quote + **congelata all'emissione** su fattura (tasso BCE del giorno, art.13 c.4 DPR 633/72). XML SDI sempre EUR. Verifica legale conforme. Spec+piano in `docs/superpowers/`.
+- Nuovo `currency.py` (to_display/to_base/symbol/format_money/disclaimer/freeze_invoice_fx) + `fx.get_fx_rate_on` (BCE storico). Quote: `currency_block` payload + 422 tasso assente + riga prezzo→base (`from_listino`). UI: card valuta + `mfFormatMoney`. PDF quote+fattura convertiti + disclaimer. Invoice: 3 colonne nuove + auto-migrate + freeze a tutti i siti Invoice() + NC copia tasso. SDI verificato EUR. Settings EUR/USD/GBP/CHF. Migrazione precondizione eseguita.
+- **255/255** test. E2E: quote USD → tasso live 0.859 → riga 1000 USD = 858.81 base. ✅
+- **Restart :8000 necessario** (Matteo) per attivare backend + auto-migrate colonne Invoice.
+
+**Backlog Matteo ancora aperto** (dopo valuta): listino (duplica voce, vista categorie troncata, cancellazione rotta), quote (dettaglio AI vuoto), progetti (n° episodi serie + copilot), copilot (nuova conv mostra chat precedente), source-map lucide. Vedi messaggio Matteo 31 mag.
+
+**Prossimo**: push tutti i commit (.147→.156) + ZIP quando Matteo OK; restart :8000; poi backlog quick-fix.
+
+### α.172.154 ✅ — conversione qty/prezzo trn su cambio unità (vedi sotto)
 
 ### α.172.154 ✅ (conversione qty/prezzo anche per trn — bug Matteo)
 `saveLineField` (quotes.html, cambio unità inline riga salvata) era hardcoded day↔hr (`factor=HOURS_PER_DAY`) → trn non convertiva qty+prezzo. Generalizzato via `HOURS_PER_UNIT_JS`: factor=ore(old)/ore(new), qty*=factor, price/=factor, totale invariato. Copre day↔trn↔hr + legacy turno; non-temporali nessuna conversione. Solo template (hard refresh). NB: 2 conversioni JS distinte — `convertPriceOnUnitChange` (add-line, solo prezzo, già generalizzato .151) e `saveLineField` (inline riga salvata, qty+prezzo, .154).

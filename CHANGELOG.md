@@ -1,5 +1,39 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.155–156 — Conversione valuta completa (quote + fattura) (31 mag 2026)
+
+Feature grossa (spec+piano subagent-driven, 12 task TDD). Modello **base-anchored**:
+tutti gli importi DB restano in valuta base (EUR); la conversione in valuta cliente
+($/£/CHF) è **live indicativa** sulla quote e **congelata all'emissione** sulla fattura
+(tasso BCE del giorno, art. 13 c.4 DPR 633/1972). XML SDI sempre in EUR. Verifica legale
+conforme. Spec: `docs/superpowers/specs/2026-05-31-currency-conversion-design.md`.
+
+- **`app/services/currency.py`** (nuovo): `to_display`/`to_base` (Decimal HALF_UP), `symbol`,
+  `format_money` (formato IT), `disclaimer` (testo legale parametrizzato), `freeze_invoice_fx`.
+  `SUPPORTED = EUR/USD/GBP/CHF`.
+- **`fx.get_fx_rate_on`**: tasso BCE storico per-data (frankfurter `/{date}`) per la
+  conversione legale all'emissione.
+- **Quote**: payload con `currency_block` (valuta + tasso live + disclaimer); cambio valuta
+  → 422 se tasso assente, NESSUNA riscrittura importi; riga con prezzo digitato in valuta →
+  convertito in base al save (`from_listino=1` evita doppia conversione delle voci listino).
+- **Quote UI**: card valuta (tasso live + disclaimer), tutti i valori riga/totali convertiti
+  via `mfFormatMoney` (helper global.js); list-view/listino restano in base.
+- **PDF quote**: convertito in valuta + disclaimer (backward-compatible per EUR).
+- **Fattura**: 3 colonne nuove su `Invoice` (`currency`/`fx_rate_to_base`/`fx_rate_fixed_at`)
+  + auto-migrate idempotente al boot. `freeze_invoice_fx` congela il tasso BCE della data di
+  emissione a TUTTI i siti `Invoice()` (finance + billing); nota credito copia il tasso
+  dell'originale (storno equivalente, no re-freeze). 5 siti project-level default base (valuta
+  ambigua su progetti multi-quote — documentato). PDF fattura convertito + disclaimer.
+- **XML SDI invariato EUR** (verificato): `Divisa=EUR`, imponibile/imposta dagli importi base.
+- **Settings**: valuta base limitata a EUR/USD/GBP/CHF.
+- Migrazione `scripts/migrate_currency_baseanchored.py` (precondizione + backfill, eseguita).
+- Test: +~30 (currency, fx storico, quote currency, invoice currency, PDF, SDI). **255/255**.
+- E2E verificato: quote USD → tasso BCE live (0.859) → riga 1000 USD salvata 858.81 base.
+
+**Restart server** per attivare backend + auto-migrate colonne Invoice. Disclaimer assume
+tenant IT (base EUR); adattamento mercati esteri = sviluppo futuro (`currency.disclaimer`
+centralizzato).
+
 ## v3.5.0-alpha.172.154 — conversione qty/prezzo su cambio unità anche per trn (31 mag 2026)
 
 Matteo: "trn non converte la quantità come day e hr". La conversione inline su
