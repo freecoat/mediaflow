@@ -2015,6 +2015,8 @@ function renderLines() {
   const table = document.getElementById('lines-table');
   const emptyTbody = document.getElementById('lines-tbody-empty');
   const allLines = currentQuote.lines || [];
+  // Base-anchored: subtotali/sezioni sono in valuta base; converti per display.
+  const cb = (currentQuote && currentQuote.currency_block) || {currency:'EUR', live_rate:1.0};
   // v3.5.0-alpha.172.4 (Sprint 4 T1) — Aggiorna count/subtotal nelle tab
   // dal totale lordo per nature (non-opzionali). Tab visibili sempre.
   _refreshQuoteTabSummary(allLines);
@@ -2088,7 +2090,7 @@ function renderLines() {
               Subtotale sezione <strong>${escapeHtml(currentSection)}</strong>:
             </td>
             <td class="mono text-right" style="font-size:11px;font-weight:600;color:var(--text2);padding:3px 12px;">
-              ${fmtCurrency(sectionAccum)}
+              ${mfFormatMoney(sectionAccum, cb.currency, cb.live_rate)}
             </td>
             <td></td>
           </tr>`;
@@ -2126,7 +2128,7 @@ function renderLines() {
           Subtotale <strong>${escapeHtml(cat)}</strong>:
         </td>
         <td class="mono text-right" style="font-size:12px;font-weight:600;padding:4px 12px;" data-cat-subtotal="${safeCat}">
-          ${fmtCurrency(catSubtotal)}
+          ${mfFormatMoney(catSubtotal, cb.currency, cb.live_rate)}
         </td>
         <td></td>
       </tr>`;
@@ -2139,7 +2141,7 @@ function renderLines() {
                  onblur="saveCategoryDiscount(this)" style="width:60px;font-size:12px;">
         </td>
         <td class="mono text-right" style="font-size:12px;" data-cat-disc-amount="${safeCat}">
-          ${catDisc > 0 ? '−' + fmtCurrency(catDisc * catSubtotal) : '—'}
+          ${catDisc > 0 ? '−' + mfFormatMoney(catDisc * catSubtotal, cb.currency, cb.live_rate) : '—'}
         </td>
         <td></td>
       </tr>`;
@@ -2154,7 +2156,7 @@ function renderLines() {
           ↳ Totale categoria <strong>${escapeHtml(cat)}</strong> (al netto):
         </td>
         <td class="mono text-right" style="font-size:13px;font-weight:700;color:#22c55e;padding:4px 12px;border-top:1px dashed var(--border);" data-cat-net="${safeCat}">
-          ${fmtCurrency(catNet)}
+          ${mfFormatMoney(catNet, cb.currency, cb.live_rate)}
         </td>
         <td></td>
       </tr>`;
@@ -2205,6 +2207,8 @@ async function persistCategoryOrder() {
 }
 
 function renderLineRow(l) {
+  // Base-anchored: l.total è in valuta base; converti per display.
+  const cb = (currentQuote && currentQuote.currency_block) || {currency:'EUR', live_rate:1.0};
   const desc = (l.description || '').replace(/"/g, '&quot;');
   const detail = (l.detail || '').replace(/"/g, '&quot;');
   const isOpt = !!l.is_optional;
@@ -2273,7 +2277,7 @@ function renderLineRow(l) {
                  value="${l.unit_price}" onblur="saveLineField(this)"></td>
       <td><input class="inline-edit mono text-right" data-field="line_discount_pct" type="number" step="0.5" min="0" max="100"
                  value="${(l.line_discount_pct * 100).toFixed(1)}" onblur="saveLineDiscount(this)"></td>
-      <td class="mono text-right" style="font-weight:600;" data-line-total="${l.id}">${fmtCurrency(l.total)}</td>
+      <td class="mono text-right" style="font-weight:600;" data-line-total="${l.id}">${mfFormatMoney(l.total, cb.currency, cb.live_rate)}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-ghost btn-sm" onclick="editLineSection(${l.id})" title="Etichetta sezione (es. SKY, NBCU…)">🏷</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleLineOptional(${l.id})" title="${isOpt ? 'Rendi obbligatoria' : 'Rendi opzionale'}" style="${isOpt ? 'color:#f59e0b;' : ''}">${isOpt ? '◎' : '○'}</button>
@@ -2306,8 +2310,17 @@ function renderCurrencyHeader() {
   const host = document.getElementById('quote-currency-host');
   if (!host) return;
   host.textContent = '';
-  const ccy = q.currency || 'EUR';
-  const rate = q.fx_rate_to_base || 1.0;
+  // Base-anchored model: i valori API sono in valuta BASE; la quote può avere
+  // una valuta di display estera. cb fornisce currency/base_currency/live_rate/
+  // symbol/disclaimer/rate_available. Fallback ai vecchi campi quote per
+  // retrocompat se currency_block manca.
+  const cb = (q && q.currency_block) || {
+    currency: q.currency || 'EUR', base_currency: 'EUR',
+    live_rate: q.fx_rate_to_base || 1.0, symbol: '', disclaimer: null,
+  };
+  const ccy = cb.currency || 'EUR';
+  const rate = (cb.live_rate != null) ? cb.live_rate : 1.0;
+  const isBase = (cb.currency === cb.base_currency);
   const fxAt = q.fx_rate_fixed_at ? new Date(q.fx_rate_fixed_at).toLocaleString('it-IT') : null;
   const isDraft = (q.status === 'draft');
   const wrap = document.createElement('div');
@@ -2346,13 +2359,15 @@ function renderCurrencyHeader() {
   const rateInfo = document.createElement('span');
   rateInfo.className = 'text-xs text-muted';
   rateInfo.style.marginLeft = 'auto';
-  if (rate !== 1.0) {
-    rateInfo.textContent = '1 ' + ccy + ' = ' + rate.toFixed(4) + ' base · snapshot ' + (fxAt || '—');
+  if (!isBase) {
+    rateInfo.textContent = 'tasso live ' + (rate != null ? rate : 'n/d') +
+      ' (' + ccy + '/' + (cb.base_currency || 'EUR') + ')' +
+      (fxAt ? ' · snapshot ' + fxAt : '');
   } else {
-    rateInfo.textContent = 'stesso della base · no conversione';
+    rateInfo.textContent = 'stessa della base · no conversione';
   }
   wrap.appendChild(rateInfo);
-  if (isDraft && rate !== 1.0) {
+  if (isDraft && !isBase) {
     const reload = document.createElement('button');
     reload.className = 'btn btn-ghost btn-sm';
     reload.title = 'Forza refresh tasso dal provider (Frankfurter BCE)';
@@ -2361,6 +2376,14 @@ function renderCurrencyHeader() {
     wrap.appendChild(reload);
   }
   host.appendChild(wrap);
+  // Disclaimer cambio (es. "valori convertiti al tasso live, non vincolanti").
+  if (cb.disclaimer) {
+    const disc = document.createElement('div');
+    disc.className = 'text-xs text-muted';
+    disc.style.cssText = 'margin-top:4px; padding:0 2px;';
+    disc.textContent = cb.disclaimer;  // textContent → no XSS
+    host.appendChild(disc);
+  }
 }
 
 async function changeQuoteCurrency(newCcy) {
@@ -2818,6 +2841,8 @@ async function deleteAdvanceSchedule(scheduleId) {
 function renderTotals() {
   renderCurrencyHeader();  // v3.5.0-alpha.137 — header valuta quote
   const q = currentQuote;
+  // Base-anchored: tutti i totali q.* sono in valuta base; converti per display.
+  const cb = (q && q.currency_block) || {currency:'EUR', live_rate:1.0};
   const grossDiscountTotal = (q.subtotal_gross || 0) - (q.subtotal || 0);
   const pkgPct = -(q.package_discount || 0) * 100; // mostra positivo
   const pkgAmount = (q.subtotal || 0) - (q.total_after_discount || 0);
@@ -2844,54 +2869,54 @@ function renderTotals() {
   const splitRows = (sJcl > 0.005 && sDel > 0.005) ? `
     <div class="totals-line" style="font-size:12px;color:var(--text2);padding:2px 12px;">
       <span>↳ Lavorazioni (JCL)</span>
-      <span class="mono">${fmtCurrency(sJcl)}</span>
+      <span class="mono">${mfFormatMoney(sJcl, cb.currency, cb.live_rate)}</span>
     </div>
     <div class="totals-line" style="font-size:12px;color:var(--text2);padding:2px 12px;">
       <span>↳ Consegne (Deliverable)</span>
-      <span class="mono">${fmtCurrency(sDel)}</span>
+      <span class="mono">${mfFormatMoney(sDel, cb.currency, cb.live_rate)}</span>
     </div>` : '';
   document.getElementById('totals-panel').innerHTML = `
     <div class="totals-line gross">
       <span>Totale lordo (no sconti)</span>
-      <span class="mono">${fmtCurrency(q.subtotal_gross)}</span>
+      <span class="mono">${mfFormatMoney(q.subtotal_gross, cb.currency, cb.live_rate)}</span>
     </div>
     ${splitRows}
     ${grossDiscountTotal > 0.005 ? `
     <div class="totals-line disc">
       <span>Sconti voci + categoria</span>
-      <span class="mono">−${fmtCurrency(grossDiscountTotal)}</span>
+      <span class="mono">−${mfFormatMoney(grossDiscountTotal, cb.currency, cb.live_rate)}</span>
     </div>` : ''}
     <div class="totals-line">
       <span class="text-muted">Subtotale</span>
-      <span class="mono">${fmtCurrency(q.subtotal)}</span>
+      <span class="mono">${mfFormatMoney(q.subtotal, cb.currency, cb.live_rate)}</span>
     </div>
     <div class="totals-line">
       <span class="text-muted">Sconto pacchetto
         <input class="pkg-discount-input" type="number" step="0.5" min="0" max="100"
                value="${pkgPct.toFixed(1)}" onblur="savePackageDiscount(this)" id="pkg-disc-input">%
       </span>
-      <span class="mono ${pkgAmount > 0.005 ? 'color-rose' : 'text-muted'}">${pkgAmount > 0.005 ? '−' + fmtCurrency(pkgAmount) : '—'}</span>
+      <span class="mono ${pkgAmount > 0.005 ? 'color-rose' : 'text-muted'}">${pkgAmount > 0.005 ? '−' + mfFormatMoney(pkgAmount, cb.currency, cb.live_rate) : '—'}</span>
     </div>
     <div class="totals-line net">
       <span>Totale netto (base IVA)</span>
-      <span class="mono">${fmtCurrency(q.total_after_discount)}</span>
+      <span class="mono">${mfFormatMoney(q.total_after_discount, cb.currency, cb.live_rate)}</span>
     </div>
     <div class="totals-line">
       <span class="text-muted">IVA
         <input class="pkg-discount-input" type="number" step="0.1" min="0" max="100"
                value="${(q.vat_rate || 0).toFixed(1)}" id="q-vat" onblur="saveQuoteMeta()">%
       </span>
-      <span class="mono">${fmtCurrency(vatAmount)}</span>
+      <span class="mono">${mfFormatMoney(vatAmount, cb.currency, cb.live_rate)}</span>
     </div>
     <div class="totals-line final">
       <span>TOTALE</span>
-      <span class="mono">${fmtCurrency(q.total_with_vat)}</span>
+      <span class="mono">${mfFormatMoney(q.total_with_vat, cb.currency, cb.live_rate)}</span>
     </div>
     ${optTotal > 0.005 ? `
     <div class="totals-optional-block">
       <div class="totals-line opt-header">
         <span>Optional aggiuntivi <small style="opacity:0.7;">(non inclusi nel totale)</small></span>
-        <span class="mono">+${fmtCurrency(optTotal)}</span>
+        <span class="mono">+${mfFormatMoney(optTotal, cb.currency, cb.live_rate)}</span>
       </div>
     </div>` : ''}
   `;
@@ -2937,7 +2962,8 @@ async function saveLineField(el) {
     // v3.5.0-alpha.171.10 — usa targetId (può differire da currentQuoteId
     // se _ensureEditableQuoteOrVersion ha creato nuova versione)
     const res = await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
-    document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
+    const _cb = (currentQuote && currentQuote.currency_block) || {currency:'EUR', live_rate:1.0};
+    document.querySelector(`[data-line-total="${lineId}"]`).textContent = mfFormatMoney(res.total, _cb.currency, _cb.live_rate);
     Object.assign(currentQuote, {
       subtotal_gross: res.subtotal_gross,
       subtotal_gross_jcl: res.subtotal_gross_jcl,
@@ -2982,7 +3008,8 @@ async function saveLineDiscount(el) {
     const fd = new FormData();
     fd.append('line_discount_pct', pct);
     const res = await api('PUT', `/quotes/api/${targetId}/lines/${lineId}`, fd);
-    document.querySelector(`[data-line-total="${lineId}"]`).textContent = fmtCurrency(res.total);
+    const _cb = (currentQuote && currentQuote.currency_block) || {currency:'EUR', live_rate:1.0};
+    document.querySelector(`[data-line-total="${lineId}"]`).textContent = mfFormatMoney(res.total, _cb.currency, _cb.live_rate);
     Object.assign(currentQuote, {
       subtotal_gross: res.subtotal_gross,
       subtotal_gross_jcl: res.subtotal_gross_jcl,
@@ -3124,6 +3151,8 @@ function refreshCategoryDiscountAmounts() {
   // Risolve il bug dei subtotali categoria che non si aggiornavano live al
   // save di una linea.
   const cd = currentQuote.category_discounts || {};
+  // Base-anchored: subtotali/sconti/net categoria in valuta base → converti.
+  const cb = (currentQuote && currentQuote.currency_block) || {currency:'EUR', live_rate:1.0};
   const groups = {};
   for (const l of currentQuote.lines) {
     const cat = l.category || 'Altro';
@@ -3137,17 +3166,17 @@ function refreshCategoryDiscountAmounts() {
     const safeCat = cat.replace(/"/g, '&quot;');
     const subEl = document.querySelector(`[data-cat-subtotal="${cat}"]`)
                   || document.querySelector(`[data-cat-subtotal="${safeCat}"]`);
-    if (subEl) subEl.textContent = fmtCurrency(subtotal);
+    if (subEl) subEl.textContent = mfFormatMoney(subtotal, cb.currency, cb.live_rate);
 
     const discEl = document.querySelector(`[data-cat-disc-amount="${cat}"]`)
                    || document.querySelector(`[data-cat-disc-amount="${safeCat}"]`);
-    if (discEl) discEl.textContent = disc > 0 ? '−' + fmtCurrency(disc * subtotal) : '—';
+    if (discEl) discEl.textContent = disc > 0 ? '−' + mfFormatMoney(disc * subtotal, cb.currency, cb.live_rate) : '—';
 
     const netEl = document.querySelector(`[data-cat-net="${cat}"]`)
                   || document.querySelector(`[data-cat-net="${safeCat}"]`);
     const netRow = document.querySelector(`tr.ql-cat-net-row[data-cat="${cat}"]`)
                    || document.querySelector(`tr.ql-cat-net-row[data-cat="${safeCat}"]`);
-    if (netEl) netEl.textContent = fmtCurrency(netAmount);
+    if (netEl) netEl.textContent = mfFormatMoney(netAmount, cb.currency, cb.live_rate);
     if (netRow) netRow.style.display = disc > 0 ? '' : 'none';
   }
 }
@@ -3468,7 +3497,9 @@ async function addLine() {
     fd.append('unit', document.getElementById('al-unit').value || 'day');
     fd.append('unit_price', document.getElementById('al-price').value || '0');
     const piId = document.getElementById('al-price-item-id').value;
-    if (piId) fd.append('price_item_id', piId);
+    // from_listino=1: prezzo già in valuta base (no doppia conversione in
+    // quote a valuta estera). Solo se la voce viene dal listino.
+    if (piId) { fd.append('price_item_id', piId); fd.append('from_listino', '1'); }
     const res = await api('POST', `/quotes/api/${targetId}/lines`, fd);
     // v3.4.35: undo stack
     quotePushUndo({kind: 'line_add', line_id: res.id, label: `Voce «${desc}»`},
