@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.157 — Backlog Matteo: 7 fix/feature (multiagent) (31 mag 2026)
+
+Batch backlog post-valuta, 3 agenti paralleli (file disgiunti) + 1 sequenziale. **280/280** test.
+
+- **Listino — duplica voce**: `POST /pricelist/api/items/{id}/duplicate` (copia tutti i campi, nome "… (copia)") + bottone 📋 per riga.
+- **Listino — categorie troncate**: sidebar `width:220` + nomi categoria `word-break`/wrap + `title` tooltip + `escapeHtml`. Niente più troncamento.
+- **Listino — cancellazione rotta (BUG)**: root cause = `loadAll()` usava `active_only=false` → le voci soft-deleted riapparivano subito (sembrava non cancellasse). Fix `active_only=true` + error handler legge `detail` (mostra 403/errori). Endpoint era corretto.
+- **Copilot — dettaglio riga vuoto via AI (BUG)**: `_h_propose_quote_line`/`_h_propose_quote` leggevano `detail` ma non ereditavano da `PriceItem.description` quando vuoto (il path manuale/picker α.172.146 sì). Fix: `detail = payload.detail || pi.description || None` su entrambi gli handler.
+- **Progetti — n° episodi serie**: `Project.episodes_count` (nullable) + auto-migrate boot + campo in project_detail + `ai_context` espone "(serie, N episodi)" in PROGETTO ATTIVO e PROGETTI ESISTENTI → copilot lo legge in qualsiasi pagina.
+- **Copilot — nuova conversazione mostra chat precedente (BUG)**: `render()` early-return su 0 messaggi lasciava il DOM vecchio → ora svuota `#cp-messages` + welcome. Switch a conversazione esistente invariato.
+- **Source-map lucide 404**: rimosso `//# sourceMappingURL` da `lucide.min.js` (404 innocuo in console).
+
+Test nuovi: `test_pricelist_backlog` (10), `test_project_episodes` (7), `test_ai_quote_line_detail` (8).
+
 ## v3.5.0-alpha.172.155–156 — Conversione valuta completa (quote + fattura) (31 mag 2026)
 
 Feature grossa (spec+piano subagent-driven, 12 task TDD). Modello **base-anchored**:

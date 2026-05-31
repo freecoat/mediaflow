@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.156** — 31 maggio 2026 — Conversione valuta completa (quote + fattura)
+**v3.5.0-alpha.172.157** — 31 maggio 2026 — Backlog Matteo 7 fix/feature (multiagent)
+
+### α.172.157 ✅ (backlog Matteo — 3 agenti paralleli + 1)
+Listino: duplica voce + categorie no-troncamento + fix cancellazione (root cause `loadAll active_only=false`). Copilot: dettaglio riga AI ora eredita da PriceItem.description (come picker) + nuova conversazione svuota chat precedente. Progetti: `episodes_count` + auto-migrate + copilot lo legge ovunque. Source-map lucide silenziato. **280/280** test (test_pricelist_backlog 10 + test_project_episodes 7 + test_ai_quote_line_detail 8). Backlog Matteo COMPLETO.
+
+**Prossimo**: push tutti i commit (.147→.157) + ZIP quando Matteo OK; restart :8000 (currency backend + auto-migrate Invoice/Project).
+
+### α.172.156 ✅ — Conversione valuta completa (vedi sotto)
 
 ### α.172.155–156 ✅ (CONVERSIONE VALUTA COMPLETA — feature grossa, subagent-driven 12 task TDD)
 Modello **base-anchored**: importi DB in valuta base (EUR); conversione $/£/CHF **live indicativa** su quote + **congelata all'emissione** su fattura (tasso BCE del giorno, art.13 c.4 DPR 633/72). XML SDI sempre EUR. Verifica legale conforme. Spec+piano in `docs/superpowers/`.
