@@ -1059,12 +1059,9 @@
           </select>
         </div>
         <div class="form-group" style="flex:1;">
-          <label class="form-label">Livello prezzo</label>
-          <select class="form-select" id="bp-level">
-            <option value="list" selected>Listino</option>
-            <option value="average">Media</option>
-            <option value="low">Basso</option>
-          </select>
+          <label class="form-label">Sconto % su listino</label>
+          <input class="form-input" id="bp-discount" type="number" min="0" max="100" step="1" value="0"
+                 oninput="bpRerenderPrices()" title="Prezzi di listino fissi; sconto uniforme applicato a tutte le voci selezionate">
         </div>
         <div class="form-group" style="flex:0 0 80px;">
           <label class="form-label">Sezione</label>
@@ -4620,11 +4617,37 @@ function bpRow(b, i) {
     mid.appendChild(det);
   }
   row.appendChild(mid);
-  const price = document.createElement('div'); price.className = 'mono text-xs';
-  const p = b.price_list != null ? `€${(b.price_list).toFixed(0)}` : '—';
-  price.textContent = `${p}/${b.unit||''}`;
+  const price = document.createElement('div');
+  price.className = 'mono text-xs bp-price';
+  price.style.textAlign = 'right';
+  price.style.whiteSpace = 'nowrap';
+  price.dataset.priceList = (b.price_list != null) ? String(b.price_list) : '';
+  price.dataset.unit = b.unit || '';
   row.appendChild(price);
+  bpPriceCell(price);  // popola con sconto corrente
   return row;
+}
+
+// Aggiorna il contenuto di una cella prezzo applicando lo sconto % corrente.
+function bpPriceCell(cell) {
+  const raw = cell.dataset.priceList;
+  const unit = cell.dataset.unit || '';
+  if (raw === '' || raw == null) { cell.textContent = `—/${unit}`; return; }
+  const list = parseFloat(raw);
+  const d = Math.max(0, Math.min(100, parseFloat(document.getElementById('bp-discount').value) || 0));
+  if (d > 0) {
+    const net = list * (1 - d / 100);
+    // Prezzo listino barrato + prezzo scontato in evidenza.
+    cell.innerHTML = `<span style="text-decoration:line-through;opacity:.5;">€${list.toFixed(0)}</span> `
+      + `<b style="color:var(--indigo2);">€${net.toFixed(0)}</b>/${escapeHtml(unit)}`;
+  } else {
+    cell.textContent = `€${list.toFixed(0)}/${unit}`;
+  }
+}
+
+// Ricalcola TUTTE le celle prezzo del picker quando cambia lo sconto (live).
+function bpRerenderPrices() {
+  document.querySelectorAll('#bp-list .bp-price').forEach(bpPriceCell);
 }
 
 function bpToggleAll(on) {
@@ -4646,7 +4669,7 @@ async function confirmBucketPicker() {
   if (!ids.length) { toast('Seleziona almeno una voce', 'warning'); return; }
   const fd = new FormData();
   fd.append('template_id', tid);
-  fd.append('price_level', document.getElementById('bp-level').value);
+  fd.append('discount_pct', String(Math.max(0, Math.min(100, parseFloat(document.getElementById('bp-discount').value) || 0))));
   fd.append('section', (document.getElementById('bp-section').value || 'A').toUpperCase());
   fd.append('with_detail', document.getElementById('bp-detail').checked ? 'true' : 'false');
   ids.forEach(id => fd.append('price_item_ids', id));

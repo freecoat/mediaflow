@@ -98,6 +98,7 @@ TOOLS: list[dict] = [
                 "client_id":        {"type": "integer"},
                 "client_name":      {"type": "string"},
                 "project_type":     {"type": "string", "enum": ["feature_film", "short_film", "series", "documentary", "spot", "music_video", "corporate"]},
+                "episodes_count":   {"type": "integer", "description": "Numero di episodi. Compilalo SEMPRE quando project_type='series' (serie TV). Lascialo assente per opere singole."},
                 "length_minutes":   {"type": "number"},
                 "fps":              {"type": "string", "description": "Frame rate come stringa, es. '24', '25', '23.976'."},
                 "shooting_format":  {"type": "string"},
@@ -118,6 +119,7 @@ TOOLS: list[dict] = [
             "properties": {
                 "project_id":      {"type": "integer"},
                 "code":            {"type": "string"},
+                "episodes_count":  {"type": "integer", "description": "Numero episodi (per serie TV)."},
                 "length_minutes":  {"type": "number"},
                 "fps":             {"type": "string"},
                 "shooting_format": {"type": "string"},

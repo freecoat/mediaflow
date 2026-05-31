@@ -802,7 +802,7 @@
     </div>
     <div class="modal-body" style="max-height:72vh; overflow-y:auto;">
       <input type="hidden" id="dsm-deliverable-id">
-      <div style="display:flex; gap:8px; align-items:center; margin-bottom:14px; padding:8px 10px; background:rgba(98,114,245,0.06); border-radius:6px; flex-wrap:wrap;">
+      <div id="dsm-prefill-bar" style="display:flex; gap:8px; align-items:center; margin-bottom:14px; padding:8px 10px; background:rgba(98,114,245,0.06); border-radius:6px; flex-wrap:wrap;">
         <label class="text-xs text-muted" style="margin:0;">Pre-fill da template:</label>
         <select id="dsm-template-select" class="form-select" style="flex:1; min-width:180px; height:30px; font-size:12px;">
           <option value="">— scegli un DeliveryTemplate —</option>
@@ -2192,38 +2192,170 @@ function dsmUpdatePath(path, val) {
   cur[leaf] = val;
 }
 
+// v3.5.0-alpha.172.160 (Bug B) — stato modal: se il deliverable è linkato a un
+// DeliveryItem di capitolato (delivery_item_id), la modal mostra i SELETTORI
+// strutturati (taxonomy) invece dell'editor JSON 8-blocchi — come il menu
+// capitolato sui singoli item della quotazione.
+let _dsmStructured = false;
+let _dsmDeliveryItemId = null;
+let _dsmTaxonomy = null;
+
+async function _dsmLoadTaxonomy() {
+  if (_dsmTaxonomy) return _dsmTaxonomy;
+  try { _dsmTaxonomy = await api('GET', '/delivery-taxonomy/api'); }
+  catch(e) { _dsmTaxonomy = {packages:[],containers:[],video_codecs:[],resolutions:[],frame_rates:[]}; }
+  return _dsmTaxonomy;
+}
+
 async function dsmOpen(deliverableId) {
   const d = _dhItems.find(x => x.id === deliverableId);
   if (!d) return;
   openModal('modal-deliverable-specs');
   document.getElementById('dsm-deliverable-id').value = String(d.id);
   document.getElementById('dsm-title').textContent = `Specifiche tecniche — ${d.name}`;
-  const sel = document.getElementById('dsm-template-select');
-  _dhClear(sel);
-  const optEmpty = document.createElement('option');
-  optEmpty.value = ''; optEmpty.textContent = '— scegli un DeliveryTemplate —';
-  sel.appendChild(optEmpty);
-  _dhTemplates.forEach(t => {
-    const opt = document.createElement('option');
-    opt.value = String(t.id);
-    opt.textContent = `${t.code} — ${t.name || ''}${t.broadcaster ? ' · ' + t.broadcaster : ''}`;
-    sel.appendChild(opt);
-  });
+  const prefillBar = document.getElementById('dsm-prefill-bar');
   const host = document.getElementById('dsm-blocks-host');
   _dhClear(host);
+  _dsmStructured = false;
+  _dsmDeliveryItemId = null;
   const loading = document.createElement('div'); loading.className = 'text-muted text-sm';
-  loading.textContent = 'Caricamento blocchi…'; host.appendChild(loading);
+  loading.textContent = 'Caricamento specifiche…'; host.appendChild(loading);
   try {
     const fresh = await api('GET', `/jobs/api/deliverables/${d.id}`);
-    _dsmCurrentSpec = fresh.spec_json || {};
-    _dsmMode = 'pretty';
-    document.getElementById('dsm-toggle-mode').textContent = '📝 Modifica JSON';
-    dsmRenderBlocks();
+    if (fresh.delivery_item_id) {
+      // Ramo STRUTTURATO: specifiche derivate dal capitolato.
+      if (prefillBar) prefillBar.style.display = 'none';
+      _dsmStructured = true;
+      _dsmDeliveryItemId = fresh.delivery_item_id;
+      const [item, tax] = await Promise.all([
+        api('GET', `/delivery-items/api/${fresh.delivery_item_id}`),
+        _dsmLoadTaxonomy(),
+      ]);
+      dsmRenderStructured(item, tax);
+    } else {
+      // Ramo legacy: editor JSON 8-blocchi (deliverable senza capitolato linkato).
+      if (prefillBar) prefillBar.style.display = '';
+      const sel = document.getElementById('dsm-template-select');
+      _dhClear(sel);
+      const optEmpty = document.createElement('option');
+      optEmpty.value = ''; optEmpty.textContent = '— scegli un DeliveryTemplate —';
+      sel.appendChild(optEmpty);
+      _dhTemplates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = String(t.id);
+        opt.textContent = `${t.code} — ${t.name || ''}${t.broadcaster ? ' · ' + t.broadcaster : ''}`;
+        sel.appendChild(opt);
+      });
+      _dsmCurrentSpec = fresh.spec_json || {};
+      _dsmMode = 'pretty';
+      document.getElementById('dsm-toggle-mode').textContent = '📝 Modifica JSON';
+      dsmRenderBlocks();
+    }
   } catch(e) {
     _dhClear(host);
     const err = document.createElement('div'); err.style.color = 'var(--rose)';
     err.textContent = 'Errore: ' + (e.message || '');
     host.appendChild(err);
+  }
+}
+
+// Costruisce i selettori taxonomy del DeliveryItem (parità col menu capitolato
+// in delivery_templates.html / openItemEditor). Edit → PUT /delivery-items/api/{id}.
+function dsmRenderStructured(v, tax) {
+  const host = document.getElementById('dsm-blocks-host');
+  _dhClear(host);
+  const opt = (list, sel, placeholder) => {
+    let h = `<option value="">${placeholder || '— nessuno —'}</option>`;
+    (list || []).forEach(r => {
+      const s = (sel !== null && sel !== undefined && Number(sel) === r.id) ? ' selected' : '';
+      h += `<option value="${r.id}"${s}>${escapeHtml(r.name)}</option>`;
+    });
+    return h;
+  };
+  const enumOpt = (vals, sel) =>
+    `<option value="">—</option>` + vals.map(x =>
+      `<option value="${escapeHtml(x)}"${sel===x?' selected':''}>${escapeHtml(x)}</option>`).join('');
+
+  const banner = document.createElement('div');
+  banner.style.cssText = 'padding:8px 10px;margin-bottom:12px;border-radius:6px;background:rgba(98,114,245,0.08);font-size:12px;color:var(--text2);';
+  banner.innerHTML = '🎯 Specifiche tecniche derivate dal <b>capitolato</b>. '
+    + 'Le modifiche aggiornano il DeliveryItem collegato.';
+  host.appendChild(banner);
+
+  const form = document.createElement('div');
+  form.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
+  const L = 'font-size:11px;color:var(--text3);text-transform:uppercase;';
+  form.innerHTML = `
+    <div style="grid-column:1/-1;"><label style="${L}">Nome</label>
+      <input class="form-input" id="dsm-s-name" value="${escapeHtml(v.name||'')}"></div>
+    <div><label style="${L}">Package</label>
+      <select class="form-select" id="dsm-s-package">${opt(tax.packages, v.package_id, '— nessuno (single-file) —')}</select></div>
+    <div><label style="${L}">Container</label>
+      <select class="form-select" id="dsm-s-container">${opt(tax.containers, v.container_id)}</select></div>
+    <div><label style="${L}">Video codec</label>
+      <select class="form-select" id="dsm-s-vcodec">${opt(tax.video_codecs, v.video_codec_id, '— audio-only —')}</select></div>
+    <div><label style="${L}">Resolution</label>
+      <select class="form-select" id="dsm-s-res">${opt(tax.resolutions, v.resolution_id)}</select></div>
+    <div><label style="${L}">Bit depth</label>
+      <select class="form-select" id="dsm-s-bitdepth"><option value="">—</option>
+        ${[8,10,12,16].map(b=>`<option value="${b}"${v.video_bit_depth===b?' selected':''}>${b}-bit</option>`).join('')}</select></div>
+    <div><label style="${L}">Chroma</label>
+      <select class="form-select" id="dsm-s-chroma">${enumOpt(['4:4:4','4:2:2','4:2:0','4:1:1','4:4:4:4'], v.chroma_subsampling)}</select></div>
+    <div><label style="${L}">Frame rate</label>
+      <select class="form-select" id="dsm-s-fr">${opt(tax.frame_rates, v.frame_rate_id)}</select></div>
+    <div><label style="${L}">Aspect ratio</label>
+      <input class="form-input" id="dsm-s-aspect" value="${escapeHtml(v.aspect_ratio||'')}" placeholder="es. 1.85 / 2.39 / 16:9"></div>
+    <div><label style="${L}">Scan type</label>
+      <select class="form-select" id="dsm-s-scan">${enumOpt(['progressive','interlaced','psf'], v.scan_type)}</select></div>
+    <div><label style="${L}">HDR format</label>
+      <select class="form-select" id="dsm-s-hdr">${enumOpt(['SDR','HDR10','HDR10+','Dolby Vision','HLG'], v.hdr_format)}</select></div>
+    <div style="grid-column:1/-1;"><label style="${L}">Color space</label>
+      <input class="form-input" id="dsm-s-color" value="${escapeHtml(v.color_space||'')}" placeholder="es. Rec.709 / DCI XYZ / Rec.2020 PQ"></div>
+    <div><label style="${L}">Subtitle format</label>
+      <select class="form-select" id="dsm-s-subfmt">${enumOpt(['TTML IMSC 1.1','PNG+XML','Burn-in','PGS','EBU-STL','SRT'], v.subtitle_format)}</select></div>
+    <div><label style="${L}">Subtitle lang (ISO comma)</label>
+      <input class="form-input" id="dsm-s-sublang" value="${escapeHtml((v.subtitle_languages||[]).join(','))}" placeholder="es. it,en,fr"></div>
+    <div style="grid-column:1/-1;"><label style="${L}">Note</label>
+      <textarea class="form-input" id="dsm-s-notes" rows="2">${escapeHtml(v.notes||'')}</textarea></div>
+  `;
+  host.appendChild(form);
+}
+
+async function dsmSaveStructured() {
+  const iid = _dsmDeliveryItemId;
+  if (!iid) return;
+  const fd = new FormData();
+  const _set = (key, id) => {
+    const el = document.getElementById(id);
+    if (el) fd.append(key, el.value !== '' ? el.value : '');
+  };
+  const name = (document.getElementById('dsm-s-name').value || '').trim();
+  if (!name) { toast('Nome obbligatorio', 'error'); return; }
+  fd.append('name', name);
+  _set('package_id', 'dsm-s-package');
+  _set('container_id', 'dsm-s-container');
+  _set('video_codec_id', 'dsm-s-vcodec');
+  _set('resolution_id', 'dsm-s-res');
+  _set('video_bit_depth', 'dsm-s-bitdepth');
+  _set('chroma_subsampling', 'dsm-s-chroma');
+  _set('frame_rate_id', 'dsm-s-fr');
+  _set('aspect_ratio', 'dsm-s-aspect');
+  _set('scan_type', 'dsm-s-scan');
+  _set('hdr_format', 'dsm-s-hdr');
+  _set('color_space', 'dsm-s-color');
+  _set('subtitle_format', 'dsm-s-subfmt');
+  const slang = (document.getElementById('dsm-s-sublang').value || '').trim();
+  fd.append('subtitle_languages', slang
+    ? JSON.stringify(slang.split(',').map(s => s.trim()).filter(Boolean)) : '');
+  fd.append('notes', (document.getElementById('dsm-s-notes').value || '').trim());
+  try {
+    const r = await fetch(`/delivery-items/api/${iid}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
+    if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+    toast('💾 Specifiche capitolato salvate', 'success');
+    closeModal('modal-deliverable-specs');
+    renderDeliverableHub();
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
   }
 }
 
@@ -2276,6 +2408,8 @@ async function dsmAiPropose() {
 }
 
 async function dsmSave() {
+  // v3.5.0-alpha.172.160 (Bug B) — ramo strutturato salva il DeliveryItem capitolato.
+  if (_dsmStructured) { return dsmSaveStructured(); }
   const id = parseInt(document.getElementById('dsm-deliverable-id').value, 10);
   if (!id) return;
   // Se mode=raw, parsa le textarea aggiornando _dsmCurrentSpec

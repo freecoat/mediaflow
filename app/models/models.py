@@ -1060,6 +1060,10 @@ class PriceCategory(Base):
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # v3.5.0-alpha.172.160 — Soft-delete categoria (force-delete soft): l'endpoint
+    # delete disattiva la categoria + le sue voci (is_active=False) invece di
+    # bloccare quando ci sono voci collegate. Recuperabili riattivando.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", index=True)
     items: Mapped[List["PriceItem"]] = relationship(back_populates="category", cascade="all, delete-orphan")
 
 

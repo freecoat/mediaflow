@@ -1,5 +1,35 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.160 — Remote-control batch: 5 fix (listino, picker, deliverables) (31 mag 2026)
+
+5 issue da remote-control. Tutti testati (boot 200, endpoint, force-delete funzionale).
+
+- **Episodi serie (AI)**: la capability `propose_project`/`propose_project_metadata` ora include
+  `episodes_count` (schema + handler). Il campo esisteva già end-to-end (model + form + display);
+  mancava solo nel tool-schema AI → il copilot non lo compilava creando serie.
+- **Cancella categoria listino (force-delete soft)**: l'endpoint `DELETE /pricelist/api/categories/{id}`
+  non blocca più con 400 se ci sono voci collegate. Disattiva la categoria + le sue voci
+  (`is_active=False`, recuperabili) invece del DELETE fisico (che via cascade avrebbe cancellato le
+  voci e rotto le QuoteLine). Nuova colonna `price_categories.is_active` + auto-migrate. UI: tasto
+  Elimina sempre disponibile, conferma avvisa quante voci verranno archiviate.
+- **Visualizzazione categorie (filtri in alto)**: rimossa la sidebar laterale; le categorie sono ora
+  **chips di filtro sopra la tabella** ("Tutte" + chip per categoria con conteggio + ✏️ inline).
+  Tabella a larghezza piena.
+- **Picker capitolato → sconto %**: il listino ha prezzi FISSI. Rimosso il dropdown fasce
+  (listino/media/basso); al suo posto un input **% sconto** uniforme con **preview live** nel modal
+  (prezzo listino barrato → prezzo scontato). Backend `load-from-template-items` passa da
+  `price_level` a `discount_pct`: `unit_price`=price_list, sconto salvato per riga in `line_discount_pct`.
+- **Deliverables planning — 2 bug**:
+  - *Bug A*: la vista `/planning/?view=deliverables` mostrava item di progetti **cestinati**
+    (soft-delete). La query `/jobs/api/deliverables/list` ora filtra `Project.deleted_at IS NULL`
+    (preservando i deliverable senza progetto).
+  - *Bug B*: la modal specifiche mostrava solo l'editor JSON 8-blocchi. Ora, se il deliverable è
+    linkato a un DeliveryItem di capitolato (`delivery_item_id`), mostra i **selettori taxonomy
+    strutturati** (package/container/codec/resolution/bit depth/chroma/frame rate/aspect/scan/HDR/
+    color space/sottotitoli) — parità col menu capitolato sui singoli item di quotazione. Salva via
+    `PUT /delivery-items/api/{id}`. Fallback JSON per deliverable non linkati. Serializer deliverable
+    ora espone `delivery_item_id`.
+
 ## v3.5.0-alpha.172.159 — Mobile v2 Fase A: foundation look + drawer nav (31 mag 2026)
 
 Prima fase dell'espansione mobile (da companion spartano a livello intermedio). Look curato

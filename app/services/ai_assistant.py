@@ -316,6 +316,7 @@ def _h_propose_project(db: Session, data: dict) -> dict:
     p = Project(
         code=code, title=title, client_id=client.id,
         project_type=data.get("project_type"),
+        episodes_count=data.get("episodes_count"),
         length_minutes=data.get("length_minutes"),
         fps=str(data["fps"]) if data.get("fps") is not None else None,
         shooting_format=data.get("shooting_format"),
@@ -728,7 +729,7 @@ def _h_propose_new_item_and_line(db: Session, data: dict) -> dict:
 @ai_capability("propose_project_metadata")
 def _h_propose_project_metadata(db: Session, data: dict) -> dict:
     p = _resolve_project(db, data)
-    fields = ["length_minutes", "fps", "shooting_format", "delivery_format", "director"]
+    fields = ["episodes_count", "length_minutes", "fps", "shooting_format", "delivery_format", "director"]
     updated = {}
     for f in fields:
         if f in data and data[f] not in (None, ""):

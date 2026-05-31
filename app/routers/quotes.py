@@ -1966,7 +1966,7 @@ async def load_from_template_items(
     quote_id: int,
     template_id: int = Form(...),
     price_item_ids: List[int] = Form(...),
-    price_level: PriceLevel = Form(PriceLevel.list_price),
+    discount_pct: float = Form(0.0),
     section: str = Form("A"),
     with_detail: bool = Form(True),
     db: Session = Depends(get_db),
@@ -1977,7 +1977,14 @@ async def load_from_template_items(
     sono il sottoinsieme spuntato dei bucket derivati dai DeliveryItem del template.
     Se ``with_detail``, precompila ``detail`` con le note di capitolato aggregate
     per quel bucket (piattaforma upload, naming, ecc.). Idempotente sui price_item.
+
+    v3.5.0-alpha.172.160 — il listino ha prezzi FISSI: ``unit_price`` = prezzo di
+    listino (price_list). ``discount_pct`` (0..100) è uno sconto percentuale
+    applicato a TUTTE le voci selezionate, salvato per riga in ``line_discount_pct``
+    (il ricalcolo quote applica già ``(1 - line_discount_pct)``).
     """
+    # Clamp sconto 0..1 (input arriva in percentuale 0..100).
+    disc_frac = max(0.0, min(1.0, (discount_pct or 0.0) / 100.0))
     q = db.query(Quote).options(joinedload(Quote.lines)).filter(
         Quote.id == quote_id,
         Quote.tenant_id == current_tenant_id(),
@@ -2028,7 +2035,8 @@ async def load_from_template_items(
         if not item:
             skipped_invalid += 1
             continue
-        price = _resolve_item_unit_price(item, price_level)
+        # Prezzo di listino FISSO (no fasce): lo sconto è uniforme via line_discount_pct.
+        price = _resolve_item_unit_price(item, PriceLevel.list_price)
         sect_count += 1
         sort_order += 10
         line = QuoteLine(
@@ -2039,10 +2047,10 @@ async def load_from_template_items(
             detail=(opt.get("detail_suggestion") if with_detail else None),
             quantity=1.0,
             unit=item.unit,
-            price_level=price_level,
+            price_level=PriceLevel.list_price,
             unit_price=price,
             allowance=0.0,
-            line_discount_pct=0.0,
+            line_discount_pct=disc_frac,
             total=0.0,
             hardcosts=0.0,
             price_item_id=item.id,

@@ -24,26 +24,25 @@
 {% endblock %}
 
 {% block content %}
-<div class="flex gap-4" style="align-items:flex-start;">
-  <!-- Sidebar categorie -->
-  <div class="card" style="min-width:180px;max-width:240px;width:220px;position:sticky;top:80px;">
-    <div class="card-title mb-2">Categorie</div>
-    <div id="cat-list"></div>
+<div style="min-width:0;">
+  <!-- Barra filtri in alto (v3.5.0-alpha.172.160): categoria come chips sopra
+       la tabella invece della sidebar laterale. -->
+  <div class="flex items-center gap-3 mb-3" style="flex-wrap:wrap;">
+    <div class="search-bar" style="flex:1;min-width:200px;">
+      <span>🔍</span>
+      <input type="text" id="search-items" placeholder="Cerca per nome, descrizione o keyword…" oninput="renderItems()">
+    </div>
+    <div class="tabs" style="margin:0;" title="1 giornata = 8 ore. Cambia solo la visualizzazione, il prezzo memorizzato resta invariato.">
+      <div class="tab active" id="view-day" onclick="setViewMode('day')" data-i18n="pricelist.per_day">€/Giorno</div>
+      <div class="tab" id="view-hour" onclick="setViewMode('hour')" data-i18n="pricelist.per_hour">€/Ora</div>
+    </div>
+    <span class="text-xs text-muted" id="items-count"></span>
   </div>
+  <!-- Chips categoria: filtro 1-alla-volta. ✏️ inline per modifica/elimina. -->
+  <div id="cat-chips" class="flex gap-2 mb-3" style="flex-wrap:wrap;align-items:center;"></div>
 
   <!-- Tabella voci -->
-  <div style="flex:1;min-width:0;">
-    <div class="flex items-center gap-3 mb-3" style="flex-wrap:wrap;">
-      <div class="search-bar" style="flex:1;min-width:200px;">
-        <span>🔍</span>
-        <input type="text" id="search-items" placeholder="Cerca per nome, descrizione o keyword…" oninput="renderItems()">
-      </div>
-      <div class="tabs" style="margin:0;" title="1 giornata = 8 ore. Cambia solo la visualizzazione, il prezzo memorizzato resta invariato.">
-        <div class="tab active" id="view-day" onclick="setViewMode('day')" data-i18n="pricelist.per_day">€/Giorno</div>
-        <div class="tab" id="view-hour" onclick="setViewMode('hour')" data-i18n="pricelist.per_hour">€/Ora</div>
-      </div>
-      <span class="text-xs text-muted" id="items-count"></span>
-    </div>
+  <div style="min-width:0;">
     <div class="card">
       <div class="table-wrap">
         <table class="mf-sortable">
@@ -372,14 +371,23 @@ async function loadAll() {
 }
 
 function renderCats() {
-  document.getElementById('cat-list').innerHTML = allCats.map(c => `
-    <div class="nav-item ${activeCat === c.id ? 'active' : ''}" style="cursor:pointer;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
-      <span style="flex:1;font-size:13px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;" title="${escapeHtml(c.name)}" onclick="filterByCat(${c.id})">${escapeHtml(c.name)}</span>
-      <span class="text-xs" style="flex-shrink:0;" onclick="filterByCat(${c.id})">${c.item_count}</span>
-      <button class="btn btn-ghost btn-icon btn-sm" title="Modifica categoria"
-              onclick="event.stopPropagation(); editCategory(${c.id})"
-              style="opacity:0.5;padding:2px 4px;flex-shrink:0;">✏️</button>
-    </div>`).join('');
+  // v3.5.0-alpha.172.160 — chips orizzontali sopra la tabella (filtri sopra).
+  const host = document.getElementById('cat-chips');
+  if (!host) return;
+  const chipStyle = (active) =>
+    `display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;`
+    + `font-size:12px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;`
+    + (active ? 'background:var(--indigo2);color:#fff;border-color:var(--indigo2);'
+              : 'background:var(--bg2);color:var(--text);');
+  let html = `<span style="${chipStyle(!activeCat)}" onclick="filterByCat(null)">Tutte</span>`;
+  html += allCats.map(c => `
+    <span style="${chipStyle(activeCat === c.id)}">
+      <span onclick="filterByCat(${c.id})">${escapeHtml(c.name)}</span>
+      <span style="opacity:.7;font-family:'DM Mono',monospace;" onclick="filterByCat(${c.id})">${c.item_count}</span>
+      <span title="Modifica categoria" onclick="event.stopPropagation(); editCategory(${c.id})"
+            style="opacity:.65;padding-left:2px;">✏️</span>
+    </span>`).join('');
+  host.innerHTML = html;
 }
 
 async function editCategory(id) {
@@ -389,7 +397,11 @@ async function editCategory(id) {
   document.getElementById('cat-edit-name').value = c.name || '';
   document.getElementById('cat-edit-desc').value = c.description || '';
   document.getElementById('cat-edit-order').value = c.sort_order || 0;
-  document.getElementById('cat-edit-delete').style.display = (c.item_count > 0) ? 'none' : '';
+  // v3.5.0-alpha.172.160 — Elimina sempre disponibile (force-delete soft):
+  // le voci collegate vengono archiviate, non perse.
+  const delBtn = document.getElementById('cat-edit-delete');
+  delBtn.style.display = '';
+  delBtn.dataset.itemCount = String(c.item_count || 0);
   openModal('modal-edit-cat');
 }
 
@@ -416,15 +428,20 @@ async function saveCategoryEdit() {
 async function deleteCategoryFromEdit() {
   const id = document.getElementById('cat-edit-id').value;
   const name = document.getElementById('cat-edit-name').value;
-  if (!confirm(`Eliminare la categoria "${name}"?`)) return;
+  const n = parseInt(document.getElementById('cat-edit-delete').dataset.itemCount || '0', 10);
+  const warn = n > 0
+    ? `Eliminare la categoria "${name}"?\n\n${n} voci collegate verranno archiviate (disattivate, recuperabili).`
+    : `Eliminare la categoria "${name}"?`;
+  if (!confirm(warn)) return;
   try {
     const r = await fetch(`/pricelist/api/categories/${id}`, { method: 'DELETE' });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       throw new Error(err.detail || 'Errore');
     }
+    const res = await r.json().catch(() => ({}));
     closeModal('modal-edit-cat');
-    toast('Categoria eliminata', 'success');
+    toast(res.archived_items ? `Categoria eliminata · ${res.archived_items} voci archiviate` : 'Categoria eliminata', 'success');
     if (activeCat == id) activeCat = null;
     loadAll();
   } catch(e) { toast(e.message, 'error'); }

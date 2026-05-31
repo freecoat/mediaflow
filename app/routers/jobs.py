@@ -519,6 +519,9 @@ def _serialize_deliverable(d: JobDeliverable) -> dict:
         # v3.5.0-alpha.172.89 (Bundle I) — substatus QC nullable
         "qc_substatus": d.qc_substatus.value if d.qc_substatus else None,
         "delivery_template_id": d.delivery_template_id,
+        # v3.5.0-alpha.172.160 (Bug B) — FK al DeliveryItem capitolato strutturato,
+        # serve alla modal planning per mostrare/editare le specs con selettori taxonomy.
+        "delivery_item_id": d.delivery_item_id,
         "spec_json": d.spec_json or {},
         "primary_resource_id": d.primary_resource_id,
         "estimated_hours": d.estimated_hours,
@@ -610,6 +613,7 @@ async def list_deliverables_tenant_wide(
 
     Default: exclude deleted, limit 500 (paginazione client-side per kanban).
     """
+    from sqlalchemy import or_
     q = (
         db.query(JobDeliverable, Job, Project)
         .join(Job, Job.id == JobDeliverable.job_id)
@@ -618,6 +622,9 @@ async def list_deliverables_tenant_wide(
     )
     if not include_deleted:
         q = q.filter(JobDeliverable.deleted_at.is_(None))
+        # v3.5.0-alpha.172.160 (Bug A) — escludi deliverable di progetti cestinati
+        # (soft-delete). outerjoin: tieni le righe senza progetto (project NULL).
+        q = q.filter(or_(Project.id.is_(None), Project.deleted_at.is_(None)))
     if status:
         try:
             q = q.filter(JobDeliverable.status == DeliverableStatus(status))

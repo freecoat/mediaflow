@@ -49,7 +49,8 @@ async def pricelist_page(
 ):
     categories = (
         db.query(PriceCategory)
-        .filter(PriceCategory.tenant_id == current_tenant_id())
+        .filter(PriceCategory.tenant_id == current_tenant_id(),
+                PriceCategory.is_active == True)  # noqa: E712
         .order_by(PriceCategory.sort_order)
         .all()
     )
@@ -75,12 +76,15 @@ async def pricelist_page(
 async def list_categories(db: Session = Depends(get_db)):
     cats = (
         db.query(PriceCategory)
-        .filter(PriceCategory.tenant_id == current_tenant_id())
+        .filter(PriceCategory.tenant_id == current_tenant_id(),
+                PriceCategory.is_active == True)  # noqa: E712
         .order_by(PriceCategory.sort_order)
         .all()
     )
+    # item_count = solo voci ATTIVE (le inattive sono nel "cestino" logico).
     return [{"id": c.id, "name": c.name, "description": c.description,
-             "sort_order": c.sort_order, "item_count": len(c.items)} for c in cats]
+             "sort_order": c.sort_order,
+             "item_count": sum(1 for it in c.items if it.is_active)} for c in cats]
 
 
 @router.post("/api/categories", dependencies=[RequireEditPricelist])
@@ -120,15 +124,24 @@ async def update_category(
 
 @router.delete("/api/categories/{cat_id}", dependencies=[RequireEditPricelist])
 async def delete_category(cat_id: int, db: Session = Depends(get_db)):
+    """Force-delete soft (v3.5.0-alpha.172.160): disattiva la categoria E le sue
+    voci (is_active=False) invece di bloccare quando ci sono voci collegate.
+    Nessun DELETE fisico → recuperabile riattivando. Evita anche il cascade
+    'all, delete-orphan' che cancellerebbe le voci (e romperebbe QuoteLine
+    che le referenziano)."""
     c = db.query(PriceCategory).filter(
         PriceCategory.id == cat_id,
         PriceCategory.tenant_id == current_tenant_id()
     ).first()
     if not c: raise HTTPException(404)
-    if c.items:
-        raise HTTPException(400, f"Impossibile eliminare: {len(c.items)} voci collegate")
-    db.delete(c); db.commit()
-    return {"ok": True}
+    archived = 0
+    for it in c.items:
+        if it.is_active:
+            it.is_active = False
+            archived += 1
+    c.is_active = False
+    db.commit()
+    return {"ok": True, "archived_items": archived}
 
 
 # ── Voci listino ──────────────────────────────────────────────
