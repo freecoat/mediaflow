@@ -461,12 +461,18 @@ def _h_propose_quote(db: Session, data: dict) -> dict:
             else:
                 price = float(raw_price)
 
+            # detail: usa valore esplicito del payload; se assente eredita da
+            # PriceItem.description (stesso comportamento del picker manuale α.172.146).
+            detail = (ld.get("detail") or "").strip() or (
+                (pi.description or "").strip() if pi else ""
+            ) or None
+
             line = QuoteLine(
                 quote_id=q.id,
                 section=section,
                 position=ld.get("position") or f"{section}.{i+1}",
                 description=description,
-                detail=ld.get("detail"),
+                detail=detail,
                 quantity=qty,
                 unit=unit,
                 price_level=PriceLevel.list_price,
@@ -597,12 +603,18 @@ def _h_propose_quote_line(db: Session, data: dict) -> dict:
     description = data.get("description") or (pi.name if pi else "")
     unit = data.get("unit") or (pi.unit if pi else "day")
 
+    # detail: usa valore esplicito del payload; se assente eredita da
+    # PriceItem.description (stesso comportamento del picker manuale α.172.146).
+    detail = (data.get("detail") or "").strip() or (
+        (pi.description or "").strip() if pi else ""
+    ) or None
+
     line = QuoteLine(
         quote_id=q.id,
         section=data.get("section") or "A",
         position=data.get("position") or f"A.{len(q.lines)+1}",
         description=description,
-        detail=data.get("detail"),
+        detail=detail,
         quantity=qty,
         unit=unit,
         price_level=PriceLevel.list_price,
