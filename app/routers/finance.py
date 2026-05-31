@@ -2905,16 +2905,19 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
     if admin_email:
         client_info_parts.append(f"Att.ne Amministrazione · {admin_email}")
     invoice_data = {
-        "number":      inv.number,
-        "issue_date":  inv.issue_date.strftime("%d/%m/%Y") if inv.issue_date else "—",
-        "due_date":    inv.due_date.strftime("%d/%m/%Y") if inv.due_date else None,
-        "client_name": inv.client.name if inv.client else "—",
-        "client_info": "<br/>".join(client_info_parts),
-        "subtotal":    inv.subtotal,
-        "vat_rate":    inv.vat_rate,
-        "total":       inv.total,
-        "notes":       inv.notes,
-        "is_closing":  bool(getattr(inv, "is_closing", False)),
+        "number":            inv.number,
+        "issue_date":        inv.issue_date.strftime("%d/%m/%Y") if inv.issue_date else "—",
+        "due_date":          inv.due_date.strftime("%d/%m/%Y") if inv.due_date else None,
+        "client_name":       inv.client.name if inv.client else "—",
+        "client_info":       "<br/>".join(client_info_parts),
+        "subtotal":          inv.subtotal,
+        "vat_rate":          inv.vat_rate,
+        "total":             inv.total,
+        "notes":             inv.notes,
+        "is_closing":        bool(getattr(inv, "is_closing", False)),
+        # v3.5.0-alpha.172.156 Task 10 — valuta display PDF
+        "currency":          getattr(inv, "currency", "EUR") or "EUR",
+        "fx_rate_to_base":   getattr(inv, "fx_rate_to_base", 1.0) or 1.0,
     }
     # v3.5.0-alpha.112 — Fattura di chiusura: aggiungi riepilogo storico
     if getattr(inv, "is_closing", False) and getattr(inv, "closing_project_id", None):

@@ -23,15 +23,31 @@ LIGHT   = colors.HexColor("#f5f6fa")
 WHITE   = colors.white
 BLACK   = colors.HexColor("#1a1a2e")
 
+_BASE_CURRENCY = "EUR"
 
-def _money(v: float, sign: bool = False) -> str:
+
+def _money(v: float, sign: bool = False, sym: str = "€") -> str:
     """Formatta un importo come '€ 1.234,56'. Se sign=True, prefissa + per positivi."""
     if v is None:
         return ""
-    s = f"€ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    s = f"{sym} {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     if sign and v > 0:
         s = "+" + s
     return s
+
+
+def _money_display(base_v: float, ccy: str, rate: float, sign: bool = False) -> str:
+    """Formatta un importo convertito in valuta cliente.
+
+    Se ccy == EUR (base) oppure rate <= 0, passa direttamente a _money.
+    Altrimenti converte base_v / rate e usa il simbolo valuta.
+    """
+    from app.services.currency import to_display, symbol as ccy_symbol
+    if not ccy or ccy.upper() == _BASE_CURRENCY or not rate or rate <= 0:
+        return _money(base_v, sign=sign)
+    display_v = to_display(base_v, rate)
+    sym = ccy_symbol(ccy)
+    return _money(display_v, sign=sign, sym=sym)
 
 
 def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None) -> bytes:
@@ -45,7 +61,21 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
 
     Returns:
         bytes del PDF generato
+
+    v3.5.0-alpha.172.156 — Task 10 currency: se invoice['currency'] != EUR,
+    tutti gli importi vengono convertiti base/fx_rate_to_base per la
+    visualizzazione PDF, e un disclaimer legale è aggiunto in calce.
+    Gli importi in DB restano in EUR (base). SDI XML non è toccato.
     """
+    # ── Valuta display ────────────────────────────────────────
+    ccy = (invoice.get("currency") or _BASE_CURRENCY).upper()
+    rate = invoice.get("fx_rate_to_base") or 1.0
+    is_foreign = ccy != _BASE_CURRENCY and rate > 0
+
+    def _m(v: float, sign: bool = False) -> str:
+        """Importo in valuta display (convertito se estera)."""
+        return _money_display(v, ccy, rate, sign=sign)
+
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -117,8 +147,8 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
         table_data.append([
             Paragraph(str(line.get("description", "")), body),
             Paragraph(str(line.get("quantity", 1)),     right),
-            Paragraph(f"€ {line.get('unit_price',0):,.2f}".replace(",","X").replace(".",",").replace("X","."), right),
-            Paragraph(f"€ {line.get('total',0):,.2f}".replace(",","X").replace(".",",").replace("X","."),      right),
+            Paragraph(_m(line.get("unit_price") or 0),  right),
+            Paragraph(_m(line.get("total") or 0),        right),
         ])
 
     line_table = Table(table_data, colWidths=col_w, repeatRows=1)
@@ -146,13 +176,10 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
     vat_amt  = round(subtotal * vat_rate / 100, 2)
     total    = round(subtotal + vat_amt, 2)
 
-    def fmt(n):
-        return f"€ {n:,.2f}".replace(",","X").replace(".",",").replace("X",".")
-
     totals_data = [
-        ["", "Imponibile:",  fmt(subtotal)],
-        ["", f"IVA {vat_rate}%:", fmt(vat_amt)],
-        ["", "TOTALE:",      fmt(total)],
+        ["", "Imponibile:",  _m(subtotal)],
+        ["", f"IVA {vat_rate}%:", _m(vat_amt)],
+        ["", "TOTALE:",      _m(total)],
     ]
     totals_table = Table(totals_data, colWidths=[100*mm, 40*mm, 30*mm])
     totals_table.setStyle(TableStyle([
@@ -235,6 +262,19 @@ def generate_invoice_pdf(invoice: dict, lines: list[dict], company: dict = None)
             story.append(sum_table)
         else:
             story.append(Paragraph("Nessuna fattura precedente.", muted))
+
+    # ── Disclaimer valuta estera (Task 10) ────────────────────
+    if is_foreign:
+        from app.services.currency import disclaimer as ccy_disclaimer
+        issue_date_str = invoice.get("issue_date") or ""
+        disc_text = ccy_disclaimer(_BASE_CURRENCY, ccy, rate, issue_date_str, emitted=True)
+        story.append(Spacer(1, 6*mm))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=GRAY, spaceAfter=3*mm))
+        disclaimer_style = ParagraphStyle(
+            "disclaimer", fontSize=7, textColor=GRAY,
+            fontName="Helvetica-Oblique", leading=11
+        )
+        story.append(Paragraph(disc_text, disclaimer_style))
 
     # ── Note ──────────────────────────────────────────────────
     notes = invoice.get("notes")
