@@ -1,1 +1,419 @@
-/* mobile.css — area /m PWA staff. Stile touch-first. (Task 2 lo completa.) */
+/* mobile.css — area /m PWA staff. Stile touch-first dark. v3.5.0-alpha.172.158
+   Classi usate da base_mobile.html + template schermate. */
+
+/* ===== VARIABILI ===== */
+:root {
+  --m-bg:       #0f1117;
+  --m-bg2:      #171a23;
+  --m-bg3:      #1e2230;
+  --m-accent:   #6272f5;
+  --m-accent-d: #4a59d8;
+  --m-text:     #e8eaf0;
+  --m-muted:    #8a90a2;
+  --m-border:   #262a36;
+  --m-danger:   #e05252;
+  --m-success:  #4caf7d;
+  --m-warn:     #e0a052;
+  --m-top-h:    52px;
+  --m-tab-h:    58px;
+  --m-radius:   12px;
+  --m-radius-sm:8px;
+}
+
+/* ===== RESET BASE ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background: var(--m-bg);
+  color: var(--m-text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: contain;
+}
+
+a {
+  color: var(--m-accent);
+  text-decoration: none;
+}
+
+/* ===== HEADER TOP ===== */
+.m-top {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--m-top-h);
+  display: flex;
+  align-items: center;
+  background: var(--m-bg2);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--m-border);
+  z-index: 20;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.m-top-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--m-text);
+  flex: 1;
+}
+
+.m-top-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--m-accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 4px;
+}
+
+/* ===== MAIN SCROLL AREA ===== */
+.m-main {
+  padding: 12px 14px;
+  /* bottom padding = tab bar height + safe area (iPhone notch/home bar) */
+  padding-bottom: calc(var(--m-tab-h) + env(safe-area-inset-bottom) + 12px);
+  min-height: calc(100vh - var(--m-top-h));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== TAB BAR ===== */
+.m-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+  background: var(--m-bg2);
+  border-top: 1px solid var(--m-border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 30;
+  height: calc(var(--m-tab-h) + env(safe-area-inset-bottom));
+}
+
+.m-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--m-muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  min-height: 44px; /* touch target */
+}
+
+.m-tab:active {
+  opacity: 0.7;
+}
+
+.m-tab.active {
+  color: var(--m-accent);
+}
+
+.m-tab span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ===== SEZIONI E TITOLI ===== */
+.m-section {
+  margin-bottom: 20px;
+}
+
+.m-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--m-muted);
+  margin: 0 0 8px;
+  padding: 0 2px;
+}
+
+/* ===== CARD ===== */
+.m-card {
+  background: var(--m-bg2);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.m-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--m-text);
+}
+
+.m-card-sub {
+  font-size: 13px;
+  color: var(--m-muted);
+  margin: 0;
+}
+
+.m-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.m-card-accent {
+  border-left: 3px solid var(--m-accent);
+  padding-left: 13px;
+}
+
+/* ===== BOTTONI ===== */
+.m-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 10px 20px;
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius);
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--m-bg3);
+  color: var(--m-text);
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.m-btn:active {
+  opacity: 0.75;
+}
+
+.m-btn-primary {
+  background: var(--m-accent);
+  border-color: var(--m-accent);
+  color: #fff;
+}
+
+.m-btn-primary:active {
+  background: var(--m-accent-d);
+}
+
+.m-btn-danger {
+  background: var(--m-danger);
+  border-color: var(--m-danger);
+  color: #fff;
+}
+
+.m-btn-success {
+  background: var(--m-success);
+  border-color: var(--m-success);
+  color: #fff;
+}
+
+.m-btn-block {
+  display: flex;
+  width: 100%;
+}
+
+.m-btn-lg {
+  min-height: 56px;
+  font-size: 17px;
+  border-radius: 14px;
+}
+
+/* ===== LISTE ===== */
+.m-list {
+  background: var(--m-bg2);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.m-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--m-border);
+  min-height: 48px; /* touch target */
+}
+
+.m-list-item:last-child {
+  border-bottom: none;
+}
+
+.m-list-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.m-list-item-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--m-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-list-item-sub {
+  font-size: 13px;
+  color: var(--m-muted);
+  margin-top: 1px;
+}
+
+.m-list-item-right {
+  font-size: 13px;
+  color: var(--m-muted);
+  flex-shrink: 0;
+}
+
+/* ===== STATI VUOTO / CARICAMENTO ===== */
+.m-loading {
+  color: var(--m-muted);
+  text-align: center;
+  padding: 32px 16px;
+  font-size: 14px;
+}
+
+.m-empty {
+  color: var(--m-muted);
+  text-align: center;
+  padding: 32px 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.m-empty-icon {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+/* ===== BADGE / TAG ===== */
+.m-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: var(--m-bg3);
+  color: var(--m-muted);
+  border: 1px solid var(--m-border);
+}
+
+.m-badge-accent   { background: var(--m-accent); color: #fff; border-color: var(--m-accent); }
+.m-badge-success  { background: var(--m-success); color: #fff; border-color: var(--m-success); }
+.m-badge-danger   { background: var(--m-danger);  color: #fff; border-color: var(--m-danger); }
+.m-badge-warn     { background: var(--m-warn);    color: #fff; border-color: var(--m-warn); }
+
+/* ===== FORM ===== */
+.m-form-group {
+  margin-bottom: 14px;
+}
+
+.m-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-muted);
+  margin-bottom: 5px;
+}
+
+.m-input, .m-select, .m-textarea {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 14px;
+  background: var(--m-bg3);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius-sm);
+  font-size: 15px;
+  color: var(--m-text);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.m-input:focus, .m-select:focus, .m-textarea:focus {
+  border-color: var(--m-accent);
+}
+
+.m-textarea {
+  min-height: 80px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* ===== TOAST ===== */
+.m-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--m-tab-h) + env(safe-area-inset-bottom) + 10px);
+  background: #1c2035;
+  color: var(--m-text);
+  border: 1px solid var(--m-border);
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 50;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.m-toast.show {
+  opacity: 1;
+}
+
+/* ===== DIVIDER ===== */
+.m-divider {
+  border: none;
+  border-top: 1px solid var(--m-border);
+  margin: 12px 0;
+}
+
+/* ===== CHIP ORARIO (usato in Oggi/Assegnazioni) ===== */
+.m-time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--m-accent);
+  background: rgba(98, 114, 245, 0.12);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
