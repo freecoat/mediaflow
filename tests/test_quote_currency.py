@@ -66,3 +66,12 @@ def test_line_price_base_currency_quote_unchanged(db, monkeypatch):
     quote = _mk_quote(db, currency="EUR")
     monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
     assert q._line_price_to_base(db, quote, entered_price=500.0, from_price_item=False) == 500.0
+
+
+def test_line_price_missing_rate_raises_422(db, monkeypatch):
+    quote = _mk_quote(db, currency="USD")
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    monkeypatch.setattr("app.services.fx.get_fx_rate", lambda db, a, b: None)
+    with pytest.raises(HTTPException) as ei:
+        q._line_price_to_base(db, quote, entered_price=100.0, from_price_item=False)
+    assert ei.value.status_code == 422

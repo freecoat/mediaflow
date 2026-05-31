@@ -1742,6 +1742,10 @@ async def add_quote_line(
     category_override: Optional[str] = Form(None),
     is_optional: bool = Form(False),
     section_label: Optional[str] = Form(None),
+    # Segnale esplicito: il frontend deve inviare from_listino=1 quando aggiunge
+    # una voce dal picker del listino con prezzo già prefillato. Evita doppia
+    # conversione valuta se unit_price è non-zero ma proviene già dalla base.
+    from_listino: int = Form(0),
     db: Session = Depends(get_db),
 ):
     q = db.query(Quote).options(
@@ -1752,13 +1756,17 @@ async def add_quote_line(
     # v3.5.0-alpha.172.146 — eredita dalla voce di listino sia il prezzo (se 0)
     # sia il DETTAGLIO (se vuoto): prima il campo detail restava sempre vuoto
     # aggiungendo una voce dal listino.
-    price_from_listino = False
+    #
+    # True se prezzo proviene dal listino (già in valuta base, NON convertire).
+    # Segnale esplicito dal frontend (from_listino=1) OPPURE euristica legacy
+    # (price_item_id presente + prezzo non digitato a mano, cioè unit_price==0).
+    price_from_listino = bool(from_listino) or (price_item_id is not None and unit_price == 0)
     if price_item_id:
         item = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
         if item:
             if unit_price == 0:
                 unit_price = _resolve_item_unit_price(item, price_level)
-                price_from_listino = True  # eredita prezzo da listino → già in base
+                # prezzo risolto dal listino → già in base, non convertire
             if not (detail or "").strip() and (item.description or "").strip():
                 detail = item.description.strip()
     unit_price = _line_price_to_base(db, q, entered_price=unit_price, from_price_item=price_from_listino)
