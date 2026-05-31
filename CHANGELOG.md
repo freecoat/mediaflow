@@ -1,5 +1,28 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.148 — test estensivi fasi 7-12 + regressione anomaly cascade (31 mag 2026)
+
+Verifica E2E (pivot API/curl, server :8770 su snapshot di lavoro) delle fasi
+7-12 del test plan + chiusura gap di copertura su un invariante finance.
+
+- **F7 pass-through OT** ✓ — `PUT /cost-report/api/job/{id}/weighted-revenue`
+  toggle ON→`weighted_revenue=true` (2 righe ricalcolate) / OFF→restore.
+- **F10 anomaly reopen cascade** ✓ logica + **+3 test regressione**
+  (`tests/test_anomaly_reopen_cascade.py`): mancava copertura su un invariante
+  P&L (reopen senza cleanup → double-count a re-handle). Coperti: LossEntry
+  HARD-delete, OverheadCost SOFT-delete (deleted_at), reopen su open = noop.
+  Live N/A sul DB attuale (0 anomalie, nessun delta da rilevare).
+- **F11 HARD-BLOCK** ✓ — schedule acconti Σpct>100% → **409** (30%+80%=110%,
+  msg con bullet); 2° AP > budget progetto → **409** (24.625+25.000 vs budget
+  44.750 = 110.9%, msg con €).
+- **F9 filmografia** — pagina `/clients/{id}/works` 200; chiamata AI richiede
+  API key (test live lato Matteo).
+- **Smoke 11 pagine** (cost-report/finance/cashflow/works/planning/dam/quotes/
+  delivery-templates/hr/anomalies-summary): zero 500. `/anomalies` standalone
+  404 atteso (UI è tab in `/finance`, router prefix `/finance`).
+- Nessun residuo sul DB di lavoro (schedule creato+rimosso, toggle ripristinato,
+  AP-block non ha creato nulla). 161/161 pytest.
+
 ## v3.5.0-alpha.172.147 — chiusura gap audit TPN/DAM P1 (31 mag 2026)
 
 Chiusi i 5 gap P1 TPN/DAM rimasti dall'audit multi-agent (debito beta, fixati

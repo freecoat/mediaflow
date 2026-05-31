@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.147** — 31 maggio 2026 — chiusura gap audit TPN/DAM P1 (5 fix sicurezza)
+**v3.5.0-alpha.172.148** — 31 maggio 2026 — test estensivi fasi 7-12 + regressione anomaly cascade
+
+### α.172.148 ✅ (test estensivi fasi 7-12 + regressione anomaly cascade)
+Verifica E2E (API/curl, server :8770 su snapshot lavoro). **161/161** test (+3).
+- **F7 pass-through OT** ✓ toggle weighted ON/OFF (PUT cost-report).
+- **F10 anomaly reopen cascade** ✓ + 3 test regressione (`test_anomaly_reopen_cascade.py`): LossEntry hard-delete, OverheadCost soft-delete, reopen-open noop. Live N/A (0 anomalie sul DB).
+- **F11 HARD-BLOCK** ✓ schedule Σpct>100% → 409 (110%); AP>budget → 409 (110.9%).
+- **F9 filmografia** pagina 200; AI call = key Matteo (live).
+- **Smoke 11 pagine**: zero 500. DB lavoro senza residui.
+**Debito #3 ancora aperto**: `datetime.utcnow` ×111 (1362 warn deprecation — proposto helper `now_utc()` naive, DECISIONE Matteo) · rebuild UNIQUE composito DB esistente · `delivery_portals.py` orphan.
+
+**Prossimo**: decisione utcnow sweep + test copilot Gomorra lato Matteo (server suo).
 
 ### α.172.147 ✅ (chiusura gap audit TPN/DAM P1)
 5 gap P1 TPN/DAM (debito beta, fixati ora: sicurezza + basso rischio). **158/158** test (+12).
