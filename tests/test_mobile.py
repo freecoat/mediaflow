@@ -24,3 +24,23 @@ def test_manifest_valid():
     assert m["start_url"] == "/m"
     assert m["display"] == "standalone"
     assert any(i["sizes"] == "512x512" for i in m["icons"])
+
+
+def test_base_mobile_has_drawer_markup():
+    html = open("app/templates/mobile/base_mobile.html", encoding="utf-8").read()
+    # header con hamburger che apre il drawer
+    assert "m-drawer" in html
+    assert "m-drawer-overlay" in html
+    assert "mDrawerToggle" in html or "mDrawerOpen" in html
+    # le 5 voci operative nel drawer
+    for label in ("Oggi", "Timbr", "Assegnazion", "Ferie", "Notifich"):
+        assert label in html
+    # lucide caricato + init
+    assert "lucide" in html
+    # bottom tab bar v1 rimossa
+    assert "m-tabbar" not in html
+
+
+def test_mobile_js_has_drawer_helpers():
+    js = open("app/static/js/mobile.js", encoding="utf-8").read()
+    assert "mDrawerToggle" in js or "mDrawerOpen" in js

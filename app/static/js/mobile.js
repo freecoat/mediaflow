@@ -17,3 +17,17 @@ function mToast(msg) {
 }
 function mFmtDate(iso) { if(!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('it-IT', {day:'2-digit', month:'2-digit'}); }
 function mFmtTime(iso) { if(!iso) return ''; const d = new Date(iso); return d.toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'}); }
+
+function mDrawerOpen() {
+  document.getElementById('m-drawer')?.classList.add('open');
+  document.getElementById('m-drawer-overlay')?.classList.add('open');
+  document.body.classList.add('m-no-scroll');
+}
+function mDrawerClose() {
+  document.getElementById('m-drawer')?.classList.remove('open');
+  document.getElementById('m-drawer-overlay')?.classList.remove('open');
+  document.body.classList.remove('m-no-scroll');
+}
+function mDrawerToggle() {
+  document.getElementById('m-drawer')?.classList.contains('open') ? mDrawerClose() : mDrawerOpen();
+}

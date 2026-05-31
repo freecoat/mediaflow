@@ -11,24 +11,43 @@
 </head>
 <body>
   <header class="m-top">
+    <button class="m-top-burger" aria-label="Menu" onclick="mDrawerToggle()"><i data-lucide="menu"></i></button>
     <span class="m-top-title">{% block topbar %}Claqo{% endblock %}</span>
+    <a class="m-top-action" href="/m/notifiche" aria-label="Notifiche"><i data-lucide="bell"></i></a>
   </header>
+
+  <div class="m-drawer-overlay" id="m-drawer-overlay" onclick="mDrawerClose()"></div>
+  <aside class="m-drawer" id="m-drawer" aria-hidden="true">
+    <div class="m-drawer-head">
+      <span class="m-drawer-brand">Claqo</span>
+      {% if user %}<span class="m-drawer-user">{{ user.full_name or user.email }}</span>{% endif %}
+    </div>
+    <nav class="m-drawer-nav">
+      <div class="m-drawer-group">Operativo</div>
+      <a href="/m"               class="m-drawer-item {% if active=='oggi' %}active{% endif %}"><i data-lucide="home"></i>Oggi</a>
+      <a href="/m/assegnazioni"  class="m-drawer-item {% if active=='assegnazioni' %}active{% endif %}"><i data-lucide="clipboard-list"></i>Assegnazioni</a>
+      <a href="/m/timbra"        class="m-drawer-item {% if active=='timbra' %}active{% endif %}"><i data-lucide="clock"></i>Timbratura</a>
+      <a href="/m/ferie"         class="m-drawer-item {% if active=='ferie' %}active{% endif %}"><i data-lucide="palmtree"></i>Ferie</a>
+      <a href="/m/notifiche"     class="m-drawer-item {% if active=='notifiche' %}active{% endif %}"><i data-lucide="bell"></i>Notifiche</a>
+    </nav>
+    <a class="m-drawer-logout" href="/auth/logout"><i data-lucide="log-out"></i>Esci</a>
+  </aside>
+
   <main class="m-main" id="m-main">
     {% block content %}{% endblock %}
   </main>
-  <nav class="m-tabbar">
-    <a href="/m" class="m-tab {% if active=='oggi' %}active{% endif %}"><span>🏠</span>Oggi</a>
-    <a href="/m/assegnazioni" class="m-tab {% if active=='assegnazioni' %}active{% endif %}"><span>📋</span>Lavori</a>
-    <a href="/m/timbra" class="m-tab {% if active=='timbra' %}active{% endif %}"><span>⏱</span>Timbra</a>
-    <a href="/m/ferie" class="m-tab {% if active=='ferie' %}active{% endif %}"><span>🌴</span>Ferie</a>
-    <a href="/m/notifiche" class="m-tab {% if active=='notifiche' %}active{% endif %}"><span>🔔</span>Avvisi</a>
-  </nav>
+
+  <script src="/static/js/lucide.min.js?v={{ app_version }}"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => navigator.serviceWorker.register('/static/sw.js').catch(()=>{}));
     }
   </script>
   <script src="/static/js/mobile.js?v={{ app_version }}"></script>
+  <script>
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') mDrawerClose(); });
+    if (window.lucide && lucide.createIcons) lucide.createIcons();
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
