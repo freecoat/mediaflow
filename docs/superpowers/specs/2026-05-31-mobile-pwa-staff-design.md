@@ -85,13 +85,15 @@ Bottom tab bar su tutte: **Oggi · Assegnazioni · Timbra · Ferie · Notifiche*
 - `GET /notifications/api/list`, `POST /api/{id}/read`, `POST /api/mark-all-read`,
   `GET /api/unread-count`
 
-**Gap possibile:**
-- **Accetta/rifiuta assegnazione propria**: verificare in implementazione se esiste un
-  endpoint per lo staff per rispondere alla propria assegnazione. Se NON esiste, aggiungere
+**Gap da colmare in v1 (accetta/rifiuta è feature confermata, non read-only):**
+- **Accetta/rifiuta assegnazione propria**: in implementazione, verificare se esiste già un
+  endpoint per lo staff per rispondere alla propria assegnazione (cercare attorno a
+  `booking-requests` / assignment status). Se NON esiste, **aggiungere**
   `POST /planning/api/my-bookings/{booking_id}/respond` (form `action=accept|reject`,
-  scoped all'utente loggato: solo se il booking è assegnato a una sua Resource). Se la
-  funzione non è ancora prevista lato business, la schermata mostra le assegnazioni
-  read-only in v1 e l'accetta/rifiuta è follow-up.
+  scoped all'utente loggato: 403 se il booking non è assegnato a una sua Resource). Persiste
+  lo stato risposta sull'assegnazione (campo esistente tipo `response_status`/`accepted` —
+  verificare il modello `BookingAssignment`; se manca il campo, aggiungerlo + auto-migrate).
+  Test dedicato (accept/reject del proprio booking OK; 403 su booking altrui).
 
 ## 7. Sicurezza
 
