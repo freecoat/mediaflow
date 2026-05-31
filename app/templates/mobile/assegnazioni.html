@@ -4,7 +4,11 @@
 
 {% block content %}
   <div id="m-assegnazioni-root" class="m-section">
-    <div class="m-loading">Caricamento…</div>
+    <div class="m-skeleton">
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+    </div>
   </div>
 {% endblock %}
 
@@ -135,8 +139,15 @@
       if (!bookings || bookings.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'm-empty';
-        empty.textContent = 'Nessuna assegnazione.';
+        const emptyIcon = document.createElement('div');
+        emptyIcon.className = 'm-empty-icon';
+        const emptyI = document.createElement('i');
+        emptyI.setAttribute('data-lucide', 'clipboard-list');
+        emptyIcon.appendChild(emptyI);
+        empty.appendChild(emptyIcon);
+        empty.appendChild(document.createTextNode('Nessuna assegnazione.'));
         root.appendChild(empty);
+        if (window.lucide) lucide.createIcons();
         return;
       }
 
@@ -152,6 +163,7 @@
           root.appendChild(_renderCard(b));
         }
       }
+      if (window.lucide) lucide.createIcons();
     } catch (e) {
       if (e.message !== 'auth') {
         root.innerHTML = '';

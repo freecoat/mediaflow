@@ -2,7 +2,13 @@
 {% block title %}Notifiche — Claqo{% endblock %}
 {% block topbar %}Notifiche{% endblock %}
 {% block content %}
-  <div id="m-notifiche-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
+  <div id="m-notifiche-root" class="m-section">
+    <div class="m-skeleton">
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+    </div>
+  </div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -17,8 +23,11 @@
 
     /* bottone "Segna tutte lette" */
     var btnAll = mEl('button', 'm-btn m-btn-block');
-    btnAll.textContent = '✓ Segna tutte lette';
     btnAll.style.marginBottom = '14px';
+    var checkIcon = document.createElement('i');
+    checkIcon.setAttribute('data-lucide', 'check');
+    btnAll.appendChild(checkIcon);
+    btnAll.appendChild(document.createTextNode(' Segna tutte lette'));
     btnAll.addEventListener('click', function () {
       btnAll.disabled = true;
       mapi('POST', '/notifications/api/mark-all-read')
@@ -36,12 +45,14 @@
     /* lista notifiche */
     if (!items || items.length === 0) {
       var empty = mEl('div', 'm-empty');
-      var emptyIcon = mEl('span', 'm-empty-icon');
-      emptyIcon.textContent = '🔔';
-      var emptyText = document.createTextNode('Nessuna notifica');
+      var emptyIcon = mEl('div', 'm-empty-icon');
+      var bellI = document.createElement('i');
+      bellI.setAttribute('data-lucide', 'bell-off');
+      emptyIcon.appendChild(bellI);
       empty.appendChild(emptyIcon);
-      empty.appendChild(emptyText);
+      empty.appendChild(document.createTextNode('Nessuna notifica'));
       root.appendChild(empty);
+      if (window.lucide) lucide.createIcons();
       return;
     }
 
@@ -110,14 +121,18 @@
     });
 
     root.appendChild(list);
+    if (window.lucide) lucide.createIcons();
   }
 
   /* ---- caricamento ---- */
   function loadNotifiche() {
-    var loading = mEl('div', 'm-loading');
-    loading.textContent = 'Caricamento…';
     root.textContent = '';
-    root.appendChild(loading);
+    var skelWrap = mEl('div', 'm-skeleton');
+    for (var si = 0; si < 3; si++) {
+      var skelCard = mEl('div', 'm-skeleton-card');
+      skelWrap.appendChild(skelCard);
+    }
+    root.appendChild(skelWrap);
     mapi('GET', '/notifications/api/list?limit=50')
       .then(function (data) { renderNotifiche(data); })
       .catch(function (err) {

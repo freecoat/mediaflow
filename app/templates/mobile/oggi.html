@@ -2,7 +2,12 @@
 {% block title %}Oggi — Claqo{% endblock %}
 {% block topbar %}Oggi{% endblock %}
 {% block content %}
-  <div id="m-oggi-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
+  <div id="m-oggi-root" class="m-section">
+    <div class="m-skeleton">
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+    </div>
+  </div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -16,124 +21,192 @@
     // ── 1. unread-count badge ────────────────────────────────
     try {
       var countData = await mapi("GET", "/notifications/api/unread-count");
-      // countData.total  countData.action_required
       var total = (countData && countData.total) ? countData.total : 0;
-      var badgeHtml = total > 0
-        ? '<a href="/m/notifiche" class="m-btn" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">'
-          + '<span>Notifiche</span>'
-          + '<span class="m-badge" style="background:#6272f5;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;">'
-          + mEsc(String(total))
-          + '</span></a>'
-        : '';
-      if (badgeHtml) {
-        var badgeEl = document.createElement("div");
-        badgeEl.innerHTML = badgeHtml;
-        root.insertBefore(badgeEl, root.firstChild);
+      if (total > 0) {
+        var notifLink = document.createElement("a");
+        notifLink.href = "/m/notifiche";
+        notifLink.className = "m-btn m-btn-block";
+        notifLink.style.marginBottom = "12px";
+        notifLink.style.justifyContent = "space-between";
+
+        var notifLabel = document.createElement("span");
+        notifLabel.style.display = "flex";
+        notifLabel.style.alignItems = "center";
+        notifLabel.style.gap = "6px";
+        var bellIcon = document.createElement("i");
+        bellIcon.setAttribute("data-lucide", "bell");
+        notifLabel.appendChild(bellIcon);
+        notifLabel.appendChild(document.createTextNode(" Notifiche"));
+
+        var countBadge = document.createElement("span");
+        countBadge.className = "m-badge m-badge-accent";
+        countBadge.textContent = String(total);
+
+        notifLink.appendChild(notifLabel);
+        notifLink.appendChild(countBadge);
+        root.insertBefore(notifLink, root.firstChild);
       }
     } catch (e) {
       // badge non critica, ignora errori silenziosamente
     }
 
     // ── 2. stato timbratura (ultimi punch di oggi) ──────────
-    var punchSection = document.createElement("div");
-    punchSection.className = "m-card";
+    var punchSection = mEl("div", "m-card");
     var punchState = "OUT";
     try {
       var punches = await mapi("GET", "/hr/api/punches");
-      // punches è array; ogni item ha: id, start_datetime, end_datetime, kind, kind_label, resource_name
-      // Stato corrente: se l'ultimo punch ha end_datetime null → IN, altrimenti OUT
       if (Array.isArray(punches) && punches.length > 0) {
         var last = punches[punches.length - 1];
-        // start_datetime, end_datetime (null se ancora aperto)
-        if (last.end_datetime === null || last.end_datetime === undefined) {
-          punchState = "IN";
-        } else {
-          punchState = "OUT";
-        }
-        var lastKind = last.kind_label ? mEsc(last.kind_label) : mEsc(last.kind || "Turno");
+        punchState = (last.end_datetime === null || last.end_datetime === undefined) ? "IN" : "OUT";
+        var lastKind = last.kind_label || last.kind || "Turno";
         var lastStart = last.start_datetime ? mFmtTime(last.start_datetime) : "";
         var lastEnd = last.end_datetime ? mFmtTime(last.end_datetime) : "–";
-        punchSection.innerHTML =
-          '<div class="m-card-title" style="margin-bottom:8px;">Timbratura</div>'
-          + '<div style="margin-bottom:10px;font-size:14px;color:#8a90a2;">'
-          + 'Ultimo: ' + lastKind + ' ' + mEsc(lastStart) + ' → ' + mEsc(lastEnd)
-          + '</div>'
-          + '<div style="display:flex;align-items:center;gap:10px;">'
-          + '<span style="font-size:22px;font-weight:700;color:' + (punchState === "IN" ? "#4ade80" : "#f87171") + ';">'
-          + mEsc(punchState)
-          + '</span>'
-          + '<a href="/m/timbra" class="m-btn m-btn-primary" style="flex:1;text-align:center;line-height:48px;text-decoration:none;">'
-          + 'Timbra'
-          + '</a>'
-          + '</div>';
+
+        var titleDiv = mEl("div", "m-card-title");
+        titleDiv.style.marginBottom = "8px";
+        var clockIcon = document.createElement("i");
+        clockIcon.setAttribute("data-lucide", "clock");
+        titleDiv.appendChild(clockIcon);
+        titleDiv.appendChild(document.createTextNode(" Timbratura"));
+        punchSection.appendChild(titleDiv);
+
+        var subDiv = mEl("div", "");
+        subDiv.style.cssText = "margin-bottom:10px;font-size:14px;color:var(--m-muted);";
+        subDiv.textContent = "Ultimo: " + lastKind + " " + lastStart + " → " + lastEnd;
+        punchSection.appendChild(subDiv);
+
+        var row = mEl("div", "");
+        row.style.cssText = "display:flex;align-items:center;gap:10px;";
+
+        var stateBadge = mEl("span", "m-badge " + (punchState === "IN" ? "m-badge-in" : "m-badge-out"));
+        stateBadge.textContent = punchState;
+        row.appendChild(stateBadge);
+
+        var timbraLink = document.createElement("a");
+        timbraLink.href = "/m/timbra";
+        timbraLink.className = "m-btn m-btn-primary";
+        timbraLink.style.cssText = "flex:1;text-align:center;line-height:48px;text-decoration:none;";
+        timbraLink.textContent = "Timbra";
+        row.appendChild(timbraLink);
+        punchSection.appendChild(row);
       } else {
-        punchSection.innerHTML =
-          '<div class="m-card-title" style="margin-bottom:8px;">Timbratura</div>'
-          + '<div style="color:#8a90a2;font-size:14px;margin-bottom:10px;">Nessuna timbratura oggi.</div>'
-          + '<a href="/m/timbra" class="m-btn m-btn-primary" style="display:block;text-align:center;line-height:48px;text-decoration:none;">'
-          + 'Timbra'
-          + '</a>';
+        var titleDiv2 = mEl("div", "m-card-title");
+        titleDiv2.style.marginBottom = "8px";
+        var clockIcon2 = document.createElement("i");
+        clockIcon2.setAttribute("data-lucide", "clock");
+        titleDiv2.appendChild(clockIcon2);
+        titleDiv2.appendChild(document.createTextNode(" Timbratura"));
+        punchSection.appendChild(titleDiv2);
+
+        var noTimbDiv = mEl("div", "");
+        noTimbDiv.style.cssText = "color:var(--m-muted);font-size:14px;margin-bottom:10px;";
+        noTimbDiv.textContent = "Nessuna timbratura oggi.";
+        punchSection.appendChild(noTimbDiv);
+
+        var timbraLink2 = document.createElement("a");
+        timbraLink2.href = "/m/timbra";
+        timbraLink2.className = "m-btn m-btn-primary";
+        timbraLink2.style.cssText = "display:block;text-align:center;line-height:48px;text-decoration:none;";
+        timbraLink2.textContent = "Timbra";
+        punchSection.appendChild(timbraLink2);
       }
     } catch (e) {
-      punchSection.innerHTML =
-        '<div class="m-card-title">Timbratura</div>'
-        + '<div class="m-empty">Impossibile caricare timbratura.</div>'
-        + '<a href="/m/timbra" class="m-btn" style="display:block;text-align:center;line-height:48px;text-decoration:none;">Vai a Timbra</a>';
+      var errTitle = mEl("div", "m-card-title");
+      errTitle.textContent = "Timbratura";
+      punchSection.appendChild(errTitle);
+      var errMsg = mEl("div", "m-empty");
+      errMsg.textContent = "Impossibile caricare timbratura.";
+      punchSection.appendChild(errMsg);
+      var timbraFallback = document.createElement("a");
+      timbraFallback.href = "/m/timbra";
+      timbraFallback.className = "m-btn";
+      timbraFallback.style.cssText = "display:block;text-align:center;line-height:48px;text-decoration:none;";
+      timbraFallback.textContent = "Vai a Timbra";
+      punchSection.appendChild(timbraFallback);
     }
 
     // ── 3. booking di oggi ───────────────────────────────────
     var bookSection = document.createElement("div");
     try {
       var bookings = await mapi("GET", "/planning/api/my-bookings?today_only=true");
-      // ogni booking ha:
-      //   assignment_id, booking_id
-      //   title            — stringa già formattata (titolo booking/assegnazione)
-      //   start            — ISO datetime (start_datetime dell'assignment)
-      //   end              — ISO datetime (end_datetime dell'assignment)
-      //   duration_minutes — intero
-      //   job_id, job_code, job_title
-      //   cost_line_description
-      //   kind, status, priority, execution_status, overtime_status
-      //   notes
       if (Array.isArray(bookings) && bookings.length > 0) {
+        var secTitle = mEl("div", "m-section-title");
+        var briefIcon = document.createElement("i");
+        briefIcon.setAttribute("data-lucide", "briefcase");
+        secTitle.appendChild(briefIcon);
+        secTitle.appendChild(document.createTextNode(" Lavori di oggi"));
+        bookSection.appendChild(secTitle);
+
         var listEl = mEl("div", "m-list");
         bookings.forEach(function (b) {
-          var timeStr = mFmtTime(b.start) + " – " + mFmtTime(b.end);
-          var jobLabel = b.job_title
-            ? mEsc(b.job_title) + (b.job_code ? ' <span style="color:#8a90a2;font-size:12px;">[' + mEsc(b.job_code) + ']</span>' : "")
-            : "";
-          var execBadge = "";
-          if (b.execution_status && b.execution_status !== "planned") {
-            execBadge = ' <span style="font-size:11px;background:#262a36;padding:2px 6px;border-radius:6px;">' + mEsc(b.execution_status) + '</span>';
-          }
-          var noteHtml = b.notes
-            ? '<div style="color:#8a90a2;font-size:12px;margin-top:4px;">' + mEsc(b.notes) + '</div>'
-            : "";
           var item = mEl("div", "m-list-item");
-          item.innerHTML =
-            '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
-            + '<div style="font-size:13px;color:#8a90a2;">' + mEsc(timeStr) + '</div>'
-            + '<div>' + execBadge + '</div>'
-            + '</div>'
-            + '<div class="m-card-title" style="margin-top:4px;">' + mEsc(b.title) + '</div>'
-            + (jobLabel ? '<div style="margin-top:2px;font-size:13px;">' + jobLabel + '</div>' : "")
-            + (b.cost_line_description ? '<div style="color:#8a90a2;font-size:12px;">' + mEsc(b.cost_line_description) + '</div>' : "")
-            + noteHtml;
+
+          var topRow = mEl("div", "");
+          topRow.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;";
+
+          var timeSpan = mEl("span", "");
+          timeSpan.style.cssText = "font-size:13px;color:var(--m-muted);";
+          timeSpan.textContent = mFmtTime(b.start) + " – " + mFmtTime(b.end);
+          topRow.appendChild(timeSpan);
+
+          if (b.execution_status && b.execution_status !== "planned") {
+            var execBadge = mEl("span", "m-badge");
+            execBadge.textContent = b.execution_status;
+            topRow.appendChild(execBadge);
+          }
+          item.appendChild(topRow);
+
+          var titleEl = mEl("div", "m-card-title");
+          titleEl.style.marginTop = "4px";
+          titleEl.textContent = b.title;
+          item.appendChild(titleEl);
+
+          if (b.job_title) {
+            var jobDiv = mEl("div", "");
+            jobDiv.style.cssText = "margin-top:2px;font-size:13px;color:var(--m-text-2);";
+            jobDiv.textContent = b.job_title + (b.job_code ? " [" + b.job_code + "]" : "");
+            item.appendChild(jobDiv);
+          }
+
+          if (b.cost_line_description) {
+            var descDiv = mEl("div", "");
+            descDiv.style.cssText = "font-size:12px;color:var(--m-muted);";
+            descDiv.textContent = b.cost_line_description;
+            item.appendChild(descDiv);
+          }
+
+          if (b.notes) {
+            var notesDiv = mEl("div", "");
+            notesDiv.style.cssText = "font-size:12px;color:var(--m-muted);margin-top:4px;";
+            notesDiv.textContent = b.notes;
+            item.appendChild(notesDiv);
+          }
+
           listEl.appendChild(item);
         });
-        bookSection.appendChild(mEl("div", "m-card-title", "Lavori di oggi"));
         bookSection.appendChild(listEl);
       } else {
-        bookSection.innerHTML = '<div class="m-empty">Nessun lavoro oggi.</div>';
+        var emptyDiv = mEl("div", "m-empty");
+        var emptyIcon = mEl("div", "m-empty-icon");
+        var emptyI = document.createElement("i");
+        emptyI.setAttribute("data-lucide", "calendar-check");
+        emptyIcon.appendChild(emptyI);
+        emptyDiv.appendChild(emptyIcon);
+        emptyDiv.appendChild(document.createTextNode("Nessun lavoro oggi."));
+        bookSection.appendChild(emptyDiv);
       }
     } catch (e) {
-      bookSection.innerHTML = '<div class="m-empty">Impossibile caricare i lavori.</div>';
+      var errDiv = mEl("div", "m-empty");
+      errDiv.textContent = "Impossibile caricare i lavori.";
+      bookSection.appendChild(errDiv);
     }
 
     // ── assemble ─────────────────────────────────────────────
     root.innerHTML = "";
     root.appendChild(punchSection);
     root.appendChild(bookSection);
+
+    if (window.lucide) lucide.createIcons();
   }
 
   if (document.readyState === "loading") {

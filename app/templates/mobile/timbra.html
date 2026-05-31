@@ -2,7 +2,12 @@
 {% block title %}Timbra — Claqo{% endblock %}
 {% block topbar %}Timbratura{% endblock %}
 {% block content %}
-  <div id="m-timbra-root" class="m-section"><div class="m-loading">Caricamento…</div></div>
+  <div id="m-timbra-root" class="m-section">
+    <div class="m-skeleton">
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+    </div>
+  </div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -90,7 +95,11 @@
 
     /* ── lista timbrature recenti ── */
     var section = mEl('div', 'm-section');
-    var heading = mEl('div', 'm-section-title', 'Timbrature recenti');
+    var heading = mEl('div', 'm-section-title');
+    var histIcon = document.createElement('i');
+    histIcon.setAttribute('data-lucide', 'history');
+    heading.appendChild(histIcon);
+    heading.appendChild(document.createTextNode(' Timbrature recenti'));
     section.appendChild(heading);
 
     if (!_punches.length) {
@@ -138,6 +147,7 @@
       section.appendChild(list);
     }
     root.appendChild(section);
+    if (window.lucide) lucide.createIcons();
   }
 
   /* ── azioni ── */

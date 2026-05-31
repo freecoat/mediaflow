@@ -3,11 +3,14 @@
 {% block topbar %}Ferie e assenze{% endblock %}
 {% block content %}
   <div id="m-ferie-root" class="m-section">
-    <div class="m-loading">Caricamento…</div>
+    <div class="m-skeleton">
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+    </div>
   </div>
   <div class="m-section" id="m-ferie-form-section" style="display:none">
     <div class="m-card">
-      <div class="m-form-title">Nuova richiesta</div>
+      <div class="m-form-title"><i data-lucide="calendar-plus"></i> Nuova richiesta</div>
       <form id="m-ferie-form" onsubmit="submitFerie(event)">
         <input type="hidden" id="m-ferie-resource-id" name="resource_id" value="">
         <div class="m-form-group">
@@ -84,7 +87,12 @@
   function renderList(items) {
     var root = document.getElementById('m-ferie-root');
     if (!items || items.length === 0) {
-      root.innerHTML = '<div class="m-empty">Nessuna richiesta trovata.</div>';
+      root.innerHTML =
+        '<div class="m-empty">'
+        + '<div class="m-empty-icon"><i data-lucide="calendar-off"></i></div>'
+        + 'Nessuna richiesta trovata.'
+        + '</div>';
+      if (window.lucide) lucide.createIcons();
       return;
     }
     var html = '<div class="m-list">';
@@ -112,6 +120,7 @@
     }
     html += '</div>';
     root.innerHTML = html;
+    if (window.lucide) lucide.createIcons();
   }
 
   // ── Risolve resource_id: da lista assenze, poi da punches ─────
@@ -191,7 +200,7 @@
         document.getElementById('m-ferie-resource-id').value = String(_resourceId || '');
         // Ricarica la lista
         var root = document.getElementById('m-ferie-root');
-        root.innerHTML = '<div class="m-loading">Aggiornamento…</div>';
+        root.innerHTML = '<div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>';
         return mapi('GET', '/planning/api/my-unavailabilities');
       })
       .then(function (items) {
