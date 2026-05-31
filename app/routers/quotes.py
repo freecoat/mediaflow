@@ -46,6 +46,22 @@ def _resolve_item_unit_price(item, price_level) -> float:
     return float(chosen)
 
 
+def _line_price_to_base(db, quote, entered_price: float, from_price_item: bool) -> float:
+    """Converte un prezzo riga in valuta base. Prezzo da listino = già base.
+    Prezzo digitato manualmente in quote estera = in valuta cliente -> /converti."""
+    from app.services import fx, currency as cur
+    from app.models import Tenant
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    base = (tenant.default_currency if tenant else "EUR").upper()
+    ccy = (getattr(quote, "currency", None) or base).upper()
+    if from_price_item or ccy == base:
+        return float(entered_price)
+    rate = fx.get_fx_rate(db, ccy, base)
+    if rate is None:
+        raise HTTPException(422, "Tasso di cambio non disponibile per la conversione")
+    return cur.to_base(float(entered_price), rate)
+
+
 def _currency_block_for_quote(db, quote) -> dict:
     """Blocco valuta per il payload quote: valuta target + tasso LIVE corrente
     (indicativo) + disclaimer. Importi restano in base; il frontend converte."""
@@ -1736,13 +1752,16 @@ async def add_quote_line(
     # v3.5.0-alpha.172.146 — eredita dalla voce di listino sia il prezzo (se 0)
     # sia il DETTAGLIO (se vuoto): prima il campo detail restava sempre vuoto
     # aggiungendo una voce dal listino.
+    price_from_listino = False
     if price_item_id:
         item = db.query(PriceItem).filter(PriceItem.id == price_item_id).first()
         if item:
             if unit_price == 0:
                 unit_price = _resolve_item_unit_price(item, price_level)
+                price_from_listino = True  # eredita prezzo da listino → già in base
             if not (detail or "").strip() and (item.description or "").strip():
                 detail = item.description.strip()
+    unit_price = _line_price_to_base(db, q, entered_price=unit_price, from_price_item=price_from_listino)
     sort_order = max((l.sort_order for l in q.lines), default=0) + 10
     cat_override_clean = (category_override or "").strip() or None
     section_label_clean = (section_label or "").strip() or None
@@ -2068,7 +2087,8 @@ async def update_quote_line(
     if detail is not None: line.detail = detail
     if quantity is not None: line.quantity = quantity
     if unit is not None: line.unit = unit
-    if unit_price is not None: line.unit_price = unit_price
+    if unit_price is not None:
+        line.unit_price = _line_price_to_base(db, q_pre, entered_price=unit_price, from_price_item=False)
     if allowance is not None: line.allowance = allowance
     if line_discount_pct is not None: line.line_discount_pct = line_discount_pct
     if category_override is not None:

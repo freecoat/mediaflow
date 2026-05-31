@@ -45,3 +45,24 @@ def test_currency_block_foreign_has_rate_and_disclaimer(db, monkeypatch):
     assert block["currency"] == "USD"
     assert block["live_rate"] == 0.92
     assert block["disclaimer"] and "DPR 633" in block["disclaimer"]
+
+
+def test_line_price_entered_in_currency_stored_in_base(db, monkeypatch):
+    quote = _mk_quote(db, currency="USD")
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    monkeypatch.setattr("app.services.fx.get_fx_rate", lambda db, a, b: 0.92)
+    # input 1000 USD -> base = 1000*0.92 = 920 EUR
+    assert q._line_price_to_base(db, quote, entered_price=1000.0, from_price_item=False) == 920.0
+
+
+def test_line_price_from_listino_is_base_unchanged(db, monkeypatch):
+    quote = _mk_quote(db, currency="USD")
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    monkeypatch.setattr("app.services.fx.get_fx_rate", lambda db, a, b: 0.92)
+    assert q._line_price_to_base(db, quote, entered_price=850.0, from_price_item=True) == 850.0
+
+
+def test_line_price_base_currency_quote_unchanged(db, monkeypatch):
+    quote = _mk_quote(db, currency="EUR")
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    assert q._line_price_to_base(db, quote, entered_price=500.0, from_price_item=False) == 500.0
