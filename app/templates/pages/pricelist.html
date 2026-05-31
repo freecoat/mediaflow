@@ -26,7 +26,7 @@
 {% block content %}
 <div class="flex gap-4" style="align-items:flex-start;">
   <!-- Sidebar categorie -->
-  <div class="card" style="min-width:200px;max-width:220px;position:sticky;top:80px;">
+  <div class="card" style="min-width:180px;max-width:240px;width:220px;position:sticky;top:80px;">
     <div class="card-title mb-2">Categorie</div>
     <div id="cat-list"></div>
   </div>
@@ -352,24 +352,33 @@ function setViewMode(mode) {
 async function loadAll() {
   const [cats, items] = await Promise.all([
     fetch('/pricelist/api/categories').then(r => r.json()),
-    fetch('/pricelist/api/items?active_only=false').then(r => r.json()),
+    // BUG FIX: active_only=true (default) — le voci soft-deleted non devono
+    // ricomparire nella lista dopo la cancellazione. active_only=false era
+    // la causa per cui "Disattiva" sembrava non funzionare.
+    fetch('/pricelist/api/items?active_only=true').then(r => r.json()),
   ]);
   allCats = cats; allItems = items;
   renderCats();
-  // popola select categoria nel modal voce
-  document.getElementById('it-cat').innerHTML =
-    allCats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  // popola select categoria nel modal voce (usa DOM per evitare innerHTML con dati untrusted)
+  const catSel = document.getElementById('it-cat');
+  catSel.innerHTML = '';
+  allCats.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.name;
+    catSel.appendChild(o);
+  });
   renderItems();
 }
 
 function renderCats() {
   document.getElementById('cat-list').innerHTML = allCats.map(c => `
-    <div class="nav-item ${activeCat === c.id ? 'active' : ''}" style="cursor:pointer;display:flex;align-items:center;gap:6px;">
-      <span style="flex:1;font-size:13px;" onclick="filterByCat(${c.id})">${c.name.replace(/</g,'&lt;')}</span>
-      <span class="text-xs" onclick="filterByCat(${c.id})">${c.item_count}</span>
+    <div class="nav-item ${activeCat === c.id ? 'active' : ''}" style="cursor:pointer;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;">
+      <span style="flex:1;font-size:13px;white-space:normal;word-break:break-word;overflow-wrap:anywhere;" title="${escapeHtml(c.name)}" onclick="filterByCat(${c.id})">${escapeHtml(c.name)}</span>
+      <span class="text-xs" style="flex-shrink:0;" onclick="filterByCat(${c.id})">${c.item_count}</span>
       <button class="btn btn-ghost btn-icon btn-sm" title="Modifica categoria"
               onclick="event.stopPropagation(); editCategory(${c.id})"
-              style="opacity:0.5;padding:2px 4px;">✏️</button>
+              style="opacity:0.5;padding:2px 4px;flex-shrink:0;">✏️</button>
     </div>`).join('');
 }
 
@@ -462,6 +471,7 @@ function renderItems() {
       <td class="mono text-right">${dp.price != null ? fmtCurrency(dp.price) : '—'}</td>
       <td class="mono text-right text-muted">${i.hardcosts ? fmtCurrency(i.hardcosts) : '—'}</td>
       <td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="duplicateItem(${i.id})" title="Duplica voce">📋</button>
         <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteItem(${i.id})" title="Disattiva">🗑️</button>
       </td>
     </tr>`;
@@ -620,13 +630,30 @@ async function saveItem() {
   } catch(e) { alert(e.message); }
 }
 
+async function duplicateItem(id) {
+  try {
+    const r = await fetch(`/pricelist/api/items/${id}/duplicate`, { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `Errore ${r.status}`);
+    }
+    const res = await r.json();
+    toast(`Duplicato: ${res.name}`, 'success');
+    loadAll();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
 async function deleteItem(id) {
   if (!confirm('Disattivare questa voce?')) return;
   try {
     const r = await fetch(`/pricelist/api/items/${id}`, { method: 'DELETE' });
-    if (!r.ok) throw new Error('Errore');
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `Errore ${r.status}`);
+    }
+    toast('Voce disattivata', 'success');
     loadAll();
-  } catch(e) { alert(e.message); }
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 document.addEventListener('change', (e) => {

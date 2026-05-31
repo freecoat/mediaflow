@@ -291,6 +291,42 @@ async def delete_item(item_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.post("/api/items/{item_id}/duplicate", dependencies=[RequireEditPricelist])
+async def duplicate_item(item_id: int, db: Session = Depends(get_db)):
+    """Duplica una voce del listino copiando tutti i campi business.
+    Il nome della copia viene suffissato con ' (copia)'.
+    Restituisce id e nome della nuova voce.
+    """
+    src = db.query(PriceItem).filter(
+        PriceItem.id == item_id,
+        PriceItem.tenant_id == current_tenant_id()
+    ).first()
+    if not src:
+        raise HTTPException(404, "Voce non trovata")
+    copy = PriceItem(
+        tenant_id=current_tenant_id(),
+        category_id=src.category_id,
+        department_id=src.department_id,
+        name=f"{src.name} (copia)",
+        description=src.description,
+        unit=src.unit,
+        unit_pre=src.unit_pre,
+        unit_nature=src.unit_nature,
+        price_list=src.price_list,
+        price_average=src.price_average,
+        price_low=src.price_low,
+        hardcosts=src.hardcosts,
+        keywords=list(src.keywords) if src.keywords else None,
+        cross_dept=src.cross_dept,
+        additional_department_ids=list(src.additional_department_ids) if src.additional_department_ids else None,
+        is_active=True,
+    )
+    db.add(copy)
+    db.commit()
+    db.refresh(copy)
+    return {"id": copy.id, "name": copy.name}
+
+
 # ── Export / Import ───────────────────────────────────────────
 
 EXPORT_VERSION = "1.0"
