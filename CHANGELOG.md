@@ -1,5 +1,26 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.150 — reparti + prezzi voci-bucket Deliveries (31 mag 2026)
+
+Richiesta Matteo: assegnare reparto + prezzi (media nazionale IT) alle 66
+voci-bucket della categoria "Deliveries" (create da `migrate_deliveries_buckets`
+α.172.135, nate con `department_id=None` e `price_list=None`).
+
+- **Reparti**: voci AUDIO (Full Mix, stem singoli, M&E, DM&E, Stems bundle,
+  Optional Audio) → **Audio (Suono)** (19 voci). VIDEO + SOTTOTITOLI + altro
+  (KDM/ISO/Document) → **DI / Video** (47 voci).
+- **Prezzi** (3 livelli list/avg/low, fee mastering+QC+wrap per deliverable,
+  NON grading/mix creativo): DCP 2K 1200/4K 1800, IMF 1500, MXF HD 450/UHD 700,
+  MP4 web 180, ProRes 422 HD 350/UHD 550, ProRes 4444 750, 4444 XQ 900,
+  Image Sequence 900, SD master 250, Subtitle 120, KDM 80, ISO 150, Document 0;
+  Full Mix 600, stem singolo 250, M&E 450, Stems bundle 700, Optional Audio 350,
+  DM&E 18 €/min.
+- Script idempotente `scripts/migrate_deliveries_pricing.py` (`--dry` preview):
+  classifica per nome, riassegna reparto + 3 prezzi. Riusabile dopo reset DB.
+- Snapshot pre-applicazione `db_snapshots/snapshot-3.5.0-alpha.172.149-pre-deliveries-pricing.db`.
+- Test `tests/test_deliveries_pricing.py` (29 casi sulla `classify()`).
+  Verifica DB: 66/66 prezzate, 0 senza reparto. 190/190 pytest.
+
 ## v3.5.0-alpha.172.149 — sweep datetime.utcnow → now_utc (31 mag 2026)
 
 Chiuso il debito beta `datetime.utcnow()` ×111 (deprecato in Python 3.12+,

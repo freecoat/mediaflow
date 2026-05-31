@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.149** — 31 maggio 2026 — sweep datetime.utcnow → now_utc
+**v3.5.0-alpha.172.150** — 31 maggio 2026 — reparti + prezzi voci-bucket Deliveries
+
+### α.172.150 ✅ (reparti + prezzi Deliveries — richiesta Matteo)
+66 voci-bucket cat "Deliveries" (erano dept+prezzo None): AUDIO→Suono(3) 19 voci, VIDEO+SOTTOTITOLI+altro(KDM/ISO/Document)→DI(1) 47 voci. Prezzi 3 livelli (mastering/delivery fee, no grading/mix): DCP 2K 1200/4K 1800, IMF 1500, MXF HD 450/UHD 700, MP4 180, ProRes 422 350/422UHD 550/4444 750/XQ 900, ImgSeq 900, SD 250, Subtitle 120, KDM 80, ISO 150, Document 0; FullMix 600, stem 250, M&E 450, StemsBundle 700, OptAudio 350, DM&E 18/min. Script `scripts/migrate_deliveries_pricing.py` idempotente + 29 test. Snapshot pre-apply salvato. 190/190.
+
+**Prossimo**: push 4 commit (.147-.150) + ZIP quando Matteo OK · test copilot Gomorra lato Matteo.
 
 ### α.172.149 ✅ (sweep datetime.utcnow → now_utc)
 Chiuso debito `datetime.utcnow` ×111 (deprecato). Helper `app/services/clock.py` → `now_utc()` = `datetime.now(UTC).replace(tzinfo=None)` (naive, semantica identica, no cicli con models). 45 file (39 sweep + 6 alias locali), import via AST. 0 call-site residui (solo docstring clock.py). Warning 1362→15. **161/161**.
