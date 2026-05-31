@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.153 — label unità "trn 3h" (31 mag 2026)
+
+Matteo: abbreviare in "trn 3h". I 4 dropdown ora usano `value="trn"` + label
+"trn 3h" (prima `value="turno"`, label "turno (3h)"). `trn` è già canonico in
+tutto il backend (HOURS_PER_UNIT, _UNIT_TO_NATURE, reverse_quote, AI). "turno"
+resta alias riconosciuto (retrocompat: righe già salvate continuano a calcolare
+a 3h; l'edit inline preseleziona trn anche su unit legacy "turno"). Solo
+template → visibile con hard refresh (auto_reload dev, no restart).
+
 ## v3.5.0-alpha.172.152 — "turno" anche nei dropdown mancanti (31 mag 2026)
 
 Follow-up .151 (Matteo: "non vedo l'unità nel menu della voce di quotazione né

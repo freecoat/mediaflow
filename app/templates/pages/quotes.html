@@ -731,7 +731,7 @@
                 <label class="form-label">Unità</label>
                 <select class="form-select" id="al-unit" onchange="convertPriceOnUnitChange()">
                   <option value="day">day (giornata 8h)</option>
-                  <option value="turno">turno (3h)</option>
+                  <option value="trn">trn 3h</option>
                   <option value="hr" data-i18n="quotes.hr_short">hr (ora)</option>
                   <option value="pc">pc (pezzo)</option>
                   <option value="min">min (minuto prodotto)</option>
@@ -2250,7 +2250,7 @@ function renderLineRow(l) {
           <select class="inline-edit mono" data-field="unit" onchange="saveLineField(this)" style="font-size:12px;padding:2px 4px;min-width:70px;width:auto;">
             <optgroup label="Lavorazione (a tempo)">
               <option value="day"${l.unit==='day'?' selected':''}>day</option>
-              <option value="turno"${l.unit==='turno'?' selected':''}>turno (3h)</option>
+              <option value="trn"${l.unit==='trn'||l.unit==='turno'?' selected':''}>trn 3h</option>
               <option value="hr"${l.unit==='hr'?' selected':''}>hr</option>
             </optgroup>
             <optgroup label="Consegna">

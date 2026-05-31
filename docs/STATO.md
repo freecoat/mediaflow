@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.152** — 31 maggio 2026 — "turno" nei dropdown mancanti
+**v3.5.0-alpha.172.153** — 31 maggio 2026 — label unità "trn 3h"
+
+### α.172.153 ✅ (label "trn 3h" — richiesta Matteo)
+4 dropdown ora `value="trn"` + label "trn 3h" (era value="turno"/"turno (3h)"). `trn` già canonico in tutto il backend; "turno" resta alias retrocompat (inline edit preseleziona trn anche su legacy "turno"). Solo template → hard refresh, no restart. Server :8000 ora gira .152 (riavviato da Matteo) → auto-reload serve .153 template; codice Python resta .152 fino a prossimo restart (irrilevante: trn già supportato in .151).
+
+**Prossimo**: push commit .147-.153 + ZIP quando Matteo OK.
+
+### α.172.152 ✅ — "turno" nei dropdown mancanti (vedi sotto)
 
 ### α.172.152 ✅ (turno nei dropdown rimasti — follow-up Matteo)
 .151 aveva coperto solo pannello add-line (#al-unit) + pricelist (#it-unit). Aggiunti: /quotes select **inline edit riga** (L2252, JS-built) + `_lineNature` JS time-list + /job_detail `#ex-unit`. NB: template auto_reload in dev → opzioni visibili con hard refresh; logica turno=3h richiede **restart server** (l'istanza :8000 girava ancora α.172.72 — template freschi, Python vecchio).
