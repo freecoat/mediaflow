@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.146** — 30 maggio 2026 — fix quote/picker capitolato + hardening copilot (note Matteo)
+**v3.5.0-alpha.172.147** — 31 maggio 2026 — chiusura gap audit TPN/DAM P1 (5 fix sicurezza)
+
+### α.172.147 ✅ (chiusura gap audit TPN/DAM P1)
+5 gap P1 TPN/DAM (debito beta, fixati ora: sicurezza + basso rischio). **158/158** test (+12).
+- **#1 metadata/delivery-info no-auth** (`dam.py`): i 2 GET filtravano solo tenant+exists → leak codec/res/durata+delivery di asset altrui. Ora `user_can_access_asset()`+log deny+`request:Request`.
+- **#2 MFA upload/delete**: check `check_project_mfa_required` era solo download → esteso a upload+delete.
+- **#3 secure-delete default**: `DELETE` ora `secure=1` (DOD 3-pass). `?secure=0` opt-out.
+- **#4 watermark PDF**: nuovo `apply_watermark_pdf()` (PyMuPDF) su ogni pagina; branch PDF in `download_asset`, forzato non-admin. Video/DCP fuori scope (gated+loggati).
+- **#5 uploaded_by spoof**: derivato da utente autenticato (era Form falsificabile); risolve TODO hardcoded `uploaded_by=1` in dam.html.
+Test: `tests/test_dam_tpn_audit.py`. Debito residuo beta: rebuild UNIQUE composito (DB esistente), `datetime.utcnow` ×111 (deprecation, helper centralizzabile), `delivery_portals.py` orphan (feature roadmap).
+
+**Prossimo**: test estensivi fasi 7-12 (pivot API/curl) + eventuali fix.
 
 ### α.172.146 ✅ (fix quote/picker capitolato + copilot — note analisi quotazioni Matteo)
 **Picker/quote**: Bug1 detail riga eredita da PriceItem.description · Bug2 `template_bucket_options` detail ricco (specs+nomi+note, era solo note→vuoto) · Bug3a dedup per (voce+capitolato) non più solo price_item_id (voce da capitolato diverso ora aggiunta) · Bug3b `section_label`=broadcaster capitolato (Sky vs NBCU non confondibili). Verificato live su Fremantle/Vision (pid 58 in 2 righe etichettate distinte, 21/21 bucket con detail).

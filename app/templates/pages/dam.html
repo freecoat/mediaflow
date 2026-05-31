@@ -432,7 +432,9 @@ async function uploadFiles() {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('uploaded_by', 1);   // TODO: utente corrente dalla sessione
+      // uploaded_by è derivato server-side dall'utente autenticato
+      // (anti-spoof, v3.5.0-alpha.172.147). Questo campo è ignorato se
+      // c'è sessione; resta come fallback per path non autenticati.
       if (jobId) fd.append('job_id', jobId);
       if (tags)  fd.append('tags', tags);
       if (desc)  fd.append('description', desc);

@@ -1,5 +1,32 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.147 — chiusura gap audit TPN/DAM P1 (31 mag 2026)
+
+Chiusi i 5 gap P1 TPN/DAM rimasti dall'audit multi-agent (debito beta, fixati
+ora perché di sicurezza e a basso rischio). +12 test → **158/158**.
+
+- **#1 metadata/delivery-info no-auth-check** (`dam.py`): `GET /dam/api/assets/{id}/metadata`
+  e `/delivery-info` filtravano solo per tenant+exists → chiunque autenticato
+  poteva leggere codec/risoluzione/durata + contesto delivery di asset di
+  progetti non suoi (leak compartimentazione TPN). Ora gated da
+  `user_can_access_asset()` + log `deny`. Aggiunto `request: Request`.
+- **#2 MFA su upload/delete**: il check `check_project_mfa_required` era solo
+  su download. Ora vale anche su `POST /api/assets/upload` e
+  `DELETE /api/assets/{id}` (progetto MFA-required → 403 se user senza MFA).
+- **#3 secure-delete default**: `DELETE /api/assets/{id}` ora `secure=1` di
+  default (DOD 3-pass wipe prima di unlink). `?secure=0` opt-out esplicito.
+- **#4 watermark non-image**: nuovo `apply_watermark_pdf()` (PyMuPDF) stampa
+  watermark user+ts su ogni pagina PDF (capitolati/allegati). Branch PDF in
+  `download_asset`, forzato per non-admin. Video/DCP restano fuori scope
+  (serve transcode) ma sono access-gated + loggati.
+- **#5 uploaded_by spoof**: `upload_asset` derivava `uploaded_by` dal Form
+  (client) → falsificabile. Ora deriva dall'utente autenticato; Form
+  ignorato se c'è sessione (fallback solo per script/seed). Risolve il TODO
+  hardcoded `uploaded_by=1` in `dam.html`.
+
+Test: `tests/test_dam_tpn_audit.py` (12 test: gate auth via chiamata diretta
+coroutine + monkeypatch helper; dam_security PDF watermark unit).
+
 ## v3.5.0-alpha.172.146 — fix quote/picker capitolato + hardening copilot (note Matteo) (30 mag 2026)
 
 Risolte le note di Matteo dall'analisi quotazioni + dialogo copilot.

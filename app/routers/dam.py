@@ -17,6 +17,7 @@ from app.models import (
 from app.services.dam import save_upload, generate_thumbnail, resolve_asset_type, delete_asset_files
 from app.services.dam_security import (
     apply_watermark_image, secure_delete_file, is_image_mime,
+    apply_watermark_pdf, is_pdf_mime,
 )
 from fastapi.responses import Response
 from app.services.rbac import requires_permission, current_user_optional, is_admin
@@ -206,6 +207,7 @@ async def list_assets(
 @router.get("/api/assets/{asset_id}/metadata")
 async def get_asset_metadata(
     asset_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Estrae metadata tecnici dal file Asset via ffprobe / Pillow.
@@ -219,6 +221,16 @@ async def get_asset_metadata(
     ).first()
     if not a:
         raise HTTPException(404, "Asset non trovato")
+    # v3.5.0-alpha.172.147 (audit TPN gap #1) — access check: i metadata
+    # tecnici (codec/risoluzione/durata) sono informazione sensibile su un
+    # asset compartimentalizzato. Senza questo check chiunque autenticato
+    # poteva leggerli per asset di progetti non suoi.
+    user = current_user_optional(request)
+    if not user_can_access_asset(user, a, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=a.project_id, request=request,
+                         extra="metadata read denied")
+        raise HTTPException(403, "Accesso negato (TPN compartimentalizzazione)")
     if not a.file_path:
         return {"asset_id": asset_id, "tool": "none",
                 "errors": ["asset senza file_path"],
@@ -239,6 +251,7 @@ async def get_asset_metadata(
 @router.get("/api/assets/{asset_id}/delivery-info")
 async def get_asset_delivery_info(
     asset_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Restituisce delivery context dell'asset: deliverable linkati,
@@ -254,6 +267,13 @@ async def get_asset_delivery_info(
     ).first()
     if not a:
         raise HTTPException(404, "Asset non trovato")
+    # v3.5.0-alpha.172.147 (audit TPN gap #1) — access check
+    user = current_user_optional(request)
+    if not user_can_access_asset(user, a, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=a.project_id, request=request,
+                         extra="delivery-info read denied")
+        raise HTTPException(403, "Accesso negato (TPN compartimentalizzazione)")
 
     deliverables = []
     # Primary FK (legacy): job_deliverable_id
@@ -354,7 +374,7 @@ async def upload_asset(
     file: UploadFile = File(...),
     job_id: Optional[int] = Form(None),
     project_id: Optional[int] = Form(None),
-    uploaded_by: int = Form(...),
+    uploaded_by: Optional[int] = Form(None),  # anti-spoof: ignorato se user auth (vedi sotto)
     description: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # CSV di tag
     db: Session = Depends(get_db),
@@ -383,6 +403,20 @@ async def upload_asset(
                          extra="upload target project not in user grants")
         raise HTTPException(403, "Non hai accesso al progetto target (TPN)")
 
+    # v3.5.0-alpha.172.147 (audit TPN gap #2) — MFA required sul progetto
+    # vale anche in upload (prima solo download era gated).
+    if not check_project_mfa_required(user, project_id, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         project_id=project_id, request=request,
+                         extra="upload blocked: project requires MFA")
+        raise HTTPException(403, "Progetto richiede MFA. Configura MFA in /settings → 🔒 MFA TOTP")
+
+    # v3.5.0-alpha.172.147 (audit TPN gap #5) — uploaded_by deriva
+    # dall'utente AUTENTICATO, non dal form: il campo client era
+    # falsificabile (audit trail/attribuzione inaffidabile). Fallback al
+    # form solo se non c'è sessione (path non autenticati / script seed).
+    effective_uploaded_by = user.id if user else (uploaded_by or 1)
+
     asset = Asset(
         tenant_id=current_tenant_id(),
         filename=filename,
@@ -394,7 +428,7 @@ async def upload_asset(
         file_size=len(file_bytes),
         job_id=job_id,
         project_id=project_id,
-        uploaded_by=uploaded_by,
+        uploaded_by=effective_uploaded_by,
         description=description,
     )
     db.add(asset)
@@ -475,6 +509,22 @@ async def download_asset(
                          + "_wm.jpg") if "." in a.original_name else a.original_name + "_wm.jpg"
                 return Response(content=wm_bytes, media_type="image/jpeg",
                                 headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    # v3.5.0-alpha.172.147 (audit TPN gap #4) — watermark anche su PDF
+    # (capitolati, allegati, delivery note). Non-admin: forzato (no bypass
+    # via ?watermark=0). Video/DCP/altri binari restano fuori scope (serve
+    # ffmpeg/transcode) ma sono comunque access-gated + loggati sopra.
+    force_wm = not is_admin(user)
+    if (watermark or force_wm) and not is_s3 and is_pdf_mime(a.mime_type):
+        wm_bytes = apply_watermark_pdf(
+            a.file_path,
+            user_email=(user.email if user else None),
+            extra=f"asset:{a.id}",
+        )
+        if wm_bytes:
+            fname = (a.original_name.rsplit(".", 1)[0]
+                     + "_wm.pdf") if "." in a.original_name else a.original_name + "_wm.pdf"
+            return Response(content=wm_bytes, media_type="application/pdf",
+                            headers={"Content-Disposition": f'attachment; filename="{fname}"'})
     # v3.5.0-alpha.110 — Se file su S3 → redirect a presigned URL.
     if is_s3:
         try:
@@ -528,11 +578,13 @@ async def get_thumbnail(asset_id: int, request: Request, db: Session = Depends(g
 @router.delete("/api/assets/{asset_id}", dependencies=[RequireEditDam])
 async def delete_asset(
     asset_id: int, request: Request,
-    secure: int = 0,
+    secure: int = 1,
     db: Session = Depends(get_db),
 ):
-    """`secure=1` → DOD wipe (random 3 pass) prima di unlink. Più lento
-    ma garantisce no-recover dei dati su disco (TPN compliance)."""
+    """v3.5.0-alpha.172.147 (audit TPN gap #3) — secure delete è ora il
+    DEFAULT (`secure=1`): DOD wipe (random 3 pass) prima di unlink, no
+    recover dei dati su disco. `?secure=0` opt-out esplicito (delete veloce
+    per asset non sensibili / file molto grandi)."""
     user = current_user_optional(request)
     a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == current_tenant_id()).first()
     if not a:
@@ -542,6 +594,12 @@ async def delete_asset(
                          asset_id=asset_id, project_id=a.project_id, request=request,
                          extra="delete denied")
         raise HTTPException(403, "Accesso negato")
+    # v3.5.0-alpha.172.147 (audit TPN gap #2) — MFA required vale anche in delete
+    if not check_project_mfa_required(user, a.project_id, db):
+        log_asset_access(db, user=user, action=AssetAccessAction.deny,
+                         asset_id=asset_id, project_id=a.project_id, request=request,
+                         extra="delete blocked: project requires MFA")
+        raise HTTPException(403, "Progetto richiede MFA. Configura MFA in /settings → 🔒 MFA TOTP")
     # Log delete BEFORE actual deletion (asset_id riferimento storico)
     log_asset_access(db, user=user, action=AssetAccessAction.delete,
                      asset_id=asset_id, project_id=a.project_id, request=request,

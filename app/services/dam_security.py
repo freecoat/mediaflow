@@ -145,3 +145,65 @@ def secure_delete_file(file_path: str, passes: int = 3) -> bool:
 
 def is_image_mime(mime_type: Optional[str]) -> bool:
     return bool(mime_type and mime_type.startswith("image"))
+
+
+def is_pdf_mime(mime_type: Optional[str]) -> bool:
+    return bool(mime_type and "pdf" in mime_type.lower())
+
+
+def apply_watermark_pdf(
+    file_path: str,
+    user_email: Optional[str] = None,
+    ts: Optional[datetime] = None,
+    *,
+    extra: Optional[str] = None,
+) -> Optional[bytes]:
+    """v3.5.0-alpha.172.147 (audit TPN gap #4) — Stampa un watermark
+    semitrasparente (user+ts+extra) su OGNI pagina di un PDF e ritorna i
+    bytes del PDF watermarkato. None se non leggibile / non PDF.
+
+    Usa PyMuPDF (fitz), già dipendenza del progetto (tech_specs_extractor).
+    """
+    try:
+        import fitz  # PyMuPDF
+    except Exception:
+        return None
+    ts = ts or datetime.utcnow()
+    label = f"{user_email or 'anonymous'} · {ts.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+    if extra:
+        label += f" · {extra}"
+    label += " · MediaFlow TPN"
+    try:
+        doc = fitz.open(file_path)
+    except Exception:
+        return None
+    try:
+        for page in doc:
+            rect = page.rect
+            # Footer banner (basso, leggibile)
+            fs = max(7.0, min(rect.width, rect.height) / 55.0)
+            page.insert_text(
+                fitz.Point(12, rect.height - 12),
+                label,
+                fontsize=fs,
+                color=(0.45, 0.45, 0.45),
+                fill_opacity=0.55,
+                overlay=True,
+            )
+            # Diagonale grande al centro (scoraggia screenshot/redistribuzione)
+            big = (user_email or "TPN").upper()
+            page.insert_text(
+                fitz.Point(rect.width * 0.18, rect.height * 0.62),
+                big,
+                fontsize=max(28.0, min(rect.width, rect.height) / 9.0),
+                color=(0.5, 0.5, 0.5),
+                fill_opacity=0.12,
+                rotate=0,
+                overlay=True,
+            )
+        out = doc.tobytes()
+        return out
+    except Exception:
+        return None
+    finally:
+        doc.close()
