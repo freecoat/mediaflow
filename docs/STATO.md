@@ -8,7 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.159** — 31 maggio 2026 — Mobile v2 Fase A (foundation look + drawer nav)
+**v3.5.0-alpha.172.161** — 1 giugno 2026 — Link deliverable ↔ item capitolato end-to-end
+
+### α.172.161 ✅ (deliverable ↔ capitolato — remote-control Matteo)
+Due problemi `/planning/?view=deliverables`: (1) deliverable orfani; (2) specs tecniche non visibili/selezionabili. **Causa radice**: catena capitolato→quote→job non persisteva il FK `DeliveryItem` (solo `price_item_id` + `detail` stringa) → `JobDeliverable.delivery_item_id` sempre NULL → modal specs (α.160) cadeva nel JSON vuoto.
+- **Schema**: `quote_lines.delivery_item_id` FK + auto-migrate. Picker quote espone `items[]` + sotto-select per bucket multi-item (`delivery_item_map`); mono-item auto-link. Convert quote→job (3 spawn) propaga il FK.
+- **Modal planning (approccio B)**: barra selettore capitolato sempre visibile (capitolato→item), preselezionata se linkato / scegli dai capitolati se no. PUT deliverable accetta `delivery_item_id` (str, ""/"0"=unlink). Bottone scollega.
+- **Backfill** `scripts/backfill_deliverable_capitolato_link.py` (idempotente): GLO 7/11 auto-linkati, 4 manuali (2 no-capitolato + 2 multi-item ambigui).
+- **Cleanup**: 24 orfani rimossi (12 dangling quote_line + 12 su job_id=2 inesistente). Snapshot salvato.
+- **297/297** test (+7). Smoke browser E2E ok (preselect + link/unlink UI, 0 errori console).
+
+**Prossimo**: Matteo lega a mano i 4 deliverable residui via selettore; testa picker quote (sotto-select item su bucket multi-item) creando una quote nuova. Push quando OK. Tunnel :9000 live (`inkjet-agreed-peripherals-tank.trycloudflare.com`).
+
+### α.172.159 — 31 maggio 2026 — Mobile v2 Fase A (foundation look + drawer nav)
 
 ### α.172.159 ✅ (Mobile v2 Fase A — foundation, subagent-driven 3 task)
 Espansione mobile (Matteo: v1 spartano+limitato → livello intermedio). Fase A = look + nav. Drawer laterale (☰, sostituisce tab bar) + design system v2 (`mobile.css` [frontend-design], dark ink-indigo, tokens+componenti+skeleton, 90 classi preservate) + 5 schermate con icone lucide. **290/290** test, E2E ok. **Iniziativa mobile-v2 in 4 fasi**: A look/nav ✅ · B consultazione entità (Agenda/Progetti/Quote/Clienti/Finance) · C azioni · D copilot/planning. Editor pesanti → desktop. Spec/piani in `docs/superpowers/` (2026-05-31-mobile-v2-faseA + mobile-pwa-staff).

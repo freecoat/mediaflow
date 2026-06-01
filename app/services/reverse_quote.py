@@ -246,6 +246,7 @@ def attach_to_pending_quote(
                     total_accrued=0.0,
                     total_cost_accrued=0.0,
                     billing_status=DeliverableBillingStatus.not_billed,
+                    delivery_item_id=line.delivery_item_id,  # α.172.161
                 )
                 db.add(d); db.flush()
                 spawned_deliverables.append(d.id)

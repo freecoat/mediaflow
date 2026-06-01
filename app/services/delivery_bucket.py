@@ -246,6 +246,10 @@ def template_bucket_options(db: Session, tenant_id: int, template_id: int) -> li
             "price_low": pi.price_low,
             "item_count": len(group),
             "item_names": [it.name for it in group],
+            # v3.5.0-alpha.172.161 — id+nome dei DeliveryItem del bucket, per
+            # consentire al picker quote di fissare il "punto di partenza" delle
+            # tech specs (QuoteLine.delivery_item_id). Ordine = stabile per id.
+            "items": [{"id": it.id, "name": it.name} for it in sorted(group, key=lambda x: x.id)],
             "detail_suggestion": " · ".join(detail_parts) if detail_parts else None,
         })
     out.sort(key=lambda o: o["name"].lower())

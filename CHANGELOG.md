@@ -1,5 +1,38 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.161 — Link deliverable ↔ item capitolato end-to-end (1 giu 2026)
+
+Risolve due problemi nella vista `/planning/?view=deliverables` (segnalati da Matteo): deliverable
+orfani su GLO + impossibilità di vedere/selezionare le specifiche tecniche dell'item di capitolato.
+
+**Causa radice**: la catena capitolato→quote→job→planning **non persisteva** il FK strutturato.
+`QuoteLine`/`JobCostLine` avevano solo `price_item_id`; l'item di capitolato (`DeliveryItem`) era
+tracciato solo come stringa (`detail`) + broadcaster (`section_label`). Quindi
+`JobDeliverable.delivery_item_id` restava sempre NULL → la modal specs (α.160) cadeva nel ramo JSON
+8-blocchi vuoto.
+
+- **Schema**: nuova colonna `quote_lines.delivery_item_id` (FK `delivery_items`, nullable) +
+  auto-migrate al boot. Fissa il "punto di partenza" delle tech specs scelto in quotazione.
+- **Picker capitolato (quote)**: `template_bucket_options` espone ora `items:[{id,name}]`. Per i
+  bucket multi-item il picker mostra un sotto-select "🎯 specs" per scegliere quale `DeliveryItem`
+  rappresenta la riga; per i mono-item il link è automatico. Mappa `delivery_item_map` →
+  `load-from-template-items`.
+- **Convert quote→job**: i 3 spawn di `JobDeliverable` (convert, `_respawn_line_artifacts`,
+  `reverse_quote`) propagano `QuoteLine.delivery_item_id` → `JobDeliverable.delivery_item_id`.
+- **Modal planning (B)**: barra selettore capitolato sempre visibile (dropdown capitolato →
+  dropdown item). Se il deliverable è già linkato → preselezionato + specs strutturate; se non
+  linkato → si sceglie qui dai capitolati del tenant. Cambio item → PUT `delivery_item_id` + render
+  selettori taxonomy. Bottone "✕ scollega" torna all'editor libero. `PUT /jobs/api/deliverables/{id}`
+  accetta `delivery_item_id` (str: ""/"0" = unlink, id = link+valida tenant).
+- **Backfill retroattivo**: `scripts/backfill_deliverable_capitolato_link.py` (idempotente) lega i
+  deliverable esistenti by-name (broadcaster→template, price_item→item, disambigua con detail).
+  Su GLO: 7/11 linkati automaticamente, 4 restano selezionabili a mano (2 senza capitolato, 2 bucket
+  multi-item ambigui).
+- **Cleanup dati GLO**: rimossi 24 deliverable orfani (12 con `quote_line_id` dangling su job GLO +
+  12 su `job_id=2` inesistente — duplicati da convert precedenti). Snapshot pre-purge salvato.
+- **Test**: `tests/test_capitolato_deliverable_link.py` (+7 → **297**). Smoke browser E2E: modal
+  linkato preselezionato, link/unlink via UI, 0 errori console.
+
 ## v3.5.0-alpha.172.160 — Remote-control batch: 5 fix (listino, picker, deliverables) (31 mag 2026)
 
 5 issue da remote-control. Tutti testati (boot 200, endpoint, force-delete funzionale).

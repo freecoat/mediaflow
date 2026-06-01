@@ -270,6 +270,8 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
                     total_accrued=0.0,
                     total_cost_accrued=0.0,
                     billing_status=DeliverableBillingStatus.not_billed,
+                    # v3.5.0-alpha.172.161 — propaga il punto-di-partenza capitolato.
+                    delivery_item_id=line.delivery_item_id,
                 ))
     db.flush()  # Necessario: JCL.id + Deliverable.id servono al materialize_schedules
 
@@ -422,6 +424,7 @@ def _respawn_line_artifacts(db: Session, line: QuoteLine, job: Optional[Job]) ->
                 total_accrued=0.0,
                 total_cost_accrued=0.0,
                 billing_status=DeliverableBillingStatus.not_billed,
+                delivery_item_id=line.delivery_item_id,  # α.172.161
             ))
         db.flush()
         return {
@@ -1969,6 +1972,10 @@ async def load_from_template_items(
     discount_pct: float = Form(0.0),
     section: str = Form("A"),
     with_detail: bool = Form(True),
+    # v3.5.0-alpha.172.161 — mappa JSON {price_item_id: delivery_item_id} che fissa
+    # il "punto di partenza" delle tech specs per le righe bucket multi-item.
+    # Per i bucket con un solo DeliveryItem il link è auto-derivato (no mappa).
+    delivery_item_map: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """F2 — aggiunge righe quote dai bucket selezionati nel picker (decisione 2+10).
@@ -2008,6 +2015,25 @@ async def load_from_template_items(
         DeliveryTemplate.tenant_id == current_tenant_id(),
     ).first()
     cap_label = (((t.broadcaster if t and t.broadcaster else (t.name if t else None)) or "").strip()) or None
+
+    # v3.5.0-alpha.172.161 — risolve il DeliveryItem-punto-di-partenza per riga.
+    # Mappa esplicita dal picker (bucket multi-item) + fallback auto per bucket
+    # mono-item. Valida che l'id scelto appartenga ai DeliveryItem del bucket.
+    import json as _json
+    try:
+        di_map = {int(k): int(v) for k, v in (_json.loads(delivery_item_map or "{}") or {}).items() if v}
+    except (ValueError, TypeError):
+        di_map = {}
+
+    def _resolve_delivery_item(pid: int, opt: dict) -> Optional[int]:
+        items = opt.get("items") or []
+        valid_ids = {it["id"] for it in items}
+        chosen = di_map.get(pid)
+        if chosen and chosen in valid_ids:
+            return chosen
+        if len(items) == 1:  # bucket mono-item → link automatico
+            return items[0]["id"]
+        return None  # multi-item senza scelta → selezionabile poi in planning
 
     # Dedup per (voce + capitolato): la stessa voce-bucket dallo STESSO capitolato
     # non viene duplicata; ma la stessa voce da un capitolato DIVERSO viene
@@ -2057,6 +2083,7 @@ async def load_from_template_items(
             sort_order=sort_order,
             is_optional=False,
             section_label=cap_label,
+            delivery_item_id=_resolve_delivery_item(pid, opt),
         )
         db.add(line)
         existing_keys.add((item.id, cap_label))

@@ -4616,6 +4616,26 @@ function bpRow(b, i) {
     det.textContent = '↳ ' + b.detail_suggestion;
     mid.appendChild(det);
   }
+  // v3.5.0-alpha.172.161 — punto-di-partenza tech specs: per i bucket multi-item
+  // il picker consente di scegliere QUALE DeliveryItem rappresenta la riga (si
+  // propaga a JobDeliverable.delivery_item_id). Mono-item → link automatico
+  // server-side, nessun selettore. Default "(scegli in planning)" = nessun link.
+  if (Array.isArray(b.items) && b.items.length > 1) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin-top:4px;display:flex;align-items:center;gap:6px;';
+    const lab = document.createElement('span'); lab.className = 'text-xs text-muted';
+    lab.textContent = '🎯 specs:';
+    const isel = document.createElement('select');
+    isel.className = 'bp-item form-select'; isel.dataset.pid = b.price_item_id;
+    isel.style.cssText = 'height:26px;font-size:11px;max-width:280px;';
+    // evita che il click sul select tocchi il checkbox della label
+    isel.addEventListener('click', e => e.preventDefault());
+    let oh = '<option value="">— scegli in planning —</option>';
+    b.items.forEach(it => { oh += `<option value="${it.id}">${escapeHtml(it.name)}</option>`; });
+    isel.innerHTML = oh;
+    wrap.appendChild(lab); wrap.appendChild(isel);
+    mid.appendChild(wrap);
+  }
   row.appendChild(mid);
   const price = document.createElement('div');
   price.className = 'mono text-xs bp-price';
@@ -4673,6 +4693,15 @@ async function confirmBucketPicker() {
   fd.append('section', (document.getElementById('bp-section').value || 'A').toUpperCase());
   fd.append('with_detail', document.getElementById('bp-detail').checked ? 'true' : 'false');
   ids.forEach(id => fd.append('price_item_ids', id));
+  // v3.5.0-alpha.172.161 — mappa {price_item_id: delivery_item_id} scelta per i
+  // bucket multi-item (solo righe spuntate con un item selezionato).
+  const checkedPids = new Set(ids.map(String));
+  const diMap = {};
+  document.querySelectorAll('#bp-list .bp-item').forEach(sel => {
+    const pid = sel.dataset.pid;
+    if (checkedPids.has(String(pid)) && sel.value) diMap[pid] = parseInt(sel.value, 10);
+  });
+  if (Object.keys(diMap).length) fd.append('delivery_item_map', JSON.stringify(diMap));
   document.getElementById('bp-confirm').disabled = true;
   try {
     const r = await fetch(`/quotes/api/${currentQuoteId}/load-from-template-items`, {

@@ -802,6 +802,20 @@
     </div>
     <div class="modal-body" style="max-height:72vh; overflow-y:auto;">
       <input type="hidden" id="dsm-deliverable-id">
+      <!-- v3.5.0-alpha.172.161 — Selettore item capitolato (punto-di-partenza specs).
+           Sempre visibile: lega/cambia il DeliveryItem da cui derivano le tech specs.
+           Se il deliverable arriva dal picker quote è pre-selezionato; altrimenti
+           si sceglie qui dai capitolati del tenant. -->
+      <div id="dsm-capitolato-bar" style="display:flex; gap:8px; align-items:center; margin-bottom:10px; padding:8px 10px; background:rgba(98,114,245,0.10); border:1px solid rgba(98,114,245,0.25); border-radius:6px; flex-wrap:wrap;">
+        <label class="text-xs" style="margin:0; font-weight:600; color:var(--indigo2);">🎯 Item capitolato:</label>
+        <select id="dsm-cap-template" class="form-select" style="flex:1; min-width:160px; height:30px; font-size:12px;" onchange="dsmCapTemplateChange()">
+          <option value="">— capitolato —</option>
+        </select>
+        <select id="dsm-cap-item" class="form-select" style="flex:1.4; min-width:180px; height:30px; font-size:12px;" onchange="dsmCapItemChange()">
+          <option value="">— item —</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="dsm-cap-unlink" onclick="dsmCapUnlink()" title="Scollega: torna all'editor specifiche libero" style="font-size:11px; display:none;">✕ scollega</button>
+      </div>
       <div id="dsm-prefill-bar" style="display:flex; gap:8px; align-items:center; margin-bottom:14px; padding:8px 10px; background:rgba(98,114,245,0.06); border-radius:6px; flex-wrap:wrap;">
         <label class="text-xs text-muted" style="margin:0;">Pre-fill da template:</label>
         <select id="dsm-template-select" class="form-select" style="flex:1; min-width:180px; height:30px; font-size:12px;">
@@ -2199,12 +2213,59 @@ function dsmUpdatePath(path, val) {
 let _dsmStructured = false;
 let _dsmDeliveryItemId = null;
 let _dsmTaxonomy = null;
+// v3.5.0-alpha.172.161 — cache template capitolato per il selettore modal.
+let _dsmCapTemplates = null;
 
 async function _dsmLoadTaxonomy() {
   if (_dsmTaxonomy) return _dsmTaxonomy;
   try { _dsmTaxonomy = await api('GET', '/delivery-taxonomy/api'); }
   catch(e) { _dsmTaxonomy = {packages:[],containers:[],video_codecs:[],resolutions:[],frame_rates:[]}; }
   return _dsmTaxonomy;
+}
+
+// v3.5.0-alpha.172.161 — popola il dropdown capitolato della barra selettore.
+async function _dsmLoadCapTemplates() {
+  if (_dsmCapTemplates) return _dsmCapTemplates;
+  try { _dsmCapTemplates = await api('GET', '/delivery-templates/api/list'); }
+  catch(e) { _dsmCapTemplates = []; }
+  return _dsmCapTemplates;
+}
+
+function _dsmFillCapTemplateSelect(templates, selectedId) {
+  const sel = document.getElementById('dsm-cap-template');
+  _dhClear(sel);
+  const e0 = document.createElement('option');
+  e0.value = ''; e0.textContent = '— capitolato —';
+  sel.appendChild(e0);
+  (templates || []).forEach(t => {
+    const o = document.createElement('option');
+    o.value = String(t.id);
+    const bc = t.broadcaster ? t.broadcaster + ' · ' : '';
+    o.textContent = `${bc}${t.name || t.code || ('#'+t.id)}`;
+    if (selectedId && Number(selectedId) === t.id) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+async function _dsmFillCapItemSelect(templateId, selectedItemId) {
+  const sel = document.getElementById('dsm-cap-item');
+  _dhClear(sel);
+  const e0 = document.createElement('option');
+  e0.value = ''; e0.textContent = '— item —';
+  sel.appendChild(e0);
+  if (!templateId) return;
+  let items = [];
+  try {
+    const r = await api('GET', `/delivery-templates/api/${templateId}/items`);
+    items = (r && r.items) || [];
+  } catch(e) { items = []; }
+  items.forEach(it => {
+    const o = document.createElement('option');
+    o.value = String(it.id);
+    o.textContent = it.name || ('#'+it.id);
+    if (selectedItemId && Number(selectedItemId) === it.id) o.selected = true;
+    sel.appendChild(o);
+  });
 }
 
 async function dsmOpen(deliverableId) {
@@ -2220,20 +2281,29 @@ async function dsmOpen(deliverableId) {
   _dsmDeliveryItemId = null;
   const loading = document.createElement('div'); loading.className = 'text-muted text-sm';
   loading.textContent = 'Caricamento specifiche…'; host.appendChild(loading);
+  // Popola sempre il dropdown capitolati (selettore punto-di-partenza).
+  const templates = await _dsmLoadCapTemplates();
+  _dsmFillCapTemplateSelect(templates, null);
+  await _dsmFillCapItemSelect('', null);  // reset item dropdown (evita stale tra aperture)
+  document.getElementById('dsm-cap-unlink').style.display = 'none';
   try {
     const fresh = await api('GET', `/jobs/api/deliverables/${d.id}`);
     if (fresh.delivery_item_id) {
-      // Ramo STRUTTURATO: specifiche derivate dal capitolato.
-      if (prefillBar) prefillBar.style.display = 'none';
-      _dsmStructured = true;
-      _dsmDeliveryItemId = fresh.delivery_item_id;
+      // Ramo STRUTTURATO: specifiche derivate dal capitolato (già linkato).
       const [item, tax] = await Promise.all([
         api('GET', `/delivery-items/api/${fresh.delivery_item_id}`),
         _dsmLoadTaxonomy(),
       ]);
+      _dsmFillCapTemplateSelect(templates, item.delivery_template_id);
+      await _dsmFillCapItemSelect(item.delivery_template_id, fresh.delivery_item_id);
+      document.getElementById('dsm-cap-unlink').style.display = '';
+      _dsmStructured = true;
+      _dsmDeliveryItemId = fresh.delivery_item_id;
+      if (prefillBar) prefillBar.style.display = 'none';
       dsmRenderStructured(item, tax);
     } else {
-      // Ramo legacy: editor JSON 8-blocchi (deliverable senza capitolato linkato).
+      // Nessun link: selettore vuoto + editor JSON legacy disponibile.
+      // Suggerisce di scegliere un item capitolato dalla barra in alto.
       if (prefillBar) prefillBar.style.display = '';
       const sel = document.getElementById('dsm-template-select');
       _dhClear(sel);
@@ -2257,6 +2327,50 @@ async function dsmOpen(deliverableId) {
     err.textContent = 'Errore: ' + (e.message || '');
     host.appendChild(err);
   }
+}
+
+// Cambio capitolato nel selettore → ricarica gli item di quel template.
+async function dsmCapTemplateChange() {
+  const tid = document.getElementById('dsm-cap-template').value;
+  await _dsmFillCapItemSelect(tid, null);
+}
+
+// Scelta item capitolato → persiste il link sul deliverable e mostra le specs.
+async function dsmCapItemChange() {
+  const iid = parseInt(document.getElementById('dsm-cap-item').value, 10);
+  const did = parseInt(document.getElementById('dsm-deliverable-id').value, 10);
+  if (!iid || !did) return;
+  try {
+    const fd = new FormData();
+    fd.append('delivery_item_id', String(iid));
+    const r = await fetch(`/jobs/api/deliverables/${did}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || 'Errore link'); }
+    const [item, tax] = await Promise.all([
+      api('GET', `/delivery-items/api/${iid}`),
+      _dsmLoadTaxonomy(),
+    ]);
+    _dsmStructured = true;
+    _dsmDeliveryItemId = iid;
+    document.getElementById('dsm-prefill-bar').style.display = 'none';
+    document.getElementById('dsm-cap-unlink').style.display = '';
+    dsmRenderStructured(item, tax);
+    toast('🎯 Item capitolato collegato', 'success');
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// Scollega l'item capitolato → torna all'editor JSON libero.
+async function dsmCapUnlink() {
+  const did = parseInt(document.getElementById('dsm-deliverable-id').value, 10);
+  if (!did) return;
+  if (!confirm('Scollegare l\'item di capitolato? Le specifiche torneranno all\'editor libero.')) return;
+  try {
+    const fd = new FormData();
+    fd.append('delivery_item_id', '0');  // "0" → unlink server-side (NULL)
+    const r = await fetch(`/jobs/api/deliverables/${did}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || 'Errore'); }
+    toast('Item scollegato', 'success');
+    dsmOpen(did);  // re-render in modalità legacy
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
 // Costruisce i selettori taxonomy del DeliveryItem (parità col menu capitolato

@@ -1874,6 +1874,15 @@ class QuoteLine(Base):
     category_override: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # Per tracking AI matching (quale voce del capitolato ha generato questa riga)
     source_hint: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.5.0-alpha.172.161 — Link strutturato all'item di capitolato scelto nel
+    # picker quote (punto di partenza delle tech specs). Una riga-bucket aggrega
+    # N DeliveryItem per voce-listino; questo FK fissa QUALE item rappresenta la
+    # riga. Si propaga a JobDeliverable.delivery_item_id al convert quote→job,
+    # abilitando i selettori specs strutturati in planning. Nullable: righe libere
+    # o bucket multi-item senza scelta restano senza link (selezionabile in modal).
+    delivery_item_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_items.id"), nullable=True, index=True
+    )
     # v3.4.39 — Eredità riga-per-riga nelle nuove versioni di quote.
     # Quando una Quote V2 è creata da V1 (new-version), ogni riga di V2 ha
     # parent_line_id = id della riga sorgente in V1. Permette il re-bind preciso

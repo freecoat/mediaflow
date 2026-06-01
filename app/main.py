@@ -221,6 +221,7 @@ def _auto_migrate_columns():
             ("is_optional", "BOOLEAN NOT NULL DEFAULT 0"),
             ("section_label", "VARCHAR(120) NULL"),
             ("referred_from_jcl_id", "INTEGER NULL REFERENCES job_cost_lines(id)"),
+            ("delivery_item_id", "INTEGER NULL REFERENCES delivery_items(id)"),
         ]
         with engine.begin() as conn:
             for col, ddl in ql_alter:
@@ -2127,7 +2128,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.160", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.161", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

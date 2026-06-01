@@ -833,6 +833,10 @@ async def update_deliverable(
     job_cost_line_id: Optional[int] = Form(None),
     price_item_id: Optional[int] = Form(None),
     delivery_template_id: Optional[int] = Form(None),
+    # α.172.161 — link item capitolato. str (non int) per distinguere "" (unlink
+    # esplicito → NULL) da assente (None → no-op). Optional[int]+"" verrebbe
+    # coerciato a None da FastAPI, rendendo impossibile lo scollegamento.
+    delivery_item_id: Optional[str] = Form(None),
     primary_resource_id: Optional[int] = Form(None),
     estimated_hours: Optional[float] = Form(None),
     target_delivery_date: Optional[str] = Form(None),
@@ -947,6 +951,24 @@ async def update_deliverable(
     if job_cost_line_id is not None: d.job_cost_line_id = job_cost_line_id or None
     if price_item_id is not None: d.price_item_id = price_item_id or None
     if delivery_template_id is not None: d.delivery_template_id = delivery_template_id or None
+    # α.172.161 — link/unlink al DeliveryItem capitolato (punto-di-partenza specs).
+    # "" → scollega (NULL). id valido → verifica esistenza+tenant. None → no-op.
+    if delivery_item_id is not None:
+        raw = delivery_item_id.strip()
+        if raw in ("", "0"):
+            d.delivery_item_id = None
+        else:
+            try:
+                iid = int(raw)
+            except ValueError:
+                raise HTTPException(400, f"delivery_item_id non valido: {raw}")
+            it = db.query(DeliveryItem).filter(
+                DeliveryItem.id == iid,
+                DeliveryItem.tenant_id == current_tenant_id(),
+            ).first()
+            if not it:
+                raise HTTPException(404, "DeliveryItem non trovato")
+            d.delivery_item_id = it.id
     if primary_resource_id is not None: d.primary_resource_id = primary_resource_id or None
     if estimated_hours is not None: d.estimated_hours = estimated_hours
     if file_naming is not None: d.file_naming = file_naming.strip()[:500] or None
