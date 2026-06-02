@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.165 — Audit validità dati capitolati (2 giu 2026)
+
+`scripts/audit_capitolati.py` (READ-ONLY): scansiona tutti i DeliveryTemplate + DeliveryItem
+(+ segmenti timeline, AudioConfigPreset, AudioTrackSpec) e segnala anomalie per severità
+(ERROR/WARN/INFO): TC fuori range (fps-aware), FK dangling/disattivate, enum fuori set
+(bit depth/chroma/scan/subtitle/primaries), incoerenze colore (color_space vs hdr_format,
+primaries vs gamut), code template duplicati, template senza item, segmenti con kind/TC/ordine
+anomali, audio track FK + sample-rate/bit-depth.
+
+Primo run: **3 ERROR + 13 WARN**.
+- **Fix dati**: template **Fremantle** (tpl4) aveva la stessa corruzione TC del Vision
+  (`59:59:00:00` invalido) → corretto a `00:59:59:00` / black out `01:00:00:00` / program `01:00:00:00`.
+- **Aperto** (decisione Matteo): 12 item UHD con `color_space='Rec.2020 PQ'` ma `hdr_format='SDR'`
+  (PQ è curva HDR → contraddizione; 2 NBCU + 10 RAI, tutti varianti SDR).
+
 ## v3.5.0-alpha.172.164 — Timecode SMPTE corretto + scan color primaries (2 giu 2026)
 
 **Timecode**: il template Vision aveva `default_tc_start` e segmento "Nero pre-programma" corrotti
