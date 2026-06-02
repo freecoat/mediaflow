@@ -3057,6 +3057,12 @@ def _copy_quote_lines(src_lines: list, dest_quote_id: int, track_parent: bool) -
             sort_order=sl.sort_order,
             category_override=sl.category_override,
             source_hint=sl.source_hint,
+            # v3.5.0-alpha.172.175 — preserva etichetta capitolato + link item +
+            # flag opzionale nelle nuove versioni/duplicati (prima andavano persi:
+            # le label del picker capitolato sparivano nella new-version).
+            section_label=sl.section_label,
+            delivery_item_id=sl.delivery_item_id,
+            is_optional=sl.is_optional,
             parent_line_id=sl.id if track_parent else None,
         )
         new_lines.append(nl)

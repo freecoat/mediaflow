@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.174** — 2 giugno 2026 — Fix acconto/fatture orfane GLO + cascade purge finance
+**v3.5.0-alpha.172.175** — 2 giugno 2026 — Fix new-version perdeva etichette capitolato
+
+### α.172.175 ✅ (new-version quote: label capitolato preservate)
+`_copy_quote_lines` (new-version + duplicate) non copiava `section_label`/`delivery_item_id`/`is_optional` → le etichette picker capitolato sparivano nelle nuove versioni. Fix: copy propaga i 3 campi. Quote sorgente intatte. +2 test (**317**). Server :9000 da riavviare per attivare.
+
+### α.172.174 — 2 giugno 2026 — Fix acconto/fatture orfane GLO + cascade purge finance
 
 ### α.172.174 ✅ (fatture/acconti orfani + root cause purge)
 GLO mostrava acconto fatturato €14.775 + bozza €9.850 NON suoi: relitti di un **project 1 purgato** (allocation sui JCL GLO). Cleanup dati (10 fatture+2 acconti+6 schedule orfani rimossi; GLO ora billed 0 + 2 acconti pending 34.982+52.473). **Root cause fixato**: `soft_delete._purge_project_dependents` cascata invoices/advance/schedule/billing/job_deliverables al purge progetto. +2 test (**315**). Snapshot pre-cleanup. Server :9000 da riavviare per attivare il cascade nel runtime.

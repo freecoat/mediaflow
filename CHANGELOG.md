@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.175 — Fix: new-version quote perdeva le etichette capitolato (2 giu 2026)
+
+**Bug (Matteo)**: generando una nuova versione da quote approvata, le etichette del picker capitolato
+(`section_label`, es. "Sky Italia"/"NBCUniversal") sparivano dalle righe (i deliverable sul job restavano).
+**Causa**: `_copy_quote_lines` (usato da new-version e duplicate) copiava `detail`/`category_override`/
+`source_hint` ma **non** `section_label`, `delivery_item_id` (link item capitolato α.161), `is_optional`.
+**Fix**: il copy ora propaga i 3 campi → nuove versioni/duplicati mantengono etichetta capitolato + link
+specs + flag opzionale. Quote sorgente intatte (nessuna riparazione dati necessaria).
+- **tests/test_quote_version_copy.py** (+2 → **317**).
 ## v3.5.0-alpha.172.174 — Fix acconto/fatture orfane + cascade purge finance (2 giu 2026)
 
 **Sintomo (Matteo)**: GLO mostrava un acconto fatturato (€14.775) + bozza acconto (€9.850) che non gli
