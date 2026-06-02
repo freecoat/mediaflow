@@ -37,7 +37,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.orm import Session, with_loader_criteria
 
 from app.models.models import (
@@ -398,6 +398,86 @@ def _collect_active_quotes_on_project(db: Session, project: Project) -> list[dic
     } for q in rows]
 
 
+def _purge_project_dependents(db: Session, project_id: int, job_ids: list[int],
+                              quote_ids: list[int], jcl_ids: list[int]) -> dict:
+    """v3.5.0-alpha.172.174 — Hard-delete dei dipendenti FINANCE + DELIVERABLE di un
+    progetto durante il purge totale. Senza questo, il purge lasciava orfani
+    (invoices/advance_payments/schedules/billing/job_deliverables) che inquinavano
+    altri progetti via le allocation sui JCL (vedi GLO acconto fantasma).
+
+    Ordine figli→padri, scoping per project_id / job_ids / quote_ids / jcl_ids.
+    Difensivo: tabella assente → try/except la salta (compat DB più vecchi).
+    NB: NON usare inspect(engine)/get_table_names qui — aprirebbe una connessione
+    separata che su SQLite :memory: vede un DB vuoto (perdita dati di sessione)."""
+
+    def _sel(sql, params):
+        try:
+            return [r[0] for r in db.execute(text(sql), params).fetchall()]
+        except Exception:
+            return []
+
+    def dele(table, where_sql, params):
+        try:
+            r = db.execute(text(f"DELETE FROM {table} WHERE {where_sql}"), params)
+            return r.rowcount or 0
+        except Exception as e:  # noqa: BLE001 — tabella assente o altro: salta, non bloccare il purge
+            logging.getLogger(__name__).warning("purge dependents %s: %s", table, e)
+            return 0
+
+    # id helper per IN dinamici. `prefix` UNIVOCO per chiamata: evita collisioni
+    # di parametri quando si mergiano più clausole nello stesso execute
+    # (lista vuota → clausola sempre falsa).
+    def _in(col, ids, prefix):
+        if not ids:
+            return f"{col} IN (NULL)", {}
+        keys = {f"{prefix}{i}": v for i, v in enumerate(ids)}
+        ph = ",".join(":" + k for k in keys)
+        return f"{col} IN ({ph})", keys
+
+    # Raccogli id derivati
+    jw0, jp0 = _in("job_id", job_ids, "jb")
+    deliverable_ids = _sel(f"SELECT id FROM job_deliverables WHERE {jw0}", jp0) if job_ids else []
+    invoice_ids = _sel(f"SELECT id FROM invoices WHERE project_id = :pid OR {jw0}",
+                       {"pid": project_id, **jp0})
+    advance_ids = _sel("SELECT id FROM advance_payments WHERE project_id = :pid",
+                       {"pid": project_id})
+    batch_ids = _sel("SELECT id FROM billing_batches WHERE project_id = :pid",
+                     {"pid": project_id})
+
+    out = {}
+    jw, jp = _in("job_cost_line_id", jcl_ids, "jc")
+    iw, ip = _in("invoice_id", invoice_ids, "iv")
+    aw, ap = _in("advance_payment_id", advance_ids, "ad")
+    dw, dp = _in("job_deliverable_id", deliverable_ids, "dl")
+    bw, bp = _in("batch_id", batch_ids, "bt")
+    bbw, bbp = _in("billing_batch_id", batch_ids, "bb")
+    qw, qp = _in("quote_id", quote_ids, "qt")
+
+    # figli billing/slices
+    out["billing_batch_lines"] = dele("billing_batch_lines", bw, bp)
+    out["jcl_billed_slices"] = dele("jcl_billed_slices", f"({jw}) OR ({iw})", {**jp, **ip})
+    out["deliverable_billed_slices"] = dele("deliverable_billed_slices", f"({dw}) OR ({bbw})", {**dp, **bbp})
+    # figli advance
+    out["adv_consumptions"] = dele("advance_payment_consumptions", f"({aw}) OR ({iw}) OR ({bbw})", {**ap, **ip, **bbp})
+    out["adv_allocations"] = dele("advance_payment_allocations", f"({aw}) OR ({jw})", {**ap, **jp})
+    out["adv_deliv_allocations"] = dele("advance_payment_deliverable_allocations", f"({aw}) OR ({dw})", {**ap, **dp})
+    # figli fatture
+    out["invoice_payments"] = dele("invoice_payments", iw, ip)
+    out["invoice_lines"] = dele("invoice_lines", iw, ip)
+    # schedule acconti
+    out["quote_advance_schedules"] = dele("quote_advance_schedules", qw, qp)
+    # pivot/asset deliverable
+    out["booking_deliverables"] = dele("booking_deliverables", dw, dp)
+    out["deliverable_assets"] = dele("deliverable_assets", dw, dp)
+    # padri
+    out["billing_batches"] = dele("billing_batches", "project_id = :pid", {"pid": project_id})
+    out["advance_payments"] = dele("advance_payments", "project_id = :pid", {"pid": project_id})
+    idw, idp = _in("id", invoice_ids, "ii")
+    out["invoices"] = dele("invoices", f"project_id = :pid OR ({idw})", {"pid": project_id, **idp})
+    out["job_deliverables"] = dele("job_deliverables", jw0, jp0)
+    return out
+
+
 def soft_delete_project(db: Session, project: Project, *, user: User,
                         force: bool = False) -> dict:
     """Soft-delete di un Project. Regole:
@@ -453,6 +533,18 @@ def soft_delete_project(db: Session, project: Project, *, user: User,
     bookings_count = 0
     assignments_count = 0
     job_assignments_count = 0
+    # v3.5.0-alpha.172.174 — PRIMA del cascade booking/cost_line: hard-delete dei
+    # dipendenti finance+deliverable (invoices/advance/schedule/billing/job_deliverables),
+    # che il purge NON toccava → lasciava orfani che inquinavano altri progetti.
+    _job_ids, _jcl_ids = [], []
+    for q in quotes_all:
+        if q.job:
+            _job_ids.append(q.job.id)
+            _jcl_ids.extend([cl.id for cl in q.job.cost_lines])
+    _quote_ids = [q.id for q in quotes_all]
+    dependents_purged = _purge_project_dependents(
+        db, project.id, _job_ids, _quote_ids, _jcl_ids)
+    db.flush()
     for q in quotes_all:
         quotes_count += 1
         job = q.job
@@ -509,6 +601,7 @@ def soft_delete_project(db: Session, project: Project, *, user: User,
         "bookings_count":        bookings_count,
         "assignments_count":     assignments_count,
         "job_assignments_count": job_assignments_count,
+        "dependents_purged":     dependents_purged,
     }
 
 

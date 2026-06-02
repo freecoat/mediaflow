@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.174 — Fix acconto/fatture orfane + cascade purge finance (2 giu 2026)
+
+**Sintomo (Matteo)**: GLO mostrava un acconto fatturato (€14.775) + bozza acconto (€9.850) che non gli
+appartenevano; discrepanze cost report.
+**Diagnosi**: relitti finance di un **project 1 purgato** (pre-GLO, 24 mag) — 10 fatture + 2 acconti +
+6 schedule orfani — con le **allocation puntate ai JCL di GLO** → inquinavano il cost report di GLO.
+**Causa**: il purge totale progetto NON cascatava su finance/deliverable → orfani.
+
+- **Cleanup dati**: rimossi i relitti orfani (10 invoices +26 lines, 2 advance +4 alloc, 6 schedule).
+  GLO ora pulito: billed 0, 2 acconti pending (€34.982 + €52.473 = quote 13). Snapshot pre-cleanup salvato.
+- **Fix root cause** (`soft_delete._purge_project_dependents`): il purge progetto force ora cascata
+  su invoices, invoice_lines/payments, advance_payments (+alloc/consum/deliv-alloc), quote_advance_schedules,
+  billing_batches/lines, jcl/deliverable billed_slices, job_deliverables (+pivot/asset). Scoping per
+  project/job/quote/jcl, ordine figli→padri, difensivo (try/except tabella assente).
+- **tests/test_purge_finance_cascade.py** (+2 → **315**): verifica cascade target + scoping (survivor
+  intatto) + empty-safe. NB: niente `inspect(engine)` nel purge (apre connessione separata → su SQLite
+  :memory: perde i dati di sessione).
 ## v3.5.0-alpha.172.173 — Self-host Cloudflare Tunnel + principio asset metadata-only (2 giu 2026)
 
 - **`docker-compose.tunnel.yml`**: self-host da ufficio/casa. claqo solo su rete interna +

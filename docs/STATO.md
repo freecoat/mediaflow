@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.173** — 2 giugno 2026 — Self-host Cloudflare Tunnel + asset metadata-only
+**v3.5.0-alpha.172.174** — 2 giugno 2026 — Fix acconto/fatture orfane GLO + cascade purge finance
+
+### α.172.174 ✅ (fatture/acconti orfani + root cause purge)
+GLO mostrava acconto fatturato €14.775 + bozza €9.850 NON suoi: relitti di un **project 1 purgato** (allocation sui JCL GLO). Cleanup dati (10 fatture+2 acconti+6 schedule orfani rimossi; GLO ora billed 0 + 2 acconti pending 34.982+52.473). **Root cause fixato**: `soft_delete._purge_project_dependents` cascata invoices/advance/schedule/billing/job_deliverables al purge progetto. +2 test (**315**). Snapshot pre-cleanup. Server :9000 da riavviare per attivare il cascade nel runtime.
+
+**Prossimo**: restart :9000; eventuale fix cascade anche a livello JOB-purge standalone (stessa classe bug); push commit .174 (+ .160→.173 già pushati? NO—.160→.173 pushati turno scorso, .174 nuovo).
+
+### α.172.173 — 2 giugno 2026 — Self-host Cloudflare Tunnel + asset metadata-only
 
 ### α.172.173 ✅ (self-host on-prem + principio asset)
 `docker-compose.tunnel.yml` (claqo interno + cloudflared named via TUNNEL_TOKEN, no port-forward/CGNAT-ok) + `docs/SELF-HOST.md` (setup, Cloudflare Access, backup offsite). `.env` +TUNNEL_TOKEN. **Principio asset formalizzato**: SaaS = solo metadato+reference; binari sui server tenant (già implementato `fs-scan`/`fs-import` → Asset.file_path reference, no copia). Roadmap MAM/S3. Nessun cambio codice. 313 test.
