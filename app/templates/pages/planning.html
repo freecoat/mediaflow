@@ -2418,7 +2418,7 @@ function dsmRenderStructured(v, tax) {
     <div><label style="${L}">Frame rate</label>
       <select class="form-select" id="dsm-s-fr">${opt(tax.frame_rates, v.frame_rate_id)}</select></div>
     <div><label style="${L}">Aspect ratio</label>
-      <input class="form-input" id="dsm-s-aspect" value="${escapeHtml(v.aspect_ratio||'')}" placeholder="es. 1.85 / 2.39 / 16:9"></div>
+      <select class="form-select" id="dsm-s-aspect">${enumOpt([...new Set(['1.33','1.37','1.66','1.78','1.85','1.90','2.00','2.35','2.39','2.40','16:9','9:16',...(v.aspect_ratio?[v.aspect_ratio]:[])])], v.aspect_ratio)}</select></div>
     <div><label style="${L}">Scan type</label>
       <select class="form-select" id="dsm-s-scan">${enumOpt(['progressive','interlaced','psf'], v.scan_type)}</select></div>
     <div><label style="${L}">HDR format</label>

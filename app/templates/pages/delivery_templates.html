@@ -1160,7 +1160,10 @@ async function openItemEditor(item, tid) {
     <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Frame rate</label>
       <select class="form-select" id="dli-fr">${opt(tax.frame_rates, v.frame_rate_id)}</select></div>
     <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Aspect ratio</label>
-      <input class="form-input" id="dli-aspect" value="${escapeHtml(v.aspect_ratio||'')}" placeholder="es. 1.85 / 2.39 / 16:9"></div>
+      <select class="form-select" id="dli-aspect">
+        <option value="">—</option>
+        ${[...new Set(['1.33','1.37','1.66','1.78','1.85','1.90','2.00','2.35','2.39','2.40','16:9','9:16',...(v.aspect_ratio?[v.aspect_ratio]:[])])].map(a => `<option value="${escapeHtml(a)}"${v.aspect_ratio===a?' selected':''}>${escapeHtml(a)}</option>`).join('')}
+      </select></div>
 
     <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Scan type</label>
       <select class="form-select" id="dli-scan">

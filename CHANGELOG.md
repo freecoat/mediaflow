@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.162 — Aspect ratio a tendina (2 giu 2026)
+
+`aspect_ratio` nelle tech specs era un input testo libero (è una String nel modello, non una taxonomy
+come resolution/codec). Convertito in **select** con i rapporti comuni (1.33/1.37/1.66/1.78/1.85/1.90/
+2.00/2.35/2.39/2.40/16:9/9:16) in entrambi gli editor (modal planning `dsm-s-aspect` + editor capitolato
+`dli-aspect`). Eventuali valori custom già salvati sono **preservati** (prepend via Set) → nessuna perdita
+dati da capitolati parsati. Solo template (hard refresh, no restart).
+
 ## v3.5.0-alpha.172.161 — Link deliverable ↔ item capitolato end-to-end (1 giu 2026)
 
 Risolve due problemi nella vista `/planning/?view=deliverables` (segnalati da Matteo): deliverable
