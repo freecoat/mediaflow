@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.171** — 2 giugno 2026 — Fondazione hosting backend (Docker)
+**v3.5.0-alpha.172.172** — 2 giugno 2026 — Deploy VPS con Caddy (HTTPS) + cookie Secure
+
+### α.172.172 ✅ (deploy VPS HTTPS + hardening cookie)
+`docker-compose.prod.yml` (claqo interno + Caddy 80/443 TLS auto + header sicurezza) + `deploy/Caddyfile` + cookie `secure` condizionale prod (access_token/MFA/portal). DEPLOY.md flow A/B + roadmap. Login dev verificato (303, no-secure). 313 test.
+
+**Linea hosting CONFERMATA (Matteo)**: VPS EU + **SQLite singola istanza**. Self-hosted sempre supportato. **Postgres = milestone con trigger** (2° tenant/database-is-locked/più worker/cliente enterprise) → comporta Float→Numeric + Alembic + retest. **Isolamento clienti sicurezza = deployment-per-tenant** (istanza Docker dedicata, già pronto). **DB-per-tenant in 1 istanza = Fase 7** (connection registry). Dominio = col rebrand (Claqo non confermato) → primo deploy IP/sottodominio. Accesso locale dev resta attivo (env-driven). React/Capacitor app rimandata post-hosting.
+
+**Prossimo**: deploy reale su VPS (build immagine sull'host) quando Matteo sceglie provider/dominio; eventuale Postgres quando scatta un trigger.
+
+### α.172.171 — 2 giugno 2026 — Fondazione hosting backend (Docker)
 
 ### α.172.171 ✅ (hosting backend — fondazione portabile)
 Artefatti deploy: Dockerfile (3.13-slim, non-root, healthcheck, 1 worker SQLite, volume /data) + docker-compose (volume claqo_data) + docker-entrypoint.sh + bootstrap_admin.py (tenant+admin da ENV, idempotente, validato) + .dockerignore + .gitattributes (LF su .sh) + .env.production.example + docs/DEPLOY.md (Caddy HTTPS, backup, sicurezza). App invariata (config già env-driven). Docker non in ambiente dev → build da validare sull'host. 313 test.

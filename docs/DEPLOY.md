@@ -19,24 +19,32 @@ python -c "from cryptography.fernet import Fernet; print('AI_KEY_ENCRYPTION_KEY=
 ```
 
 ## 3. Avvio
+
+### A) Produzione VPS con HTTPS (consigliato) — `docker-compose.prod.yml` + Caddy
+Imposta `DOMAIN` + `ACME_EMAIL` in `.env`, punta il dominio (A/AAAA) al server, apri 80/443:
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml logs -f   # bootstrap admin + "startup complete"
+```
+Caddy ottiene e rinnova il certificato Let's Encrypt da solo. `claqo` NON è esposto
+sull'host (solo rete interna); pubblico solo 80/443 via Caddy. Header di sicurezza
+(HSTS, nosniff, frame SAMEORIGIN) già applicati in `deploy/Caddyfile`.
+
+### B) Avvio semplice / locale-docker (no TLS) — `docker-compose.yml`
 ```bash
 docker compose up -d --build
-docker compose logs -f          # verifica: bootstrap admin + "Application startup complete"
 curl -fsS http://localhost:8000/health
 ```
-Primo boot: crea tabelle + auto-migrate colonne + admin (da `ADMIN_EMAIL/PASSWORD`).
-DB SQLite e uploads vivono sul volume `claqo_data` (persistono ai redeploy).
+Espone :8000 in chiaro — solo per test/dietro un proxy già esistente.
 
-## 4. HTTPS + dominio (VPS) — Caddy (TLS automatico)
-Esporre il container solo su localhost (`127.0.0.1:8000:8000` in compose) e mettere
-Caddy davanti. `Caddyfile`:
-```
-claqo.tuodominio.it {
-    reverse_proxy 127.0.0.1:8000
-}
-```
-Caddy ottiene e rinnova il certificato Let's Encrypt da solo. Alternative: nginx +
-certbot, o Traefik.
+Primo boot (entrambi): crea tabelle + auto-migrate colonne + admin (da
+`ADMIN_EMAIL/PASSWORD`). DB SQLite e uploads vivono sul volume `claqo_data`.
+
+## 4. Sicurezza HTTPS già inclusa
+- Cookie auth/portal con flag **Secure** automatico in `APP_ENV=production` (oltre a
+  HttpOnly + SameSite=Lax).
+- Caddy: HSTS, X-Content-Type-Options, Referrer-Policy, X-Frame-Options SAMEORIGIN.
+- Alternative a Caddy: nginx+certbot o Traefik (sostituiscono il servizio `caddy`).
 
 ## 5. Backup (importante)
 Il DB è un file sul volume. Backup periodico:
@@ -53,11 +61,20 @@ così gli upload non stanno sul volume locale.
 - Cambia la password admin al primo accesso. MFA TOTP disponibile in `/settings`.
 - Esporre solo 443 (Caddy); il container resta su localhost.
 
-## 7. Scelte aperte (vedi STATO.md)
-- **DB**: SQLite-su-volume (parti subito, ok piccolo team) → **Postgres** quando
-  servono più worker / concorrenza scrittura (`DATABASE_URL=postgresql+psycopg://…`,
-  alzare `--workers`). Il porting Float→Numeric è già previsto per Postgres.
-- **Provider**: PaaS (Fly/Render/Railway, low-ops) vs VPS EU (Hetzner, sovranità
-  dato + costo, gestione manuale). Regione **EU** consigliata (GDPR, post-house IT).
-- **Multi-tenant hard** (Fase 7) e **rebrand** finale si intrecciano con l'hosting
-  pubblico.
+## 7. Roadmap hosting (decisioni 2 giu 2026)
+- **Linea attuale**: VPS EU + **SQLite singola istanza** su volume. Self-hosted
+  sempre supportato (clienti con prerequisiti di sicurezza straordinari).
+- **Postgres = milestone pianificata** (NON ora). Trigger per migrare:
+  2° tenant/team in una stessa istanza · errori "database is locked" sotto carico ·
+  necessità di più worker · cliente enterprise che lo impone. La migrazione comporta:
+  `Float→Numeric`, adozione **Alembic** (le auto-migrate attuali sono DDL SQLite-shaped),
+  retest su PG. `DATABASE_URL=postgresql+psycopg://…` + alzare `--workers`.
+- **Isolamento per cliente sicurezza**: **deployment-per-tenant** = un'istanza Docker
+  + DB dedicati per quel cliente (anche self-hosted da loro). Isolamento fisico totale,
+  zero codice nuovo — già abilitato da questi artefatti.
+- **DB-per-tenant in una sola istanza** (SaaS multi-tenant) = **Fase 7**: serve un
+  connection-registry (engine/SessionLocal per tenant; la resolution chain
+  `_resolve_tenant_from_request` esiste già), migrazioni ×N tenant, dashboard
+  platform-admin a fan-out. Con SQLite: un `.db` per tenant aggira il single-writer.
+- **Dominio/rebrand**: il dominio finale dipende dal nome (Claqo non confermato) →
+  primo deploy su IP/sottodominio provvisorio.

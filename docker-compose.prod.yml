@@ -1,0 +1,50 @@
+# v3.5.0-alpha.172.172 — Claqo produzione VPS con Caddy (HTTPS automatico).
+# claqo NON espone porte sull'host: è raggiungibile solo da Caddy via rete interna.
+# Caddy termina TLS su 80/443 e fa reverse proxy. SQLite singola istanza su volume.
+#
+# Uso:
+#   cp .env.production.example .env   # compila segreti + DOMAIN + ACME_EMAIL
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  claqo:
+    build: .
+    image: claqo:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: production
+      AUTH_REQUIRED: "true"
+      DATABASE_URL: sqlite:////data/mediaflow.db
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - claqo_data:/data
+    expose:
+      - "8000"          # solo rete interna (nessun publish sull'host)
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - claqo
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # certificati (persistenti!)
+      - caddy_config:/config
+
+volumes:
+  claqo_data:
+  caddy_data:
+  caddy_config:

@@ -68,6 +68,7 @@ async def login(
             httponly=True,
             max_age=MFA_PENDING_MAX_AGE,
             samesite="lax",
+            secure=(settings.app_env == "production"),  # α.172.172 — HTTPS-only in prod
         )
         return resp
     # v3.5.0-alpha.101 — JWT include tid (tenant_id) per cross-tenant gate.
@@ -79,6 +80,7 @@ async def login(
         httponly=True,
         max_age=settings.access_token_expire_minutes * 60,
         samesite="lax",
+        secure=(settings.app_env == "production"),  # α.172.172 — HTTPS-only in prod
     )
     # v3.5.0-alpha.78.1 — TPN audit log login (admin compreso)
     try:
@@ -161,6 +163,7 @@ async def mfa_verify(
         httponly=True,
         max_age=settings.access_token_expire_minutes * 60,
         samesite="lax",
+        secure=(settings.app_env == "production"),  # α.172.172 — HTTPS-only in prod
     )
     resp.delete_cookie(MFA_PENDING_COOKIE)
     return resp

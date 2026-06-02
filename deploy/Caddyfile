@@ -1,0 +1,25 @@
+# v3.5.0-alpha.172.172 — Reverse proxy + TLS automatico (Let's Encrypt) per Claqo.
+# Caddy ottiene/rinnova il certificato da solo. Richiede: DOMAIN che punta al
+# server (A/AAAA) + porte 80/443 aperte. Variabili da .env: DOMAIN, ACME_EMAIL.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+	reverse_proxy claqo:8000
+
+	# Header di sicurezza. HSTS attivo solo su HTTPS (Caddy serve sempre TLS qui).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "SAMEORIGIN"
+		-Server
+	}
+
+	# Limite upload coerente con max_upload_mb dell'app (200MB + margine).
+	request_body {
+		max_size 220MB
+	}
+}

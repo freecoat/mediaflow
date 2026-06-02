@@ -17,6 +17,7 @@ Niente endpoint mutator: il cliente è SOLO lettore.
 """
 from __future__ import annotations
 from app.services.clock import now_utc
+from app.config import settings
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
@@ -221,6 +222,7 @@ async def portal_login(
         httponly=True,
         max_age=max(60, max_age),
         samesite="lax",
+        secure=(settings.app_env == "production"),  # α.172.172 — HTTPS-only in prod
     )
     return resp
 

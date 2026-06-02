@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.172 — Deploy VPS con Caddy (HTTPS) + cookie Secure (2 giu 2026)
+
+Rifinitura hosting su SQLite singola istanza (linea confermata: Postgres = milestone con trigger).
+- **`docker-compose.prod.yml`**: claqo (rete interna, no publish host) + **Caddy** (80/443, HTTP/3,
+  TLS Let's Encrypt automatico, certificati su volume). `deploy/Caddyfile` con reverse_proxy + header
+  sicurezza (HSTS, nosniff, Referrer-Policy, X-Frame-Options SAMEORIGIN) + gzip/zstd.
+- **Cookie Secure in produzione**: i cookie `access_token` (login + MFA), MFA-pending e `portal_token`
+  ora hanno `secure=(APP_ENV==production)` (oltre a HttpOnly + SameSite=Lax). In dev (http) resta off →
+  nessuna regressione locale (login dev verificato 303, no Secure).
+- `.env.production.example`: aggiunti `DOMAIN` + `ACME_EMAIL`. `docs/DEPLOY.md`: flow A (VPS+Caddy) / B
+  (semplice) + roadmap hosting (trigger Postgres, deployment-per-tenant per clienti sicurezza,
+  DB-per-tenant Fase 7).
+- 313 test. Build/deploy da validare sull'host VPS.
 ## v3.5.0-alpha.172.171 — Fondazione hosting backend (Docker portabile) (2 giu 2026)
 
 Primo passo verso l'hosting: artefatti deploy portabili (girano su qualsiasi host Docker — VPS/Fly/
