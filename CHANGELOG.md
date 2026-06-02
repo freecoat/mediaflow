@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.166 — Forza vista mobile (auto-redirect a /m) (2 giu 2026)
+
+Da smartphone, aprendo una pagina desktop (senza `/m`) si viene dirottati alla PWA mobile `/m`.
+- Middleware `mobile_force_view`: su User-Agent smartphone (Mobi/iPhone/iPod/Windows Phone/BlackBerry/
+  Opera Mini), solo navigazioni GET HTML fuori da /m → **302 /m**. Esenti: /static /auth /api /uploads
+  /portal /health /docs ecc. + richieste fetch/XHR (Accept non-HTML) → il backend mobile e gli endpoint
+  JSON restano intatti. Tablet (iPad/Android tablet senza "Mobi") NON forzati.
+- **Escape** cookie `prefer_desktop=1` (1 anno): `GET /prefer-desktop?next=...` lo setta, `GET /prefer-mobile`
+  lo rimuove. Link "🖥️ Versione desktop" aggiunto nel drawer mobile (→ /prefer-desktop?next=/dashboard).
+- Nessun loop su /m, sito desktop pienamente usabile con preferenza desktop attiva. 313 test verdi.
+
 ## v3.5.0-alpha.172.165 — Audit validità dati capitolati (2 giu 2026)
 
 `scripts/audit_capitolati.py` (READ-ONLY): scansiona tutti i DeliveryTemplate + DeliveryItem

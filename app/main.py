@@ -2129,7 +2129,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.165", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.166", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2203,6 +2203,56 @@ async def no_cache_html(request: Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+
+# ── Mobile redirect (v3.5.0-alpha.172.166) ────────────────────────────────
+# Su smartphone, le pagine di navigazione HTML fuori da /m vengono dirottate
+# alla PWA mobile /m. Escape: cookie `prefer_desktop=1` (link "versione desktop"
+# nel drawer mobile → /prefer-desktop). Solo navigazioni GET HTML; API/static/
+# auth/uploads/portal e le richieste fetch (Accept non-HTML) NON sono toccate,
+# così il sito desktop resta pienamente usabile da chi sceglie "versione desktop".
+import re as _re_mod
+_MOBILE_UA = _re_mod.compile(r"(Mobi|iPhone|iPod|Windows Phone|BlackBerry|Opera Mini)", _re_mod.I)
+_MOBILE_REDIR_EXEMPT = (
+    "/m", "/static", "/auth", "/api", "/uploads", "/portal", "/health",
+    "/favicon", "/docs", "/openapi", "/redoc", "/public",
+    "/prefer-desktop", "/prefer-mobile", "/sw.js", "/manifest",
+)
+
+
+@app.middleware("http")
+async def mobile_force_view(request: Request, call_next):
+    if request.method == "GET":
+        path = request.url.path
+        if (not any(path == p or path.startswith(p + "/") or path == p for p in _MOBILE_REDIR_EXEMPT)
+                and "/api/" not in path
+                and request.cookies.get("prefer_desktop") != "1"):
+            ua = request.headers.get("user-agent", "")
+            accept = request.headers.get("accept", "")
+            # solo navigazioni HTML reali da smartphone (non fetch/xhr/asset)
+            if "text/html" in accept and _MOBILE_UA.search(ua):
+                from fastapi.responses import RedirectResponse as _RR
+                return _RR(url="/m", status_code=302)
+    return await call_next(request)
+
+
+@app.get("/prefer-desktop")
+async def prefer_desktop(next: str = "/"):
+    """Imposta la preferenza 'versione desktop' (1 anno) e torna alla pagina."""
+    from fastapi.responses import RedirectResponse as _RR
+    safe = next if next.startswith("/") and not next.startswith("//") else "/"
+    resp = _RR(url=safe, status_code=302)
+    resp.set_cookie("prefer_desktop", "1", max_age=31536000, samesite="lax", path="/")
+    return resp
+
+
+@app.get("/prefer-mobile")
+async def prefer_mobile():
+    """Rimuove la preferenza desktop → torna alla PWA mobile."""
+    from fastapi.responses import RedirectResponse as _RR
+    resp = _RR(url="/m", status_code=302)
+    resp.delete_cookie("prefer_desktop", path="/")
+    return resp
 
 
 # ── Auth guard (v3.4.27.1) ─────────────────────────────────────
