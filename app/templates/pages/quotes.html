@@ -3697,12 +3697,50 @@ async function changeLineCategory(lineId) {
 }
 
 async function setQuoteStatus(status) {
+  // v3.5.0-alpha.172.178 — reject di quote APPROVATA con Job: prompt 3-vie
+  // (progetto perso / nuova versione / annulla). I Consuntivi (phantom) esclusi.
+  if (status === 'rejected' && currentQuote && currentQuote.status === 'approved'
+      && currentQuote.has_job && !currentQuote.is_phantom) {
+    return _rejectApprovedWithJob();
+  }
   try {
     const fd = new FormData(); fd.append('status', status);
     await api('PUT', `/quotes/api/${currentQuoteId}/status`, fd);
     document.getElementById('editor-status').textContent = SL[status] || status;
     toast('Stato aggiornato', 'success');
+    if (typeof reloadQuote === 'function') reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+async function _rejectApprovedWithJob() {
+  const lost = confirm(
+    `La quotazione ${currentQuote.number} è APPROVATA e ha un Job collegato.\n\n` +
+    `• OK = PROGETTO PERSO: chiude il job, annulla gli acconti pending e disattiva ` +
+    `il cost report (BLOCCATO se ci sono fatture/acconti emessi o lavoro svolto).\n\n` +
+    `• Annulla = valuta invece una NUOVA VERSIONE (in attesa di approvazione).`
+  );
+  if (lost) {
+    try {
+      const fd = new FormData(); fd.append('status', 'rejected'); fd.append('mode', 'lost');
+      await api('PUT', `/quotes/api/${currentQuoteId}/status`, fd);
+      toast('Progetto perso: quote rifiutata, job e acconti chiusi.', 'success', 4500);
+      if (typeof reloadQuote === 'function') await reloadQuote();
+    } catch(e) { toast(e.message || 'Errore', 'error', 7000); }
+    return;
+  }
+  const nv = confirm(
+    `Creare una NUOVA VERSIONE (bozza, in attesa di approvazione)?\n\n` +
+    `La versione attuale ${currentQuote.number} diventa "Sostituita" (storico). ` +
+    `Il Job resta attivo; all'approvazione della nuova versione userai migrate-job ` +
+    `per propagarla.`
+  );
+  if (!nv) return;
+  try {
+    const fd = new FormData(); fd.append('supersede_parent', 'true');
+    const r = await api('POST', `/quotes/api/${currentQuoteId}/new-version`, fd);
+    toast(`Nuova versione ${r.number} (v${r.version}) creata — la precedente è ora storico.`, 'success', 5000);
+    openEditor(r.id);
+  } catch(e) { toast(e.message || 'Errore creazione versione', 'error'); }
 }
 
 async function approveAndCreateJob() {

@@ -8,7 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.176** — 2 giugno 2026 — Picker/template su quote immutabile → warning nuova versione
+**v3.5.0-alpha.172.178** — 2 giugno 2026 — Reject quote approvata+job: prompt progetto-perso / nuova-versione
+
+### α.172.177-178 ✅ (immutabilità quote: drag&drop, revert, reject lifecycle)
+- **.177**: guard drag&drop listino (prima 409 secco) + revert visivo su annulla in saveLineField/Discount/optional/section (reloadQuote).
+- **.178**: reject di quote approved+job → prompt 3-vie. **Progetto perso** (mode=lost): chiude job+acconti pending, BLOCCA 409 se fatturato/pagato/lavorato. **Nuova versione**: v2 draft + v1 superseded (new-version supersede_parent). Serializer +has_job/is_phantom/parent_quote_id. +2 test (**319**). Restart :9000 per backend.
+
+### α.172.176 — 2 giugno 2026 — Picker/template su quote immutabile → warning nuova versione
 
 ### α.172.176 ✅ (guard add-voci su quote approvata)
 `_ensureEditableQuoteOrVersion` cablato su `openBucketPicker` + `openLoadFromTemplate` (prima solo add/edit voce singola). Guard generico: approved+rejected (no Consuntivi phantom), messaggio dinamico, su conferma crea+carica nuova versione. Solo template. Smoke browser ok (warning, no apertura). 317 test.

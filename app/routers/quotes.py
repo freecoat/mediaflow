@@ -1041,6 +1041,11 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
         "fx_rate_to_base": getattr(q, "fx_rate_to_base", 1.0),
         "fx_rate_fixed_at": q.fx_rate_fixed_at.isoformat() if getattr(q, "fx_rate_fixed_at", None) else None,
         "currency_block": _currency_block_for_quote(db, q),
+        # v3.5.0-alpha.172.178 — flag per il guard immutabilità + prompt reject:
+        # has_job (3-vie su reject), is_phantom (Consuntivi editabili), parent.
+        "has_job": q.job is not None,
+        "is_phantom": getattr(q, "is_phantom", False),
+        "parent_quote_id": q.parent_quote_id,
         # v3.5.0-alpha.139 — Termini di acconto definiti in quote
         "advance_schedules": _get_schedules_serialized(db, q.id),
         "generated_from_deliverables": q.generated_from_deliverables,
@@ -1077,7 +1082,12 @@ async def get_quote(quote_id: int, db: Session = Depends(get_db)):
 
 @router.put("/api/{quote_id}/status", dependencies=[RequireEditQuotes])
 async def update_quote_status(
-    quote_id: int, status: QuoteStatus = Form(...), db: Session = Depends(get_db),
+    quote_id: int, status: QuoteStatus = Form(...),
+    # v3.5.0-alpha.172.178 — reject di quote approvata con job: mode="lost"
+    # (progetto perso) chiede pulizia guardata; senza mode resta il comportamento
+    # legacy (annulla job se vuoto, altrimenti 400).
+    mode: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
 ):
     """Aggiorna lo stato della quote.
 
@@ -1167,15 +1177,60 @@ async def update_quote_status(
         except Exception as e:
             print(f"[quote-approve] notify no_resources failed: {e}")
     elif prev == QuoteStatus.approved and new != QuoteStatus.approved and q.job:
-        # Disapprovazione: cancella il job se senza attività, altrimenti blocca
-        if _job_has_activity(db, q.job):
-            raise HTTPException(
-                400,
-                f"Impossibile riportare la quote a '{new.value}': il job {q.job.code} "
-                "ha attività (booking o timbrature). Cancella prima le attività."
-            )
-        cancelled_job_id = q.job.id
-        q.job.status = JobStatus.cancelled
+        if mode == "lost":
+            # v3.5.0-alpha.172.178 — "Progetto perso": chiude job + annulla acconti
+            # pending, MA blocca se c'è qualcosa di fatturato/pagato o lavoro svolto
+            # (richiede prima note di credito / storni — scelta Matteo).
+            from app.models import AdvancePayment, Invoice, JCLBilledSlice
+            blockers = []
+            if _job_has_activity(db, q.job):
+                blockers.append("booking o timbrature presenti")
+            inv_billed = db.query(AdvancePayment).filter(
+                AdvancePayment.project_id == q.project_id,
+                (AdvancePayment.invoice_id.isnot(None)) |
+                (AdvancePayment.status.in_(["invoiced", "paid", "consumed"])),
+            ).first()
+            if inv_billed:
+                blockers.append("acconti già fatturati/pagati")
+            real_inv = db.query(Invoice).filter(
+                Invoice.project_id == q.project_id,
+                Invoice.status != "cancelled",
+            ).first()
+            if real_inv:
+                blockers.append(f"fatture emesse (es. {real_inv.number})")
+            jcl_ids = [cl.id for cl in q.job.cost_lines]
+            if jcl_ids:
+                slice_billed = db.query(JCLBilledSlice).filter(
+                    JCLBilledSlice.job_cost_line_id.in_(jcl_ids),
+                    JCLBilledSlice.voided_at.is_(None),
+                ).first()
+                if slice_billed:
+                    blockers.append("righe di costo già fatturate (slice)")
+            if blockers:
+                raise HTTPException(
+                    409,
+                    "Impossibile segnare 'progetto perso': " + "; ".join(blockers) +
+                    ". Gestisci prima (note di credito sugli acconti / storno booking), "
+                    "poi riprova."
+                )
+            # Pulito: annulla acconti pending + cancella job.
+            for adv in db.query(AdvancePayment).filter(
+                AdvancePayment.project_id == q.project_id,
+                AdvancePayment.status.in_(["pending", "draft", "confirmed", "open"]),
+            ).all():
+                adv.status = "cancelled"
+            cancelled_job_id = q.job.id
+            q.job.status = JobStatus.cancelled
+        else:
+            # Legacy: cancella il job se senza attività, altrimenti blocca.
+            if _job_has_activity(db, q.job):
+                raise HTTPException(
+                    400,
+                    f"Impossibile riportare la quote a '{new.value}': il job {q.job.code} "
+                    "ha attività (booking o timbrature). Cancella prima le attività."
+                )
+            cancelled_job_id = q.job.id
+            q.job.status = JobStatus.cancelled
 
     q.status = new
     db.commit()
@@ -3207,6 +3262,9 @@ async def move_quote_to_project(
 async def new_version_quote(
     quote_id: int,
     request: Request,
+    # v3.5.0-alpha.172.178 — se true, marca la quote sorgente come "superseded"
+    # (usato dal flusso reject→"nuova versione in attesa": v1 → storico).
+    supersede_parent: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     """Crea una nuova versione della quote (parent_quote_id valorizzato).
@@ -3270,6 +3328,13 @@ async def new_version_quote(
     db.flush()
 
     _recalc_quote(new_q)
+    # v3.5.0-alpha.172.178 — flusso reject→nuova versione: la sorgente diventa
+    # storico (superseded) puntando alla nuova versione.
+    superseded_src = False
+    if supersede_parent and src.status != QuoteStatus.superseded:
+        src.status = QuoteStatus.superseded
+        src.superseded_by_id = new_q.id
+        superseded_src = True
     db.commit()
     db.refresh(new_q)
     return {
@@ -3277,6 +3342,7 @@ async def new_version_quote(
         "number": new_q.number,
         "version": new_q.version,
         "parent_quote_id": new_q.parent_quote_id,
+        "superseded_parent": superseded_src,
         "title": new_q.title,
         "lines_count": len(new_lines),
         "kind": "version",

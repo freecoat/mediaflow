@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.178 — Reject quote approvata con job: prompt progetto-perso / nuova-versione (2 giu 2026)
+
+Richiesta Matteo (punto 3): rifiutare una quote approvata con Job collegato deve offrire una scelta, non
+lasciare job/acconti/cost-report appesi.
+- **Prompt 3-vie** su "❌ Rifiutata" se quote `approved` + `has_job` (esclusi Consuntivi phantom):
+  - **Progetto perso** (`mode=lost`): chiude job + annulla acconti *pending* + cost report inattivo.
+    **BLOCCA (409)** se ci sono acconti già fatturati/pagati, fatture emesse, slice fatturate o
+    booking/timbrature svolti → "gestisci prima (note credito / storni)". (scelta Matteo)
+  - **Nuova versione** (in attesa di approvazione): crea v2 draft + **v1 → superseded** (storico);
+    job resta attivo, all'approvazione di v2 si usa migrate-job. (`new-version?supersede_parent=true`)
+- Serializer quote detail: aggiunti `has_job`, `is_phantom`, `parent_quote_id` (is_phantom mancava →
+  il guard α.176 trattava i Consuntivi come non-phantom).
+- **tests/test_reject_lost_mode.py** (+2 → **319**): lost-clean pulisce, lost-con-fatturato → 409.
 ## v3.5.0-alpha.172.177 — Guard drag&drop + revert edit annullato su quote immutabile (2 giu 2026)
 
 Due bug segnalati da Matteo sul guard quote immutabile (α.176):
