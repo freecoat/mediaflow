@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.161** — 1 giugno 2026 — Link deliverable ↔ item capitolato end-to-end
+**v3.5.0-alpha.172.164** — 2 giugno 2026 — Timecode SMPTE corretto + scan color primaries
+
+### α.172.162–164 ✅ (tech specs: aspect/color tendine + TC SMPTE — remote-control Matteo)
+- **.162** aspect_ratio → select (era input libero).
+- **.163** color_space → select + nuovo campo `color_primaries` (gamut CICP). Schema+migrate+backend+2 editor.
+- **.164 TIMECODE**: nuovo `app/services/timecode.py` SMPTE 12M (parse/validate/normalize + TC↔frame con **drop-frame** Heidelberger + coerce). Validazione su PUT template/item (tc_start/program_start/segmenti, fps-aware) → 422 se fuori range + zero-pad auto. `_clean_tc` estrattore scarta TC invalidi. **Fix dati Vision tpl12** (era 59:59:00:00 invalido → 00:59:59:00; black in 00:59:59:00 out 01:00:00:00). **Auto-mask** `.tc-mask`: ":" automatici digitando. **Scan primaries** `scripts/backfill_color_primaries.py`: 122/210 item derivati da color_space/hdr/res, 88 ambigui NULL. **313 test** (+16 TC). Smoke browser ok.
+
+**Prossimo**: Matteo verifica TC Vision in UI + i 4 deliverable GLO da legare a mano (.161). Eventuale: transfer/matrix CICP espliciti (ora transfer da hdr_format). Push quando OK (commit .160→.164 non pushati). Tunnel :9000 live.
+
+### α.172.161 — 1 giugno 2026 — Link deliverable ↔ item capitolato end-to-end
 
 ### α.172.161 ✅ (deliverable ↔ capitolato — remote-control Matteo)
 Due problemi `/planning/?view=deliverables`: (1) deliverable orfani; (2) specs tecniche non visibili/selezionabili. **Causa radice**: catena capitolato→quote→job non persisteva il FK `DeliveryItem` (solo `price_item_id` + `detail` stringa) → `JobDeliverable.delivery_item_id` sempre NULL → modal specs (α.160) cadeva nel JSON vuoto.

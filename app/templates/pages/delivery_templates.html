@@ -779,9 +779,9 @@ async function openDetail(tid) {
         <textarea class="form-input" id="edt-description" rows="2" style="width:100%;font-size:12px;">${escapeHtml(t.description||'')}</textarea></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
         <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">TC Start default</label>
-          <input class="form-input" id="edt-default-tc-start" value="${escapeHtml(t.default_tc_start||'')}" placeholder="es. 00:59:59:00" style="font-family:var(--font-mono);"></div>
+          <input class="form-input tc-mask" id="edt-default-tc-start" value="${escapeHtml(t.default_tc_start||'')}" placeholder="es. 00:59:59:00" style="font-family:var(--font-mono);" maxlength="11" inputmode="numeric"></div>
         <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Program Start default</label>
-          <input class="form-input" id="edt-default-program-start" value="${escapeHtml(t.default_program_start||'')}" placeholder="es. 01:00:00:00" style="font-family:var(--font-mono);"></div>
+          <input class="form-input tc-mask" id="edt-default-program-start" value="${escapeHtml(t.default_program_start||'')}" placeholder="es. 01:00:00:00" style="font-family:var(--font-mono);" maxlength="11" inputmode="numeric"></div>
       </div>
       <div style="margin-top:8px;">
         <label id="edt-tl-label" style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;">Timeline default (testa/coda) — ereditata dagli item</label>
@@ -1001,6 +1001,28 @@ function renderItemsPane(pane, tid) {
   pane.appendChild(list);
 }
 
+// ── Auto-format SMPTE timecode (v3.5.0-alpha.172.164) ─────────────────────
+// Inserisce automaticamente i ":" mentre si digita → HH:MM:SS:FF. Solo cifre
+// significative (max 8). Listener delegato: vale anche per input creati a runtime
+// (item editor, segmenti) che hanno classe .tc-mask.
+function _fmtTcInput(raw) {
+  const d = String(raw || '').replace(/\D/g, '').slice(0, 8);
+  const parts = [];
+  for (let i = 0; i < d.length; i += 2) parts.push(d.slice(i, i + 2));
+  return parts.join(':');
+}
+if (!window._tcMaskBound) {
+  window._tcMaskBound = true;
+  document.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('tc-mask')) {
+      const atEnd = t.selectionStart === t.value.length;
+      t.value = _fmtTcInput(t.value);
+      if (atEnd) { try { t.setSelectionRange(t.value.length, t.value.length); } catch(_) {} }
+    }
+  });
+}
+
 // ── Timeline segments helpers (v3.5.0-alpha.172.128) ──────────────────────
 // α.172.132 — Editor segmenti timeline RIUSABILE (instance-based). Usato sia
 // dall'item editor (#item-timeline-segments) sia dal template editor
@@ -1052,8 +1074,8 @@ function makeTimelineSegmentEditor(container, initialSegs, opts) {
       d.style.cssText = 'display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;align-items:center;';
       d.innerHTML = `<select class="tl-kind" style="font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 4px;"${dis}>${kindOpts}</select>`
         + `<input class="tl-label" value="${escapeHtml(s.label||'')}" placeholder="label" style="width:80px;font-size:12px;"${dis}>`
-        + `<input class="tl-tcin"  value="${escapeHtml(s.tc_in||'')}" placeholder="tc in" style="width:90px;font-size:12px;"${dis}>`
-        + `<input class="tl-tcout" value="${escapeHtml(s.tc_out||'')}" placeholder="tc out" style="width:90px;font-size:12px;"${dis}>`
+        + `<input class="tl-tcin tc-mask"  value="${escapeHtml(s.tc_in||'')}" placeholder="tc in" style="width:90px;font-size:12px;" maxlength="11" inputmode="numeric"${dis}>`
+        + `<input class="tl-tcout tc-mask" value="${escapeHtml(s.tc_out||'')}" placeholder="tc out" style="width:90px;font-size:12px;" maxlength="11" inputmode="numeric"${dis}>`
         + `<input class="tl-reel"  value="${escapeHtml(s.reel||'')}" placeholder="reel" style="width:56px;font-size:12px;"${dis}>`
         + `<input class="tl-source" value="${escapeHtml(s.source||'')}" placeholder="source" style="width:80px;font-size:12px;"${dis}>`;
       if (!readOnly) {
@@ -1236,12 +1258,12 @@ async function openItemEditor(item, tid) {
   tlGrid.innerHTML = `
     <div>
       <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">TC Start</label>
-      <input class="form-input" id="item-tc-start" value="${escapeHtml(v.tc_start||'')}" placeholder="es. 00:59:59:00">
+      <input class="form-input tc-mask" id="item-tc-start" value="${escapeHtml(v.tc_start||'')}" placeholder="es. 00:59:59:00" maxlength="11" inputmode="numeric">
       <span id="item-tc-start-inh" style="font-size:11px;color:var(--text3);">${escapeHtml(tcInhText)}</span>
     </div>
     <div>
       <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Program Start</label>
-      <input class="form-input" id="item-program-start" value="${escapeHtml(v.program_start||'')}" placeholder="es. 01:00:00:00">
+      <input class="form-input tc-mask" id="item-program-start" value="${escapeHtml(v.program_start||'')}" placeholder="es. 01:00:00:00" maxlength="11" inputmode="numeric">
     </div>
   `;
   tlSec.appendChild(tlGrid);

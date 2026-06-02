@@ -1,5 +1,29 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.164 — Timecode SMPTE corretto + scan color primaries (2 giu 2026)
+
+**Timecode**: il template Vision aveva `default_tc_start` e segmento "Nero pre-programma" corrotti
+(`59:59:00:00` / `59:59:01:00`, HH=59 invalido) — prodotti dall'estrazione AI del capitolato e mai
+validati. Nessun modulo TC esisteva nel backend.
+- **Nuovo `app/services/timecode.py`** (SMPTE 12M): parse/validate/normalize + conversione TC↔frame
+  con **drop-frame** corretto (algoritmo Heidelberger, 29.97/59.94 fps), add_frames, coerce per i router.
+  16 test (`tests/test_timecode.py`) inclusi i casi drop-frame (00:00:59;29 +1 → 00:01:00;02; minuto
+  ÷10 senza salto; accuratezza 1h DF).
+- **Validazione su save**: `PUT /delivery-templates/{id}` e `PUT /delivery-items/{id}` validano/normalizzano
+  `tc_start`/`program_start` + `tc_in`/`tc_out` di ogni segmento (fps-aware dal frame_rate dell'item).
+  TC fuori range → **422**; zero-padding automatico (`1:2:3:4` → `01:02:03:04`). `_clean_tc`
+  dell'estrattore capitolati ora scarta i TC fuori range invece di salvarli.
+- **Fix dati Vision** (tpl 12): `default_tc_start`=`00:59:59:00`, black `Nero pre-programma`
+  in=`00:59:59:00` out=`01:00:00:00`, program `01:00:00:00`.
+- **Auto-format input** (`.tc-mask`): i `:` si inseriscono da soli digitando (HH:MM:SS:FF) su tutti i
+  campi TC dell'editor capitolato (default + item + segmenti). Solo cifre, max 8.
+
+**Color primaries**: `scripts/backfill_color_primaries.py` (idempotente) deriva `color_primaries`
+dai dati colore già estratti dai capitolati (color_space + hdr_format + risoluzione). 122/210
+DeliveryItem popolati (BT.709/BT.2020/DCI-P3/XYZ…), 88 ambigui (audio/sidecar) lasciati NULL.
+
+**313/313** test (+16). Smoke browser: validazione 422/normalizzazione + auto-mask, 0 errori console.
+
 ## v3.5.0-alpha.172.163 — Color space a tendina + color primaries (2 giu 2026)
 
 `color_space` nelle tech specs → da input libero a **select** (Rec.709/Rec.2020[/PQ/HLG]/DCI-P3[/D65]/

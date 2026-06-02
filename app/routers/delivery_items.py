@@ -296,18 +296,36 @@ async def update_item(
     if sort_order is not None:               it.sort_order = sort_order
 
     # timeline + audio-config (v3.5.0-alpha.172.127)
-    if tc_start is not None:
-        it.tc_start = tc_start.strip() or None
-    if program_start is not None:
-        it.program_start = program_start.strip() or None
+    # α.172.164 — validazione/normalizzazione SMPTE TC (fps-aware dal frame_rate).
+    from app.services.timecode import coerce_tc as _tc
+    from app.models.models import FrameRate as _FR
+    _fr = db.get(_FR, it.frame_rate_id) if it.frame_rate_id else None
+    _fps = _fr.fps if _fr else None
+    _drop = bool(_fr.is_drop_frame) if _fr else None
+    try:
+        if tc_start is not None:
+            it.tc_start = _tc(tc_start, fps=_fps, drop=_drop, field="tc_start")
+        if program_start is not None:
+            it.program_start = _tc(program_start, fps=_fps, drop=_drop, field="program_start")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     if timeline_segments_json is not None:
         try:
             v = json.loads(timeline_segments_json) if timeline_segments_json.strip() else []
             if not isinstance(v, list):
                 raise ValueError("must be list")
-            it.timeline_segments = v
         except (json.JSONDecodeError, ValueError) as e:
             raise HTTPException(400, f"timeline_segments_json invalido: {e}")
+        # Normalizza/valida tc_in/tc_out di ogni segmento.
+        try:
+            for seg in v:
+                if not isinstance(seg, dict):
+                    continue
+                seg["tc_in"] = _tc(seg.get("tc_in"), fps=_fps, drop=_drop, field="tc_in")
+                seg["tc_out"] = _tc(seg.get("tc_out"), fps=_fps, drop=_drop, field="tc_out")
+        except ValueError as e:
+            raise HTTPException(422, f"timeline segment {e}")
+        it.timeline_segments = v
     if audio_config_preset_id is not None:
         pid = int(audio_config_preset_id) if str(audio_config_preset_id).strip() else None
         if pid:

@@ -878,12 +878,27 @@ async def update_template(
     if metadata_requirements is not None: t.metadata_requirements = _parse_dict(metadata_requirements)
     if suggested_items is not None: t.suggested_items = _parse_list(suggested_items)
     if is_active is not None: t.is_active = is_active
-    # v3.5.0-alpha.172.128
-    if default_tc_start is not None: t.default_tc_start = default_tc_start.strip() or None
-    if default_program_start is not None: t.default_program_start = default_program_start.strip() or None
+    # v3.5.0-alpha.172.128 — TC defaults (α.172.164: validazione SMPTE strutturale;
+    # fps ignoto a livello template → range HH 00-23, MM/SS 00-59, FF 00-29).
+    from app.services.timecode import coerce_tc as _tc
+    try:
+        if default_tc_start is not None:
+            t.default_tc_start = _tc(default_tc_start, field="default_tc_start")
+        if default_program_start is not None:
+            t.default_program_start = _tc(default_program_start, field="default_program_start")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     # v3.5.0-alpha.172.132 — timeline default (lista segmenti, stessa shape di item.timeline_segments)
     if default_timeline_segments is not None:
         v = _parse_list(default_timeline_segments)
+        try:
+            for seg in (v or []):
+                if not isinstance(seg, dict):
+                    continue
+                seg["tc_in"] = _tc(seg.get("tc_in"), field="tc_in")
+                seg["tc_out"] = _tc(seg.get("tc_out"), field="tc_out")
+        except ValueError as e:
+            raise HTTPException(422, f"timeline segment {e}")
         t.default_timeline_segments = v if v else None
     db.commit()
     db.refresh(t)

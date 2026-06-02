@@ -198,11 +198,21 @@ _TC_RE = _re.compile(r"\b(\d{1,2}:\d{2}:\d{2}[:;.]\d{2})\b")
 
 
 def _clean_tc(raw):
-    """Estrae un TC ben formato HH:MM:SS:FF dalla stringa grezza. Prosa/None → None."""
+    """Estrae un TC ben formato HH:MM:SS:FF dalla stringa grezza. Prosa/None → None.
+
+    α.172.164 — valida anche i RANGE (HH 00-23, MM/SS 00-59, FF 00-29) e normalizza
+    lo zero-padding: un candidato fuori range (es. l'AI emette '59:59:00:00') viene
+    scartato invece di essere salvato come spec corrotta."""
     if not raw:
         return None
     m = _TC_RE.search(str(raw))
-    return m.group(1) if m else None
+    if not m:
+        return None
+    from app.services.timecode import normalize_tc
+    try:
+        return normalize_tc(m.group(1))  # fps ignoto → range strutturali
+    except ValueError:
+        return None
 
 
 def apply_head_specs(db: Session, template_id: int, parsed: dict, tenant_id: int) -> dict:
@@ -227,6 +237,19 @@ def apply_head_specs(db: Session, template_id: int, parsed: dict, tenant_id: int
         tpl.default_program_start = pg
         pg_set = True
     if segs:
+        # α.172.164 — scarta TC segmento fuori range invece di salvarli corrotti.
+        from app.services.timecode import normalize_tc
+        def _seg_tc(x):
+            if not x:
+                return None
+            try:
+                return normalize_tc(str(x))
+            except ValueError:
+                return None
+        for s in segs:
+            if isinstance(s, dict):
+                s["tc_in"] = _seg_tc(s.get("tc_in"))
+                s["tc_out"] = _seg_tc(s.get("tc_out"))
         tpl.default_timeline_segments = segs
 
     created = updated = 0
