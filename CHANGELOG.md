@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.167 — Mobile Fase B: consultazione business (2 giu 2026)
+
+Espansione /m da "punch app" a companion business. Nuove schermate (read-only, dati via fetch dagli
+endpoint JSON desktop esistenti — niente nuovo backend dati):
+- **Progetti** `/m/progetti` (lista: search + chip stato) → **detail** `/m/progetti/{id}` (anagrafica,
+  cliente link, quotazioni, job).
+- **Clienti** `/m/clienti` (lista: search) → **detail** `/m/clienti/{id}` (contatti tap-to-call/mailto,
+  dati fiscali, progetti).
+- **Finance** `/m/finance` (read-only): KPI portfolio (quotato/maturato/fatturato/margine) + lista job
+  con quotato/maturato, da `/cost-report/api/list`.
+- **Cerca** `/m/cerca`: ricerca globale live su progetti + clienti, risultati raggruppati.
+- **Oggi**: tile di navigazione business. **Drawer**: gruppo "Business" + icona 🔍 in topbar.
+- Helper compatti in `mobile.js` (`mListRow`/`mField`/`mCard`/`mKpi`/`mStatusBadge`/`mMoney`/`mLucide`),
+  CSS dedicato (list-row, field, search, chips, nav-grid, kpi). Tutto via textContent (no XSS).
+- Editing pesante resta su desktop. **313 test**. Smoke browser (viewport 390px): tutte le schermate
+  caricano dati, 0 errori console. Fix: client object → nome nel detail progetto.
+
 ## v3.5.0-alpha.172.166 — Forza vista mobile (auto-redirect a /m) (2 giu 2026)
 
 Da smartphone, aprendo una pagina desktop (senza `/m`) si viene dirottati alla PWA mobile `/m`.

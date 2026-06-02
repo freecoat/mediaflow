@@ -13,6 +13,7 @@
   <header class="m-top">
     <button class="m-top-burger" aria-label="Menu" onclick="mDrawerToggle()"><i data-lucide="menu"></i></button>
     <span class="m-top-title">{% block topbar %}Claqo{% endblock %}</span>
+    <a class="m-top-action" href="/m/cerca" aria-label="Cerca"><i data-lucide="search"></i></a>
     <a class="m-top-action" href="/m/notifiche" aria-label="Notifiche"><i data-lucide="bell"></i></a>
   </header>
 
@@ -29,6 +30,11 @@
       <a href="/m/timbra"        class="m-drawer-item {% if active=='timbra' %}active{% endif %}"><i data-lucide="clock"></i>Timbratura</a>
       <a href="/m/ferie"         class="m-drawer-item {% if active=='ferie' %}active{% endif %}"><i data-lucide="palmtree"></i>Ferie</a>
       <a href="/m/notifiche"     class="m-drawer-item {% if active=='notifiche' %}active{% endif %}"><i data-lucide="bell"></i>Notifiche</a>
+      <div class="m-drawer-group">Business</div>
+      <a href="/m/progetti"      class="m-drawer-item {% if active=='progetti' %}active{% endif %}"><i data-lucide="folder-kanban"></i>Progetti</a>
+      <a href="/m/clienti"       class="m-drawer-item {% if active=='clienti' %}active{% endif %}"><i data-lucide="building-2"></i>Clienti</a>
+      <a href="/m/finance"       class="m-drawer-item {% if active=='finance' %}active{% endif %}"><i data-lucide="wallet"></i>Finance</a>
+      <a href="/m/cerca"         class="m-drawer-item {% if active=='cerca' %}active{% endif %}"><i data-lucide="search"></i>Cerca</a>
     </nav>
     <a class="m-drawer-item" href="/prefer-desktop?next=/dashboard"><i data-lucide="monitor"></i>Versione desktop</a>
     <a class="m-drawer-logout" href="/auth/logout"><i data-lucide="log-out"></i>Esci</a>

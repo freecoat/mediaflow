@@ -1,0 +1,69 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Cliente — Claqo{% endblock %}
+{% block topbar %}Cliente{% endblock %}
+{% block content %}
+  <a href="/m/clienti" class="m-btn m-btn-ghost" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;"><i data-lucide="chevron-left"></i> Clienti</a>
+  <div id="m-cld-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ID = {{ entity_id }};
+
+  function linkVal(href, text) {
+    if (!text) return "—";
+    var a = document.createElement("a"); a.href = href; a.textContent = text; return a;
+  }
+
+  async function load() {
+    var root = document.getElementById("m-cld-root"); mClear(root);
+    var c;
+    try { c = await mapi("GET", "/clients/api/" + ID); }
+    catch (e) { mError(root, "Cliente non trovato."); return; }
+
+    document.querySelector(".m-top-title").textContent = c.name || "Cliente";
+
+    var head = mCard(null);
+    var t = mEl("div", "m-card-title"); t.textContent = c.name || "—"; head.appendChild(t);
+    if (c.industry || c.city) {
+      var s = mEl("div", "m-list-sub"); s.textContent = [c.city, c.industry].filter(Boolean).join(" · "); head.appendChild(s);
+    }
+    root.appendChild(head);
+
+    // Contatti (tap-to-call / email)
+    var ct = mCard("Contatti", "phone");
+    if (c.contact_name) ct.appendChild(mField("Referente", [c.contact_name, c.contact_role].filter(Boolean).join(" · ")));
+    ct.appendChild(mField("Telefono", c.contact_phone ? linkVal("tel:" + c.contact_phone, c.contact_phone) : "—"));
+    ct.appendChild(mField("Email", c.contact_email ? linkVal("mailto:" + c.contact_email, c.contact_email) : "—"));
+    if (c.website) ct.appendChild(mField("Sito", linkVal((c.website.indexOf("http") === 0 ? "" : "https://") + c.website, c.website)));
+    root.appendChild(ct);
+
+    // Fiscale
+    if (c.vat_number || c.tax_code || c.sdi_code) {
+      var fc = mCard("Dati fiscali", "file-badge");
+      fc.appendChild(mField("P.IVA", c.vat_number));
+      if (c.tax_code) fc.appendChild(mField("Cod. fiscale", c.tax_code));
+      if (c.sdi_code) fc.appendChild(mField("SDI", c.sdi_code));
+      if (c.pec) fc.appendChild(mField("PEC", c.pec));
+      root.appendChild(fc);
+    }
+
+    // Progetti
+    var projs = c.projects || [];
+    var pc = mCard("Progetti (" + projs.length + ")", "folder-kanban");
+    if (!projs.length) pc.appendChild(mEmpty("Nessun progetto."));
+    else projs.forEach(function (p) {
+      var sb = mStatusBadge(p.status);
+      pc.appendChild(mListRow("/m/progetti/" + p.id, p.title || p.code, p.code, sb.text, sb.cls));
+    });
+    root.appendChild(pc);
+
+    mLucide();
+  }
+  load();
+})();
+</script>
+{% endblock %}

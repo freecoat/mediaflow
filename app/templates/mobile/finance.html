@@ -1,0 +1,70 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Finance — Claqo{% endblock %}
+{% block topbar %}Finance{% endblock %}
+{% block content %}
+  <div class="m-search">
+    <i data-lucide="search"></i>
+    <input id="m-fi-q" type="search" placeholder="Cerca job, cliente…" autocomplete="off">
+  </div>
+  <div id="m-fi-kpi"></div>
+  <div class="m-section-head"><strong>Job</strong><span class="m-count" id="m-fi-count"></span></div>
+  <div id="m-fi-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ALL = [], q = "";
+
+  function kpi(label, val, cls) {
+    var k = mEl("div", "m-kpi");
+    var l = mEl("div", "m-kpi-label"); l.textContent = label; k.appendChild(l);
+    var v = mEl("div", "m-kpi-val" + (cls ? " " + cls : "")); v.textContent = val; k.appendChild(v);
+    return k;
+  }
+  function renderKpi() {
+    var box = document.getElementById("m-fi-kpi"); mClear(box);
+    var grid = mEl("div", "m-kpi-grid");
+    var quoted = 0, accrued = 0, billed = 0, costAccr = 0;
+    ALL.forEach(function (j) {
+      quoted += j.total_quoted_base || j.total_quoted || 0;
+      accrued += j.total_accrued_base || j.total_accrued || 0;
+      billed += j.billed_total || 0;
+      costAccr += j.total_cost_accrued || 0;
+    });
+    var margin = accrued - costAccr;
+    grid.appendChild(kpi("Quotato", mMoney(quoted)));
+    grid.appendChild(kpi("Maturato", mMoney(accrued)));
+    grid.appendChild(kpi("Fatturato", mMoney(billed)));
+    grid.appendChild(kpi("Margine", mMoney(margin), margin >= 0 ? "pos" : "neg"));
+    box.appendChild(grid);
+  }
+  function match(j) {
+    if (!q) return true;
+    return [j.code, j.title, j.client, j.quote_number].join(" ").toLowerCase().indexOf(q) !== -1;
+  }
+  function render() {
+    var root = document.getElementById("m-fi-root"); mClear(root);
+    var rows = ALL.filter(match);
+    document.getElementById("m-fi-count").textContent = rows.length + " / " + ALL.length;
+    if (!rows.length) { root.appendChild(mEmpty("Nessun job.")); return; }
+    rows.forEach(function (j) {
+      var sub = [j.client, "Quotato " + mMoney(j.total_quoted_base || j.total_quoted)].filter(Boolean).join(" · ");
+      var row = mListRow("/m/finance#" + j.id, j.title || j.code, sub,
+        mMoney(j.total_accrued_base || j.total_accrued), "m-badge-accent");
+      root.appendChild(row);
+    });
+    mLucide();
+  }
+  async function load() {
+    try { ALL = await mapi("GET", "/cost-report/api/list"); }
+    catch (e) { mError(document.getElementById("m-fi-root")); return; }
+    renderKpi(); render();
+  }
+  document.getElementById("m-fi-q").addEventListener("input", function (e) { q = (e.target.value || "").toLowerCase().trim(); render(); });
+  load();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Progetti — Claqo{% endblock %}
+{% block topbar %}Progetti{% endblock %}
+{% block content %}
+  <div class="m-search">
+    <i data-lucide="search"></i>
+    <input id="m-pj-q" type="search" placeholder="Cerca progetto, codice, cliente…" autocomplete="off">
+  </div>
+  <div class="m-chips" id="m-pj-chips"></div>
+  <div id="m-pj-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ALL = [], q = "", status = "";
+  var STATUSES = ["", "in_progress", "completed", "draft", "cancelled"];
+  var LABELS = { "": "Tutti", in_progress: "In corso", completed: "Completati", draft: "Bozza", cancelled: "Annullati" };
+
+  function chips() {
+    var box = document.getElementById("m-pj-chips"); mClear(box);
+    STATUSES.forEach(function (s) {
+      var c = mEl("div", "m-chip" + (s === status ? " active" : ""));
+      c.textContent = LABELS[s] || s;
+      c.onclick = function () { status = s; render(); chips(); };
+      box.appendChild(c);
+    });
+  }
+  function match(p) {
+    if (status && (p.status || "").toLowerCase() !== status) return false;
+    if (!q) return true;
+    var hay = [p.code, p.title, p.client_name].join(" ").toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
+  function render() {
+    var root = document.getElementById("m-pj-root"); mClear(root);
+    var rows = ALL.filter(match);
+    if (!rows.length) { root.appendChild(mEmpty("Nessun progetto.")); return; }
+    rows.forEach(function (p) {
+      var sub = [p.code, p.client_name].filter(Boolean).join(" · ");
+      var sb = mStatusBadge(p.status);
+      root.appendChild(mListRow("/m/progetti/" + p.id, p.title, sub, sb.text, sb.cls));
+    });
+    mLucide();
+  }
+  async function load() {
+    try { ALL = await mapi("GET", "/projects/api"); }
+    catch (e) { mError(document.getElementById("m-pj-root")); return; }
+    chips(); render();
+  }
+  document.getElementById("m-pj-q").addEventListener("input", function (e) { q = (e.target.value || "").toLowerCase().trim(); render(); });
+  load();
+})();
+</script>
+{% endblock %}

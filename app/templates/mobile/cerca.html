@@ -1,0 +1,61 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Cerca — Claqo{% endblock %}
+{% block topbar %}Cerca{% endblock %}
+{% block content %}
+  <div class="m-search">
+    <i data-lucide="search"></i>
+    <input id="m-se-q" type="search" placeholder="Cerca progetti, clienti…" autocomplete="off" autofocus>
+  </div>
+  <div id="m-se-root" class="m-section"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var PROJ = [], CLI = [], ready = false, q = "";
+
+  function section(title, icon, count) {
+    var head = mEl("div", "m-section-head");
+    var s = document.createElement("strong");
+    s.appendChild(mIcon(icon)); s.appendChild(document.createTextNode(" " + title));
+    head.appendChild(s);
+    var c = mEl("span", "m-count"); c.textContent = String(count); head.appendChild(c);
+    return head;
+  }
+  function render() {
+    var root = document.getElementById("m-se-root"); mClear(root);
+    if (!ready) { root.appendChild(mEmpty("Caricamento…")); return; }
+    if (!q) { root.appendChild(mEmpty("Digita per cercare progetti e clienti.")); return; }
+
+    var pj = PROJ.filter(function (p) { return [p.code, p.title, p.client_name].join(" ").toLowerCase().indexOf(q) !== -1; }).slice(0, 20);
+    var cl = CLI.filter(function (c) { return [c.name, c.city, c.industry].join(" ").toLowerCase().indexOf(q) !== -1; }).slice(0, 20);
+
+    if (!pj.length && !cl.length) { root.appendChild(mEmpty("Nessun risultato per “" + q + "”.")); return; }
+
+    if (pj.length) {
+      root.appendChild(section("Progetti", "folder-kanban", pj.length));
+      pj.forEach(function (p) {
+        var sb = mStatusBadge(p.status);
+        root.appendChild(mListRow("/m/progetti/" + p.id, p.title, [p.code, p.client_name].filter(Boolean).join(" · "), sb.text, sb.cls));
+      });
+    }
+    if (cl.length) {
+      root.appendChild(section("Clienti", "building-2", cl.length));
+      cl.forEach(function (c) {
+        root.appendChild(mListRow("/m/clienti/" + c.id, c.name, [c.city, c.industry].filter(Boolean).join(" · "), null, null));
+      });
+    }
+    mLucide();
+  }
+  async function load() {
+    try {
+      var res = await Promise.all([mapi("GET", "/projects/api"), mapi("GET", "/clients/api")]);
+      PROJ = res[0] || []; CLI = res[1] || []; ready = true;
+    } catch (e) { ready = true; }
+    render();
+  }
+  document.getElementById("m-se-q").addEventListener("input", function (e) { q = (e.target.value || "").toLowerCase().trim(); render(); });
+  render(); load();
+})();
+</script>
+{% endblock %}

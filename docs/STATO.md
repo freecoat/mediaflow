@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.164** — 2 giugno 2026 — Timecode SMPTE corretto + scan color primaries
+**v3.5.0-alpha.172.167** — 2 giugno 2026 — Mobile Fase B (consultazione business) + audit + mobile force-view
+
+### α.172.165–167 ✅ (audit capitolati + force mobile + mobile Fase B)
+- **.165** `scripts/audit_capitolati.py` read-only (TC/FK/enum/colore/segmenti). Fix Fremantle TC. 12 item UHD Rec.2020 PQ+SDR lasciati (RAI inaffidabile, scelta Matteo).
+- **.166** middleware `mobile_force_view`: UA smartphone → 302 /m (escape cookie `prefer_desktop`, link drawer + `/prefer-desktop`/`/prefer-mobile`).
+- **.167 MOBILE FASE B**: /m da punch-app a companion business. Progetti (list+detail), Clienti (list+detail, tap-to-call), Finance (KPI+job read-only), Cerca globale. Tile su Oggi + gruppo Business drawer + 🔍 topbar. Helper mobile.js + CSS. Dati via fetch endpoint JSON desktop (no nuovo backend). 0 errori console, viewport 390px verificato.
+
+**Prossimo**: Mobile Fase C (azioni: rispondi assegnazioni già c'è; eventuale crea/modifica leggera) + Fase D (copilot/planning lista). Test Matteo da telefono. Push commit .160→.167 quando OK. Tunnel :9000 live (`/m`).
+
+### α.172.164 — 2 giugno 2026 — Timecode SMPTE corretto + scan color primaries
 
 ### α.172.162–164 ✅ (tech specs: aspect/color tendine + TC SMPTE — remote-control Matteo)
 - **.162** aspect_ratio → select (era input libero).

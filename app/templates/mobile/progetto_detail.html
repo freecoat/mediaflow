@@ -1,0 +1,75 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Progetto — Claqo{% endblock %}
+{% block topbar %}Progetto{% endblock %}
+{% block content %}
+  <a href="/m/progetti" class="m-btn m-btn-ghost" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;"><i data-lucide="chevron-left"></i> Progetti</a>
+  <div id="m-pjd-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ID = {{ entity_id }};
+
+  function fmtDate(s) { return s ? new Date(s).toLocaleDateString("it-IT") : "—"; }
+
+  async function load() {
+    var root = document.getElementById("m-pjd-root"); mClear(root);
+    var p;
+    try { p = await mapi("GET", "/projects/api/" + ID); }
+    catch (e) { mError(root, "Progetto non trovato."); return; }
+
+    document.querySelector(".m-top-title").textContent = p.code || "Progetto";
+
+    // Header card
+    var head = mCard(null);
+    var t = mEl("div", "m-card-title"); t.textContent = p.title || "—"; head.appendChild(t);
+    var sb = mStatusBadge(p.status);
+    var badge = mEl("span", "m-badge " + sb.cls); badge.textContent = sb.text;
+    badge.style.marginTop = "6px"; badge.style.display = "inline-block";
+    head.appendChild(badge);
+    root.appendChild(head);
+
+    // Anagrafica
+    var info = mCard("Dettagli", "info");
+    info.appendChild(mField("Codice", p.code));
+    var cliName = (p.client && typeof p.client === "object") ? (p.client.name || "—")
+                  : (p.client || p.client_name || "—");
+    var cliEl;
+    if (p.client_id) { cliEl = document.createElement("a"); cliEl.href = "/m/clienti/" + p.client_id; cliEl.textContent = cliName; }
+    info.appendChild(mField("Cliente", cliEl || cliName));
+    info.appendChild(mField("Tipo", p.project_type));
+    if (p.episodes_count) info.appendChild(mField("Episodi", p.episodes_count));
+    if (p.length_minutes) info.appendChild(mField("Durata", p.length_minutes + " min"));
+    info.appendChild(mField("Regista", p.director));
+    info.appendChild(mField("Consegna", fmtDate(p.delivery_deadline)));
+    root.appendChild(info);
+
+    // Quotazioni
+    var quotes = p.quotes || [];
+    var qc = mCard("Quotazioni (" + quotes.length + ")", "file-text");
+    if (!quotes.length) qc.appendChild(mEmpty("Nessuna quotazione."));
+    else quotes.forEach(function (q) {
+      var sub = [q.number, q.status].filter(Boolean).join(" · ");
+      qc.appendChild(mListRow("#", q.title || q.number || ("#" + q.id), sub,
+        q.total_with_vat != null ? mMoney(q.total_with_vat, q.currency) : null, "m-badge-out"));
+    });
+    root.appendChild(qc);
+
+    // Job → link a finance
+    var jobs = p.jobs || [];
+    var jc = mCard("Job (" + jobs.length + ")", "briefcase");
+    if (!jobs.length) jc.appendChild(mEmpty("Nessun job."));
+    else jobs.forEach(function (j) {
+      jc.appendChild(mListRow("/m/finance", j.title || j.code || ("#" + j.id), j.code, j.status, "m-badge-out"));
+    });
+    root.appendChild(jc);
+
+    mLucide();
+  }
+  load();
+})();
+</script>
+{% endblock %}

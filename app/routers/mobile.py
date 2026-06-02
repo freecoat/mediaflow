@@ -56,3 +56,38 @@ async def m_notifiche(request: Request):
 @router.get("/offline", response_class=HTMLResponse, include_in_schema=False)
 async def m_offline(request: Request):
     return _tpl().TemplateResponse("mobile/offline.html", {"request": request})
+
+
+# ── v3.5.0-alpha.172.167 — Fase B: consultazione business (read-only) ──────
+# Template lean; i dati arrivano via fetch dagli endpoint JSON desktop esistenti
+# (/projects/api, /clients/api, /cost-report/api/list, ...). Editing pesante resta
+# su desktop. Le route detail passano l'id al template per il fetch client-side.
+
+@router.get("/cerca", response_class=HTMLResponse, include_in_schema=False)
+async def m_cerca(request: Request):
+    return _page(request, "cerca", active="cerca")
+
+
+@router.get("/progetti", response_class=HTMLResponse, include_in_schema=False)
+async def m_progetti(request: Request):
+    return _page(request, "progetti", active="progetti")
+
+
+@router.get("/progetti/{project_id}", response_class=HTMLResponse, include_in_schema=False)
+async def m_progetto_detail(request: Request, project_id: int):
+    return _page(request, "progetto_detail", active="progetti", entity_id=project_id)
+
+
+@router.get("/clienti", response_class=HTMLResponse, include_in_schema=False)
+async def m_clienti(request: Request):
+    return _page(request, "clienti", active="clienti")
+
+
+@router.get("/clienti/{client_id}", response_class=HTMLResponse, include_in_schema=False)
+async def m_cliente_detail(request: Request, client_id: int):
+    return _page(request, "cliente_detail", active="clienti", entity_id=client_id)
+
+
+@router.get("/finance", response_class=HTMLResponse, include_in_schema=False)
+async def m_finance(request: Request):
+    return _page(request, "finance", active="finance")

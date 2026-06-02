@@ -1,0 +1,43 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Clienti — Claqo{% endblock %}
+{% block topbar %}Clienti{% endblock %}
+{% block content %}
+  <div class="m-search">
+    <i data-lucide="search"></i>
+    <input id="m-cl-q" type="search" placeholder="Cerca cliente, città, settore…" autocomplete="off">
+  </div>
+  <div id="m-cl-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ALL = [], q = "";
+  function match(c) {
+    if (!q) return true;
+    return [c.name, c.city, c.industry, c.country].join(" ").toLowerCase().indexOf(q) !== -1;
+  }
+  function render() {
+    var root = document.getElementById("m-cl-root"); mClear(root);
+    var rows = ALL.filter(match);
+    if (!rows.length) { root.appendChild(mEmpty("Nessun cliente.")); return; }
+    rows.forEach(function (c) {
+      var sub = [c.city, c.industry].filter(Boolean).join(" · ");
+      var n = c.projects_count;
+      root.appendChild(mListRow("/m/clienti/" + c.id, c.name, sub,
+        (n != null ? n + " prog" : null), "m-badge-accent"));
+    });
+    mLucide();
+  }
+  async function load() {
+    try { ALL = await mapi("GET", "/clients/api"); }
+    catch (e) { mError(document.getElementById("m-cl-root")); return; }
+    render();
+  }
+  document.getElementById("m-cl-q").addEventListener("input", function (e) { q = (e.target.value || "").toLowerCase().trim(); render(); });
+  load();
+})();
+</script>
+{% endblock %}

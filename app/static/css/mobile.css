@@ -963,3 +963,69 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===========================================================================
+   v3.5.0-alpha.172.167 — Schermate business (Progetti/Clienti/Finance/Cerca)
+   =========================================================================== */
+.m-search {
+  display: flex; align-items: center; gap: var(--m-sp-2);
+  background: var(--m-bg3); border: 1px solid var(--m-border);
+  border-radius: var(--m-r-pill); padding: 0 var(--m-sp-3);
+  height: 42px; margin: 0 0 var(--m-sp-3);
+}
+.m-search i[data-lucide] { width: 18px; height: 18px; color: var(--m-muted); flex: 0 0 auto; }
+.m-search input {
+  flex: 1; background: transparent; border: 0; outline: none;
+  color: var(--m-text); font-size: var(--m-fs-body); height: 100%;
+}
+.m-search input::placeholder { color: var(--m-faint); }
+
+.m-chips { display: flex; gap: var(--m-sp-2); overflow-x: auto; padding-bottom: var(--m-sp-2); margin-bottom: var(--m-sp-2); -webkit-overflow-scrolling: touch; }
+.m-chips::-webkit-scrollbar { display: none; }
+.m-chip {
+  flex: 0 0 auto; padding: 6px 14px; border-radius: var(--m-r-pill);
+  background: var(--m-bg3); border: 1px solid var(--m-border);
+  color: var(--m-text-2); font-size: var(--m-fs-cap); font-weight: var(--m-fw-med);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+.m-chip.active { background: var(--m-accent-soft); color: #9ba6f9; border-color: rgba(98,114,245,0.40); }
+
+.m-list-row {
+  display: flex; align-items: center; gap: var(--m-sp-3);
+  background: var(--m-bg2); border: 1px solid var(--m-border);
+  border-radius: var(--m-radius); padding: var(--m-sp-3) var(--m-sp-3);
+  margin-bottom: var(--m-sp-2); text-decoration: none; color: var(--m-text);
+  min-height: var(--m-tap);
+}
+.m-list-row:active { background: var(--m-bg-hi); }
+.m-list-main { flex: 1; min-width: 0; }
+.m-list-title { font-size: var(--m-fs-sub); font-weight: var(--m-fw-semi); color: var(--m-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-list-sub { font-size: var(--m-fs-cap); color: var(--m-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-list-chev { width: 18px; height: 18px; color: var(--m-faint); flex: 0 0 auto; }
+
+.m-field { display: flex; justify-content: space-between; gap: var(--m-sp-3); padding: 9px 0; border-bottom: 1px solid var(--m-border); }
+.m-field:last-child { border-bottom: 0; }
+.m-field-label { font-size: var(--m-fs-cap); color: var(--m-muted); flex: 0 0 40%; }
+.m-field-val { font-size: var(--m-fs-body); color: var(--m-text); text-align: right; flex: 1; min-width: 0; word-break: break-word; }
+.m-field-val a { color: #9ba6f9; text-decoration: none; }
+
+.m-nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--m-sp-3); margin-bottom: var(--m-sp-4); }
+.m-nav-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--m-sp-2);
+  background: var(--m-bg2); border: 1px solid var(--m-border); border-radius: var(--m-radius);
+  padding: var(--m-sp-3); text-decoration: none; color: var(--m-text); min-height: 78px;
+}
+.m-nav-tile:active { background: var(--m-bg-hi); }
+.m-nav-tile i[data-lucide] { width: 22px; height: 22px; color: var(--m-accent); }
+.m-nav-tile-label { font-size: var(--m-fs-body); font-weight: var(--m-fw-semi); }
+.m-nav-tile-sub { font-size: var(--m-fs-micro); color: var(--m-muted); }
+
+.m-kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--m-sp-3); margin-bottom: var(--m-sp-3); }
+.m-kpi { background: var(--m-bg2); border: 1px solid var(--m-border); border-radius: var(--m-radius); padding: var(--m-sp-3); }
+.m-kpi-label { font-size: var(--m-fs-micro); color: var(--m-muted); text-transform: uppercase; letter-spacing: .04em; }
+.m-kpi-val { font-size: var(--m-fs-title); font-weight: var(--m-fw-bold); margin-top: 4px; }
+.m-kpi-val.pos { color: var(--m-success); }
+.m-kpi-val.neg { color: var(--m-danger); }
+
+.m-section-head { display: flex; align-items: baseline; justify-content: space-between; margin: var(--m-sp-2) 0; }
+.m-section-head .m-count { font-size: var(--m-fs-cap); color: var(--m-muted); }
