@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.172** — 2 giugno 2026 — Deploy VPS con Caddy (HTTPS) + cookie Secure
+**v3.5.0-alpha.172.173** — 2 giugno 2026 — Self-host Cloudflare Tunnel + asset metadata-only
+
+### α.172.173 ✅ (self-host on-prem + principio asset)
+`docker-compose.tunnel.yml` (claqo interno + cloudflared named via TUNNEL_TOKEN, no port-forward/CGNAT-ok) + `docs/SELF-HOST.md` (setup, Cloudflare Access, backup offsite). `.env` +TUNNEL_TOKEN. **Principio asset formalizzato**: SaaS = solo metadato+reference; binari sui server tenant (già implementato `fs-scan`/`fs-import` → Asset.file_path reference, no copia). Roadmap MAM/S3. Nessun cambio codice. 313 test.
+
+**3 vie hosting pronte**: A) VPS+Caddy (`docker-compose.prod.yml`) · B) self-host ufficio Cloudflare Tunnel (`docker-compose.tunnel.yml`) · C) semplice/local-docker (`docker-compose.yml`). Tutte SQLite singola istanza. Setup reale (build immagine + tunnel/dominio) da fare sull'host quando Matteo decide.
+
+**Prossimo**: Matteo sceglie ambiente (VPS vs ufficio) e procede al deploy reale; oppure altro lavoro app. Push commit .160→.173 (15) quando OK.
+
+### α.172.172 — 2 giugno 2026 — Deploy VPS con Caddy (HTTPS) + cookie Secure
 
 ### α.172.172 ✅ (deploy VPS HTTPS + hardening cookie)
 `docker-compose.prod.yml` (claqo interno + Caddy 80/443 TLS auto + header sicurezza) + `deploy/Caddyfile` + cookie `secure` condizionale prod (access_token/MFA/portal). DEPLOY.md flow A/B + roadmap. Login dev verificato (303, no-secure). 313 test.

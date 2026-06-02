@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.173 — Self-host Cloudflare Tunnel + principio asset metadata-only (2 giu 2026)
+
+- **`docker-compose.tunnel.yml`**: self-host da ufficio/casa. claqo solo su rete interna +
+  **cloudflared** (named tunnel via `TUNNEL_TOKEN`): connessione uscente verso Cloudflare → niente
+  port-forward, niente IP pubblico, funziona dietro **CGNAT**. HTTPS + hostname gestiti da Cloudflare.
+- **`docs/SELF-HOST.md`**: setup tunnel passo-passo, Cloudflare Access (gate SSO), backup offsite,
+  doppio uso come deployment-per-tenant on-prem per clienti sicurezza.
+- `.env.production.example`: aggiunto `TUNNEL_TOKEN`.
+- **Principio asset formalizzato** (decisione Matteo): il SaaS conserva **solo metadato + riferimento**;
+  i binari restano fisicamente sui server del tenant. Già implementato: `fs-scan` + `fs-import`
+  registrano `Asset.file_path` come reference **senza copiare** (resta sul NAS). Roadmap: integrazione
+  MAM / AWS S3 (vars `AWS_*` già in config) per stream on-demand. Upload diretto resta via secondaria.
+- Nessun cambio codice (solo artefatti deploy + docs). 313 test invariati.
 ## v3.5.0-alpha.172.172 — Deploy VPS con Caddy (HTTPS) + cookie Secure (2 giu 2026)
 
 Rifinitura hosting su SQLite singola istanza (linea confermata: Postgres = milestone con trigger).
