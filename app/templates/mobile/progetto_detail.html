@@ -53,7 +53,7 @@
     if (!quotes.length) qc.appendChild(mEmpty("Nessuna quotazione."));
     else quotes.forEach(function (q) {
       var sub = [q.number, q.status].filter(Boolean).join(" · ");
-      qc.appendChild(mListRow("#", q.title || q.number || ("#" + q.id), sub,
+      qc.appendChild(mListRow("/m/quote/" + q.id, q.title || q.number || ("#" + q.id), sub,
         q.total_with_vat != null ? mMoney(q.total_with_vat, q.currency) : null, "m-badge-out"));
     });
     root.appendChild(qc);

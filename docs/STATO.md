@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.168** — 2 giugno 2026 — Mobile Fase C (crea booking + cost report essenziale)
+**v3.5.0-alpha.172.169** — 2 giugno 2026 — Mobile: Quote + timbra rapida + fix risposta assegnazioni
+
+### α.172.169 ✅ (loop operativo mobile)
+Quotazioni `/m/quote` (list+detail: totali/voci/valuta) + drawer + link da progetto detail. Timbra rapida one-tap ENTRATA/USCITA su Oggi. Fix `my-bookings` ritorna `response_status` (card assegnazioni mostra stato post-reload). 313 test, 0 errori console.
+
+**Prossimo Mobile Fase D**: copilot AI mobile + planning lista settimanale. Backlog mobile: deliverables read-only, cashflow sintetico, DAM+scan QR, ferie richiesta. Push commit .160→.169 quando OK.
+
+### α.172.168 — 2 giugno 2026 — Mobile Fase C (crea booking + cost report essenziale)
 
 ### α.172.168 ✅ (Mobile Fase C — azioni)
 Creazione booking `/m/booking/new` (form tipo/job→JCL/risorsa/data/orari, gestisce force_single_type + 403 staff) + cost report essenziale `/m/finance/{job_id}` (KPI + voci costo + fatturazione). Entry point booking su Oggi+drawer. Righe Finance → detail. Verificato end-to-end (POST 200 + cleanup), 0 errori console.

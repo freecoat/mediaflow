@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.169 — Mobile: Quote + timbra rapida + fix risposta assegnazioni (2 giu 2026)
+
+Chiude il loop operativo mobile.
+- **Quotazioni** `/m/quote` (lista: search + chip stato) → **detail** `/m/quote/{id}` (header, totali
+  imponibile/sconto/IVA in valuta, voci con qty×prezzo·categoria). Drawer "Quotazioni" + righe quote del
+  progetto detail ora linkano al detail.
+- **Timbra rapida** su Oggi: bottone one-tap ENTRATA/USCITA (stato letto da `/hr/api/punches`), crea/chiude
+  il punch senza passare da /m/timbra.
+- **Fix risposta assegnazioni**: `/planning/api/my-bookings` ora ritorna `response_status` → la card
+  Assegnazioni mostra correttamente accettato/rifiutato dopo il reload (i bottoni accept/reject c'erano già).
+- **313 test**. Smoke browser 390px: quote list+detail, quick-punch (stato corretto), 0 errori console.
+
 ## v3.5.0-alpha.172.168 — Mobile Fase C: crea booking + cost report essenziale (2 giu 2026)
 
 - **Creazione booking** `/m/booking/new`: form (tipo, job→JCL a cascata, risorsa, data, orari, stato, note)

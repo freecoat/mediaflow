@@ -3934,6 +3934,9 @@ async def project_bookings(
         out.append({
             "assignment_id": a.id,
             "booking_id": b.id,
+            # v3.5.0-alpha.172.169 — stato risposta staff (accepted/rejected/None),
+            # serve alla card mobile per mostrare il badge dopo il reload.
+            "response_status": getattr(a, "response_status", None),
             "title": _booking_title_for_assignment(b, a.resource.name if a.resource else "?"),
             "start": a.start_datetime.isoformat(),
             "end": a.end_datetime.isoformat(),
@@ -4128,6 +4131,9 @@ async def my_bookings(
         out.append({
             "assignment_id": a.id,
             "booking_id": b.id,
+            # v3.5.0-alpha.172.169 — stato risposta staff (accepted/rejected/None),
+            # serve alla card mobile per mostrare il badge dopo il reload.
+            "response_status": getattr(a, "response_status", None),
             "title": _booking_title_for_assignment(b, a.resource.name if a.resource else "?"),
             "start": a.start_datetime.isoformat(),
             "end": a.end_datetime.isoformat(),

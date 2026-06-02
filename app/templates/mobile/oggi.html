@@ -2,6 +2,7 @@
 {% block title %}Oggi — Claqo{% endblock %}
 {% block topbar %}Oggi{% endblock %}
 {% block content %}
+  <div id="m-quick-punch" style="margin-bottom:10px;"></div>
   <a href="/m/booking/new" class="m-btn m-btn-primary m-btn-block" style="margin-bottom:14px;text-decoration:none;align-items:center;justify-content:center;gap:6px;"><i data-lucide="calendar-plus"></i> Nuovo booking</a>
   <div id="m-oggi-root" class="m-section">
     <div class="m-skeleton">
@@ -222,6 +223,59 @@
   } else {
     loadOggi();
   }
+}());
+</script>
+<script>
+// v3.5.0-alpha.172.169 — Timbra rapida one-tap su Oggi (IN/OUT) riusando /hr/api/punches.
+(function () {
+  "use strict";
+  var box = document.getElementById("m-quick-punch");
+  if (!box) return;
+
+  function isOpen(p) { return p && (p.end_datetime === null || p.end_datetime === undefined || p.end_datetime === ""); }
+  function isoNow() { var d = new Date(); d.setSeconds(0, 0); var p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":00"; }
+
+  async function render() {
+    var punches = [];
+    try { punches = await mapi("GET", "/hr/api/punches"); } catch (e) { box.style.display = "none"; return; }
+    if (!Array.isArray(punches)) { box.style.display = "none"; return; }
+    var last = punches.length ? punches[punches.length - 1] : null;
+    var open = isOpen(last);
+    mClear(box);
+    var btn = document.createElement("button");
+    btn.className = "m-btn m-btn-block " + (open ? "m-btn-reject" : "m-btn-primary");
+    btn.style.cssText = "align-items:center;justify-content:center;gap:8px;";
+    btn.appendChild(mIcon(open ? "log-out" : "log-in"));
+    btn.appendChild(document.createTextNode(open ? " Timbra USCITA" : " Timbra ENTRATA"));
+    btn.addEventListener("click", function () { doPunch(open, last); });
+    box.appendChild(btn);
+    mLucide();
+  }
+  async function doPunch(open, last) {
+    var btn = box.querySelector("button"); if (btn) { btn.disabled = true; }
+    try {
+      if (open) {
+        var fd = new FormData(); fd.append("end_datetime", isoNow());
+        await mapi("PUT", "/hr/api/punches/" + last.id, fd);
+        mToast("Uscita registrata ✓");
+      } else {
+        var rid = (last && last.resource_id) ? last.resource_id : 0;
+        var fd2 = new FormData();
+        fd2.append("resource_id", String(rid));
+        fd2.append("start_datetime", isoNow());
+        fd2.append("kind", "shift");
+        await mapi("POST", "/hr/api/punches", fd2);
+        mToast("Entrata registrata ✓");
+      }
+      render();
+      if (typeof loadOggi === "function") setTimeout(loadOggi, 300);
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      mToast("Errore: " + ((e && e.message) || "timbratura"));
+    }
+  }
+  render();
 }());
 </script>
 {% endblock %}

@@ -1,0 +1,63 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Quotazione — Claqo{% endblock %}
+{% block topbar %}Quotazione{% endblock %}
+{% block content %}
+  <a href="/m/quote" class="m-btn m-btn-ghost" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;"><i data-lucide="chevron-left"></i> Quotazioni</a>
+  <div id="m-qd-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ID = {{ entity_id }};
+
+  async function load() {
+    var root = document.getElementById("m-qd-root"); mClear(root);
+    var x;
+    try { x = await mapi("GET", "/quotes/api/" + ID); }
+    catch (e) { mError(root, "Quotazione non trovata."); return; }
+    var cur = x.currency || "EUR";
+    document.querySelector(".m-top-title").textContent = x.number || "Quotazione";
+
+    var head = mCard(null);
+    var t = mEl("div", "m-card-title"); t.textContent = x.title || x.number || "—"; head.appendChild(t);
+    var sb = mStatusBadge(x.status);
+    var badge = mEl("span", "m-badge " + sb.cls); badge.textContent = sb.text;
+    badge.style.cssText = "margin-top:6px;display:inline-block;"; head.appendChild(badge);
+    root.appendChild(head);
+
+    var info = mCard("Dettagli", "info");
+    info.appendChild(mField("Numero", x.number));
+    info.appendChild(mField("Cliente", x.client));
+    var prj;
+    if (x.project_id) { prj = document.createElement("a"); prj.href = "/m/progetti/" + x.project_id; prj.textContent = x.project_title || "—"; }
+    info.appendChild(mField("Progetto", prj || x.project_title));
+    if (x.currency && x.currency !== "EUR") info.appendChild(mField("Valuta", x.currency + (x.fx_rate_to_base ? " (×" + x.fx_rate_to_base + ")" : "")));
+    root.appendChild(info);
+
+    var tot = mCard("Totali", "calculator");
+    tot.appendChild(mField("Imponibile", mMoney(x.subtotal != null ? x.subtotal : x.total_after_discount, cur)));
+    tot.appendChild(mField("Dopo sconto", mMoney(x.total_after_discount, cur)));
+    var ivaRow = mField("Totale IVA incl.", mMoney(x.total_with_vat, cur));
+    ivaRow.querySelector(".m-field-val").style.fontWeight = "700";
+    tot.appendChild(ivaRow);
+    root.appendChild(tot);
+
+    var lines = (x.lines || []).filter(function (l) { return !l.is_optional; });
+    var lc = mCard("Voci (" + lines.length + ")", "list");
+    if (!lines.length) lc.appendChild(mEmpty("Nessuna voce."));
+    else lines.forEach(function (l) {
+      var sub = (l.quantity || 0) + " " + (l.unit || "") + " × " + mMoney(l.unit_price, cur)
+                + (l.category || l.category_override ? " · " + (l.category_override || l.category) : "");
+      lc.appendChild(mListRow("#", l.description || "—", sub, mMoney(l.total, cur), "m-badge-out"));
+    });
+    root.appendChild(lc);
+
+    mLucide();
+  }
+  load();
+})();
+</script>
+{% endblock %}

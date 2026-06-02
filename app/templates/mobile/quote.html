@@ -1,0 +1,57 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Quotazioni — Claqo{% endblock %}
+{% block topbar %}Quotazioni{% endblock %}
+{% block content %}
+  <div class="m-search">
+    <i data-lucide="search"></i>
+    <input id="m-qt-q" type="search" placeholder="Cerca numero, titolo, cliente…" autocomplete="off">
+  </div>
+  <div class="m-chips" id="m-qt-chips"></div>
+  <div id="m-qt-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ALL = [], q = "", status = "";
+  var ST = ["", "draft", "sent", "approved", "rejected"];
+  var LAB = { "": "Tutte", draft: "Bozza", sent: "Inviate", approved: "Approvate", rejected: "Rifiutate" };
+
+  function chips() {
+    var box = document.getElementById("m-qt-chips"); mClear(box);
+    ST.forEach(function (s) {
+      var c = mEl("div", "m-chip" + (s === status ? " active" : ""));
+      c.textContent = LAB[s] || s;
+      c.onclick = function () { status = s; render(); chips(); };
+      box.appendChild(c);
+    });
+  }
+  function match(x) {
+    if (status && (x.status || "").toLowerCase() !== status) return false;
+    if (!q) return true;
+    return [x.number, x.title, x.client, x.project_title].join(" ").toLowerCase().indexOf(q) !== -1;
+  }
+  function render() {
+    var root = document.getElementById("m-qt-root"); mClear(root);
+    var rows = ALL.filter(match);
+    if (!rows.length) { root.appendChild(mEmpty("Nessuna quotazione.")); return; }
+    rows.forEach(function (x) {
+      var sub = [x.number, x.client].filter(Boolean).join(" · ");
+      var sb = mStatusBadge(x.status);
+      var row = mListRow("/m/quote/" + x.id, x.title || x.number, sub, sb.text, sb.cls);
+      root.appendChild(row);
+    });
+    mLucide();
+  }
+  async function load() {
+    try { var d = await mapi("GET", "/quotes/api"); ALL = Array.isArray(d) ? d : (d.items || []); }
+    catch (e) { mError(document.getElementById("m-qt-root")); return; }
+    chips(); render();
+  }
+  document.getElementById("m-qt-q").addEventListener("input", function (e) { q = (e.target.value || "").toLowerCase().trim(); render(); });
+  load();
+})();
+</script>
+{% endblock %}
