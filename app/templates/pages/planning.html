@@ -2423,8 +2423,10 @@ function dsmRenderStructured(v, tax) {
       <select class="form-select" id="dsm-s-scan">${enumOpt(['progressive','interlaced','psf'], v.scan_type)}</select></div>
     <div><label style="${L}">HDR format</label>
       <select class="form-select" id="dsm-s-hdr">${enumOpt(['SDR','HDR10','HDR10+','Dolby Vision','HLG'], v.hdr_format)}</select></div>
-    <div style="grid-column:1/-1;"><label style="${L}">Color space</label>
-      <input class="form-input" id="dsm-s-color" value="${escapeHtml(v.color_space||'')}" placeholder="es. Rec.709 / DCI XYZ / Rec.2020 PQ"></div>
+    <div><label style="${L}">Color space</label>
+      <select class="form-select" id="dsm-s-color">${enumOpt([...new Set(['Rec.709','Rec.2020','Rec.2020 PQ','Rec.2020 HLG','DCI-P3','DCI-P3 D65','DCI XYZ','sRGB','Rec.601','Display P3','ACEScg','Linear',...(v.color_space?[v.color_space]:[])])], v.color_space)}</select></div>
+    <div><label style="${L}">Color primaries (gamut)</label>
+      <select class="form-select" id="dsm-s-cprim">${enumOpt([...new Set(['BT.709','BT.2020','DCI-P3','P3-D65','BT.601 525','BT.601 625','ACES AP0','ACES AP1','XYZ',...(v.color_primaries?[v.color_primaries]:[])])], v.color_primaries)}</select></div>
     <div><label style="${L}">Subtitle format</label>
       <select class="form-select" id="dsm-s-subfmt">${enumOpt(['TTML IMSC 1.1','PNG+XML','Burn-in','PGS','EBU-STL','SRT'], v.subtitle_format)}</select></div>
     <div><label style="${L}">Subtitle lang (ISO comma)</label>
@@ -2457,6 +2459,7 @@ async function dsmSaveStructured() {
   _set('scan_type', 'dsm-s-scan');
   _set('hdr_format', 'dsm-s-hdr');
   _set('color_space', 'dsm-s-color');
+  _set('color_primaries', 'dsm-s-cprim');
   _set('subtitle_format', 'dsm-s-subfmt');
   const slang = (document.getElementById('dsm-s-sublang').value || '').trim();
   fd.append('subtitle_languages', slang

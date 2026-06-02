@@ -86,6 +86,7 @@ def _serialize_item(it: DeliveryItem, with_tracks: bool = True) -> dict:
         "frame_rate_id": it.frame_rate_id,
         "scan_type": it.scan_type,
         "color_space": it.color_space,
+        "color_primaries": it.color_primaries,
         "hdr_format": it.hdr_format,
         "subtitle_format": it.subtitle_format,
         "subtitle_languages": it.subtitle_languages,
@@ -171,6 +172,7 @@ async def create_item_manual(
     frame_rate_id: Optional[int] = Form(None),
     scan_type: Optional[str] = Form(None),
     color_space: Optional[str] = Form(None),
+    color_primaries: Optional[str] = Form(None),
     hdr_format: Optional[str] = Form(None),
     subtitle_format: Optional[str] = Form(None),
     suggested_unit: Optional[str] = Form(None),
@@ -203,6 +205,7 @@ async def create_item_manual(
         frame_rate_id=frame_rate_id,
         scan_type=scan_type or None,
         color_space=color_space or None,
+        color_primaries=color_primaries or None,
         hdr_format=hdr_format or None,
         subtitle_format=subtitle_format or None,
         suggested_unit=suggested_unit or None,
@@ -232,6 +235,7 @@ async def update_item(
     frame_rate_id: Optional[int] = Form(None),
     scan_type: Optional[str] = Form(None),
     color_space: Optional[str] = Form(None),
+    color_primaries: Optional[str] = Form(None),
     hdr_format: Optional[str] = Form(None),
     subtitle_format: Optional[str] = Form(None),
     subtitle_languages: Optional[str] = Form(None),  # JSON list
@@ -268,6 +272,7 @@ async def update_item(
     if frame_rate_id is not None:            it.frame_rate_id = frame_rate_id or None
     if scan_type is not None:                it.scan_type = scan_type.strip() or None
     if color_space is not None:              it.color_space = color_space.strip() or None
+    if color_primaries is not None:          it.color_primaries = color_primaries.strip() or None
     if hdr_format is not None:               it.hdr_format = hdr_format.strip() or None
     if subtitle_format is not None:          it.subtitle_format = subtitle_format.strip() or None
     if subtitle_languages is not None:
@@ -395,6 +400,7 @@ async def revalidate_item_ai(iid: int, request: Request, db: Session = Depends(g
         "frame_rate": _name_or_none(db, "FrameRate", it.frame_rate_id),
         "scan_type": it.scan_type,
         "color_space": it.color_space,
+        "color_primaries": it.color_primaries,
         "hdr_format": it.hdr_format,
         "extra_specs": it.extra_specs,
         "notes": it.notes,
@@ -429,7 +435,7 @@ Mappa l'item agli id taxonomy. Restituisci JSON {{"items":[...]}}.
             setattr(it, f, new_val)
             updates_applied[f] = {"from": old_val, "to": new_val}
     # Campi free-text potenzialmente migliorati
-    for f in ("chroma_subsampling", "aspect_ratio", "scan_type", "color_space", "hdr_format"):
+    for f in ("chroma_subsampling", "aspect_ratio", "scan_type", "color_space", "color_primaries", "hdr_format"):
         new_val = mapped.get(f)
         if new_val is not None and new_val != getattr(it, f):
             old_val = getattr(it, f)

@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.163 — Color space a tendina + color primaries (2 giu 2026)
+
+`color_space` nelle tech specs → da input libero a **select** (Rec.709/Rec.2020[/PQ/HLG]/DCI-P3[/D65]/
+DCI XYZ/sRGB/Rec.601/Display P3/ACEScg/Linear). Nuovo campo **`color_primaries`** (gamut CICP:
+BT.709/BT.2020/DCI-P3/P3-D65/BT.601 525/625/ACES AP0/AP1/XYZ), separato da color_space (il transfer
+PQ/HLG/SDR resta derivabile da hdr_format). In entrambi gli editor (modal planning + editor capitolato).
+- Schema: `delivery_items.color_primaries` (String) + auto-migrate.
+- Backend: `_serialize_item` + create/update item + AI-apply field-loop + QC compare.
+- Valori custom esistenti preservati (Set). **297/297** test. Smoke browser: select+save ok, 0 errori console.
+
 ## v3.5.0-alpha.172.162 — Aspect ratio a tendina (2 giu 2026)
 
 `aspect_ratio` nelle tech specs era un input testo libero (è una String nel modello, non una taxonomy

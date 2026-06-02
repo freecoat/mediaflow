@@ -1176,8 +1176,16 @@ async function openItemEditor(item, tid) {
         ${['SDR','HDR10','HDR10+','Dolby Vision','HLG'].map(c => `<option value="${c}"${v.hdr_format===c?' selected':''}>${c}</option>`).join('')}
       </select></div>
 
-    <div style="grid-column:1/-1;"><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Color space</label>
-      <input class="form-input" id="dli-color" value="${escapeHtml(v.color_space||'')}" placeholder="es. Rec.709 / DCI XYZ / Rec.2020 PQ"></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Color space</label>
+      <select class="form-select" id="dli-color">
+        <option value="">—</option>
+        ${[...new Set(['Rec.709','Rec.2020','Rec.2020 PQ','Rec.2020 HLG','DCI-P3','DCI-P3 D65','DCI XYZ','sRGB','Rec.601','Display P3','ACEScg','Linear',...(v.color_space?[v.color_space]:[])])].map(c => `<option value="${escapeHtml(c)}"${v.color_space===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}
+      </select></div>
+    <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Color primaries (gamut)</label>
+      <select class="form-select" id="dli-cprim">
+        <option value="">—</option>
+        ${[...new Set(['BT.709','BT.2020','DCI-P3','P3-D65','BT.601 525','BT.601 625','ACES AP0','ACES AP1','XYZ',...(v.color_primaries?[v.color_primaries]:[])])].map(c => `<option value="${escapeHtml(c)}"${v.color_primaries===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}
+      </select></div>
 
     <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Subtitle format</label>
       <select class="form-select" id="dli-subfmt">
@@ -1503,6 +1511,7 @@ async function openItemEditor(item, tid) {
     _set('frame_rate_id', 'dli-fr');
     _set('scan_type', 'dli-scan');
     _set('color_space', 'dli-color');
+    _set('color_primaries', 'dli-cprim');
     _set('hdr_format', 'dli-hdr');
     _set('subtitle_format', 'dli-subfmt');
     const slang = document.getElementById('dli-sublang').value.trim();

@@ -948,6 +948,11 @@ class DeliveryItem(Base):
     frame_rate_id: Mapped[Optional[int]] = mapped_column(ForeignKey("delivery_frame_rates.id"), nullable=True)
     scan_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "progressive" "interlaced" "psf"
     color_space: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)  # "Rec.709" "DCI XYZ" "Rec.2020 PQ"
+    # v3.5.0-alpha.172.163 — color primaries / gamut esplicito (CICP color_primaries).
+    # Separato da color_space: i primaries sono il gamut (BT.709/BT.2020/DCI-P3),
+    # color_space resta il descrittore colloquiale (gamut+transfer). Il transfer
+    # (PQ/HLG/SDR) è derivabile da hdr_format.
+    color_primaries: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # "BT.709" "BT.2020" "DCI-P3"
     hdr_format: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)   # "SDR" "HDR10" "DV" "HLG"
 
     # Subtitle layer
