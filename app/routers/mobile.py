@@ -112,3 +112,14 @@ async def m_quote_detail(request: Request, quote_id: int):
 @router.get("/booking/new", response_class=HTMLResponse, include_in_schema=False)
 async def m_booking_new(request: Request):
     return _page(request, "booking_new", active="assegnazioni")
+
+
+# ── Fase D: copilot AI + agenda settimanale ───────────────────────────────
+@router.get("/copilot", response_class=HTMLResponse, include_in_schema=False)
+async def m_copilot(request: Request):
+    return _page(request, "copilot", active="copilot")
+
+
+@router.get("/agenda", response_class=HTMLResponse, include_in_schema=False)
+async def m_agenda(request: Request):
+    return _page(request, "agenda", active="agenda")

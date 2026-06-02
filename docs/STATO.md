@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.169** — 2 giugno 2026 — Mobile: Quote + timbra rapida + fix risposta assegnazioni
+**v3.5.0-alpha.172.170** — 2 giugno 2026 — Mobile Fase D: Copilot AI + Agenda settimanale
+
+### α.172.170 ✅ (Mobile Fase D — chiusura iniziativa mobile A→D)
+Copilot AI `/m/copilot` (chat + azioni Applica/Rifiuta + markdown-lite XSS-safe, verificato AI reale) + Agenda settimanale `/m/agenda` (my-bookings 7gg + nav settimana). Drawer Agenda + gruppo Assistente. 313 test, 0 errori console.
+**Mobile completo Fasi A→D.** Backlog mobile residuo: deliverables read-only, cashflow sintetico, DAM+scan QR, ferie-richiesta, offline-sync vero, planning all-resources (ora agenda = solo mie).
+
+**Prossimo**: test Matteo da telefono su tutto il mobile. Push commit .160→.170 (12) quando OK. Tunnel :9000 live.
+
+### α.172.169 — 2 giugno 2026 — Mobile: Quote + timbra rapida + fix risposta assegnazioni
 
 ### α.172.169 ✅ (loop operativo mobile)
 Quotazioni `/m/quote` (list+detail: totali/voci/valuta) + drawer + link da progetto detail. Timbra rapida one-tap ENTRATA/USCITA su Oggi. Fix `my-bookings` ritorna `response_status` (card assegnazioni mostra stato post-reload). 313 test, 0 errori console.

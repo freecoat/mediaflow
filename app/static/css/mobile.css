@@ -1029,3 +1029,49 @@ button {
 
 .m-section-head { display: flex; align-items: baseline; justify-content: space-between; margin: var(--m-sp-2) 0; }
 .m-section-head .m-count { font-size: var(--m-fs-cap); color: var(--m-muted); }
+
+/* ===========================================================================
+   v3.5.0-alpha.172.170 — Copilot chat + Agenda settimanale
+   =========================================================================== */
+/* Chat: lista messaggi scrollabile + barra input fissa in fondo */
+.m-chat-msgs {
+  display: flex; flex-direction: column; gap: var(--m-sp-2);
+  padding-bottom: 84px; min-height: 40vh;
+}
+.m-bubble {
+  max-width: 86%; padding: 10px 13px; border-radius: 14px;
+  font-size: var(--m-fs-body); line-height: 1.45; white-space: pre-wrap; word-break: break-word;
+}
+.m-bubble-ai { align-self: flex-start; background: var(--m-bg2); border: 1px solid var(--m-border); border-bottom-left-radius: 4px; color: var(--m-text); }
+.m-bubble-user { align-self: flex-end; background: var(--m-accent); color: #fff; border-bottom-right-radius: 4px; }
+.m-bubble-typing { color: var(--m-muted); letter-spacing: 2px; }
+.m-action-card {
+  align-self: flex-start; width: 86%;
+  background: var(--m-accent-soft); border: 1px solid rgba(98,114,245,0.30);
+  border-radius: 12px; padding: var(--m-sp-3);
+}
+.m-action-title { font-size: var(--m-fs-cap); font-weight: var(--m-fw-semi); color: #9ba6f9; margin-bottom: var(--m-sp-2); }
+.m-action-btns { display: flex; gap: var(--m-sp-2); }
+.m-action-btns .m-btn { flex: 1; }
+.m-action-done { font-size: var(--m-fs-cap); font-weight: var(--m-fw-med); }
+.m-action-done.ok { color: var(--m-success); }
+.m-action-done.err { color: var(--m-danger); }
+/* Barra input chat fissa sopra il fondo schermo */
+.m-chat-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex; gap: var(--m-sp-2); align-items: flex-end;
+  padding: var(--m-sp-2) var(--m-sp-3) calc(var(--m-sp-3) + env(safe-area-inset-bottom));
+  background: var(--m-bg2); border-top: 1px solid var(--m-border);
+}
+.m-chat-input {
+  flex: 1; resize: none; background: var(--m-bg3); border: 1px solid var(--m-border);
+  border-radius: var(--m-r-2); color: var(--m-text); font-size: var(--m-fs-body);
+  padding: 10px 12px; max-height: 120px; font-family: var(--m-font);
+}
+.m-chat-input:focus { outline: none; border-color: var(--m-border-2); }
+.m-chat-bar .m-btn { height: 44px; width: 48px; flex: 0 0 auto; padding: 0; justify-content: center; }
+
+/* Agenda: navigazione settimana */
+.m-week-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--m-sp-2); margin-bottom: var(--m-sp-2); }
+.m-week-nav .m-btn { width: 44px; flex: 0 0 auto; justify-content: center; }
+.m-week-range { flex: 1; text-align: center; font-weight: var(--m-fw-semi); font-size: var(--m-fs-sub); }

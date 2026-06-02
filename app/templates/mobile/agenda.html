@@ -1,0 +1,73 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Agenda — Claqo{% endblock %}
+{% block topbar %}Agenda{% endblock %}
+{% block content %}
+  <div class="m-week-nav">
+    <button id="m-ag-prev" class="m-btn m-btn-ghost" aria-label="Settimana precedente"><i data-lucide="chevron-left"></i></button>
+    <div id="m-ag-range" class="m-week-range">…</div>
+    <button id="m-ag-next" class="m-btn m-btn-ghost" aria-label="Settimana successiva"><i data-lucide="chevron-right"></i></button>
+  </div>
+  <button id="m-ag-today" class="m-btn m-btn-ghost m-btn-block" style="margin-bottom:10px;">Oggi</button>
+  <div id="m-ag-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var offset = 0; // settimane rispetto a quella corrente
+
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function isoDate(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function mondayOf(off) {
+    var d = new Date(); d.setHours(0, 0, 0, 0);
+    var dow = (d.getDay() + 6) % 7; // lun=0
+    d.setDate(d.getDate() - dow + off * 7);
+    return d;
+  }
+  function fmtDay(d) { return d.toLocaleDateString("it-IT", { weekday: "short", day: "2-digit", month: "2-digit" }); }
+  function fmtShort(d) { return d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" }); }
+
+  async function load() {
+    var root = document.getElementById("m-ag-root");
+    var mon = mondayOf(offset);
+    var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    document.getElementById("m-ag-range").textContent = fmtShort(mon) + " – " + fmtShort(sun);
+    mClear(root); root.appendChild(mEl("div", "m-skeleton")).appendChild(mEl("div", "m-skeleton-card"));
+
+    var rows;
+    try {
+      rows = await mapi("GET", "/planning/api/my-bookings?from_date=" + isoDate(mon) + "T00:00:00&to_date=" + isoDate(sun) + "T23:59:59");
+    } catch (e) { mError(root); return; }
+    mClear(root);
+    if (!rows || !rows.length) { root.appendChild(mEmpty("Nessun impegno questa settimana.")); return; }
+
+    // group by day
+    var byDay = {};
+    rows.forEach(function (b) { var k = (b.start || "").slice(0, 10); (byDay[k] = byDay[k] || []).push(b); });
+    for (var i = 0; i < 7; i++) {
+      var day = new Date(mon); day.setDate(mon.getDate() + i);
+      var key = isoDate(day);
+      var items = byDay[key];
+      if (!items || !items.length) continue;
+      var head = mEl("div", "m-day-header"); head.textContent = fmtDay(day); root.appendChild(head);
+      items.forEach(function (b) {
+        var time = mFmtTime(b.start) + " – " + mFmtTime(b.end);
+        var sub = [time, b.job_code].filter(Boolean).join(" · ");
+        var sb = mStatusBadge(b.status);
+        var href = b.job_id ? ("/m/finance/" + b.job_id) : "#";
+        root.appendChild(mListRow(href, b.job_title || b.title || "—", sub, sb.text, sb.cls));
+      });
+    }
+    if (!root.children.length) root.appendChild(mEmpty("Nessun impegno questa settimana."));
+    mLucide();
+  }
+
+  document.getElementById("m-ag-prev").addEventListener("click", function () { offset--; load(); });
+  document.getElementById("m-ag-next").addEventListener("click", function () { offset++; load(); });
+  document.getElementById("m-ag-today").addEventListener("click", function () { offset = 0; load(); });
+  load();
+})();
+</script>
+{% endblock %}

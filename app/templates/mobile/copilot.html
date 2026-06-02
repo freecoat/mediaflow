@@ -1,0 +1,105 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Copilot — Claqo{% endblock %}
+{% block topbar %}Copilot{% endblock %}
+{% block content %}
+  <div class="m-chat-msgs" id="m-cp-msgs">
+    <div class="m-bubble m-bubble-ai">Ciao! Sono il copilot di Claqo. Chiedimi di clienti, progetti, quotazioni o di creare voci. Le azioni che propongo le confermi tu.</div>
+  </div>
+  <div class="m-chat-bar">
+    <textarea id="m-cp-input" class="m-chat-input" rows="1" placeholder="Scrivi un messaggio…"></textarea>
+    <button id="m-cp-send" class="m-btn m-btn-primary" aria-label="Invia"><i data-lucide="send"></i></button>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var msgs = document.getElementById("m-cp-msgs");
+  var input = document.getElementById("m-cp-input");
+  var sendBtn = document.getElementById("m-cp-send");
+  var history = [];      // [{role, content}]
+  var convId = null;
+  var busy = false;
+
+  function scrollDown() { msgs.scrollTop = msgs.scrollHeight; }
+  // Markdown-lite SICURO: escape prima, poi **bold** / *italic* / `code`.
+  function mdLite(s) {
+    var e = mEsc(s);
+    e = e.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    e = e.replace(/`([^`]+)`/g, "<code>$1</code>");
+    e = e.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:]|$)/g, "$1<em>$2</em>");
+    return e;
+  }
+  function bubble(text, who) {
+    var b = mEl("div", "m-bubble " + (who === "user" ? "m-bubble-user" : "m-bubble-ai"));
+    if (who === "user") b.textContent = text; else b.innerHTML = mdLite(text);
+    msgs.appendChild(b); scrollDown(); return b;
+  }
+  function typingBubble() {
+    var b = mEl("div", "m-bubble m-bubble-ai m-bubble-typing"); b.textContent = "…";
+    msgs.appendChild(b); scrollDown(); return b;
+  }
+
+  function actionCard(a) {
+    var c = mEl("div", "m-action-card");
+    var t = mEl("div", "m-action-title"); t.textContent = "⚡ " + (a.title || a.action_type); c.appendChild(t);
+    var row = mEl("div", "m-action-btns");
+    var ap = mEl("button", "m-btn m-btn-accept"); ap.textContent = "Applica";
+    var rj = mEl("button", "m-btn m-btn-reject"); rj.textContent = "Rifiuta";
+    function done(msg, cls) { row.remove(); var s = mEl("div", "m-action-done " + cls); s.textContent = msg; c.appendChild(s); }
+    ap.addEventListener("click", async function () {
+      ap.disabled = rj.disabled = true;
+      try { var r = await mapi("POST", "/ai/api/actions/" + a.id + "/apply", new FormData());
+        done("✓ Applicato" + (r && r.message ? ": " + r.message : ""), "ok"); mToast("Azione applicata ✓"); }
+      catch (e) { ap.disabled = rj.disabled = false; mToast("Errore: " + ((e && e.message) || "apply")); }
+    });
+    rj.addEventListener("click", async function () {
+      ap.disabled = rj.disabled = true;
+      try { await mapi("POST", "/ai/api/actions/" + a.id + "/reject", new FormData()); done("✕ Rifiutato", "err"); }
+      catch (e) { ap.disabled = rj.disabled = false; mToast("Errore"); }
+    });
+    row.appendChild(ap); row.appendChild(rj); c.appendChild(row);
+    msgs.appendChild(c); scrollDown();
+  }
+
+  async function send() {
+    if (busy) return;
+    var text = (input.value || "").trim();
+    if (!text) return;
+    input.value = ""; input.style.height = "auto";
+    bubble(text, "user");
+    history.push({ role: "user", content: text });
+    busy = true; sendBtn.disabled = true;
+    var typing = typingBubble();
+    try {
+      var body = { messages: history, page: "mobile" };
+      if (convId) body.conversation_id = convId;
+      var r = await fetch("/ai/api/chat", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      var data = await r.json();
+      typing.remove();
+      if (!r.ok) { bubble("Errore: " + ((data && data.detail) || ("HTTP " + r.status)), "ai"); return; }
+      convId = data.conversation_id || convId;
+      var acts = data.actions || [];
+      var reply = data.reply || (acts.length ? "Ho preparato " + acts.length + " azione/i da confermare 👇" : "(nessuna risposta)");
+      bubble(reply, "ai");
+      history.push({ role: "assistant", content: reply });
+      acts.forEach(actionCard);
+    } catch (e) {
+      typing.remove(); bubble("Errore di rete.", "ai");
+    } finally {
+      busy = false; sendBtn.disabled = false; mLucide();
+    }
+  }
+
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); send(); }
+  });
+  input.addEventListener("input", function () { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 120) + "px"; });
+})();
+</script>
+{% endblock %}

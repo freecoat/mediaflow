@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.170 — Mobile Fase D: Copilot AI + Agenda settimanale (2 giu 2026)
+
+- **Copilot AI** `/m/copilot`: chat full-screen (bolle utente/AI, input fisso, Ctrl+Enter). POST
+  `/ai/api/chat` (conversation_id mantenuto). Azioni proposte → card con **Applica/Rifiuta**
+  (`/ai/api/actions/{id}/apply|reject`). Markdown-lite SICURO (escape→bold/italic/code, XSS-safe).
+  Verificato con AI reale ("1 progetto attivo: GLO").
+- **Agenda settimanale** `/m/agenda`: vista 7 giorni da `/planning/api/my-bookings` (from/to),
+  raggruppata per giorno, con nav settimana ‹ › + bottone Oggi. Righe → cost report del job.
+- Drawer: "Agenda" (Operativo) + gruppo "Assistente" → Copilot AI.
+- **313 test**. Smoke browser 390px: copilot chat (reply+markdown+azioni), agenda nav, 0 errori console.
+
+**Mobile completo (Fasi A→D)**: Oggi (timbra rapida+nav) · Agenda · Assegnazioni (respond) · Timbra ·
+Ferie · Notifiche · Progetti · Clienti · Quotazioni · Finance (+cost report job) · Cerca · Nuovo
+booking · Copilot AI. Backlog: deliverables read-only, cashflow, DAM+QR, ferie-richiesta, offline-sync.
+
 ## v3.5.0-alpha.172.169 — Mobile: Quote + timbra rapida + fix risposta assegnazioni (2 giu 2026)
 
 Chiude il loop operativo mobile.

@@ -26,6 +26,7 @@
     <nav class="m-drawer-nav">
       <div class="m-drawer-group">Operativo</div>
       <a href="/m"               class="m-drawer-item {% if active=='oggi' %}active{% endif %}"><i data-lucide="home"></i>Oggi</a>
+      <a href="/m/agenda"        class="m-drawer-item {% if active=='agenda' %}active{% endif %}"><i data-lucide="calendar-days"></i>Agenda</a>
       <a href="/m/assegnazioni"  class="m-drawer-item {% if active=='assegnazioni' %}active{% endif %}"><i data-lucide="clipboard-list"></i>Assegnazioni</a>
       <a href="/m/booking/new"   class="m-drawer-item"><i data-lucide="calendar-plus"></i>Nuovo booking</a>
       <a href="/m/timbra"        class="m-drawer-item {% if active=='timbra' %}active{% endif %}"><i data-lucide="clock"></i>Timbratura</a>
@@ -37,6 +38,8 @@
       <a href="/m/quote"         class="m-drawer-item {% if active=='quote' %}active{% endif %}"><i data-lucide="file-text"></i>Quotazioni</a>
       <a href="/m/finance"       class="m-drawer-item {% if active=='finance' %}active{% endif %}"><i data-lucide="wallet"></i>Finance</a>
       <a href="/m/cerca"         class="m-drawer-item {% if active=='cerca' %}active{% endif %}"><i data-lucide="search"></i>Cerca</a>
+      <div class="m-drawer-group">Assistente</div>
+      <a href="/m/copilot"       class="m-drawer-item {% if active=='copilot' %}active{% endif %}"><i data-lucide="sparkles"></i>Copilot AI</a>
     </nav>
     <a class="m-drawer-item" href="/prefer-desktop?next=/dashboard"><i data-lucide="monitor"></i>Versione desktop</a>
     <a class="m-drawer-logout" href="/auth/logout"><i data-lucide="log-out"></i>Esci</a>
