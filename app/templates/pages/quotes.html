@@ -2925,7 +2925,10 @@ async function saveLineField(el) {
   // v3.5.0-alpha.171.10 (Step 5 extended) — Su quote approved: doppia
   // conferma + auto-versioning prima di salvare modifica linea.
   const targetId = await _ensureEditableQuoteOrVersion('Modifica voce quote');
-  if (!targetId) return;
+  // v3.5.0-alpha.172.177 — annullato (o creata nuova versione): NON lasciare il
+  // valore digitato a video sulla quote originale. reloadQuote ripristina i valori
+  // reali (revert visivo del campo non salvato).
+  if (!targetId) { if (typeof reloadQuote === 'function') reloadQuote(); return; }
   const tr = el.closest('tr');
   const lineId = tr.dataset.lineId;
   const field = el.dataset.field;
@@ -2998,7 +3001,7 @@ async function saveLineField(el) {
 async function saveLineDiscount(el) {
   // v3.5.0-alpha.171.10 (Step 5 extended)
   const targetId = await _ensureEditableQuoteOrVersion('Modifica sconto voce');
-  if (!targetId) return;
+  if (!targetId) { if (typeof reloadQuote === 'function') reloadQuote(); return; }  // α.172.177 revert visivo
   const tr = el.closest('tr');
   const lineId = tr.dataset.lineId;
   const pct = parseFloat(el.value || 0) / 100;
@@ -3563,7 +3566,7 @@ async function toggleLineOptional(lineId) {
   if (!line) return;
   // v3.5.0-alpha.171.10 (Step 5 extended)
   const targetId = await _ensureEditableQuoteOrVersion('Toggle voce opzionale');
-  if (!targetId) return;
+  if (!targetId) { if (typeof reloadQuote === 'function') reloadQuote(); return; }  // α.172.177 revert visivo
   const newVal = !line.is_optional;
   try {
     const fd = new FormData();
@@ -3630,7 +3633,7 @@ async function saveLineSection() {
   if (!lineId) return;
   // v3.5.0-alpha.171.10 (Step 5 extended)
   const targetId = await _ensureEditableQuoteOrVersion('Modifica sezione voce');
-  if (!targetId) return;
+  if (!targetId) { if (typeof reloadQuote === 'function') reloadQuote(); return; }  // α.172.177
   try {
     const fd = new FormData();
     fd.append('section_label', value === '' ? '__CLEAR__' : value);
@@ -3861,6 +3864,10 @@ async function onLinesDrop(ev) {
   const item = (priceItems || []).find(i => String(i.id) === String(pid));
   if (!item) { toast('Voce listino non trovata', 'error'); return; }
   if (!currentQuoteId) return;
+  // v3.5.0-alpha.172.177 — quote immutabile (approved/rejected): avvisa + proponi
+  // nuova versione anche per il drag&drop dal listino (prima bypassava il guard).
+  const editableId = await _ensureEditableQuoteOrVersion('Aggiunta voce (drag&drop)');
+  if (!editableId) return;
   try {
     const fd = new FormData();
     fd.append('description', item.name);

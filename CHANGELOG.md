@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.177 — Guard drag&drop + revert edit annullato su quote immutabile (2 giu 2026)
+
+Due bug segnalati da Matteo sul guard quote immutabile (α.176):
+- **Drag&drop listino**: aggiungere una voce trascinandola sulla quote approvata **bypassava** il guard
+  (dava 409 secco). `onLinesDrop` ora chiama `_ensureEditableQuoteOrVersion` → warning + nuova versione.
+- **Edit annullato restava a video**: modificando prezzo/quantità/ecc. inline e annullando il prompt
+  versione, il valore digitato **restava visibile** sulla quote (non salvato, ma fuorviante). I 4
+  handler inline (`saveLineField`, `saveLineDiscount`, toggle opzionale, sezione) ora fanno
+  `reloadQuote()` sull'abort → revert visivo ai valori reali.
+- Solo template (hard refresh). Smoke browser: guard scatta (picker+modifica voce), 0 errori console.
+
+(Punto 3 — lifecycle job/acconti/CR su reject di quote approvata — in discussione, non incluso qui.)
 ## v3.5.0-alpha.172.176 — Picker/carica-template su quote immutabile → warning nuova versione (2 giu 2026)
 
 Richiesta Matteo: aggiungere voci (picker capitolato o "Carica da template") su una quotazione
