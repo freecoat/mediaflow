@@ -1,0 +1,28 @@
+# v3.5.0-alpha.172.171 — Claqo produzione (single container + volume dati).
+# Uso: copia .env.example → .env, compila i segreti, poi:  docker compose up -d
+# TLS/dominio: davanti metti un reverse proxy (Caddy/nginx/Traefik) o usa il
+# proxy del PaaS. Su VPS la soluzione più semplice è Caddy (HTTPS automatico).
+services:
+  claqo:
+    build: .
+    image: claqo:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_ENV: production
+      AUTH_REQUIRED: "true"
+      DATABASE_URL: sqlite:////data/mediaflow.db
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - claqo_data:/data            # DB SQLite + uploads (persistente)
+    ports:
+      - "8000:8000"                 # dietro reverse proxy: esporre solo a localhost (127.0.0.1:8000:8000)
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  claqo_data:

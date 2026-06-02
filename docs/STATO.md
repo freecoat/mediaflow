@@ -8,7 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.170** — 2 giugno 2026 — Mobile Fase D: Copilot AI + Agenda settimanale
+**v3.5.0-alpha.172.171** — 2 giugno 2026 — Fondazione hosting backend (Docker)
+
+### α.172.171 ✅ (hosting backend — fondazione portabile)
+Artefatti deploy: Dockerfile (3.13-slim, non-root, healthcheck, 1 worker SQLite, volume /data) + docker-compose (volume claqo_data) + docker-entrypoint.sh + bootstrap_admin.py (tenant+admin da ENV, idempotente, validato) + .dockerignore + .gitattributes (LF su .sh) + .env.production.example + docs/DEPLOY.md (Caddy HTTPS, backup, sicurezza). App invariata (config già env-driven). Docker non in ambiente dev → build da validare sull'host. 313 test.
+
+**DECISIONI APERTE (Matteo) per proseguire hosting**:
+- Provider: PaaS (Fly/Render/Railway, low-ops) vs VPS EU (Hetzner, sovranità+costo, manuale).
+- DB: SQLite-su-volume (subito) vs Postgres ora (robusto multi-utente; porting Float→Numeric previsto).
+- Dominio/regione (EU consigliata GDPR).
+Poi: config provider-specifica (Caddyfile / fly.toml / render.yaml) + deploy reale + hardening auth pubblico.
+**App React nativa: rimandata** (Matteo: prematura; prima hosting, poi valutare Capacitor vs React).
+
+### α.172.170 — 2 giugno 2026 — Mobile Fase D: Copilot AI + Agenda settimanale
 
 ### α.172.170 ✅ (Mobile Fase D — chiusura iniziativa mobile A→D)
 Copilot AI `/m/copilot` (chat + azioni Applica/Rifiuta + markdown-lite XSS-safe, verificato AI reale) + Agenda settimanale `/m/agenda` (my-bookings 7gg + nav settimana). Drawer Agenda + gruppo Assistente. 313 test, 0 errori console.

@@ -1,0 +1,35 @@
+# v3.5.0-alpha.172.171 — escludi dall'immagine: ambienti, segreti, dati locali,
+# artefatti pesanti. Mantiene l'immagine piccola e NON impacchetta .env/DB locali.
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.pytest_cache/
+.ruff_cache/
+node_modules/
+
+# Segreti e dati locali (NON devono finire nell'immagine)
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+mediaflow.db
+db_snapshots/
+uploads/
+logs/
+
+# Artefatti dev / non runtime
+graphify-out/
+docs/
+tests/
+.playwright-mcp/
+/*.png
+*.bak-*
+tunnel.bat
+tools/cloudflared.exe
+awesome-claude-plugins/
+.claude/

@@ -1,0 +1,4 @@
+# Forza LF sugli script shell: un CRLF nello shebang rompe l'esecuzione in
+# container Linux. (v3.5.0-alpha.172.171)
+*.sh text eol=lf
+scripts/docker-entrypoint.sh text eol=lf

@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.171 — Fondazione hosting backend (Docker portabile) (2 giu 2026)
+
+Primo passo verso l'hosting: artefatti deploy portabili (girano su qualsiasi host Docker — VPS/Fly/
+Render/Railway), provider-agnostici. Niente cambi all'app (config già env-driven: echo off + reload off
+in production, `auth_required`, storage S3 pronti).
+- **Dockerfile** (python:3.13-slim, non-root, healthcheck /health, 1 worker per SQLite, DB+uploads su
+  volume /data).
+- **docker-compose.yml** (volume persistente `claqo_data`, env_file, restart, healthcheck).
+- **scripts/docker-entrypoint.sh** (bootstrap idempotente + exec) + **scripts/bootstrap_admin.py**
+  (crea tenant+admin da ENV solo se DB vuoto — no dati demo, validato).
+- **.dockerignore** (immagine leggera, esclude .env/DB/snapshot/uploads/docs), **.gitattributes**
+  (LF forzato sugli .sh), **.env.production.example** (segreti documentati + comandi di generazione).
+- **docs/DEPLOY.md**: guida passo-passo (segreti, avvio, Caddy HTTPS, backup, sicurezza, scelte aperte).
+- 313 test. Build Docker da validare sull'host (Docker non presente in ambiente di sviluppo).
+
+**Decisioni aperte** (per il prossimo passo): provider (PaaS vs VPS EU), DB (SQLite-volume vs Postgres
+ora), dominio/regione. Vedi STATO.md.
+
 ## v3.5.0-alpha.172.170 — Mobile Fase D: Copilot AI + Agenda settimanale (2 giu 2026)
 
 - **Copilot AI** `/m/copilot`: chat full-screen (bolle utente/AI, input fisso, Ctrl+Enter). POST
