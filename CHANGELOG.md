@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.168 — Mobile Fase C: crea booking + cost report essenziale (2 giu 2026)
+
+- **Creazione booking** `/m/booking/new`: form (tipo, job→JCL a cascata, risorsa, data, orari, stato, note)
+  → POST `/planning/api/bookings`. Gestisce il gate anomaly `force_single_type` (conferma + ritenta) e il
+  403 staff (messaggio → flusso desktop). Entry point: bottone "Nuovo booking" su Oggi + voce drawer.
+- **Cost report essenziale** `/m/finance/{job_id}`: KPI (quotato/maturato/costo/margine + fatturato +
+  over/under) + voci di costo (con over/under per riga) + stato fatturazione. Da `/cost-report/api/job/{id}`.
+  Le righe Finance ora linkano al detail.
+- **313 test**. Smoke browser viewport 390px: form (job/JCL/risorse caricano), creazione end-to-end (200 +
+  cleanup), cost report detail. 0 errori console.
+
 ## v3.5.0-alpha.172.167 — Mobile Fase B: consultazione business (2 giu 2026)
 
 Espansione /m da "punch app" a companion business. Nuove schermate (read-only, dati via fetch dagli

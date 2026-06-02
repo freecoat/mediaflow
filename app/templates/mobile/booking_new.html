@@ -1,0 +1,167 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Nuovo booking — Claqo{% endblock %}
+{% block topbar %}Nuovo booking{% endblock %}
+{% block content %}
+  <a href="/m/assegnazioni" class="m-btn m-btn-ghost" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;"><i data-lucide="chevron-left"></i> Indietro</a>
+  <div class="m-card">
+    <div class="m-form-group">
+      <label class="m-label" for="bn-kind">Tipo</label>
+      <select class="m-select" id="bn-kind">
+        <option value="project">Progetto</option>
+        <option value="internal_maintenance">Manutenzione interna</option>
+        <option value="internal_research">Ricerca interna</option>
+        <option value="internal_training">Formazione interna</option>
+      </select>
+    </div>
+    <div class="m-form-group" id="bn-job-group">
+      <label class="m-label" for="bn-job">Job</label>
+      <select class="m-select" id="bn-job"><option value="">— caricamento… —</option></select>
+    </div>
+    <div class="m-form-group" id="bn-jcl-group">
+      <label class="m-label" for="bn-jcl">Lavorazione (JCL)</label>
+      <select class="m-select" id="bn-jcl"><option value="">— scegli prima il job —</option></select>
+    </div>
+    <div class="m-form-group">
+      <label class="m-label" for="bn-resource">Risorsa</label>
+      <select class="m-select" id="bn-resource"><option value="">— caricamento… —</option></select>
+    </div>
+    <div class="m-form-group">
+      <label class="m-label" for="bn-date">Data</label>
+      <input class="m-input" id="bn-date" type="date">
+    </div>
+    <div class="m-form-group" style="display:flex;gap:10px;">
+      <div style="flex:1;"><label class="m-label" for="bn-start">Inizio</label><input class="m-input" id="bn-start" type="time" value="09:00"></div>
+      <div style="flex:1;"><label class="m-label" for="bn-end">Fine</label><input class="m-input" id="bn-end" type="time" value="18:00"></div>
+    </div>
+    <div class="m-form-group">
+      <label class="m-label" for="bn-status">Stato</label>
+      <select class="m-select" id="bn-status">
+        <option value="tentative">Tentativo</option>
+        <option value="confirmed">Confermato</option>
+      </select>
+    </div>
+    <div class="m-form-group">
+      <label class="m-label" for="bn-notes">Note</label>
+      <textarea class="m-textarea" id="bn-notes" rows="2" placeholder="opzionale"></textarea>
+    </div>
+    <div class="m-form-error" id="bn-err" style="display:none;"></div>
+    <button class="m-btn m-btn-primary m-btn-block" id="bn-submit" style="margin-top:8px;">Crea booking</button>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var kindEl = document.getElementById("bn-kind");
+  var jobGroup = document.getElementById("bn-job-group");
+  var jclGroup = document.getElementById("bn-jcl-group");
+  var jobEl = document.getElementById("bn-job");
+  var jclEl = document.getElementById("bn-jcl");
+  var resEl = document.getElementById("bn-resource");
+  var dateEl = document.getElementById("bn-date");
+  var errEl = document.getElementById("bn-err");
+  var btn = document.getElementById("bn-submit");
+
+  // default data = oggi
+  try { dateEl.value = new Date().toISOString().slice(0, 10); } catch (e) {}
+
+  function showErr(msg) { errEl.textContent = msg; errEl.style.display = msg ? "block" : "none"; }
+  function fillSelect(el, items, valKey, labelFn, placeholder) {
+    mClear(el);
+    var o0 = document.createElement("option"); o0.value = ""; o0.textContent = placeholder; el.appendChild(o0);
+    (items || []).forEach(function (it) {
+      var o = document.createElement("option"); o.value = String(it[valKey]); o.textContent = labelFn(it); el.appendChild(o);
+    });
+  }
+  function toggleJob() {
+    var isP = kindEl.value === "project";
+    jobGroup.style.display = isP ? "" : "none";
+    jclGroup.style.display = isP ? "" : "none";
+  }
+  kindEl.addEventListener("change", toggleJob);
+
+  // Al cambio job → carica le lavorazioni (JCL) di quel job.
+  jobEl.addEventListener("change", async function () {
+    fillSelect(jclEl, [], "id", function(){}, "— caricamento… —");
+    if (!jobEl.value) { fillSelect(jclEl, [], "id", function(){}, "— scegli prima il job —"); return; }
+    try {
+      var d = await mapi("GET", "/cost-report/api/job/" + jobEl.value);
+      var lines = (d.cost_lines || []).map(function (l) { return { id: l.id, label: (l.description || "voce") + (l.category ? " · " + l.category : "") }; });
+      fillSelect(jclEl, lines, "id", function (l) { return l.label; }, lines.length ? "— scegli lavorazione —" : "— nessuna JCL —");
+    } catch (e) { fillSelect(jclEl, [], "id", function(){}, "— errore JCL —"); }
+  });
+
+  async function load() {
+    try {
+      var jobs = await mapi("GET", "/planning/api/jobs");
+      fillSelect(jobEl, jobs, "id", function (j) { return (j.code ? j.code + " — " : "") + (j.title || ("#" + j.id)); }, "— scegli job —");
+    } catch (e) { fillSelect(jobEl, [], "id", function(){}, "— errore job —"); }
+    try {
+      var res = await mapi("GET", "/resources/api");
+      var act = (res || []).filter(function (r) { return r.is_active !== false; });
+      fillSelect(resEl, act, "id", function (r) { return r.name + (r.role ? " (" + r.role + ")" : ""); }, "— scegli risorsa —");
+    } catch (e) { fillSelect(resEl, [], "id", function(){}, "— errore risorse —"); }
+    toggleJob();
+  }
+
+  async function submit() {
+    showErr("");
+    var kind = kindEl.value, rid = resEl.value, date = dateEl.value;
+    var st = document.getElementById("bn-start").value, en = document.getElementById("bn-end").value;
+    if (!rid) return showErr("Seleziona una risorsa.");
+    if (!date || !st || !en) return showErr("Data, inizio e fine obbligatori.");
+    if (en <= st) return showErr("La fine deve essere dopo l'inizio.");
+    if (kind === "project" && !jobEl.value) return showErr("Seleziona un job per i booking di progetto.");
+    if (kind === "project" && !jclEl.value) return showErr("Seleziona la lavorazione (JCL) del job.");
+
+    var notes = document.getElementById("bn-notes").value.trim();
+    function buildFd(force) {
+      var fd = new FormData();
+      fd.append("assignments", JSON.stringify([{
+        resource_id: parseInt(rid, 10),
+        start_datetime: date + "T" + st + ":00",
+        end_datetime: date + "T" + en + ":00",
+      }]));
+      fd.append("kind", kind);
+      fd.append("status", document.getElementById("bn-status").value);
+      if (kind === "project") { fd.append("job_id", jobEl.value); fd.append("job_cost_line_id", jclEl.value); }
+      if (notes) fd.append("notes", notes);
+      if (force) fd.append("force_single_type", "true");
+      return fd;
+    }
+    async function post(force) {
+      var r = await fetch("/planning/api/bookings", { method: "POST", body: buildFd(force), credentials: "same-origin" });
+      var data = null; try { data = await r.json(); } catch (e) {}
+      return { ok: r.ok, status: r.status, data: data };
+    }
+
+    btn.disabled = true; btn.textContent = "Creazione…";
+    try {
+      var res = await post(false);
+      // Anomaly gate: solo risorsa umana / solo tecnica → conferma + ritenta.
+      var det = res.data && res.data.detail;
+      if (!res.ok && det && typeof det === "object" && det.remediation === "force_single_type") {
+        btn.disabled = false; btn.textContent = "Crea booking";
+        if (!confirm((det.message || "Tipo risorsa singolo.") + "\n\nConfermi la creazione?")) return;
+        btn.disabled = true; btn.textContent = "Creazione…";
+        res = await post(true);
+      }
+      if (res.ok) {
+        mToast("Booking creato ✓");
+        setTimeout(function () { location.href = "/m/assegnazioni"; }, 700);
+        return;
+      }
+      btn.disabled = false; btn.textContent = "Crea booking";
+      var msg = (det && (typeof det === "string" ? det : det.message)) || ("HTTP " + res.status);
+      if (res.status === 403) msg = "Non hai i permessi per creare booking diretti. Usa 'Richiedi booking' su desktop.";
+      showErr(msg);
+    } catch (e) {
+      btn.disabled = false; btn.textContent = "Crea booking";
+      showErr((e && e.message) || "Errore di rete.");
+    }
+  }
+  btn.addEventListener("click", submit);
+  load();
+})();
+</script>
+{% endblock %}

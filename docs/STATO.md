@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.167** — 2 giugno 2026 — Mobile Fase B (consultazione business) + audit + mobile force-view
+**v3.5.0-alpha.172.168** — 2 giugno 2026 — Mobile Fase C (crea booking + cost report essenziale)
+
+### α.172.168 ✅ (Mobile Fase C — azioni)
+Creazione booking `/m/booking/new` (form tipo/job→JCL/risorsa/data/orari, gestisce force_single_type + 403 staff) + cost report essenziale `/m/finance/{job_id}` (KPI + voci costo + fatturazione). Entry point booking su Oggi+drawer. Righe Finance → detail. Verificato end-to-end (POST 200 + cleanup), 0 errori console.
+
+**Prossimo Mobile Fase D**: copilot AI mobile + planning lista settimanale. Altre possibilità: timbra rapida da Oggi, dettaglio assegnazione+rispondi (c'è respond), notifiche azioni inline, deliverables view read-only, quote detail. Push commit .160→.168 quando OK.
+
+### α.172.167 — 2 giugno 2026 — Mobile Fase B (consultazione business) + audit + mobile force-view
 
 ### α.172.165–167 ✅ (audit capitolati + force mobile + mobile Fase B)
 - **.165** `scripts/audit_capitolati.py` read-only (TC/FK/enum/colore/segmenti). Fix Fremantle TC. 12 item UHD Rec.2020 PQ+SDR lasciati (RAI inaffidabile, scelta Matteo).

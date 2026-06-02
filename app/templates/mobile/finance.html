@@ -52,7 +52,7 @@
     if (!rows.length) { root.appendChild(mEmpty("Nessun job.")); return; }
     rows.forEach(function (j) {
       var sub = [j.client, "Quotato " + mMoney(j.total_quoted_base || j.total_quoted)].filter(Boolean).join(" · ");
-      var row = mListRow("/m/finance#" + j.id, j.title || j.code, sub,
+      var row = mListRow("/m/finance/" + j.id, j.title || j.code, sub,
         mMoney(j.total_accrued_base || j.total_accrued), "m-badge-accent");
       root.appendChild(row);
     });

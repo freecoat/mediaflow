@@ -91,3 +91,14 @@ async def m_cliente_detail(request: Request, client_id: int):
 @router.get("/finance", response_class=HTMLResponse, include_in_schema=False)
 async def m_finance(request: Request):
     return _page(request, "finance", active="finance")
+
+
+@router.get("/finance/{job_id}", response_class=HTMLResponse, include_in_schema=False)
+async def m_finance_job(request: Request, job_id: int):
+    return _page(request, "finance_job", active="finance", entity_id=job_id)
+
+
+# ── Fase C: azioni — creazione booking ─────────────────────────────────────
+@router.get("/booking/new", response_class=HTMLResponse, include_in_schema=False)
+async def m_booking_new(request: Request):
+    return _page(request, "booking_new", active="assegnazioni")

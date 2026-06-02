@@ -1,0 +1,77 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Cost report — Claqo{% endblock %}
+{% block topbar %}Cost report{% endblock %}
+{% block content %}
+  <a href="/m/finance" class="m-btn m-btn-ghost" style="margin-bottom:12px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;"><i data-lucide="chevron-left"></i> Finance</a>
+  <div id="m-fj-root" class="m-section">
+    <div class="m-skeleton"><div class="m-skeleton-card"></div><div class="m-skeleton-card"></div></div>
+  </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  var ID = {{ entity_id }};
+
+  function kpi(label, val, cls) {
+    var k = mEl("div", "m-kpi");
+    var l = mEl("div", "m-kpi-label"); l.textContent = label; k.appendChild(l);
+    var v = mEl("div", "m-kpi-val" + (cls ? " " + cls : "")); v.textContent = val; k.appendChild(v);
+    return k;
+  }
+
+  async function load() {
+    var root = document.getElementById("m-fj-root"); mClear(root);
+    var d;
+    try { d = await mapi("GET", "/cost-report/api/job/" + ID); }
+    catch (e) { mError(root, "Cost report non disponibile."); return; }
+    var job = d.job || {}, s = d.summary || {};
+    document.querySelector(".m-top-title").textContent = job.code || "Cost report";
+
+    var head = mCard(null);
+    var t = mEl("div", "m-card-title"); t.textContent = job.title || job.code || "Job"; head.appendChild(t);
+    if (job.client) { var sub = mEl("div", "m-list-sub"); sub.textContent = job.client; head.appendChild(sub); }
+    root.appendChild(head);
+
+    // KPI economici essenziali
+    var grid = mEl("div", "m-kpi-grid");
+    var margin = s.real_margin_effective != null ? s.real_margin_effective : s.real_margin;
+    var ou = s.over_under != null ? s.over_under : s.over_under_now;
+    grid.appendChild(kpi("Quotato", mMoney(s.total_quoted)));
+    grid.appendChild(kpi("Maturato", mMoney(s.total_accrued)));
+    grid.appendChild(kpi("Costo maturato", mMoney(s.total_cost_accrued)));
+    grid.appendChild(kpi("Margine", mMoney(margin), (margin || 0) >= 0 ? "pos" : "neg"));
+    root.appendChild(grid);
+
+    var grid2 = mEl("div", "m-kpi-grid");
+    grid2.appendChild(kpi("Fatturato", mMoney(s.billed_locked != null ? s.billed_locked : s.invoiced_net)));
+    grid2.appendChild(kpi("Over/Under", mMoney(ou), (ou || 0) > 0 ? "neg" : "pos"));
+    root.appendChild(grid2);
+
+    // Righe di costo
+    var lines = d.cost_lines || [];
+    var lc = mCard("Voci di costo (" + lines.length + ")", "list");
+    if (!lines.length) lc.appendChild(mEmpty("Nessuna voce."));
+    else lines.forEach(function (l) {
+      var ouL = l.over_under != null ? l.over_under : l.over_under_now;
+      var badgeTxt = (ouL && Math.abs(ouL) >= 1) ? (ouL > 0 ? "Over " + mMoney(ouL) : mMoney(ouL)) : null;
+      var sub = [l.category, "Quotato " + mMoney(l.total_quoted) + " · Mat " + mMoney(l.total_accrued)].filter(Boolean).join(" · ");
+      lc.appendChild(mListRow("#", l.description || "—", sub, badgeTxt, (ouL || 0) > 0 ? "m-badge-err" : "m-badge-out"));
+    });
+    root.appendChild(lc);
+
+    // Stato fatturazione
+    var bs = d.billing_summary || {};
+    var bc = mCard("Fatturazione", "receipt");
+    bc.appendChild(mField("Non fatturato", mMoney(bs.not_billed)));
+    bc.appendChild(mField("In batch", mMoney(bs.in_batch)));
+    bc.appendChild(mField("Fatturato", mMoney(bs.billed)));
+    bc.appendChild(mField("Incassato", mMoney(bs.paid)));
+    root.appendChild(bc);
+
+    mLucide();
+  }
+  load();
+})();
+</script>
+{% endblock %}
