@@ -3076,10 +3076,14 @@ function _loadShippingMarkupInto() {
 // e prosegue le modifiche su quella. Ritorna l'id della quote su cui
 // applicare la modifica (può differire da currentQuoteId dopo versioning).
 async function _ensureEditableQuoteOrVersion(actionLabel) {
-  if (!currentQuote || currentQuote.status !== 'approved') return currentQuoteId;
+  // v3.5.0-alpha.172.176 — immutabili: approved + rejected (come il backend, 409).
+  // I Consuntivi (is_phantom) restano editabili. Messaggio con stato dinamico.
+  const _IMMUT = { approved: 'APPROVATA', rejected: 'RIFIUTATA' };
+  const _st = currentQuote && currentQuote.status;
+  if (!currentQuote || !_IMMUT[_st] || currentQuote.is_phantom) return currentQuoteId;
   const ok1 = confirm(
-    `⚠ Quote APPROVATA — ${actionLabel || 'modifica in corso'}.\n\n` +
-    `Le modifiche su una quote approvata richiedono una NUOVA VERSIONE ` +
+    `⚠ Quote ${_IMMUT[_st]} — ${actionLabel || 'modifica in corso'}.\n\n` +
+    `Le modifiche su una quote ${_IMMUT[_st].toLowerCase()} richiedono una NUOVA VERSIONE ` +
     `(la versione attuale resta come storico). Continuare?`
   );
   if (!ok1) return null;
@@ -4016,6 +4020,9 @@ async function quoteSaveConfirm() {
 let _ltTemplates = [];
 async function openLoadFromTemplate() {
   if (!currentQuoteId) { toast('Apri prima una quote', 'warning'); return; }
+  // v3.5.0-alpha.172.176 — quote approvata: avvisa + proponi nuova versione.
+  const editableId = await _ensureEditableQuoteOrVersion('Carica da template');
+  if (!editableId) return;
   try {
     _ltTemplates = await api('GET', '/delivery-templates/api/list');
   } catch(e) {
@@ -4533,6 +4540,11 @@ async function confirmLoadFromTemplate() {
 let _bpBuckets = [];
 async function openBucketPicker() {
   if (!currentQuoteId) { toast('Apri prima una quote', 'warning'); return; }
+  // v3.5.0-alpha.172.176 — quote approvata immutabile: avvisa e proponi nuova
+  // versione (draft) PRIMA di aprire il picker. Se l'utente accetta, la nuova
+  // versione viene caricata e il picker va riaperto su quella.
+  const editableId = await _ensureEditableQuoteOrVersion('Picker capitolato');
+  if (!editableId) return;
   let templates = [];
   try {
     templates = await api('GET', '/delivery-templates/api/list');

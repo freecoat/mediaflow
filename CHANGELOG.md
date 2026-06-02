@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.176 — Picker/carica-template su quote immutabile → warning nuova versione (2 giu 2026)
+
+Richiesta Matteo: aggiungere voci (picker capitolato o "Carica da template") su una quotazione
+**approvata** deve avvisare e proporre di creare una **nuova versione** (la corrente è immutabile),
+non dare un errore secco.
+- Cablato il guard esistente `_ensureEditableQuoteOrVersion` all'entry di **`openBucketPicker`** e
+  **`openLoadFromTemplate`** (prima coperti solo add/edit voce singola).
+- Guard reso **generico**: scatta su `approved` **e** `rejected` (come il backend, 409), escluso i
+  Consuntivi (`is_phantom`, editabili). Messaggio con stato dinamico (APPROVATA/RIFIUTATA).
+- Su conferma: crea nuova versione (draft), la carica, l'utente ripete l'azione sulla bozza.
+- Solo template (hard refresh). Smoke browser: picker + carica-template su quote approvata → warning,
+  nessuna apertura modal. 317 test invariati.
 ## v3.5.0-alpha.172.175 — Fix: new-version quote perdeva le etichette capitolato (2 giu 2026)
 
 **Bug (Matteo)**: generando una nuova versione da quote approvata, le etichette del picker capitolato

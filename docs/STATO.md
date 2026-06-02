@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.175** — 2 giugno 2026 — Fix new-version perdeva etichette capitolato
+**v3.5.0-alpha.172.176** — 2 giugno 2026 — Picker/template su quote immutabile → warning nuova versione
+
+### α.172.176 ✅ (guard add-voci su quote approvata)
+`_ensureEditableQuoteOrVersion` cablato su `openBucketPicker` + `openLoadFromTemplate` (prima solo add/edit voce singola). Guard generico: approved+rejected (no Consuntivi phantom), messaggio dinamico, su conferma crea+carica nuova versione. Solo template. Smoke browser ok (warning, no apertura). 317 test.
+
+### α.172.175 — 2 giugno 2026 — Fix new-version perdeva etichette capitolato
 
 ### α.172.175 ✅ (new-version quote: label capitolato preservate)
 `_copy_quote_lines` (new-version + duplicate) non copiava `section_label`/`delivery_item_id`/`is_optional` → le etichette picker capitolato sparivano nelle nuove versioni. Fix: copy propaga i 3 campi. Quote sorgente intatte. +2 test (**317**). Server :9000 da riavviare per attivare.
