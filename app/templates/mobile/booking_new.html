@@ -110,11 +110,13 @@
     var humans = humanSelected();
     if (humans.length < 2) { billBlock.style.display = "none"; return; }
     billBlock.style.display = "";
-    if (billRes.options.length !== humans.length) {
+    var humanIdsKey = humans.map(function (r) { return r.id; }).join(",");
+    if (billRes.getAttribute("data-ids") !== humanIdsKey) {
       billRes.innerHTML = "";
       humans.forEach(function (r) {
         var o = document.createElement("option"); o.value = String(r.id); o.textContent = r.name; billRes.appendChild(o);
       });
+      billRes.setAttribute("data-ids", humanIdsKey);
     }
     var mode = modeEl.value;
     billRes.style.display = (mode === "specific") ? "" : "none";
