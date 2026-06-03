@@ -251,6 +251,7 @@ async def update_item(
     program_start: Optional[str] = Form(None),
     timeline_segments_json: Optional[str] = Form(None),
     audio_config_preset_id: Optional[str] = Form(None),
+    enforce_coherence: bool = Form(True),
     db: Session = Depends(get_db),
 ):
     it = db.query(DeliveryItem).filter(
@@ -342,6 +343,15 @@ async def update_item(
         else:
             it.audio_config_preset_id = None
             it.audio_config_code = None
+
+    # v3.5.0-alpha.172.183 — enforcement coerenza: l'edit manuale (planning/capitolato)
+    # non può salvare combinazioni ERROR. AI/import non passano da qui (materialize_items)
+    # → restano warn-only. WARNING non bloccano.
+    if enforce_coherence:
+        from app.services.delivery_item_validation import validate_delivery_item
+        _errs = [f for f in validate_delivery_item(db, it) if f.get("severity") == "error"]
+        if _errs:
+            raise HTTPException(422, detail={"code": "SPEC_COHERENCE_ERROR", "findings": _errs})
 
     db.commit()
     db.refresh(it)

@@ -148,3 +148,39 @@ def test_spec_schema_j2k_in_mov_errors(client_admin, taxo):
     assert r.status_code == 200
     findings = r.json()["findings"]
     assert any(f["code"] == "J2K_REQUIRES_MXF" and f["severity"] == "error" for f in findings)
+
+
+# ── Enforcement ERROR su PUT /delivery-items/api/{iid} (SC-T3) ───────────
+@pytest.fixture
+def prores_item(client_admin, taxo):
+    """DeliveryItem valido (ProRes in QuickTime) salvato. Ritorna iid."""
+    s = client_admin.session
+    from app.models.models import DeliveryItem, DeliveryTemplate
+    tpl = DeliveryTemplate(tenant_id=1, code="T1", name="Test")
+    s.add(tpl); s.commit(); s.refresh(tpl)
+    it = DeliveryItem(tenant_id=1, delivery_template_id=tpl.id, name="Master",
+                      container_id=taxo["mov"], video_codec_id=taxo["prores"])
+    s.add(it); s.commit(); s.refresh(it)
+    return it.id
+
+
+def test_update_item_blocks_error_combo(client_admin, taxo, prores_item):
+    # container QuickTime (mov) + codec J2K → R4 error → 422
+    r = client_admin.put(f"/delivery-items/api/{prores_item}",
+                         data={"video_codec_id": taxo["j2k"], "container_id": taxo["mov"]})
+    assert r.status_code == 422
+    assert "J2K_REQUIRES_MXF" in str(r.json())
+
+
+def test_update_item_allows_valid_combo(client_admin, taxo, prores_item):
+    # J2K in MXF → valido → 200
+    r = client_admin.put(f"/delivery-items/api/{prores_item}",
+                         data={"video_codec_id": taxo["j2k"], "container_id": taxo["mxf"]})
+    assert r.status_code == 200
+
+
+def test_update_item_warning_does_not_block(client_admin, taxo, prores_item):
+    # ProRes in MXF → R3 warning → 200
+    r = client_admin.put(f"/delivery-items/api/{prores_item}",
+                         data={"video_codec_id": taxo["prores"], "container_id": taxo["mxf"]})
+    assert r.status_code == 200
