@@ -22,8 +22,21 @@
       <select class="m-select" id="bn-jcl"><option value="">— scegli prima il job —</option></select>
     </div>
     <div class="m-form-group">
-      <label class="m-label" for="bn-resource">Risorsa</label>
-      <select class="m-select" id="bn-resource"><option value="">— caricamento… —</option></select>
+      <label class="m-label">Risorse</label>
+      <div id="bn-resources" style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto;">
+        <div style="opacity:.6;">— caricamento… —</div>
+      </div>
+    </div>
+    <div class="m-form-group" id="bn-billable-block" style="display:none;">
+      <label class="m-label">Ore fatturabili al cliente: <span id="bn-billable-total">—</span></label>
+      <select class="m-select" id="bn-billable-mode">
+        <option value="max">Max (una principale)</option>
+        <option value="sum">Somma (tutte in parallelo)</option>
+        <option value="specific">Solo una risorsa</option>
+        <option value="manual">Manuale</option>
+      </select>
+      <select class="m-select" id="bn-billable-res" style="display:none;margin-top:6px;"></select>
+      <input class="m-input" id="bn-billable-manual" type="number" min="0" step="0.5" placeholder="ore" style="display:none;margin-top:6px;">
     </div>
     <div class="m-form-group">
       <label class="m-label" for="bn-date">Data</label>
@@ -57,10 +70,72 @@
   var jclGroup = document.getElementById("bn-jcl-group");
   var jobEl = document.getElementById("bn-job");
   var jclEl = document.getElementById("bn-jcl");
-  var resEl = document.getElementById("bn-resource");
+  var resBox = document.getElementById("bn-resources");
   var dateEl = document.getElementById("bn-date");
   var errEl = document.getElementById("bn-err");
   var btn = document.getElementById("bn-submit");
+
+  var modeEl = document.getElementById("bn-billable-mode");
+  var billBlock = document.getElementById("bn-billable-block");
+  var billRes = document.getElementById("bn-billable-res");
+  var billManual = document.getElementById("bn-billable-manual");
+  var RES_CACHE = [];
+  var _bnTimer = null;
+
+  function selectedAssignments() {
+    var date = dateEl.value;
+    var st = document.getElementById("bn-start").value;
+    var en = document.getElementById("bn-end").value;
+    var out = [];
+    resBox.querySelectorAll("input[type=checkbox]:checked").forEach(function (cb) {
+      out.push({
+        resource_id: parseInt(cb.value, 10),
+        start_datetime: date + "T" + st + ":00",
+        end_datetime: date + "T" + en + ":00",
+      });
+    });
+    return out;
+  }
+  function humanSelected() {
+    var humanTypes = ["person_internal", "person_freelance", "person"];
+    var res = [];
+    resBox.querySelectorAll("input[type=checkbox]:checked").forEach(function (cb) {
+      var r = RES_CACHE.find(function (x) { return x.id === parseInt(cb.value, 10); });
+      if (r && humanTypes.indexOf(r.type) !== -1) res.push(r);
+    });
+    return res;
+  }
+
+  async function bnRefreshBillable() {
+    var humans = humanSelected();
+    if (humans.length < 2) { billBlock.style.display = "none"; return; }
+    billBlock.style.display = "";
+    if (billRes.options.length !== humans.length) {
+      billRes.innerHTML = "";
+      humans.forEach(function (r) {
+        var o = document.createElement("option"); o.value = String(r.id); o.textContent = r.name; billRes.appendChild(o);
+      });
+    }
+    var mode = modeEl.value;
+    billRes.style.display = (mode === "specific") ? "" : "none";
+    billManual.style.display = (mode === "manual") ? "" : "none";
+    clearTimeout(_bnTimer);
+    _bnTimer = setTimeout(async function () {
+      var fd = new FormData();
+      fd.append("assignments", JSON.stringify(selectedAssignments()));
+      fd.append("billable_hours_mode", mode);
+      if (mode === "specific") fd.append("billable_hours_resource_id", billRes.value);
+      if (mode === "manual") fd.append("billable_hours_manual", billManual.value || "0");
+      try {
+        var r = await fetch("/planning/api/bookings/preview-billable", { method: "POST", body: fd, credentials: "same-origin" });
+        var d = await r.json();
+        document.getElementById("bn-billable-total").textContent = (d.billable_hours != null ? d.billable_hours + " h" : "—");
+      } catch (e) { document.getElementById("bn-billable-total").textContent = "—"; }
+    }, 200);
+  }
+  modeEl.addEventListener("change", bnRefreshBillable);
+  billRes.addEventListener("change", bnRefreshBillable);
+  billManual.addEventListener("input", bnRefreshBillable);
 
   // default data = oggi
   try { dateEl.value = new Date().toISOString().slice(0, 10); } catch (e) {}
@@ -79,6 +154,9 @@
     jclGroup.style.display = isP ? "" : "none";
   }
   kindEl.addEventListener("change", toggleJob);
+  dateEl.addEventListener("change", bnRefreshBillable);
+  document.getElementById("bn-start").addEventListener("change", bnRefreshBillable);
+  document.getElementById("bn-end").addEventListener("change", bnRefreshBillable);
 
   // Al cambio job → carica le lavorazioni (JCL) di quel job.
   jobEl.addEventListener("change", async function () {
@@ -98,17 +176,30 @@
     } catch (e) { fillSelect(jobEl, [], "id", function(){}, "— errore job —"); }
     try {
       var res = await mapi("GET", "/resources/api");
-      var act = (res || []).filter(function (r) { return r.is_active !== false; });
-      fillSelect(resEl, act, "id", function (r) { return r.name + (r.role ? " (" + r.role + ")" : ""); }, "— scegli risorsa —");
-    } catch (e) { fillSelect(resEl, [], "id", function(){}, "— errore risorse —"); }
+      RES_CACHE = (res || []).filter(function (r) { return r.is_active !== false; });
+      resBox.innerHTML = "";
+      RES_CACHE.forEach(function (r) {
+        var row = document.createElement("label");
+        row.style.cssText = "display:flex;align-items:center;gap:8px;";
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.value = String(r.id);
+        cb.addEventListener("change", bnRefreshBillable);
+        row.appendChild(cb);
+        var span = document.createElement("span");
+        span.textContent = r.name + (r.role ? " (" + r.role + ")" : "");
+        row.appendChild(span);
+        resBox.appendChild(row);
+      });
+    } catch (e) { resBox.innerHTML = "<div style='color:var(--danger)'>— errore risorse —</div>"; }
     toggleJob();
   }
 
   async function submit() {
     showErr("");
-    var kind = kindEl.value, rid = resEl.value, date = dateEl.value;
+    var kind = kindEl.value, date = dateEl.value;
     var st = document.getElementById("bn-start").value, en = document.getElementById("bn-end").value;
-    if (!rid) return showErr("Seleziona una risorsa.");
+    var assignments = selectedAssignments();
+    if (!assignments.length) return showErr("Seleziona almeno una risorsa.");
     if (!date || !st || !en) return showErr("Data, inizio e fine obbligatori.");
     if (en <= st) return showErr("La fine deve essere dopo l'inizio.");
     if (kind === "project" && !jobEl.value) return showErr("Seleziona un job per i booking di progetto.");
@@ -117,16 +208,18 @@
     var notes = document.getElementById("bn-notes").value.trim();
     function buildFd(force) {
       var fd = new FormData();
-      fd.append("assignments", JSON.stringify([{
-        resource_id: parseInt(rid, 10),
-        start_datetime: date + "T" + st + ":00",
-        end_datetime: date + "T" + en + ":00",
-      }]));
+      fd.append("assignments", JSON.stringify(assignments));
       fd.append("kind", kind);
       fd.append("status", document.getElementById("bn-status").value);
       if (kind === "project") { fd.append("job_id", jobEl.value); fd.append("job_cost_line_id", jclEl.value); }
       if (notes) fd.append("notes", notes);
       if (force) fd.append("force_single_type", "true");
+      if (billBlock.style.display !== "none") {
+        var m = modeEl.value;
+        fd.append("billable_hours_mode", m);
+        if (m === "specific") fd.append("billable_hours_resource_id", billRes.value);
+        if (m === "manual") fd.append("billable_hours_manual", billManual.value || "0");
+      }
       return fd;
     }
     async function post(force) {
