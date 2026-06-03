@@ -34,9 +34,9 @@ def test_normalize_maxlength_non_int_becomes_none():
 
 
 def test_normalize_unknown_tokens_flagged():
-    out = nr.normalize_naming_convention({"pattern": "{title}_{nope}", "tokens": ["title", "nope"]})
+    out = nr.normalize_naming_convention({"pattern": "{project_title}_{nope}", "tokens": ["project_title", "nope"]})
     assert "nope" in out["unknown_tokens"]
-    assert "title" not in out["unknown_tokens"]
+    assert "project_title" not in out["unknown_tokens"]
 
 
 def test_normalize_none_returns_none():

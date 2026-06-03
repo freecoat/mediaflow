@@ -126,7 +126,6 @@ TOKEN_HELP: list[dict] = [
     # Project / Client
     {"token": "project_code",       "group": "Project",  "desc": "Codice progetto (es. MARE-2026)"},
     {"token": "project_title",      "group": "Project",  "desc": "Titolo progetto completo"},
-    {"token": "title",              "group": "Project",  "desc": "Alias di project_title (titolo)"},
     {"token": "client_name",        "group": "Client",   "desc": "Nome cliente"},
     {"token": "client_code",        "group": "Client",   "desc": "Codice cliente abbreviato"},
     {"token": "studio_code",        "group": "Client",   "desc": "Codice studio (4-8 caratteri, es. RAI/SKY/A24)"},
