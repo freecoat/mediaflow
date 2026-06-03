@@ -90,6 +90,7 @@
     <div class="settings-tab" data-pane="company" onclick="showPane('company')"><i data-lucide="building-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Azienda</div>
     {% if is_admin(user) %}
     <div class="settings-tab" data-pane="numbering" onclick="showPane('numbering')"><i data-lucide="hash" style="width:14px;height:14px;vertical-align:-2px;"></i> Naming conventions</div>
+    <div class="settings-tab" data-pane="naming" onclick="showPane('naming')"><i data-lucide="file-type" style="width:14px;height:14px;vertical-align:-2px;"></i> Naming asset</div>
     <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
     <div class="settings-tab" data-pane="storage" onclick="showPane('storage')"><i data-lucide="hard-drive" style="width:14px;height:14px;vertical-align:-2px;"></i> Storage</div>
     {% endif %}
@@ -815,6 +816,19 @@ AWS_S3_DEFAULT_BUCKET=Claqo-prod</pre>
       </div>
     </div>
 
+    <!-- ── Pannello Naming asset (α.172.182) ──────────────────── -->
+    <div class="settings-pane" id="pane-naming">
+      <div class="card" id="naming-conv-card">
+        <div class="card-title">Naming convention (default azienda)</div>
+        <p class="text-muted text-sm">Convenzione applicata a tutti gli asset prodotti, salvo override del capitolato o della singola voce. Token tra <code>{graffe}</code>.</p>
+        <div id="nc-token-help" class="text-xs text-muted" style="margin:6px 0;"></div>
+        <div id="nc-editors"></div>
+        {% if is_admin(user) %}
+        <button class="btn btn-primary btn-sm" id="nc-save" style="margin-top:10px;">Salva naming convention</button>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- ── Pannello Dati (admin only, v3.5.0-alpha.34) ────────── -->
     <div class="settings-pane" id="pane-data">
       <div class="card mb-4">
@@ -981,11 +995,76 @@ function showPane(id) {
   if (id === 'hours') whReload();
   if (id === 'storage') { fspReload(); s3StatusReload(); }
   if (id === 'numbering') nmbReload();
+  if (id === 'naming') ncLoad();
   if (id === 'diag') {
     const cb = document.getElementById('diag-verbose-toggle');
     if (cb && typeof window.mfLogVerboseIsOn === 'function') cb.checked = window.mfLogVerboseIsOn();
   }
 }
+
+// ── α.172.182 — Naming convention asset (default azienda) ─────────────
+// Editor per disciplina video/audio: pattern/separator/case/extension/max_length
+// + anteprima live + elenco token. Carica da GET, salva con PUT (Form).
+async function ncLoad() {
+  let data;
+  try { data = await api('GET', '/settings/api/naming-conventions'); }
+  catch(e) { toast(e.message || 'Errore caricamento naming', 'error'); return; }
+  const th = document.getElementById('nc-token-help');
+  if (th) th.textContent = 'Token: ' + (data.token_help || []).map(t => '{' + t.token + '}').join('  ');
+  const host = document.getElementById('nc-editors');
+  if (!host) return;
+  host.innerHTML = '';
+  window._ncState = JSON.parse(JSON.stringify(data.conventions || {}));
+  ['video', 'audio'].forEach(disc => {
+    const c = (window._ncState[disc]) || {pattern:'', separator:'_', case:'asis', extension:'', max_length:'', allowed_chars:'A-Za-z0-9_-', examples:[]};
+    window._ncState[disc] = c;
+    const box = document.createElement('div');
+    box.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:10px;';
+    const title = document.createElement('div'); title.style.fontWeight='600'; title.style.marginBottom='6px';
+    title.textContent = disc === 'video' ? 'Video' : 'Audio';
+    box.appendChild(title);
+    const mk = (label, key) => {
+      const w = document.createElement('label'); w.style.cssText='display:block;font-size:12px;margin:4px 0;';
+      w.textContent = label + ' ';
+      const i = document.createElement('input'); i.className='form-input'; i.value = c[key] != null ? c[key] : '';
+      i.addEventListener('input', () => { window._ncState[disc][key] = i.value; ncPreview(disc); });
+      w.appendChild(i); return w;
+    };
+    box.appendChild(mk('Pattern', 'pattern'));
+    box.appendChild(mk('Separatore', 'separator'));
+    box.appendChild(mk('Estensione', 'extension'));
+    box.appendChild(mk('Max length', 'max_length'));
+    const cw = document.createElement('label'); cw.style.cssText='display:block;font-size:12px;margin:4px 0;'; cw.textContent='Case ';
+    const cs = document.createElement('select'); cs.className='form-select';
+    ['asis','upper','lower'].forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; if(v===(c.case||'asis')) o.selected=true; cs.appendChild(o); });
+    cs.addEventListener('change', () => { window._ncState[disc].case = cs.value; ncPreview(disc); });
+    cw.appendChild(cs); box.appendChild(cw);
+    const prev = document.createElement('div'); prev.id = 'nc-preview-' + disc; prev.style.cssText='font-size:12px;margin-top:6px;color:var(--indigo2);';
+    box.appendChild(prev);
+    host.appendChild(box);
+    ncPreview(disc);
+  });
+}
+function ncPreview(disc) {
+  const c = window._ncState[disc] || {};
+  const demo = {project_code:'MARE-2026', film_name:'MareNostrum', project_title:'MareNostrum', resolution:'UHD', lang_audio:'it', audio_config:'51', date_compact:'20260612', deliverable_kind:'PRORES'};
+  let out = (c.pattern || '').replace(/\{([a-z_]+)\}/gi, (m, k) => demo[k.toLowerCase()] || '__');
+  if (c.case === 'upper') out = out.toUpperCase(); else if (c.case === 'lower') out = out.toLowerCase();
+  if (c.extension) out += c.extension;
+  const el = document.getElementById('nc-preview-' + disc);
+  if (el) el.textContent = 'Anteprima: ' + out;
+}
+async function ncSave() {
+  ['video','audio'].forEach(disc => {
+    const c = window._ncState[disc] || {};
+    c.tokens = [...new Set((c.pattern||'').match(/\{([a-z_]+)\}/gi) || [])].map(s => s.replace(/[{}]/g,'').toLowerCase());
+    if (c.max_length === '') c.max_length = null;
+  });
+  const fd = new FormData(); fd.append('conventions_json', JSON.stringify(window._ncState));
+  try { await api('PUT', '/settings/api/naming-conventions', fd); toast('Naming convention salvata', 'success'); }
+  catch(e) { toast(e.message || 'Errore salvataggio', 'error'); }
+}
+document.getElementById('nc-save')?.addEventListener('click', ncSave);
 
 // v3.5.0-alpha.113 — Naming conventions builder drag&drop
 let _nmbData = null;
