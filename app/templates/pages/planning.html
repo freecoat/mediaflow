@@ -2503,6 +2503,25 @@ async function dsmApplySpecSchema() {
       fh.appendChild(d);
     });
   }
+  // v3.5.0-alpha.172.184 — whitelist proattivo: filtra le opzioni del codec
+  // video ai soli id ammessi nel container (valid_video_codec_ids). null = tutti.
+  const validIds = data.valid_video_codec_ids;  // array | null | undefined
+  if (vc && Array.isArray(validIds) && _dsmTaxonomy && Array.isArray(_dsmTaxonomy.video_codecs)) {
+    const allowed = new Set(validIds);
+    const current = vc.value;
+    while (vc.firstChild) vc.removeChild(vc.firstChild);
+    const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '— audio-only —';
+    vc.appendChild(o0);
+    _dsmTaxonomy.video_codecs.forEach(c => {
+      if (!allowed.has(c.id)) return;
+      const o = document.createElement('option');
+      o.value = String(c.id);
+      o.textContent = c.name;
+      if (String(c.id) === String(current)) o.selected = true;
+      vc.appendChild(o);
+    });
+    if (current && !allowed.has(Number(current))) vc.value = '';
+  }
 }
 
 async function dsmSaveStructured() {
