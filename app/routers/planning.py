@@ -1115,7 +1115,7 @@ async def list_bookings(
                 # in un periodo già fatturato. UI mostra lucchetto + tooltip,
                 # API mutator → 409 con detail.code=BOOKING_LOCKED_BY_SLICE.
                 "slice_lock": _lock_for_assignment(a),
-                # v3.5.0-alpha.180 — ore fatturabili (booking-level): esposte qui
+                # v3.5.0-alpha.172.179 — ore fatturabili (booking-level): esposte qui
                 # perché tlbOpenEdit precompila il blocco "Ore fatturabili" dal
                 # booking caricato. Senza questi campi l'edit forzava 'max' e
                 # sovrascriveva silenziosamente la modalità salvata (sum/specific/manual).

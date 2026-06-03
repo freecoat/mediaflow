@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.178** — 2 giugno 2026 — Reject quote approvata+job: prompt progetto-perso / nuova-versione
+**v3.5.0-alpha.172.179** — 3 giugno 2026 — Booking multi-risorsa su mobile + policy ore fatturabili per-booking
+
+### α.172.179 ✅ (multi-risorsa mobile + ore fatturabili configurabili)
+- **Mobile multi-risorsa** (`/m/booking/new`): select singola → lista checkbox; gate `SINGLE_TYPE_WARNING` ora soddisfabile (umana+sala in un booking).
+- **Policy ore FATTURABILI al cliente per-booking** con ≥2 risorse umane: `max` (default storico) / `sum` / `specific` / `manual`. Solo ore-cliente; **costo interno invariato** (somma sempre tutti gli assignment).
+- Nuove colonne `Booking`: `billable_hours_mode`/`_resource_id`/`_manual` (+ `scripts/migrate_billable_hours_mode.py` + auto-migrate al boot).
+- Single-source `cost_line_sync.compute_billable_hours`; endpoint `POST /planning/api/bookings/preview-billable` (preview live, no drift JS).
+- UI inline (totale ore live + selector modalità) nel modal desktop e pagina mobile, visibile solo con ≥2 umane; edit precompila e non sovrascrive il mode salvato. Edit operatore = ricalcolo silenzioso; booking fatturato resta HARD-BLOCK. **338 test.**
+
+**Prossimo**: test browser estensivo di Matteo su desktop+mobile — creazione booking multi-risorsa, le 4 modalità ore fatturabili (max/sum/specific/manual), verifica cost report quantity con `sum` vs `max`. Restart :9000 per attivare backend (auto-migrate colonne).
 
 ### α.172.177-178 ✅ (immutabilità quote: drag&drop, revert, reject lifecycle)
 - **.177**: guard drag&drop listino (prima 409 secco) + revert visivo su annulla in saveLineField/Discount/optional/section (reloadQuote).

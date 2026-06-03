@@ -1,5 +1,25 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.179 — Booking multi-risorsa su mobile + policy ore fatturabili per-booking (3 giu 2026)
+
+Estensione del booking multi-risorsa anche al mobile + politica configurabile per le ore **fatturabili al
+cliente** quando un singolo booking coinvolge più risorse umane. Il costo interno resta invariato.
+- **Booking multi-risorsa su mobile** (`/m/booking/new`): la select singola diventa una **lista di
+  checkbox**; il gate `SINGLE_TYPE_WARNING` ora è soddisfabile da mobile (es. risorsa umana + sala nello
+  stesso booking).
+- **Ore fatturabili al cliente configurabili per-booking** quando ci sono **≥2 risorse umane**:
+  `max` (default, comportamento storico) / `sum` / `specific` (ore di una risorsa scelta) / `manual` (valore
+  inserito a mano). Influenza **solo** le ore-cliente; il **costo interno** è sempre la somma di tutti gli
+  assignment.
+- **Nuove colonne `Booking`**: `billable_hours_mode`, `billable_hours_resource_id`, `billable_hours_manual`
+  (+ migrazione `scripts/migrate_billable_hours_mode.py` + auto-migrate al boot).
+- **Single-source** `cost_line_sync.compute_billable_hours`; nuovo endpoint
+  `POST /planning/api/bookings/preview-billable` (preview live lato server, niente drift di calcolo in JS).
+- **UI inline** (totale ore live + selettore modalità) nel modal desktop e nella pagina mobile, visibile
+  **solo con ≥2 umane**; l'edit precompila e **non** sovrascrive il mode già salvato.
+- Edit di un operatore = **ricalcolo silenzioso** delle ore fatturabili; booking già fatturato resta
+  **HARD-BLOCK**.
+
 ## v3.5.0-alpha.172.178 — Reject quote approvata con job: prompt progetto-perso / nuova-versione (2 giu 2026)
 
 Richiesta Matteo (punto 3): rifiutare una quote approvata con Job collegato deve offrire una scelta, non

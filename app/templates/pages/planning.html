@@ -8988,7 +8988,7 @@ async function tlbOpenEdit(bookingId) {
   // v3.5.0-alpha.66.1: rileva duplicate-overlap subito all'apertura del modal
   // edit (dato sporco pre-α.63). Mostra warning + bordo rosso sulle righe.
   _tlbCheckDuplicateOverlaps();
-  // α.172.180: precompila il blocco "Ore fatturabili" dalla modalità salvata
+  // α.172.179: precompila il blocco "Ore fatturabili" dalla modalità salvata
   // sul booking (il serializer ora espone billable_hours_mode/_resource_id/_manual
   // in extendedProps). Senza questo, l'edit forzava 'max' (default _tlbReset) e al
   // salvataggio sovrascriveva silenziosamente sum/specific/manual con 'max'.
