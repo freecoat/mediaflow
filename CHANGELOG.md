@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.182 — Naming convention strutturata nei capitolati + default tenant (3 giu 2026)
+
+- Naming convention dei file ora **strutturata a token** (riusa il vocabolario di `naming_helper`), su 3 livelli con override a cascata: **item > capitolato > default tenant**.
+- **Default tenant** (azienda) editabile in `/settings` → tab "Naming asset", per disciplina **video** e **audio**, seedato dalle convenzioni industry (DCP ISDCF / IMF / Netflix), lazy (costante finché non si salva).
+- **Estrazione di default a ogni ingest**: il parser capitolato estrae la naming strutturata per il capitolato (`deliverables_parser`) e per ogni voce (`delivery_items_parser` PASS2), validata da `normalize_naming_convention`.
+- `resolve_naming_convention` single-source per la risoluzione a cascata; nuove colonne `Tenant.naming_conventions` + `DeliveryItem.naming_convention` (+ migrazione `scripts/migrate_naming_convention.py` + auto-migrate).
+- UI capitolato: blocco naming **editabile** (pattern/separator/case/extension/max_length/allowed_chars/examples/raw_note) + anteprima nome.
+- **BACKLOG**: (1) verifica QC del filename asset vs naming risolta; (2) UI override naming **manuale** per singola voce (l'auto-estrazione c'è già); (3) vincoli specs per tipo file (sub-selezione H.264 propagata, ProRes non accetta specs H264, campi non pertinenti oscurati — audio/quicktime).
+
 ## v3.5.0-alpha.172.181 — Fix: migrate-job perdeva il link capitolato dei deliverable (3 giu 2026)
 
 Bug segnalato da Matteo: creando una nuova versione da quote approvata + migrazione job + deliveries aggiunte via picker capitolato, i deliverable risultavano **scollegati dal capitolato** in `/planning?view=deliverables`.

@@ -8,7 +8,23 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.180** — 3 giugno 2026 — Filtro reparto deliverables + 2 fix quote versioning
+**v3.5.0-alpha.172.182** — 3 giugno 2026 — Naming convention strutturata nei capitolati + default tenant
+
+### α.172.182 ✅ (naming convention strutturata, 3 livelli)
+- **Naming convention strutturata a token** (riusa il vocabolario di `naming_helper`), risolta a cascata su 3 livelli: **item > capitolato > default tenant**, via `resolve_naming_convention` (single-source).
+- **Default tenant** editabile in `/settings` → tab "Naming asset", per disciplina **video** e **audio**, seedato dalle convenzioni industry (DCP ISDCF / IMF / Netflix), **lazy** (costante finché non si salva).
+- **Estrazione di default a ogni ingest**: il parser capitolato estrae la naming strutturata per il capitolato (`deliverables_parser`) e per ogni voce (`delivery_items_parser` PASS2), validata da `normalize_naming_convention`.
+- Nuove colonne `Tenant.naming_conventions` + `DeliveryItem.naming_convention` (+ `scripts/migrate_naming_convention.py` + auto-migrate al boot).
+- **UI capitolato**: blocco naming editabile (pattern/separator/case/extension/max_length/allowed_chars/examples/raw_note) + anteprima nome.
+- **355 test** verdi.
+
+**Prossimo**:
+- **Test browser Matteo**: `/settings` tab "Naming asset" (edita convenzioni video/audio + salva → restano persistite); capitolato → blocco naming editabile (salva + anteprima nome); re-ingest di un capitolato e verifica che la naming strutturata sia estratta sia sul template sia sulle singole voci. Restart :9000 per backend (auto-migrate colonne).
+- **BACKLOG** (esplicito):
+  1. **QC verifica filename asset** vs naming risolta (`resolve_naming_convention`) — non ancora implementato.
+  2. **UI override naming per-item MANUALE**: l'auto-estrazione c'è già (PASS2); manca il widget per editare a mano la naming della singola voce. Endpoint `PUT /delivery-items/api/{iid}` già esiste → estendere `update_item` + `_serialize_item` + widget modale item.
+  3. **Vincoli specs per tipo file** (3 osservazioni): la sub-selezione H.264 non è propagata al deliverable; le specs andrebbero vincolate al tipo file (ProRes non accetta specs H264); i campi non pertinenti vanno oscurati per audio/quicktime.
+  4. Promuovere fixture `client_admin` (duplicata in `test_billable_hours_mode.py` + `test_naming_settings.py`) a `tests/conftest.py`.
 
 ### α.172.180 ✅ (3 fix da test Matteo)
 - **Filtro reparto sui deliverable** (`/planning/?view=deliverables`): `/jobs/api/deliverables/list` ora espone `department_id`/name/color per riga (da `JobDeliverable.price_item_id → PriceItem.department_id`, fallback JCL→price_item→risorsa); `renderDeliverableHub` legge `f-dept` e filtra client-side. Distingue Suono/Video via reparto. Verificato live (8 DI/Video + 3 Audio).
