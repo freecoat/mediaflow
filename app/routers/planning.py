@@ -1508,6 +1508,83 @@ async def create_booking(
     }
 
 
+@router.post("/api/bookings/preview-billable")
+async def preview_billable_hours(
+    request: Request,
+    assignments: str = Form(...),
+    billable_hours_mode: str = Form("max"),
+    billable_hours_resource_id: Optional[int] = Form(None),
+    billable_hours_manual: Optional[float] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Preview read-only delle ore FATTURABILI per un set di assignment.
+
+    Usa la stessa `cost_line_sync.compute_billable_hours` del cost report ->
+    niente drift JS-vs-server. L'UI lo chiama (debounce) al cambio di
+    durata/risorse/modalità per mostrare "Ore fatturabili: Xh".
+    """
+    from app.services import cost_line_sync as cls
+    try:
+        ass_list = _json.loads(assignments)
+    except Exception:
+        raise HTTPException(400, "assignments deve essere JSON valido (lista)")
+    if not isinstance(ass_list, list):
+        raise HTTPException(400, "assignments deve essere una lista")
+
+    rid_set = {
+        int(a["resource_id"]) for a in ass_list
+        if isinstance(a, dict) and a.get("resource_id")
+    }
+    res_map = {}
+    if rid_set:
+        for r in db.query(Resource).filter(
+            Resource.id.in_(rid_set),
+            Resource.tenant_id == current_tenant_id(),
+        ).all():
+            res_map[r.id] = r
+
+    items = []
+    breakdown = []
+    seen_human = set()
+    for a in ass_list:
+        if not isinstance(a, dict):
+            continue
+        rid = a.get("resource_id")
+        s = a.get("start_datetime")
+        e = a.get("end_datetime")
+        if not rid or not s or not e:
+            continue
+        try:
+            sd = datetime.fromisoformat(s) if isinstance(s, str) else s
+            ed = datetime.fromisoformat(e) if isinstance(e, str) else e
+        except Exception:
+            continue
+        h = max(0.0, (ed - sd).total_seconds() / 3600.0)
+        r = res_map.get(int(rid))
+        if r is not None:
+            rtype = r.type.value if hasattr(r.type, "value") else str(r.type)
+            name = r.name
+        else:
+            rtype, name = "", f"#{rid}"
+        items.append((int(rid), rtype, h))
+        breakdown.append({
+            "resource_id": int(rid), "name": name,
+            "rtype": rtype, "hours": round(h, 2),
+        })
+        if rtype in cls.HUMAN_RESOURCE_TYPES:
+            seen_human.add(int(rid))
+
+    billable = cls.compute_billable_hours(
+        items, billable_hours_mode,
+        billable_hours_resource_id, billable_hours_manual,
+    )
+    return {
+        "billable_hours": round(billable, 2),
+        "human_count": len(seen_human),
+        "breakdown": breakdown,
+    }
+
+
 # ── Booking request flow (v3.5.0-alpha.10) ──────────────────────
 # Editor/operator non possono creare booking direttamente. Inviano una
 # "richiesta" testuale al producer/manager (notifica `booking_request`),
