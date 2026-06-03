@@ -8,7 +8,22 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.183** — 3 giugno 2026 — Editor specs deliverable vincolato al tipo file
+**v3.5.0-alpha.172.184** — 3 giugno 2026 — Whitelist container→codec proattivo
+
+### α.172.184 ✅ (whitelist container→codec proattivo nell'editor planning)
+- Il dropdown **video codec** nell'editor specs del planning mostra ora **solo i codec ammessi** nel container scelto, **derivati dalle regole ERROR esistenti** (single source): J2K/JPEG2000/JPEG-XS solo in MXF; container audio → nessun video codec. ProRes→QuickTime resta selezionabile (warning, non error).
+- Funzione pura `valid_video_codec_ids` in `delivery_item_validation.py`, esposta aggiungendo `valid_video_codec_ids` alla risposta di `POST /delivery-items/api/spec-schema`. Nessuna tabella nuova.
+- L'editor (`dsmApplySpecSchema`) ricostruisce le opzioni del select codec al cambio container; se il codec selezionato non è più ammesso lo azzera. `null` = nessun filtro (container assente).
+- **375 test** verdi.
+
+**Prossimo**:
+- **Test browser Matteo**: container MXF → J2K presente nel dropdown; cambio a QuickTime → J2K sparisce; codec J2K selezionato + cambio a QuickTime → azzerato. Restart :9000 per backend.
+- **BACKLOG** (esplicito):
+  1. **Filtro proattivo anche nel capitolato editor** (oggi solo enforcement 422 α.172.183).
+  2. **Severità R3** ProRes→QuickTime: resta warning (non blocca) — valutare se promuovere.
+  3. **QC verifica filename asset** vs naming risolta (`resolve_naming_convention`) — non ancora implementato.
+  4. **UI override naming per-item MANUALE**: auto-estrazione c'è già (PASS2); manca widget per editare a mano la naming della singola voce.
+  5. Promuovere fixture `client_admin` (duplicata in più test) a `tests/conftest.py`.
 
 ### α.172.183 ✅ (editor specs deliverable vincolato al tipo file)
 - **Auto-populate**: il modal specs del planning pre-carica le specifiche dal `delivery_item_id` del deliverable (es. sub-selezione H.264/profilo fatta in quote ora visibile in planning). Sbloccato dal fix α.172.181 che popola il link.

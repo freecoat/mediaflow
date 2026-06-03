@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.184 — Whitelist container→codec proattivo (3 giu 2026)
+
+- Il dropdown **video codec** nell'editor specs del planning ora mostra **solo i codec ammessi** nel container scelto, derivati dalle regole ERROR esistenti: J2K/JPEG2000/JPEG-XS solo in container MXF; container audio → nessun video codec. ProRes→QuickTime resta **selezionabile** (è warning, non error).
+- Funzione pura `valid_video_codec_ids` (in `delivery_item_validation.py`, single source con le regole) esposta aggiungendo `valid_video_codec_ids` alla risposta di `POST /delivery-items/api/spec-schema`. Nessuna tabella nuova.
+- L'editor (`dsmApplySpecSchema`) ricostruisce le opzioni del select codec al cambio container; se il codec selezionato non è più ammesso lo azzera. `null` = nessun filtro (container assente).
+- Scope: editor planning. L'editor item del capitolato resta protetto dall'enforcement 422 (α.172.183). Backlog: filtro proattivo anche nel capitolato editor; severità R3.
+
 ## v3.5.0-alpha.172.183 — Editor specs deliverable vincolato al tipo file (3 giu 2026)
 
 - **Auto-populate**: il modal specs del planning ora pre-carica le specifiche dal `delivery_item_id` del deliverable (es. la sub-selezione H.264/profilo fatta in quote ora appare in planning). Sbloccato dal fix α.172.181 che popola il link.
