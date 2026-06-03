@@ -2424,11 +2424,11 @@ function dsmRenderStructured(v, tax) {
   form.innerHTML = `
     <div style="grid-column:1/-1;"><label style="${L}">Nome</label>
       <input class="form-input" id="dsm-s-name" value="${escapeHtml(v.name||'')}"></div>
-    <div data-spec-group="package"><label style="${L}">Package</label>
+    <div><label style="${L}">Package</label>
       <select class="form-select" id="dsm-s-package">${opt(tax.packages, v.package_id, '— nessuno (single-file) —')}</select></div>
-    <div data-spec-group="video"><label style="${L}">Container</label>
+    <div><label style="${L}">Container</label>
       <select class="form-select" id="dsm-s-container">${opt(tax.containers, v.container_id)}</select></div>
-    <div data-spec-group="video"><label style="${L}">Video codec</label>
+    <div><label style="${L}">Video codec</label>
       <select class="form-select" id="dsm-s-vcodec">${opt(tax.video_codecs, v.video_codec_id, '— audio-only —')}</select></div>
     <div data-spec-group="video"><label style="${L}">Resolution</label>
       <select class="form-select" id="dsm-s-res">${opt(tax.resolutions, v.resolution_id)}</select></div>
