@@ -171,57 +171,93 @@ def _assignment_hours(a) -> float:
     return max(0.0, (a.end_datetime - a.start_datetime).total_seconds() / 3600.0)
 
 
+def compute_billable_hours(items, mode="max", specific_rid=None, manual=None) -> float:
+    """Single source of truth per le ore FATTURABILI al cliente di un booking.
+
+    `items` = list di tuple (resource_id:int, rtype:str, hours:float).
+    Aggrega le ore per resource_id PRIMA di applicare la modalità (smart_split:
+    stessa risorsa con 2 slot AM+PM -> somma 8h).
+
+    Regole:
+      - mode='manual' -> ritorna `manual` (ore digitate dal producer), >=0.
+      - se NON ci sono risorse umane -> max(ore tra le non-umane), `mode` ignorato
+        (comportamento storico per booking solo-sala/equipment).
+      - mode='specific' -> ore aggregate della risorsa `specific_rid` (0 se assente).
+      - mode='sum'      -> somma delle ore di tutte le risorse umane.
+      - mode='max' (default) -> max delle ore tra le risorse umane.
+
+    Le opzioni NON toccano il costo interno (che somma sempre tutti gli assignment).
+    """
+    mode = (mode or "max").strip().lower()
+    if mode == "manual":
+        try:
+            return max(0.0, float(manual or 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+    from collections import defaultdict
+    human_by_res: dict = defaultdict(float)
+    nonhuman_by_res: dict = defaultdict(float)
+    for rid, rtype, hours in items:
+        if hours is None or hours <= 0:
+            continue
+        if rtype in HUMAN_RESOURCE_TYPES:
+            human_by_res[rid] += hours
+        else:
+            nonhuman_by_res[rid] += hours
+    if not human_by_res:
+        return max(nonhuman_by_res.values()) if nonhuman_by_res else 0.0
+    if mode == "specific":
+        if specific_rid in human_by_res:
+            return human_by_res[specific_rid]
+        if specific_rid in nonhuman_by_res:
+            return nonhuman_by_res[specific_rid]
+        return 0.0
+    if mode == "sum":
+        return sum(human_by_res.values())
+    # default: max
+    return max(human_by_res.values())
+
+
 def _booking_billable_hours(b) -> float:
     """v3.5.0-alpha.171 (CR-2) — Ore "fatturabili al cliente" del booking.
     v3.5.0-alpha.172.97 — fix smart_split: somma per risorsa, poi max tra risorse.
+    v3.5.0-alpha.172.179 — modalità configurabile per-booking via
+    `billable_hours_mode` (max|sum|specific|manual). Thin wrapper su
+    `compute_billable_hours` (single source of truth).
 
-    Regola Matteo (19 mag 2026):
-    - Se almeno 1 assignment è risorsa umana (person_internal/freelance/person)
-      → max(hours_per_resource) tra le umane (override umana, ignora sala/equipment)
-    - Else → max(hours_per_resource) tra non-umane (sala/equipment/software/vehicle)
-
-    Aggregazione per resource_id PRIMA del max: con smart_split (α.172.75) la
-    stessa persona ha 2 assignment giornalieri (AM 4h + PM 4h) → sum=8h.
-    Senza aggregazione, max() prendeva un solo slot da 4h sotto-stimando del 50%.
-
-    Rationale: il cliente paga le ORE LAVORO della persona; la sala è un costo
-    interno (mostrato in cost-side) ma non si fattura come ore separate.
-    Pre-α.171 sommava sala+persona → fatturazione doppia delle ore.
+    Default mode='max' = comportamento storico (override umana, max tra persone).
+    Costo interno invariato: vedi loop assignment×rate in recompute_cost_line_actual.
 
     Esempi:
-    - Booking: Carlo 8h + Sala A 8h → billable = 8h (max umana)
-    - Booking: Carlo AM 4h + Carlo PM 4h (smart_split) → billable = 8h (sum stessa risorsa)
-    - Booking: Carlo 4h + Mario 6h + Sala A 8h → billable = 6h (max umana)
-    - Booking: Sala A 8h + Sala B 4h (nessuna umana) → billable = 8h
-    - Booking: solo Carlo 8h → billable = 8h
-    - Booking senza assignments → shell-duration (back-compat)
+    - Carlo 8h + Sala A 8h (max) -> 8h (max umana)
+    - Carlo AM 4h + Carlo PM 4h (smart_split, max) -> 8h (sum stessa risorsa)
+    - Carlo 8h + Mario 6h (sum) -> 14h | (max) -> 8h | (specific Mario) -> 6h
+    - Sala A 8h + Sala B 4h (nessuna umana) -> 8h
+    - mode=manual, manual=5 -> 5h
+    - Booking senza assignments -> shell-duration (back-compat)
     """
     if not getattr(b, "assignments", None):
         if not b.start_datetime or not b.end_datetime:
             return 0.0
         return max(0.0, (b.end_datetime - b.start_datetime).total_seconds() / 3600.0)
-    from collections import defaultdict
-    human_by_res: dict = defaultdict(float)
-    nonhuman_by_res: dict = defaultdict(float)
+    items = []
     for a in b.assignments:
         h = _assignment_hours(a)
         if h <= 0:
             continue
-        rid = a.resource_id or 0
         res = getattr(a, "resource", None)
-        # Resolve type: prefer relationship enum, fallback to nothing → non-human bucket
-        rtype = None
         if res is not None:
             rtype = res.type.value if hasattr(res.type, "value") else str(res.type)
-        if rtype in HUMAN_RESOURCE_TYPES:
-            human_by_res[rid] += h
         else:
-            nonhuman_by_res[rid] += h
-    if human_by_res:
-        return max(human_by_res.values())
-    if nonhuman_by_res:
-        return max(nonhuman_by_res.values())
-    return 0.0
+            rtype = ""
+        items.append((a.resource_id or 0, rtype, h))
+    mode = getattr(b, "billable_hours_mode", None) or "max"
+    return compute_billable_hours(
+        items,
+        mode,
+        getattr(b, "billable_hours_resource_id", None),
+        getattr(b, "billable_hours_manual", None),
+    )
 
 
 def _booking_hours_weighted(db: Session, b) -> float:
