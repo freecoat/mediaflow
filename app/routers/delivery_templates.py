@@ -23,6 +23,7 @@ from app.models import DeliveryTemplate, PriceItem, PriceCategory
 from app.models.models import DeliveryItem, Package, Resolution
 from app.services.rbac import requires_permission, current_user_optional
 from app.context import current_tenant_id
+from app.services.naming_resolver import normalize_naming_convention
 
 router = APIRouter(prefix="/delivery-templates", tags=["delivery-templates"])
 
@@ -318,7 +319,7 @@ async def parse_batch_pending(request: Request, db: Session = Depends(get_db),
                         text_specs=result.get("text_specs"),
                         head_format=result.get("head_format"),
                         textless_format=result.get("textless_format"),
-                        naming_convention=result.get("naming_convention"),
+                        naming_convention=normalize_naming_convention(result.get("naming_convention")),
                         archive_specs=result.get("archive_specs"),
                         metadata_requirements=result.get("metadata_requirements"),
                         suggested_items=result.get("suggested_items"),
@@ -487,7 +488,7 @@ def _import_one_template(db: Session, data: dict) -> dict:
         text_specs=_blk("text_specs"),
         head_format=_blk("head_format"),
         textless_format=_blk("textless_format"),
-        naming_convention=_blk("naming_convention"),
+        naming_convention=normalize_naming_convention(_blk("naming_convention")),
         archive_specs=_blk("archive_specs"),
         metadata_requirements=_blk("metadata_requirements"),
         suggested_items=items if isinstance(items, list) and items else None,
@@ -797,7 +798,7 @@ async def save_template(
         text_specs=_parse(text_specs),
         head_format=_parse(head_format),
         textless_format=_parse(textless_format),
-        naming_convention=_parse(naming_convention),
+        naming_convention=normalize_naming_convention(_parse(naming_convention)),
         archive_specs=_parse(archive_specs),
         metadata_requirements=_parse(metadata_requirements),
         suggested_items=_parse_list(suggested_items),
@@ -873,7 +874,7 @@ async def update_template(
     if text_specs is not None: t.text_specs = _parse_dict(text_specs)
     if head_format is not None: t.head_format = _parse_dict(head_format)
     if textless_format is not None: t.textless_format = _parse_dict(textless_format)
-    if naming_convention is not None: t.naming_convention = _parse_dict(naming_convention)
+    if naming_convention is not None: t.naming_convention = normalize_naming_convention(_parse_dict(naming_convention))
     if archive_specs is not None: t.archive_specs = _parse_dict(archive_specs)
     if metadata_requirements is not None: t.metadata_requirements = _parse_dict(metadata_requirements)
     if suggested_items is not None: t.suggested_items = _parse_list(suggested_items)

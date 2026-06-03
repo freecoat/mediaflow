@@ -423,7 +423,14 @@ function renderParseStep2(parsed) {
 
   const host = document.getElementById('blocks-host');
   while (host.firstChild) host.removeChild(host.firstChild);
+  window._importNamingReg = {};
   for (const [key, label] of BLOCK_DEFS) {
+    if (key === 'naming_convention') {
+      // α.172.182 — editor strutturato anche in import (no raw JSON textarea)
+      const card = renderNamingBlockCard(parsed[key] || {}, window._importNamingReg);
+      host.appendChild(card);
+      continue;
+    }
     const card = document.createElement('div');
     card.className = 'blk-card' + (parsed[key] ? ' has-data' : '');
     const lbl = document.createElement('label'); lbl.textContent = label;
@@ -451,6 +458,13 @@ async function doSaveTemplate() {
 
   // valida JSON dei blocchi
   for (const [key] of BLOCK_DEFS) {
+    if (key === 'naming_convention') {
+      // α.172.182 — editor strutturato dedicato
+      const reg = window._importNamingReg || {};
+      const obj = reg.namingEditor ? reg.namingEditor.collect() : {};
+      if (Object.keys(obj).length) fd.append(key, JSON.stringify(obj));
+      continue;
+    }
     const ta = document.querySelector(`textarea[data-block-key="${key}"]`);
     if (!ta) continue;
     const v = ta.value.trim();
@@ -681,6 +695,170 @@ function renderEditableBlock(blockKey, label, data) {
   return card;
 }
 
+// ── α.172.182 — Editor naming convention strutturato (capitolato) ─────────
+// Sostituisce il generico key/value per il blocco naming_convention con campi
+// dedicati (pattern/separator/case/extension/max_length/allowed_chars/examples/
+// raw_note) + anteprima live. Ritorna { collect() } per ricostruire il dict.
+// Replica la logica di ncPreview() in settings.html.
+const NC_DEMO = {
+  project_code:'MARE-2026', project_title:'MareNostrum', film_name:'MareNostrum',
+  show_name:'MareNostrum', show_abbr:'MARE', client_name:'Rai', client_code:'RAI',
+  studio_code:'RAI', season:'S01', season_no:'1', episode:'E04', episode_no:'4',
+  content_type:'FTR', aspect:'S', resolution:'UHD', framerate:'25', standard:'PAL',
+  color_space:'Rec2020', dynamic_range:'HDR', lang_audio:'it', lang_subs:'en',
+  audio_config:'51', deliverable_kind:'PRORES', package_type:'PRORES', territory:'IT',
+  date_compact:'20260612', date_iso:'2026-06-12', version:'v1', revision:'r1',
+  rev:'r1', cut:'FINAL', deliverable_id:'DLV001', barcode:'000123', facility_code:'TPR',
+};
+function ncResolvePreview(c) {
+  let out = (c.pattern || '').replace(/\{([a-z_]+)\}/gi, (m, k) => {
+    const v = NC_DEMO[k.toLowerCase()];
+    return v != null ? v : '__';
+  });
+  if (c.separator && c.separator !== '_') out = out.replace(/_/g, c.separator);
+  if (c.case === 'upper') out = out.toUpperCase();
+  else if (c.case === 'lower') out = out.toLowerCase();
+  if (c.extension) out += c.extension;
+  if (c.max_length && out.length > c.max_length) out = out.slice(0, c.max_length);
+  return out || '(pattern vuoto)';
+}
+
+// Crea l'editor strutturato dentro `host`. `data` = dict naming_convention esistente.
+// Ritorna un oggetto con collect() -> dict (o {} se vuoto).
+function makeNamingEditor(host, data) {
+  data = (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const fields = {};
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;';
+  host.appendChild(grid);
+
+  const mkInput = (key, label, value, full) => {
+    const w = document.createElement('div');
+    if (full) w.style.gridColumn = '1 / -1';
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:2px;';
+    lbl.textContent = label;
+    const inp = document.createElement('input');
+    inp.className = 'form-input';
+    inp.style.fontSize = '12px';
+    if (value != null) inp.value = String(value);
+    w.appendChild(lbl); w.appendChild(inp);
+    grid.appendChild(w);
+    fields[key] = inp;
+    return inp;
+  };
+
+  const patIn = mkInput('pattern', 'Pattern', data.pattern, true);
+  patIn.classList.add('mono');
+  patIn.placeholder = '{project_code}_{film_name}_{resolution}_{lang_audio}_{date_compact}';
+  mkInput('separator', 'Separatore', data.separator != null ? data.separator : '_');
+  // case select
+  const caseW = document.createElement('div');
+  const caseLbl = document.createElement('label');
+  caseLbl.style.cssText = 'display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:2px;';
+  caseLbl.textContent = 'Case';
+  const caseSel = document.createElement('select');
+  caseSel.className = 'form-select';
+  caseSel.style.fontSize = '12px';
+  ['asis', 'upper', 'lower'].forEach(v => {
+    const o = document.createElement('option'); o.value = v; o.textContent = v;
+    if (v === (data.case || 'asis')) o.selected = true;
+    caseSel.appendChild(o);
+  });
+  caseW.appendChild(caseLbl); caseW.appendChild(caseSel);
+  grid.appendChild(caseW);
+  fields.case = caseSel;
+  mkInput('extension', 'Estensione', data.extension);
+  mkInput('max_length', 'Max length', data.max_length);
+  mkInput('allowed_chars', 'Allowed chars', data.allowed_chars != null ? data.allowed_chars : 'A-Za-z0-9_-', true);
+
+  // examples textarea (1 per riga)
+  const exW = document.createElement('div');
+  exW.style.gridColumn = '1 / -1';
+  const exLbl = document.createElement('label');
+  exLbl.style.cssText = 'display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:2px;';
+  exLbl.textContent = 'Examples (1 per riga)';
+  const exTa = document.createElement('textarea');
+  exTa.style.cssText = 'width:100%;min-height:48px;font-family:var(--font-mono);font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;';
+  const exArr = Array.isArray(data.examples) ? data.examples : [];
+  exTa.value = exArr.map(e => String(e)).join('\n');
+  exW.appendChild(exLbl); exW.appendChild(exTa);
+  grid.appendChild(exW);
+  fields.examples = exTa;
+
+  // raw_note textarea
+  const rnW = document.createElement('div');
+  rnW.style.gridColumn = '1 / -1';
+  const rnLbl = document.createElement('label');
+  rnLbl.style.cssText = 'display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:2px;';
+  rnLbl.textContent = 'Note (testo libero capitolato)';
+  const rnTa = document.createElement('textarea');
+  rnTa.style.cssText = 'width:100%;min-height:48px;font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 6px;';
+  rnTa.value = data.raw_note != null ? String(data.raw_note) : '';
+  rnW.appendChild(rnLbl); rnW.appendChild(rnTa);
+  grid.appendChild(rnW);
+  fields.raw_note = rnTa;
+
+  const collect = () => {
+    const pattern = (fields.pattern.value || '').trim();
+    const raw_note = (fields.raw_note.value || '').trim();
+    if (!pattern && !raw_note) return {};  // vuoto → server normalize ritorna None
+    const ml = (fields.max_length.value || '').trim();
+    const tokens = [...new Set((pattern.match(/\{([a-z_]+)\}/gi) || []))]
+      .map(s => s.replace(/[{}]/g, '').toLowerCase());
+    const examples = (fields.examples.value || '').split('\n')
+      .map(s => s.trim()).filter(Boolean);
+    const out = {
+      pattern,
+      tokens,
+      separator: fields.separator.value || '_',
+      allowed_chars: fields.allowed_chars.value || 'A-Za-z0-9_-',
+      max_length: ml === '' ? null : (parseInt(ml, 10) || null),
+      case: fields.case.value || 'asis',
+      extension: fields.extension.value || '',
+      examples,
+      raw_note,
+    };
+    // preserva source/unknown_tokens preesistenti se non sovrascritti dall'utente
+    if (data.source) out.source = data.source;
+    return out;
+  };
+
+  // anteprima live
+  const prev = document.createElement('div');
+  prev.style.cssText = 'margin-top:8px;font-size:12px;color:var(--indigo2);font-family:var(--font-mono);';
+  host.appendChild(prev);
+  const refresh = () => { prev.textContent = 'Anteprima: ' + ncResolvePreview(collect()); };
+  [patIn, fields.separator, caseSel, fields.extension, fields.max_length].forEach(el => {
+    el.addEventListener('input', refresh);
+    el.addEventListener('change', refresh);
+  });
+  refresh();
+
+  return { collect };
+}
+
+// Render card blocco naming convention con editor strutturato. Registra l'editor
+// su `hostCard.dataset.blockKey = 'naming_convention'` e su window._ncEditor (riusato
+// in save). Ritorna la card.
+function renderNamingBlockCard(data, registry) {
+  const card = document.createElement('div');
+  card.className = 'blk-card has-data';
+  card.style.cssText = 'margin-bottom:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;';
+  card.dataset.blockKey = 'naming_convention';
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-weight:600;font-size:13px;color:var(--text);margin-bottom:8px;';
+  lbl.textContent = 'Naming convention';
+  card.appendChild(lbl);
+  const editorHost = document.createElement('div');
+  card.appendChild(editorHost);
+  const ed = makeNamingEditor(editorHost, data);
+  registry.namingEditor = ed;
+  return card;
+}
+
 // v3.5.0-alpha.172.114 — taxonomy cache + helpers per tab Items
 let _taxonomyCache = null;
 async function _loadTaxonomyOnce() {
@@ -824,9 +1002,15 @@ async function openDetail(tid) {
     const blocksHost = document.createElement('div');
     blocksHost.id = 'edt-blocks-host';
     paneBlocks.appendChild(blocksHost);
+    window._dtNamingReg = {};
     for (const [key, label] of BLOCK_DEFS) {
       const data = t[key] || {};
-      const card = renderEditableBlock(key, label, data);
+      let card;
+      if (key === 'naming_convention') {
+        card = renderNamingBlockCard(data, window._dtNamingReg);
+      } else {
+        card = renderEditableBlock(key, label, data);
+      }
       blocksHost.appendChild(card);
     }
 
@@ -1877,6 +2061,13 @@ async function saveEditedTemplate() {
   // 8 blocchi: ricostruisci ogni blocco dal DOM e invia JSON-stringified.
   const blocksHost = document.getElementById('edt-blocks-host');
   for (const [key, _lbl] of BLOCK_DEFS) {
+    if (key === 'naming_convention') {
+      // α.172.182 — editor strutturato dedicato (non key/value generico)
+      const reg = window._dtNamingReg || {};
+      const obj = reg.namingEditor ? reg.namingEditor.collect() : {};
+      fd.append(key, JSON.stringify(obj));
+      continue;
+    }
     const card = blocksHost.querySelector(`[data-block-key="${key}"]`);
     if (!card) continue;
     const rowsHost = card.querySelector('.blk-rows');
