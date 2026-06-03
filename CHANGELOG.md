@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.183 — Editor specs deliverable vincolato al tipo file (3 giu 2026)
+
+- **Auto-populate**: il modal specs del planning ora pre-carica le specifiche dal `delivery_item_id` del deliverable (es. la sub-selezione H.264/profilo fatta in quote ora appare in planning). Sbloccato dal fix α.172.181 che popola il link.
+- **Field-gating per tipo file**: nuova `field_relevance` (in `delivery_item_validation.py`) nasconde i gruppi di campi non pertinenti in base a `Container.media_kind` + presenza package (es. container audio → niente colorspace/resolution; niente package → campo nascosto).
+- **Coerenza applicata**: endpoint `POST /delivery-items/api/spec-schema` ritorna `{groups, findings}` (riusa le 9 regole `validate_delivery_item`). L'editor mostra i findings inline (⛔ error / ⚠ warning) e nasconde i campi non pertinenti live al cambio di container/codec/package.
+- **Enforcement save**: `PUT /delivery-items/api/{id}` blocca con **422** i salvataggi con finding ERROR (es. J2K fuori MXF, DCP non-MXF, container mancante). WARNING non bloccano. Vale per l'edit manuale (planning + editor capitolato); AI/import (`materialize_items`) restano warn-only.
+- **Backlog**: whitelist container↔codec proattivo (filtraggio dropdown); severità R3 ProRes→QuickTime resta warning (non blocca).
+
 ## v3.5.0-alpha.172.182 — Naming convention strutturata nei capitolati + default tenant (3 giu 2026)
 
 - Naming convention dei file ora **strutturata a token** (riusa il vocabolario di `naming_helper`), su 3 livelli con override a cascata: **item > capitolato > default tenant**.
