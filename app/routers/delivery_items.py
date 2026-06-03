@@ -348,6 +348,35 @@ async def update_item(
     return _serialize_item(it)
 
 
+@router.post("/delivery-items/api/spec-schema")
+async def spec_schema(
+    container_id: Optional[int] = Form(None),
+    package_id: Optional[int] = Form(None),
+    video_codec_id: Optional[int] = Form(None),
+    has_audio: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    """Read-only: dato un combo (container/package/codec), ritorna i gruppi di
+    campi pertinenti + i findings di coerenza. Usato dall'editor specs per
+    hide/disable + warning live (riusa delivery_item_validation, single source)."""
+    from app.services.delivery_item_validation import field_relevance, validate_delivery_item
+    cont = db.get(Container, container_id) if container_id else None
+    vc = db.get(VideoCodec, video_codec_id) if video_codec_id else None
+    groups = field_relevance(
+        media_kind=getattr(cont, "media_kind", None),
+        has_package=bool(package_id),
+        video_codec_family=getattr(vc, "family", None),
+        has_audio=has_audio,
+    )
+    # DeliveryItem transiente (NON aggiunto alla sessione) per riusare la validazione.
+    transient = DeliveryItem(
+        tenant_id=current_tenant_id(), container_id=container_id,
+        package_id=package_id, video_codec_id=video_codec_id,
+    )
+    findings = validate_delivery_item(db, transient)
+    return {"groups": groups, "findings": findings}
+
+
 @router.delete("/delivery-items/api/{iid}", dependencies=[RequireEdit])
 async def delete_item(iid: int, db: Session = Depends(get_db)):
     """Soft-delete (is_active=False)."""
