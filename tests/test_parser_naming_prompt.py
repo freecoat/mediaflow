@@ -26,3 +26,12 @@ def test_parser_prompt_requests_per_item_naming():
     # Il prompt deve richiedere naming anche per singola consegna (deliverables[]).
     prompt_text = dp.PARSE_TEMPLATE_SYSTEM_PROMPT
     assert "deliverables" in prompt_text
+
+
+def test_pass2_prompt_mentions_per_item_naming():
+    # Anche il parser per-item (delivery_items_parser, PASS2) deve chiedere la
+    # naming convention strutturata per la singola voce (α.172.182, NC-T4).
+    from app.services import delivery_items_parser as dip
+    txt = dip.PASS2_SYSTEM_PROMPT
+    assert "naming_convention" in txt
+    assert "pattern" in txt

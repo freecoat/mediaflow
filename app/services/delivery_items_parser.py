@@ -31,6 +31,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.services.ai_provider import get_provider, safe_json_parse
+from app.services.naming_resolver import normalize_naming_convention
 from app.models.models import (
     Package, Container, VideoCodec, AudioCodec, AudioChannelConfig,
     AudioMixType, MixStandard, Resolution, FrameRate,
@@ -127,6 +128,15 @@ Per OGNI item, restituisci:
   reel = numero rullo DCP (es. Vision "1 logo = 1 rullo"); source = materiale sorgente.
   Se non descritta, lista vuota.
 - audio_config_code: codice di configurazione audio d'emittente se citato (es. RAI "8T07", "16T09"), altrimenti null
+- naming_convention: oggetto OPZIONALE — compila SOLO se il capitolato specifica la convenzione di nomenclatura file per QUESTA voce; altrimenti ometti o metti null. Stesso schema del blocco template:
+  - "pattern": stringa con token tra graffe scelti TRA QUESTI: {project_code, project_title, film_name, content_type, aspect, resolution, framerate, audio_config, lang_audio, lang_subs, territory, version, revision, standard, package_type, deliverable_kind, date_iso, date_compact, studio_code, facility_code}. Esempio: "{film_name}_{content_type}_{resolution}_{lang_audio}".
+  - "separator": separatore (es. "_").
+  - "case": "upper" | "lower" | "asis".
+  - "extension": estensione file se indicata (es. ".mxf").
+  - "max_length": numero massimo caratteri o null.
+  - "allowed_chars": classe caratteri ammessi se indicata (es. "A-Za-z0-9_-").
+  - "examples": lista di nomi-file di esempio citati nel capitolato.
+  - "raw_note": se la convenzione è descritta a parole ma NON mappabile a un pattern pulito, riporta qui il testo verbatim.
 Quello che non riesci a strutturare, mettilo in `notes` (non perdere informazioni).
 - extra_specs: dict JSON freeform per cose NON in taxonomy (teste/code, naming convention, archive notes, metadata extras)
 - pending_review: true SE non sei sicuro al 80%+ del mapping di package/container/video_codec
@@ -142,6 +152,7 @@ Output JSON puro (NIENTE markdown, backtick, preambolo):
       "video_codec_id": 25,
       ...
       "audio_tracks": [...],
+      "naming_convention": {"pattern": "{film_name}_{content_type}_{resolution}_{lang_audio}", "separator": "_", "case": "upper", "extension": ".mxf", "examples": [...], "raw_note": ""},
       "extra_specs": {...},
       "pending_review": false,
       "confidence": 0.85
@@ -285,6 +296,7 @@ def materialize_items(db: Session, delivery_template_id: int, parsed: dict,
             program_start=it.get("program_start"),
             timeline_segments=it.get("timeline_segments") or None,
             audio_config_code=it.get("audio_config_code"),
+            naming_convention=normalize_naming_convention(it.get("naming_convention")),
             ai_extracted=True,
             ai_confidence=float(it.get("confidence") or 0.0),
             pending_review=bool(it.get("pending_review", False)),
