@@ -8,6 +8,7 @@ import io, json, logging
 from pathlib import Path
 from typing import Optional
 from app.services.ai_provider import get_provider
+from app.services.naming_resolver import normalize_naming_convention
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +173,16 @@ I 8 blocchi (tutti opzionali, ometti i campi mancanti):
 3. text_specs: { subtitles, closed_captions, forced_narratives, languages, format (SCC/SRT/IMSC/STL), embed_or_sidecar, ... }
 4. head_format: { bars_color, bars_duration_s, slate_required, slate_layout, beep_2pop, head_silence_s, timecode_start, ... }
 5. textless_format: { required, type (clean/dirty), reels, formats, ... }
-6. naming_convention: { pattern, examples, special_chars_allowed, max_length, ... }
+6. naming_convention (oggetto, opzionale — compila SOLO se il capitolato specifica una convenzione di nomenclatura file; altrimenti ometti o metti null):
+   - "pattern": stringa con token tra graffe scelti TRA QUESTI: {project_code, project_title, film_name, content_type, aspect, resolution, framerate, audio_config, lang_audio, lang_subs, territory, version, revision, standard, package_type, deliverable_kind, date_iso, date_compact, studio_code, facility_code}. Esempio: "{film_name}_{content_type}_{resolution}_{lang_audio}_{date_compact}".
+   - "separator": separatore (es. "_").
+   - "case": "upper" | "lower" | "asis".
+   - "extension": estensione file se indicata (es. ".mxf", ".wav") o "".
+   - "max_length": numero massimo caratteri se indicato, altrimenti null.
+   - "allowed_chars": classe caratteri ammessi se indicata (es. "A-Za-z0-9_-").
+   - "examples": lista di nomi-file di esempio citati nel capitolato.
+   - "raw_note": se la convenzione è descritta a parole ma NON mappabile a un pattern pulito, riporta qui il testo verbatim.
+   Estrai questo blocco SIA per il capitolato nel suo insieme (chiave "naming_convention" a livello root) SIA, quando il capitolato distingue per singola consegna, dentro ogni voce dell'array "deliverables" (campo "naming_convention" omogeneo allo stesso schema).
 7. archive_specs: { master_format, lto_generation, hash_required, redundancy, media_type, ... }
 8. metadata_requirements: { mxf_metadata, exif_required, xml_sidecar (IMF/IMSC), iso639, fps_metadata, dolbyvision_xml, ... }
 
@@ -194,13 +204,16 @@ Schema output:
   "text_specs": {...},
   "head_format": {...},
   "textless_format": {...},
-  "naming_convention": {...},
+  "naming_convention": {"pattern": "{film_name}_{content_type}_{resolution}_{lang_audio}_{date_compact}", "separator": "_", "case": "upper", "extension": ".mxf", "max_length": 120, "allowed_chars": "A-Za-z0-9_-", "examples": [...], "raw_note": ""},
   "archive_specs": {...},
   "metadata_requirements": {...},
+  "deliverables": [
+    {"name": "DCP 4K VF", "naming_convention": {"pattern": "{film_name}_FTR_{resolution}_{lang_audio}", "separator": "_", "case": "upper"}}
+  ],
   "ai_confidence": 0.85
 }
 
-Se un blocco non è menzionato nel capitolato, ometti la chiave. Non inventare specifiche assenti."""
+Il blocco "deliverables" è opzionale: includilo solo quando il capitolato distingue una convenzione di naming per singola consegna (ogni voce porta il proprio "naming_convention" allo stesso schema del blocco 6). Se un blocco non è menzionato nel capitolato, ometti la chiave. Non inventare specifiche assenti."""
 
 
 def parse_delivery_template(text: str, provider=None) -> Optional[dict]:
@@ -232,7 +245,19 @@ Estrai i blocchi strutturati come da schema."""
     # v3.5.0-alpha.172.111 — max_tokens 4000→8000 per capitolati grossi.
     # Senza questo bump A24/IRDA tornavano JSON troncato a metà struct,
     # safe_json_parse falliva → 503 "Risposta non JSON valido".
-    return provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt, max_tokens=8000)
+    result = provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt, max_tokens=8000)
+    if not isinstance(result, dict):
+        return result
+    # α.172.182 (NC-T4) — normalizza la naming convention grezza dell'AI prima
+    # del save (template + eventuali override per-item). normalize_* ritorna None
+    # se l'AI ha omesso/lasciato vuoto il blocco → safe assegnare comunque.
+    result["naming_convention"] = normalize_naming_convention(result.get("naming_convention"))
+    items = result.get("deliverables")
+    if isinstance(items, list):
+        for it in items:
+            if isinstance(it, dict):
+                it["naming_convention"] = normalize_naming_convention(it.get("naming_convention"))
+    return result
 
 
 # ── Matching voci capitolato ↔ listino prezzi ───────────────
