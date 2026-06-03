@@ -2424,39 +2424,85 @@ function dsmRenderStructured(v, tax) {
   form.innerHTML = `
     <div style="grid-column:1/-1;"><label style="${L}">Nome</label>
       <input class="form-input" id="dsm-s-name" value="${escapeHtml(v.name||'')}"></div>
-    <div><label style="${L}">Package</label>
+    <div data-spec-group="package"><label style="${L}">Package</label>
       <select class="form-select" id="dsm-s-package">${opt(tax.packages, v.package_id, '— nessuno (single-file) —')}</select></div>
-    <div><label style="${L}">Container</label>
+    <div data-spec-group="video"><label style="${L}">Container</label>
       <select class="form-select" id="dsm-s-container">${opt(tax.containers, v.container_id)}</select></div>
-    <div><label style="${L}">Video codec</label>
+    <div data-spec-group="video"><label style="${L}">Video codec</label>
       <select class="form-select" id="dsm-s-vcodec">${opt(tax.video_codecs, v.video_codec_id, '— audio-only —')}</select></div>
-    <div><label style="${L}">Resolution</label>
+    <div data-spec-group="video"><label style="${L}">Resolution</label>
       <select class="form-select" id="dsm-s-res">${opt(tax.resolutions, v.resolution_id)}</select></div>
-    <div><label style="${L}">Bit depth</label>
+    <div data-spec-group="video"><label style="${L}">Bit depth</label>
       <select class="form-select" id="dsm-s-bitdepth"><option value="">—</option>
         ${[8,10,12,16].map(b=>`<option value="${b}"${v.video_bit_depth===b?' selected':''}>${b}-bit</option>`).join('')}</select></div>
-    <div><label style="${L}">Chroma</label>
+    <div data-spec-group="video"><label style="${L}">Chroma</label>
       <select class="form-select" id="dsm-s-chroma">${enumOpt(['4:4:4','4:2:2','4:2:0','4:1:1','4:4:4:4'], v.chroma_subsampling)}</select></div>
-    <div><label style="${L}">Frame rate</label>
+    <div data-spec-group="video"><label style="${L}">Frame rate</label>
       <select class="form-select" id="dsm-s-fr">${opt(tax.frame_rates, v.frame_rate_id)}</select></div>
-    <div><label style="${L}">Aspect ratio</label>
+    <div data-spec-group="video"><label style="${L}">Aspect ratio</label>
       <select class="form-select" id="dsm-s-aspect">${enumOpt([...new Set(['1.33','1.37','1.66','1.78','1.85','1.90','2.00','2.35','2.39','2.40','16:9','9:16',...(v.aspect_ratio?[v.aspect_ratio]:[])])], v.aspect_ratio)}</select></div>
-    <div><label style="${L}">Scan type</label>
+    <div data-spec-group="video"><label style="${L}">Scan type</label>
       <select class="form-select" id="dsm-s-scan">${enumOpt(['progressive','interlaced','psf'], v.scan_type)}</select></div>
-    <div><label style="${L}">HDR format</label>
+    <div data-spec-group="color"><label style="${L}">HDR format</label>
       <select class="form-select" id="dsm-s-hdr">${enumOpt(['SDR','HDR10','HDR10+','Dolby Vision','HLG'], v.hdr_format)}</select></div>
-    <div><label style="${L}">Color space</label>
+    <div data-spec-group="color"><label style="${L}">Color space</label>
       <select class="form-select" id="dsm-s-color">${enumOpt([...new Set(['Rec.709','Rec.2020','Rec.2020 PQ','Rec.2020 HLG','DCI-P3','DCI-P3 D65','DCI XYZ','sRGB','Rec.601','Display P3','ACEScg','Linear',...(v.color_space?[v.color_space]:[])])], v.color_space)}</select></div>
-    <div><label style="${L}">Color primaries (gamut)</label>
+    <div data-spec-group="color"><label style="${L}">Color primaries (gamut)</label>
       <select class="form-select" id="dsm-s-cprim">${enumOpt([...new Set(['BT.709','BT.2020','DCI-P3','P3-D65','BT.601 525','BT.601 625','ACES AP0','ACES AP1','XYZ',...(v.color_primaries?[v.color_primaries]:[])])], v.color_primaries)}</select></div>
-    <div><label style="${L}">Subtitle format</label>
+    <div data-spec-group="subtitle"><label style="${L}">Subtitle format</label>
       <select class="form-select" id="dsm-s-subfmt">${enumOpt(['TTML IMSC 1.1','PNG+XML','Burn-in','PGS','EBU-STL','SRT'], v.subtitle_format)}</select></div>
-    <div><label style="${L}">Subtitle lang (ISO comma)</label>
+    <div data-spec-group="subtitle"><label style="${L}">Subtitle lang (ISO comma)</label>
       <input class="form-input" id="dsm-s-sublang" value="${escapeHtml((v.subtitle_languages||[]).join(','))}" placeholder="es. it,en,fr"></div>
     <div style="grid-column:1/-1;"><label style="${L}">Note</label>
       <textarea class="form-input" id="dsm-s-notes" rows="2">${escapeHtml(v.notes||'')}</textarea></div>
   `;
   host.appendChild(form);
+
+  // α.172.183 (SC-T4) — findings container nel banner + field-gating per tipo file.
+  const findingsHost = document.createElement('div');
+  findingsHost.id = 'dsm-spec-findings';
+  findingsHost.style.marginTop = '6px';
+  banner.appendChild(findingsHost);
+
+  // Bind hide/show + findings live ai cambi del combo discriminante.
+  ['dsm-s-container','dsm-s-vcodec','dsm-s-package'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', dsmApplySpecSchema);
+  });
+  dsmApplySpecSchema();
+}
+
+// α.172.183 (SC-T4) — interroga /delivery-items/api/spec-schema e applica
+// hide/show ai gruppi di campi + renderizza i findings di coerenza (live).
+async function dsmApplySpecSchema() {
+  const cont = document.getElementById('dsm-s-container');
+  if (!cont) return;
+  const vc = document.getElementById('dsm-s-vcodec');
+  const pkg = document.getElementById('dsm-s-package');
+  const fd = new FormData();
+  if (cont.value) fd.append('container_id', cont.value);
+  if (pkg && pkg.value) fd.append('package_id', pkg.value);
+  if (vc && vc.value) fd.append('video_codec_id', vc.value);
+  let data;
+  try {
+    const r = await fetch('/delivery-items/api/spec-schema', { method: 'POST', body: fd, credentials: 'same-origin' });
+    data = await r.json();
+  } catch (e) { return; }
+  const groups = data.groups || {};
+  document.querySelectorAll('#dsm-blocks-host [data-spec-group]').forEach(el => {
+    const grp = el.getAttribute('data-spec-group');
+    el.style.display = (groups[grp] === 'hide') ? 'none' : '';
+  });
+  const fh = document.getElementById('dsm-spec-findings');
+  if (fh) {
+    fh.innerHTML = '';
+    (data.findings || []).forEach(f => {
+      const d = document.createElement('div');
+      d.style.cssText = 'font-size:11px;margin-top:4px;color:' + (f.severity === 'error' ? 'var(--rose)' : '#d99a00');
+      d.textContent = (f.severity === 'error' ? '⛔ ' : '⚠ ') + f.message;
+      fh.appendChild(d);
+    });
+  }
 }
 
 async function dsmSaveStructured() {
@@ -2489,6 +2535,14 @@ async function dsmSaveStructured() {
   fd.append('notes', (document.getElementById('dsm-s-notes').value || '').trim());
   try {
     const r = await fetch(`/delivery-items/api/${iid}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
+    // α.172.183 (SC-T4) — 422 di coerenza spec: mostra i findings, NON chiudere.
+    if (r.status === 422) {
+      const e = await r.json().catch(()=>({}));
+      const fnd = (e.detail && e.detail.findings) || [];
+      const msg = fnd.length ? fnd.map(x => x.message).join(' · ') : 'Specifiche incoerenti col tipo file';
+      toast('⛔ ' + msg, 'error', 6000);
+      return;
+    }
     if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
     toast('💾 Specifiche capitolato salvate', 'success');
     closeModal('modal-deliverable-specs');
