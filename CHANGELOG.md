@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.181 — Fix: migrate-job perdeva il link capitolato dei deliverable (3 giu 2026)
+
+Bug segnalato da Matteo: creando una nuova versione da quote approvata + migrazione job + deliveries aggiunte via picker capitolato, i deliverable risultavano **scollegati dal capitolato** in `/planning?view=deliverables`.
+- **Root cause**: `migrate_job()` (quotes.py) creava i JobDeliverable per le righe nuove **senza** `delivery_item_id`, e il re-bind delle righe esistenti non lo aggiornava. Il convert normale quote→job lo copiava già (`_create_job_from_quote`); solo la **migrazione** lo perdeva.
+- **Fix**: `delivery_item_id=nl.delivery_item_id` sulla creazione + `d.delivery_item_id = new_line.delivery_item_id` sul re-bind.
+- **Backfill** dati esistenti: i deliverable scollegati la cui quote-line ha l'item sono stati ricollegati (one-off su DB live).
+
 ## v3.5.0-alpha.172.180 — Filtro reparto deliverables + 2 fix quote versioning (3 giu 2026)
 
 Tre fix puntuali emersi dal test di Matteo.

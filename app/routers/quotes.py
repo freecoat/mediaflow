@@ -3797,6 +3797,9 @@ async def migrate_job(
                 d.quote_line_id = new_line.id
                 d.name = new_line.description
                 d.price_item_id = new_line.price_item_id
+                # v3.5.0-alpha.172.181 — propaga il link capitolato dalla riga V_new
+                # (il re-bind prima lo perdeva → deliverable scollegati dal capitolato).
+                d.delivery_item_id = new_line.delivery_item_id
                 d.unit = new_line.unit
                 d.unit_price = new_line.unit_price or 0.0
                 # quantity_delivered NON tocco. qty_planned sync solo se nessun delivered
@@ -3853,6 +3856,9 @@ async def migrate_job(
                             job_id=job.id,
                             quote_line_id=nl.id,
                             price_item_id=nl.price_item_id,
+                            # v3.5.0-alpha.172.181 — link capitolato anche sui deliverable
+                            # creati in migrazione (prima mancava → picker scollegati).
+                            delivery_item_id=nl.delivery_item_id,
                             name=nl.description,
                             nature=phys_nature,
                             unit=nl.unit,
