@@ -167,6 +167,10 @@ TOKEN_HELP: list[dict] = [
     {"token": "deliverable_id",     "group": "System",   "desc": "ID interno del deliverable (4 cifre, zero-padded)"},
 ]
 
+# v3.5.0-alpha.172.182 — set dei token noti, single source per validazione
+# delle naming convention (capitolato/tenant/item). Derivato da TOKEN_HELP.
+KNOWN_TOKENS: set = {t["token"] for t in TOKEN_HELP}
+
 
 # ── RESOLVER ──────────────────────────────────────────────────
 

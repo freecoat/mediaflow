@@ -568,6 +568,11 @@ class Tenant(Base):
     tech_specs_refresh_days: Mapped[int] = mapped_column(
         Integer, default=30, server_default="30"
     )
+    # v3.5.0-alpha.172.182 — Naming convention aziendali di default (per disciplina).
+    # Shape: {"video": <conv>, "audio": <conv>} dove <conv> è lo schema strutturato
+    # (vedi naming_resolver.normalize_naming_convention). NULL = usa i default
+    # industry costanti (DEFAULT_TENANT_NAMING_CONVENTIONS) finché l'utente non salva.
+    naming_conventions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     invoice_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)         # testo libero in calce
     # v3.5.0-alpha.172.60 — Sede strutturata FatturaPA (CedentePrestatore/Sede).
     # `address` resta come legacy free-text (compat PDF); per SDI XML servono
@@ -991,6 +996,10 @@ class DeliveryItem(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+
+    # v3.5.0-alpha.172.182 — Override naming convention per la singola voce.
+    # NULL = eredita dal capitolato, poi dal default tenant (vedi naming_resolver).
+    naming_convention: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     audio_tracks: Mapped[List["AudioTrackSpec"]] = relationship(
         back_populates="delivery_item", cascade="all, delete-orphan"

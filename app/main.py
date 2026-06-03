@@ -1133,6 +1133,20 @@ def _auto_migrate_columns():
                     print(f"[auto-migrate] delivery_templates.{col} -> ALTER")
                     conn.execute(text(f"ALTER TABLE delivery_templates ADD COLUMN {col} {ddl}"))
 
+    # v3.5.0-alpha.172.182 — naming convention (tenant default + item override)
+    if "tenants" in insp.get_table_names():
+        tcols = {c["name"] for c in insp.get_columns("tenants")}
+        if "naming_conventions" not in tcols:
+            print("[auto-migrate] tenants.naming_conventions mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE tenants ADD COLUMN naming_conventions TEXT NULL"))
+    if "delivery_items" in insp.get_table_names():
+        dicols = {c["name"] for c in insp.get_columns("delivery_items")}
+        if "naming_convention" not in dicols:
+            print("[auto-migrate] delivery_items.naming_convention mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE delivery_items ADD COLUMN naming_convention TEXT NULL"))
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
