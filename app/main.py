@@ -137,6 +137,10 @@ def _auto_migrate_columns():
             ("count_in_costs", "BOOLEAN NOT NULL DEFAULT 0"),
             ("overtime_status", "VARCHAR(16) NOT NULL DEFAULT 'none'"),
             ("original_end_datetime", "DATETIME NULL"),
+            # v3.5.0-alpha.172.179 — policy ore fatturabili per-booking
+            ("billable_hours_mode", "VARCHAR(16) NOT NULL DEFAULT 'max'"),
+            ("billable_hours_resource_id", "INTEGER NULL REFERENCES resources(id)"),
+            ("billable_hours_manual", "FLOAT NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in booking_alter:

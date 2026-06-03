@@ -2166,6 +2166,19 @@ class Booking(Base):
     # Snapshot dell'envelope originale prima di adaptive extend, per supportare
     # revert/split su rifiuto overtime (D1).
     original_end_datetime: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # v3.5.0-alpha.172.179 — Policy conteggio ore FATTURABILI al cliente quando
+    # il booking ha >=2 risorse umane. Default 'max' = comportamento storico
+    # (override umana, max tra le persone). NON tocca il costo interno, che
+    # somma sempre tutti gli assignment. Vedi cost_line_sync.compute_billable_hours.
+    #   max      -> max(ore per risorsa umana)  [default storico]
+    #   sum      -> somma delle ore di tutte le umane (lavoro parallelo)
+    #   specific -> ore della sola risorsa scelta (billable_hours_resource_id)
+    #   manual   -> ore digitate dal producer (billable_hours_manual)
+    billable_hours_mode: Mapped[str] = mapped_column(String(16), default="max")
+    billable_hours_resource_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("resources.id"), nullable=True
+    )
+    billable_hours_manual: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     job: Mapped[Optional["Job"]] = relationship(back_populates="bookings")
     cost_line: Mapped[Optional["JobCostLine"]] = relationship()
