@@ -1277,6 +1277,9 @@ async def create_booking(
     recurrence_rule: Optional[str] = Form(None),  # E5 v3.4.19: WEEKDAYS, MON, TUE,THU, DAILY...
     recurrence_until: Optional[_date] = Form(None),
     force_single_type: bool = Form(False),  # Bundle H1 v3.5.0-alpha.172.88 — bypass anomaly check
+    billable_hours_mode: str = Form("max"),  # α.172.179 max|sum|specific|manual
+    billable_hours_resource_id: Optional[int] = Form(None),
+    billable_hours_manual: Optional[float] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Crea un booking con N assignments (multi-risorsa).
@@ -1414,6 +1417,9 @@ async def create_booking(
                 status=status, kind=kind, notes=notes,
                 priority=_parse_priority(priority),
                 state=recur_state,
+                billable_hours_mode=billable_hours_mode,
+                billable_hours_resource_id=billable_hours_resource_id,
+                billable_hours_manual=billable_hours_manual,
             )
             db.add(b); db.flush()
             for pa in shifted_ass:
@@ -1468,6 +1474,9 @@ async def create_booking(
         status=status, kind=kind, notes=notes,
         priority=_parse_priority(priority),
         state=initial_state,
+        billable_hours_mode=billable_hours_mode,
+        billable_hours_resource_id=billable_hours_resource_id,
+        billable_hours_manual=billable_hours_manual,
     )
     db.add(b)
     db.flush()  # serve b.id
@@ -1699,6 +1708,9 @@ async def update_booking(
     assignments: Optional[str] = Form(None),  # se passato, replace-all
     smart_split: bool = Form(False),  # v3.5.0-alpha.172.75 — split a posteriori
     force_single_type: bool = Form(False),  # Bundle H1 v3.5.0-alpha.172.88
+    billable_hours_mode: Optional[str] = Form(None),  # α.172.179
+    billable_hours_resource_id: Optional[int] = Form(None),
+    billable_hours_manual: Optional[float] = Form(None),
     force_slice_unlock: bool = Depends(_force_unlock_dep),  # α.66.3 + α.111.23 admin-gate
     db: Session = Depends(get_db),
 ):
@@ -1823,6 +1835,21 @@ async def update_booking(
         b.notes = notes
     if priority is not None and str(priority).strip():
         b.priority = _parse_priority(priority)
+    # α.172.179 — policy ore fatturabili. Traccia il cambiamento per forzare
+    # il recompute anche senza modifica assignments/JCL (mode cambia quantity).
+    _billable_changed = False
+    if billable_hours_mode is not None and str(billable_hours_mode).strip():
+        if b.billable_hours_mode != billable_hours_mode:
+            _billable_changed = True
+        b.billable_hours_mode = billable_hours_mode.strip().lower()
+    if billable_hours_resource_id is not None:
+        if b.billable_hours_resource_id != billable_hours_resource_id:
+            _billable_changed = True
+        b.billable_hours_resource_id = billable_hours_resource_id
+    if billable_hours_manual is not None:
+        if b.billable_hours_manual != billable_hours_manual:
+            _billable_changed = True
+        b.billable_hours_manual = billable_hours_manual
 
     db.flush()
     db.refresh(b)
@@ -1834,7 +1861,9 @@ async def update_booking(
     # le acquisisce). Pattern uguale a bulk_edit new_cost_line.
     _need_recompute = (
         b.execution_status == BookingExecutionStatus.done
-        and (assignments is not None or (_old_jcl_id_for_resync != b.job_cost_line_id))
+        and (assignments is not None
+             or (_old_jcl_id_for_resync != b.job_cost_line_id)
+             or _billable_changed)
     )
     if _need_recompute:
         try:
