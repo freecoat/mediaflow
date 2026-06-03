@@ -837,6 +837,61 @@ async def fs_scan_paths_set(
     return {"ok": True, "paths": clean}
 
 
+@router.get("/api/naming-conventions")
+async def naming_conventions_get(
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Naming convention di default del tenant (video/audio). Se non salvate,
+    ritorna i default industry costanti con is_default=True. Include il
+    vocabolario token per il picker UI."""
+    from app.models import Tenant
+    from app.services.naming_resolver import DEFAULT_TENANT_NAMING_CONVENTIONS
+    from app.services.naming_helper import TOKEN_HELP
+    u = _resolve_current_user(db, access_token)
+    _require_admin(u)
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not t:
+        raise HTTPException(404)
+    stored = t.naming_conventions
+    is_default = not bool(stored)
+    conventions = stored if stored else DEFAULT_TENANT_NAMING_CONVENTIONS
+    return {"conventions": conventions, "is_default": is_default, "token_help": TOKEN_HELP}
+
+
+@router.put("/api/naming-conventions")
+async def naming_conventions_set(
+    conventions_json: str = Form(...),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Salva le naming convention tenant. conventions_json = {"video":<conv>,"audio":<conv>}.
+    Ogni <conv> viene normalizzata (normalize_naming_convention)."""
+    import json as _json
+    from app.models import Tenant
+    from app.services.naming_resolver import normalize_naming_convention
+    u = _resolve_current_user(db, access_token)
+    _require_admin(u)
+    try:
+        raw = _json.loads(conventions_json)
+    except _json.JSONDecodeError:
+        raise HTTPException(400, "conventions_json malformato")
+    if not isinstance(raw, dict):
+        raise HTTPException(400, "conventions_json deve essere un oggetto")
+    out = {}
+    for disc in ("video", "audio"):
+        norm = normalize_naming_convention(raw.get(disc))
+        if norm is not None:
+            norm["source"] = "tenant"
+            out[disc] = norm
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not t:
+        raise HTTPException(404)
+    t.naming_conventions = out or None
+    db.commit()
+    return {"ok": True, "conventions": out}
+
+
 @router.post("/api/company/logo")
 async def company_logo_upload(
     request: Request,
