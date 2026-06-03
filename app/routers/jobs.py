@@ -645,6 +645,46 @@ async def list_deliverables_tenant_wide(
         JobDeliverable.id.asc(),
     ).limit(limit).all()
 
+    # v3.5.0-alpha.172.180 — espone il REPARTO di ogni deliverable per il filtro
+    # reparto in Planning HUB (prima assente → f-dept non filtrava i deliverable).
+    # Fonte autorevole e sempre presente: JobDeliverable.price_item_id →
+    # PriceItem.department_id. Fallback: JCL → price_item, poi risorsa primaria.
+    # Batch per evitare N+1.
+    from app.models import JobCostLine, PriceItem, Resource, Department
+    pi_ids = {d.price_item_id for d, _, _ in rows if d.price_item_id}
+    jcl_ids = {d.job_cost_line_id for d, _, _ in rows if d.job_cost_line_id}
+    res_ids = {d.primary_resource_id for d, _, _ in rows if d.primary_resource_id}
+    pi_dept: dict[int, Optional[int]] = {}
+    if pi_ids:
+        for pid, dep_id in (
+            db.query(PriceItem.id, PriceItem.department_id)
+            .filter(PriceItem.id.in_(pi_ids))
+            .all()
+        ):
+            pi_dept[pid] = dep_id
+    jcl_dept: dict[int, Optional[int]] = {}
+    if jcl_ids:
+        for jcl_id, dep_id in (
+            db.query(JobCostLine.id, PriceItem.department_id)
+            .join(PriceItem, PriceItem.id == JobCostLine.price_item_id)
+            .filter(JobCostLine.id.in_(jcl_ids))
+            .all()
+        ):
+            jcl_dept[jcl_id] = dep_id
+    res_dept: dict[int, Optional[int]] = {}
+    if res_ids:
+        for rid, dep_id in (
+            db.query(Resource.id, Resource.department_id)
+            .filter(Resource.id.in_(res_ids))
+            .all()
+        ):
+            res_dept[rid] = dep_id
+    dept_ids = {v for v in list(pi_dept.values()) + list(jcl_dept.values()) + list(res_dept.values()) if v}
+    dept_map: dict[int, tuple] = {}
+    if dept_ids:
+        for dep in db.query(Department).filter(Department.id.in_(dept_ids)).all():
+            dept_map[dep.id] = (dep.name, dep.color)
+
     out = []
     for d, j, p in rows:
         rec = _serialize_deliverable(d)
@@ -654,6 +694,17 @@ async def list_deliverables_tenant_wide(
         rec["project_id"] = p.id if p else None
         rec["project_code"] = p.code if p else None
         rec["project_title"] = p.title if p else None
+        dep_id = None
+        if d.price_item_id and pi_dept.get(d.price_item_id):
+            dep_id = pi_dept[d.price_item_id]
+        elif d.job_cost_line_id and jcl_dept.get(d.job_cost_line_id):
+            dep_id = jcl_dept[d.job_cost_line_id]
+        elif d.primary_resource_id and res_dept.get(d.primary_resource_id):
+            dep_id = res_dept[d.primary_resource_id]
+        rec["department_id"] = dep_id
+        nm, col = dept_map.get(dep_id, (None, None))
+        rec["department_name"] = nm
+        rec["department_color"] = col
         out.append(rec)
     return {"count": len(out), "items": out}
 

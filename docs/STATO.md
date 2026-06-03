@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.179** — 3 giugno 2026 — Booking multi-risorsa su mobile + policy ore fatturabili per-booking
+**v3.5.0-alpha.172.180** — 3 giugno 2026 — Filtro reparto deliverables + 2 fix quote versioning
+
+### α.172.180 ✅ (3 fix da test Matteo)
+- **Filtro reparto sui deliverable** (`/planning/?view=deliverables`): `/jobs/api/deliverables/list` ora espone `department_id`/name/color per riga (da `JobDeliverable.price_item_id → PriceItem.department_id`, fallback JCL→price_item→risorsa); `renderDeliverableHub` legge `f-dept` e filtra client-side. Distingue Suono/Video via reparto. Verificato live (8 DI/Video + 3 Audio).
+- **Fix editor quote non-refresh su nuova versione da warning**: `_ensureEditableQuoteOrVersion` chiamava `loadQuote()` inesistente (no-op) → `openEditor(nv.id)`. Stessa classe di α.140.1 (funzione fantasma).
+- **Fix messaggio warning superseded fuorviante**: la sorgente resta APPROVATA+job fino a migrazione; messaggio riformulato.
+- **338 test** verdi. Smoke browser dei 3 fix fatto.
+
+**Prossimo**: test browser Matteo dei 3 fix (filtro reparto deliverables; creare nuova versione dal warning su quote approvata → editor deve saltare alla nuova versione e aggiornare Stato & azioni; rileggere il messaggio warning). Restart :9000 per backend.
 
 ### α.172.179 ✅ (multi-risorsa mobile + ore fatturabili configurabili)
 - **Mobile multi-risorsa** (`/m/booking/new`): select singola → lista checkbox; gate `SINGLE_TYPE_WARNING` ora soddisfabile (umana+sala in un booking).

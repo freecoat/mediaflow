@@ -3092,7 +3092,9 @@ async function _ensureEditableQuoteOrVersion(actionLabel) {
   if (!ok1) return null;
   const ok2 = confirm(
     `Confermi creazione nuova versione della quote ${currentQuote.number}?\n\n` +
-    `La versione attuale verrà marcata "Sostituita" (superseded).`
+    `La versione attuale resta ${_IMMUT[_st]} e collegata al job. La modifica andrà ` +
+    `sulla nuova versione (bozza). La precedente diventerà "Sostituita" solo quando ` +
+    `approverai e migrerai la nuova versione.`
   );
   if (!ok2) return null;
   try {
@@ -3102,8 +3104,10 @@ async function _ensureEditableQuoteOrVersion(actionLabel) {
       `Ripeti la modifica sulla nuova versione (caricata ora).`,
       'success', 5500
     );
-    currentQuoteId = nv.id;
-    if (typeof loadQuote === 'function') await loadQuote(nv.id);
+    // v3.5.0-alpha.172.180 — fix: `loadQuote` non esiste (era no-op silenzioso →
+    // editor restava sulla vecchia versione, Stato & azioni non si aggiornava).
+    // openEditor carica + renderizza + loadVersionsArea sulla nuova versione.
+    await openEditor(nv.id);
     // Ritorna null per evitare di applicare la modifica sulla VECCHIA quote:
     // dopo loadQuote i DOM elements sono ricreati con nuovi lineId. La
     // modifica originale (es. edit su un campo) va ripetuta esplicitamente.

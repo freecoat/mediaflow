@@ -1860,12 +1860,16 @@ async function renderDeliverableHub() {
     const projIds = (fProject || '').split(',').map(s => Number(s.trim())).filter(Boolean);
     const jobIds = (fJob || '').split(',').map(s => Number(s.trim())).filter(Boolean);
     const resIds = ((document.getElementById('f-resource')?.value) || '').split(',').map(s => Number(s.trim())).filter(Boolean);
+    // v3.5.0-alpha.172.180 — filtro reparto (multi CSV) sui deliverable. Il
+    // department_id arriva ora dal server (JCL→price_item, fallback risorsa).
+    const deptIds = ((document.getElementById('f-dept')?.value) || '').split(',').map(s => Number(s.trim())).filter(Boolean);
     const fromD = document.getElementById('f-from')?.value || '';
     const toD = document.getElementById('f-to')?.value || '';
     const qText = ((document.getElementById('f-q')?.value) || '').trim().toLowerCase();
     if (projIds.length > 1) items = items.filter(d => projIds.includes(d.project_id));
     if (jobIds.length > 1) items = items.filter(d => jobIds.includes(d.job_id));
     if (resIds.length) items = items.filter(d => d.primary_resource_id && resIds.includes(d.primary_resource_id));
+    if (deptIds.length) items = items.filter(d => d.department_id && deptIds.includes(d.department_id));
     if (fromD) items = items.filter(d => !d.target_delivery_date || d.target_delivery_date >= fromD);
     if (toD) items = items.filter(d => !d.target_delivery_date || d.target_delivery_date <= toD);
     if (qText) items = items.filter(d => (

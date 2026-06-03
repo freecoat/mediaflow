@@ -1,5 +1,22 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.180 — Filtro reparto deliverables + 2 fix quote versioning (3 giu 2026)
+
+Tre fix puntuali emersi dal test di Matteo.
+- **Filtro reparto sui deliverable** (`/planning/?view=deliverables`): prima il filtro reparto (`f-dept`) non
+  aveva effetto sui deliverable (il dato reparto non c'era nemmeno). Ora `/jobs/api/deliverables/list` espone
+  `department_id`/`department_name`/`department_color` per riga, derivato da `JobDeliverable.price_item_id →
+  PriceItem.department_id` (fallback JCL→price_item, poi risorsa primaria); `renderDeliverableHub` legge
+  `f-dept` (multi CSV) e filtra client-side. Distingue di fatto consegne **Suono** (Audio) da **Video** (DI/Video)
+  e dà gratis VFX/Commercial. Verificato live: 8 DI/Video + 3 Audio, filtro funzionante.
+- **Editor quote non si aggiornava creando una nuova versione dal warning** (immutabile approved/rejected):
+  `_ensureEditableQuoteOrVersion` chiamava `loadQuote()` — **funzione inesistente** (no-op silenzioso) → l'editor
+  restava sulla vecchia versione e "Stato & azioni" non si aggiornava. Sostituito con `openEditor(nv.id)`
+  (carica + renderizza + `loadVersionsArea`). Stessa classe di bug di α.140.1.
+- **Messaggio warning fuorviante**: il 2° confirm diceva *"la versione attuale verrà marcata Sostituita"*, ma
+  `/new-version` **non** sostituisce subito la sorgente (resta APPROVATA e legata al job fino alla migrazione).
+  Messaggio riformulato: la precedente diventa "Sostituita" solo dopo approva+migra della nuova.
+
 ## v3.5.0-alpha.172.179 — Booking multi-risorsa su mobile + policy ore fatturabili per-booking (3 giu 2026)
 
 Estensione del booking multi-risorsa anche al mobile + politica configurabile per le ore **fatturabili al
