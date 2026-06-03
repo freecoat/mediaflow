@@ -180,3 +180,35 @@ def validate_summary(db: Session, item: DeliveryItem) -> dict:
         "counts": counts,
         "issues": issues,
     }
+
+
+# v3.5.0-alpha.172.183 — Pertinenza dei campi spec per tipo file. Pura, niente DB.
+# Gruppi: video, audio, subtitle, package, color, timecode -> "show"|"hide".
+_RELEVANCE_GROUPS = ("video", "audio", "subtitle", "package", "color", "timecode")
+
+
+def field_relevance(*, media_kind, has_package, video_codec_family=None, has_audio=False) -> dict:
+    """Quali gruppi di campi sono pertinenti per il tipo file.
+
+    media_kind: "video"|"audio"|"image_seq"|"mixed"|None (da Container.media_kind).
+    has_package/has_audio: bool. video_codec_family: stringa o None.
+    Default difensivo: media_kind sconosciuto/None -> tutto "show" (non nascondere
+    se non sappiamo). subtitle/timecode sempre "show".
+    """
+    mk = (media_kind or "").strip().lower()
+    g = {k: "show" for k in _RELEVANCE_GROUPS}
+    if mk == "audio":
+        g["video"] = "hide"
+        g["color"] = "hide"
+        g["audio"] = "show"
+    elif mk == "image_seq":
+        g["audio"] = "hide"
+        g["video"] = "show"
+        g["color"] = "show"
+    elif mk in ("video", "mixed"):
+        g["video"] = "show"
+        g["color"] = "show"
+        g["audio"] = "show" if has_audio else "hide"
+    # mk sconosciuto/None -> tutto show (default difensivo)
+    g["package"] = "show" if has_package else "hide"
+    return g
