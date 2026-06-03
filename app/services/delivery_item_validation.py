@@ -212,3 +212,29 @@ def field_relevance(*, media_kind, has_package, video_codec_family=None, has_aud
     # mk sconosciuto/None -> tutto show (default difensivo)
     g["package"] = "show" if has_package else "hide"
     return g
+
+
+def valid_video_codec_ids(*, media_kind, container_name, codecs) -> list:
+    """Id dei video codec ammessi nel container, derivati dalle regole ERROR.
+
+    PURA: nessun DB. `codecs` = iterabile di oggetti con `.id`/`.family` o dict
+    con chiavi 'id'/'family'. Il chiamante risolve container/codecs e passa qui.
+
+    - media_kind == 'audio' → []  (nessun video codec; coerente con R8).
+    - container NON-MXF (name senza 'mxf') → esclude family JPEG2000/J2K (R4: J2K solo MXF).
+    - altrimenti → tutti gli id.
+    (ProRes→QuickTime è WARNING, NON filtrato: resta selezionabile.)
+    """
+    mk = (media_kind or "").strip().lower()
+    if mk == "audio":
+        return []
+    is_mxf = "mxf" in (container_name or "").strip().lower()
+    out = []
+    for c in codecs:
+        cid = c["id"] if isinstance(c, dict) else c.id
+        fam = (c["family"] if isinstance(c, dict) else getattr(c, "family", "")) or ""
+        fam = fam.strip().lower()
+        if ("jpeg" in fam or "j2k" in fam) and not is_mxf:
+            continue
+        out.append(cid)
+    return out

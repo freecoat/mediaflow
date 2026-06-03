@@ -48,6 +48,33 @@ def test_unknown_media_kind_shows_all():
     assert all(v == "show" for k, v in g.items() if k in ("video", "audio", "color"))
 
 
+# ── valid_video_codec_ids (pura, Task 1 / SC-T1) ─────────────────────────
+def test_valid_codecs_audio_empty():
+    assert dv.valid_video_codec_ids(
+        media_kind="audio", container_name="WAV",
+        codecs=[{"id": 1, "family": "PCM"}]) == []
+
+
+def test_valid_codecs_nonmxf_excludes_j2k():
+    codecs = [{"id": 1, "family": "ProRes"}, {"id": 2, "family": "JPEG2000"}]
+    assert dv.valid_video_codec_ids(
+        media_kind="mixed", container_name="QuickTime", codecs=codecs) == [1]
+
+
+def test_valid_codecs_mxf_includes_j2k():
+    codecs = [{"id": 1, "family": "ProRes"}, {"id": 2, "family": "JPEG2000"}]
+    assert sorted(dv.valid_video_codec_ids(
+        media_kind="mixed", container_name="MXF OP1a", codecs=codecs)) == [1, 2]
+
+
+def test_valid_codecs_accepts_orm_like_objects():
+    class _C:
+        def __init__(self, i, f): self.id = i; self.family = f
+    codecs = [_C(1, "ProRes"), _C(2, "JPEG 2000")]
+    assert dv.valid_video_codec_ids(
+        media_kind="video", container_name="QuickTime", codecs=codecs) == [1]
+
+
 # ── Endpoint POST /delivery-items/api/spec-schema (SC-T2) ────────────────
 #
 # Riusa il fixture `client_admin` di test_billable_hours_mode.py (StaticPool
@@ -184,3 +211,25 @@ def test_update_item_warning_does_not_block(client_admin, taxo, prores_item):
     r = client_admin.put(f"/delivery-items/api/{prores_item}",
                          data={"video_codec_id": taxo["prores"], "container_id": taxo["mxf"]})
     assert r.status_code == 200
+
+
+# ── valid_video_codec_ids esposto da spec-schema (Task 1 / SC-T2) ────────
+def test_spec_schema_returns_valid_codec_ids_mxf(client_admin, taxo):
+    r = client_admin.post("/delivery-items/api/spec-schema", data={"container_id": taxo["mxf"]})
+    assert r.status_code == 200
+    ids = r.json().get("valid_video_codec_ids")
+    assert ids is not None
+    assert taxo["j2k"] in ids
+
+
+def test_spec_schema_excludes_j2k_in_mov(client_admin, taxo):
+    r = client_admin.post("/delivery-items/api/spec-schema", data={"container_id": taxo["mov"]})
+    ids = r.json().get("valid_video_codec_ids")
+    assert ids is not None
+    assert taxo["j2k"] not in ids
+    assert taxo["prores"] in ids
+
+
+def test_spec_schema_no_container_null_filter(client_admin, taxo):
+    r = client_admin.post("/delivery-items/api/spec-schema", data={})
+    assert r.json().get("valid_video_codec_ids") is None

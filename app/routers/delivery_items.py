@@ -369,7 +369,7 @@ async def spec_schema(
     """Read-only: dato un combo (container/package/codec), ritorna i gruppi di
     campi pertinenti + i findings di coerenza. Usato dall'editor specs per
     hide/disable + warning live (riusa delivery_item_validation, single source)."""
-    from app.services.delivery_item_validation import field_relevance, validate_delivery_item
+    from app.services.delivery_item_validation import field_relevance, validate_delivery_item, valid_video_codec_ids
     cont = db.get(Container, container_id) if container_id else None
     vc = db.get(VideoCodec, video_codec_id) if video_codec_id else None
     groups = field_relevance(
@@ -384,7 +384,14 @@ async def spec_schema(
         package_id=package_id, video_codec_id=video_codec_id,
     )
     findings = validate_delivery_item(db, transient)
-    return {"groups": groups, "findings": findings}
+    # v3.5.0-alpha.172.184 — whitelist proattivo: id codec ammessi nel container.
+    # None = nessun filtro (container assente/sconosciuto → l'editor mostra tutti).
+    valid_ids = None
+    if cont is not None:
+        _codecs = db.query(VideoCodec).filter(VideoCodec.is_active == True).all()  # noqa: E712
+        valid_ids = valid_video_codec_ids(
+            media_kind=cont.media_kind, container_name=cont.name, codecs=_codecs)
+    return {"groups": groups, "findings": findings, "valid_video_codec_ids": valid_ids}
 
 
 @router.delete("/delivery-items/api/{iid}", dependencies=[RequireEdit])
