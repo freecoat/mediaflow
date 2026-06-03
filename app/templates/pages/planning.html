@@ -887,6 +887,24 @@
           <div id="tlb-assignments"></div>
         </div>
 
+        <!-- ─── Ore fatturabili al cliente (α.172.179) ──────────────────
+             Visibile SOLO se >=2 risorse HUMAN nel booking. Default mode=max.
+             Total live via POST /planning/api/bookings/preview-billable. -->
+        <div id="bk-billable-block" style="display:none; margin-bottom:16px; padding:10px; border:1px solid var(--border,#2a2e3d); border-radius:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <strong style="font-size:13px;">Ore fatturabili al cliente</strong>
+            <span id="bk-billable-total" style="font-variant-numeric:tabular-nums; font-weight:600; color:#6272f5;">—</span>
+          </div>
+          <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px; font-size:13px;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;"><input type="radio" name="bk-billable-mode" value="max" style="margin:0;" checked> Max (una principale, le altre assistono)</label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;"><input type="radio" name="bk-billable-mode" value="sum" style="margin:0;"> Somma (tutte in parallelo, fatturano tutte)</label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;"><input type="radio" name="bk-billable-mode" value="specific" style="margin:0;"> Solo una risorsa:
+              <select id="bk-billable-res" class="form-select" data-no-search="true" style="width:auto; min-width:160px; height:28px; padding:2px 8px; font-size:12px;" disabled></select></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;"><input type="radio" name="bk-billable-mode" value="manual" style="margin:0;"> Manuale:
+              <input id="bk-billable-manual" class="form-input" type="number" min="0" step="0.5" style="width:90px; height:28px; padding:2px 8px; font-size:12px;" disabled> h</label>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Tipo</label>
           <select id="tlb-kind" class="form-select" onchange="tlbOnKindChange()">
@@ -8091,6 +8109,17 @@ function _tlbReset() {
   if (dw) dw.style.display = 'none';
   const ss = document.getElementById('tlb-smart-split');
   if (ss) ss.checked = false;
+  // α.172.179: reset blocco ore fatturabili (default mode=max, nascosto)
+  const bkBlock = document.getElementById('bk-billable-block');
+  if (bkBlock) bkBlock.style.display = 'none';
+  const bkMax = document.querySelector('input[name=bk-billable-mode][value=max]');
+  if (bkMax) bkMax.checked = true;
+  const bkTot = document.getElementById('bk-billable-total');
+  if (bkTot) bkTot.textContent = '—';
+  const bkMan = document.getElementById('bk-billable-manual');
+  if (bkMan) { bkMan.value = ''; bkMan.disabled = true; }
+  const bkRes = document.getElementById('bk-billable-res');
+  if (bkRes) { bkRes.disabled = true; bkRes.removeAttribute('data-ids'); }
   const re = document.getElementById('tlb-recur-enabled');
   if (re) { re.checked = false; document.getElementById('tlb-recur-fields').style.display = 'none'; }
   const ru = document.getElementById('tlb-recur-until');
@@ -8226,6 +8255,8 @@ function _tlbUpdateRemoveButtons() {
   // Aggiorna counter nella label
   const counter = document.getElementById('tlb-ass-counter');
   if (counter) counter.textContent = `(${rows.length})`;
+  // α.172.179: ricalcola visibilità + total blocco ore fatturabili al cliente
+  if (typeof bkRefreshBillable === 'function') bkRefreshBillable();
 }
 
 function tlbAssOnChange(el) {
@@ -8259,7 +8290,79 @@ function tlbAssOnChange(el) {
   if (el.classList && el.classList.contains('tlb-ass-resource')) {
     tlbReloadLinesIfQuoteSelected();
   }
+  // α.172.179: aggiorna blocco "Ore fatturabili al cliente" (visibile >=2 human)
+  bkRefreshBillable();
 }
+
+// ── α.172.179: Ore fatturabili al cliente (blocco inline modal booking) ──
+// Visibile SOLO con >=2 risorse HUMAN. Total live via preview-billable.
+function bkHumanResourceIds(assignments) {
+  var humanTypes = ['person_internal', 'person_freelance', 'person'];
+  var ids = {};
+  (assignments || []).forEach(function (a) {
+    var r = (RESOURCES_SEED || []).find(function (x) { return x.id === a.resource_id; });
+    if (r && humanTypes.indexOf(r.type) !== -1) ids[r.id] = r.name;
+  });
+  return ids;
+}
+var _bkPreviewTimer = null;
+function bkRefreshBillable() {
+  var block = document.getElementById('bk-billable-block');
+  if (!block) return;
+  // assignments correnti senza throw (riusa _readRow per riga valida)
+  var assignments = [];
+  document.querySelectorAll('#tlb-assignments .tlb-ass-row').forEach(function (row) {
+    var r = _readRow(row);
+    if (r.resource_id && r.start && r.end && r.end > r.start) {
+      assignments.push({
+        resource_id: r.resource_id,
+        start_datetime: _toLocalDtInput(r.start),
+        end_datetime: _toLocalDtInput(r.end),
+      });
+    }
+  });
+  var humans = bkHumanResourceIds(assignments);
+  var humanIds = Object.keys(humans);
+  if (humanIds.length < 2) { block.style.display = 'none'; return; }
+  block.style.display = '';
+  var sel = document.getElementById('bk-billable-res');
+  // Ricostruisci dropdown "specific" se cambia il set di risorse human
+  var want = humanIds.join(',');
+  if (sel.getAttribute('data-ids') !== want) {
+    sel.replaceChildren();
+    humanIds.forEach(function (id) {
+      var o = document.createElement('option');
+      o.value = id;
+      o.textContent = humans[id];   // textContent: mai innerHTML con nomi
+      sel.appendChild(o);
+    });
+    sel.setAttribute('data-ids', want);
+  }
+  var mode = (document.querySelector('input[name=bk-billable-mode]:checked') || {}).value || 'max';
+  document.getElementById('bk-billable-res').disabled = (mode !== 'specific');
+  document.getElementById('bk-billable-manual').disabled = (mode !== 'manual');
+  clearTimeout(_bkPreviewTimer);
+  _bkPreviewTimer = setTimeout(async function () {
+    var fd = new FormData();
+    fd.append('assignments', JSON.stringify(assignments));
+    fd.append('billable_hours_mode', mode);
+    if (mode === 'specific') fd.append('billable_hours_resource_id', sel.value);
+    if (mode === 'manual') fd.append('billable_hours_manual', document.getElementById('bk-billable-manual').value || '0');
+    try {
+      var r = await fetch('/planning/api/bookings/preview-billable', { method: 'POST', body: fd, credentials: 'same-origin' });
+      var d = await r.json();
+      document.getElementById('bk-billable-total').textContent = (d.billable_hours != null ? d.billable_hours + ' h' : '—');
+    } catch (e) { document.getElementById('bk-billable-total').textContent = '—'; }
+  }, 200);
+}
+// Listener su mode/specific/manual (binding una sola volta al load script)
+document.querySelectorAll('input[name=bk-billable-mode]').forEach(function (el) { el.addEventListener('change', bkRefreshBillable); });
+(function () {
+  var _bkRes = document.getElementById('bk-billable-res');
+  if (_bkRes) _bkRes.addEventListener('change', bkRefreshBillable);
+  var _bkMan = document.getElementById('bk-billable-manual');
+  if (_bkMan) _bkMan.addEventListener('input', bkRefreshBillable);
+})();
 
 // v3.4.53: helper department detection ──────────────────────────
 function tlbCurrentDeptIds() {
@@ -8885,6 +8988,10 @@ async function tlbOpenEdit(bookingId) {
   // v3.5.0-alpha.66.1: rileva duplicate-overlap subito all'apertura del modal
   // edit (dato sporco pre-α.63). Mostra warning + bordo rosso sulle righe.
   _tlbCheckDuplicateOverlaps();
+  // α.172.179: ricalcola blocco ore fatturabili con i resource_id definitivi
+  // (le righe vengono sovrascritte sopra dopo tlbAddAssignmentRow). Il GET
+  // bookings non espone billable_hours_mode → resta il default max da _tlbReset.
+  bkRefreshBillable();
   openModal('modal-tl-booking');
 }
 
@@ -9433,6 +9540,16 @@ async function tlbSubmit() {
       // EDIT: chiamata separata dopo il PUT
       extendAsSeriesArgs = {rule, until};
     }
+  }
+  // α.172.179: ore fatturabili al cliente — invia mode (+ specific/manual) solo
+  // se il blocco è visibile (>=2 risorse human). Backend POST/PUT accettano i 3
+  // campi (default max). Niente append se nascosto = backend usa default.
+  const _bkBlock = document.getElementById('bk-billable-block');
+  if (_bkBlock && _bkBlock.style.display !== 'none') {
+    const bmode = (document.querySelector('input[name=bk-billable-mode]:checked') || {}).value || 'max';
+    fd.append('billable_hours_mode', bmode);
+    if (bmode === 'specific') fd.append('billable_hours_resource_id', document.getElementById('bk-billable-res').value);
+    if (bmode === 'manual') fd.append('billable_hours_manual', document.getElementById('bk-billable-manual').value || '0');
   }
   btn.disabled = true; btn.textContent = 'Salvataggio…';
   try {
