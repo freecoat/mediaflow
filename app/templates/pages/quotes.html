@@ -2265,8 +2265,11 @@ function qlClearSel() {
   qlRenderBulkBar();
 }
 function _qlEditable() {
+  // Gating del bottone "Sposta": allineato al backend lines-transfer, che
+  // consente il move SOLO da bozza (status==draft, non-phantom). Su sent/
+  // superseded/expired il backend risponderebbe 422 → qui disabilitiamo.
   const s = currentQuote && currentQuote.status;
-  return !!currentQuote && s !== 'approved' && s !== 'rejected' && !currentQuote.is_phantom;
+  return !!currentQuote && s === 'draft' && !currentQuote.is_phantom;
 }
 function qlRenderBulkBar() {
   const bar = document.getElementById('qlBulkBar');
