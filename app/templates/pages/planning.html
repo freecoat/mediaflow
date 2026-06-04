@@ -1877,6 +1877,7 @@ async function renderDeliverableHub() {
       || (d.job_code || '').toLowerCase().includes(qText)
       || (d.project_code || '').toLowerCase().includes(qText)
       || (d.project_title || '').toLowerCase().includes(qText)
+      || (d.quote_number || '').toLowerCase().includes(qText)
     ));
     _dhItems = items;
     counter.textContent = `${_dhItems.length} deliverable`;
@@ -1938,6 +1939,14 @@ function dhBuildCard(d, colorFg) {
   sub.className = 'text-xs text-muted';
   sub.textContent = (d.project_code || d.project_title || (d.job_code || `Job #${d.job_id}`)) + ' · ' + (d.unit || '—');
   card.appendChild(sub);
+  // v3.5.0-alpha.172.187 — quotazione sorgente del deliverable
+  if (d.quote_number) {
+    const qn = document.createElement('div');
+    qn.className = 'text-xs mono';
+    qn.style.cssText = 'color:#6272f5; margin-top:2px;';
+    qn.textContent = '📄 ' + d.quote_number;
+    card.appendChild(qn);
+  }
   if (d.qc_substatus) {
     const qc = document.createElement('div');
     qc.className = 'text-xs';
@@ -1977,7 +1986,7 @@ function dhRenderList(host, items) {
   table.style.width = '100%';
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
-  ['Nome','Progetto','Job','Stato','QC sub','Unit','Qty','Target','QC'].forEach(h => {
+  ['Nome','Progetto','Job','Quote','Stato','QC sub','Unit','Qty','Target','QC'].forEach(h => {
     const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
   });
   thead.appendChild(trh); table.appendChild(thead);
@@ -1992,6 +2001,7 @@ function dhRenderList(host, items) {
     const cols = [
       d.project_code || d.project_title || '—',
       d.job_code || '—',
+      d.quote_number || '—',
       d.status,
       d.qc_substatus || '—',
       d.unit || '—',
@@ -2000,7 +2010,8 @@ function dhRenderList(host, items) {
     ];
     cols.forEach((v, idx) => {
       const td = document.createElement('td');
-      if (idx === 5) td.className = 'mono text-right';
+      if (idx === 6) td.className = 'mono text-right';       // Qty
+      else if (idx === 2) td.className = 'mono text-sm';     // Quote (numero)
       else td.className = 'text-sm';
       td.textContent = v;
       tr.appendChild(td);

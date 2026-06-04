@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.186** — 4 giugno 2026 — Duplica righe quote in-place
+**v3.5.0-alpha.172.187** — 4 giugno 2026 — Quotazione sorgente nella lista deliverable
+
+### α.172.187 ✅ (quote sorgente nella lista deliverable Planning)
+- Lista/kanban Deliverable mostra la **quotazione sorgente** (`Job.quote_id → Quote.number`). Card: badge `📄 Q-…`. Lista: colonna **Quote** tra Job e Stato. Ricerca include numero quote.
+- `GET /jobs/api/deliverables/list` espone `quote_id`/`quote_number` (batch, no N+1; null se job senza quote).
+- **395 test** (+2). Smoke browser verde.
+
+**Prossimo**: test browser Matteo (vista Deliverable: colonna/badge Quote). Backlog invariato + follow-up noto: `lines-transfer` recalc grezzo su dest con sconti.
+
+### α.172.186 ✅ (duplica righe quote in-place)
 
 ### α.172.186 ✅ (duplica righe quote in-place)
 - **⧉ per riga** (copia subito sotto l'originale) + **Duplica** nella barra bulk (selezione → copie in fondo alla categoria).

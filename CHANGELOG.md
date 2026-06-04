@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.187 — Quotazione sorgente nella lista deliverable (4 giu 2026)
+
+- La lista/kanban **Deliverable** del Planning mostra ora la **quotazione sorgente** di ogni item (via `Job.quote_id → Quote.number`, es. `Q-2026-008-v4`).
+- **Card kanban**: badge `📄 Q-…` sotto progetto/job. **Lista**: nuova colonna **Quote** (tra Job e Stato). La ricerca testo include il numero quote.
+- Backend `GET /jobs/api/deliverables/list` espone `quote_id` + `quote_number` (batch lookup, no N+1). Job senza quote (reverse/phantom) → "—".
+- **395 test** (+2). Smoke browser verde (card + lista).
+
 ## v3.5.0-alpha.172.186 — Duplica righe quote in-place (4 giu 2026)
 
 - **Duplica voci nella stessa quotazione** per crearne varianti: **⧉ per riga** (copia subito sotto l'originale) + **Duplica** nella barra bulk (duplica la selezione in fondo alla categoria).

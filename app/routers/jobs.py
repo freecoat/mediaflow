@@ -685,12 +685,26 @@ async def list_deliverables_tenant_wide(
         for dep in db.query(Department).filter(Department.id.in_(dept_ids)).all():
             dept_map[dep.id] = (dep.name, dep.color)
 
+    # v3.5.0-alpha.172.187 — espone la QUOTAZIONE sorgente del deliverable
+    # (via Job.quote_id → Quote.number) per la lista/kanban deliverable del
+    # Planning. Batch per evitare N+1. Job senza quote (reverse/phantom) → None.
+    from app.models import Quote
+    quote_ids = {j.quote_id for _, j, _ in rows if j.quote_id}
+    quote_map: dict[int, str] = {}
+    if quote_ids:
+        for qid, qnum in (
+            db.query(Quote.id, Quote.number).filter(Quote.id.in_(quote_ids)).all()
+        ):
+            quote_map[qid] = qnum
+
     out = []
     for d, j, p in rows:
         rec = _serialize_deliverable(d)
         rec["job_id"] = j.id
         rec["job_code"] = j.code
         rec["job_title"] = j.title
+        rec["quote_id"] = j.quote_id
+        rec["quote_number"] = quote_map.get(j.quote_id) if j.quote_id else None
         rec["project_id"] = p.id if p else None
         rec["project_code"] = p.code if p else None
         rec["project_title"] = p.title if p else None
