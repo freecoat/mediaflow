@@ -1072,6 +1072,32 @@ async def update_deliverable(
     return payload
 
 
+@router.post("/api/deliverables/{deliverable_id}/link-ghost")
+async def link_deliverable_ghost(
+    deliverable_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Collega un deliverable orfano (quote_line_id NULL) a una riga di una
+    phantom quote 'Consuntivo' del progetto, per renderlo tracciabile.
+
+    RBAC allineato a create_deliverable (inline): edit_planning_all O
+    assign_resources. Idempotente lato servizio (no-op se già linkato).
+    """
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente per collegare il deliverable")
+
+    from app.services.deliverable_ghost_link import link_deliverable_to_ghost
+    try:
+        res = link_deliverable_to_ghost(db, deliverable_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    db.commit()
+    return res
+
+
 @router.post("/api/deliverables/{deliverable_id}/close")
 async def close_deliverable(
     deliverable_id: int,
