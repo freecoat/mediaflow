@@ -1,4 +1,5 @@
 """v3.5.0-alpha.172.185 — multiselect righe quote: elimina/copia/sposta."""
+import asyncio
 from datetime import date, datetime
 import pytest
 from fastapi import HTTPException
@@ -53,4 +54,57 @@ def test_remove_quote_lines_blocks_on_active_booking(db, monkeypatch):
     db.add(bk); db.flush()
     with pytest.raises(HTTPException) as ei:
         q._remove_quote_lines(db, quote, [lines[0].id])
+    assert ei.value.status_code == 409
+
+
+def _call(coro):
+    return asyncio.run(coro)
+
+
+def test_transfer_copy_to_existing(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-001")
+    dst, _ = _seed_quote(db, number="Q-2026-002", n_lines=0)
+    res = _call(q.lines_transfer(
+        quote_id=src.id,
+        line_ids=f"{lines[0].id},{lines[1].id}",
+        mode="copy", target="existing", target_quote_id=dst.id, db=db,
+    ))
+    assert res["ok"] is True
+    assert res["mode"] == "copy"
+    assert res["copied"] == 2
+    assert res["removed"] == 0
+    assert res["target_quote_id"] == dst.id
+    assert db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == src.id).count() == 2
+    assert db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).count() == 2
+
+
+def test_transfer_copy_preserves_capitolato_link(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-010")
+    lines[0].section_label = "Sky Italia"; lines[0].delivery_item_id = 107; db.flush()
+    dst, _ = _seed_quote(db, number="Q-2026-011", n_lines=0)
+    _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
+                           mode="copy", target="existing", target_quote_id=dst.id, db=db))
+    nl = db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).first()
+    assert nl.section_label == "Sky Italia"
+    assert nl.delivery_item_id == 107
+
+
+def test_transfer_target_same_as_source_400(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db)
+    with pytest.raises(HTTPException) as ei:
+        _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
+                               mode="copy", target="existing", target_quote_id=src.id, db=db))
+    assert ei.value.status_code == 400
+
+
+def test_transfer_target_not_editable_409(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-020")
+    dst, _ = _seed_quote(db, number="Q-2026-021", status=m.QuoteStatus.approved, n_lines=0)
+    with pytest.raises(HTTPException) as ei:
+        _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
+                               mode="copy", target="existing", target_quote_id=dst.id, db=db))
     assert ei.value.status_code == 409

@@ -2716,6 +2716,91 @@ async def batch_delete_quote_lines(
     }
 
 
+@router.post("/api/{quote_id}/lines-transfer", dependencies=[RequireEditQuotes])
+async def lines_transfer(
+    quote_id: int,
+    line_ids: str = Form(..., description="CSV di line IDs"),
+    mode: str = Form(..., description="copy | move"),
+    target: str = Form(..., description="existing | new"),
+    target_quote_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Copia o sposta righe selezionate verso un'altra quote (esistente o nuova).
+
+    Task 2: copy completo (existing + new). Il ramo move arriva nel Task 3.
+    """
+    from datetime import date as _date, timedelta as _td
+    from app.services.reverse_quote import _next_position, _next_sort_order, _recalc_quote_totals
+
+    if mode not in ("copy", "move"):
+        raise HTTPException(400, "mode deve essere copy|move")
+    if target not in ("existing", "new"):
+        raise HTTPException(400, "target deve essere existing|new")
+    try:
+        ids = [int(x.strip()) for x in line_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(400, "line_ids deve essere CSV di interi")
+    if not ids:
+        raise HTTPException(400, "line_ids vuoto")
+
+    tid = current_tenant_id()
+    source = db.query(Quote).filter(Quote.id == quote_id, Quote.tenant_id == tid).first()
+    if not source:
+        raise HTTPException(404, "Quote di origine non trovata")
+
+    selected = db.query(QuoteLine).filter(
+        QuoteLine.id.in_(ids), QuoteLine.quote_id == source.id,
+    ).all()
+    if not selected:
+        raise HTTPException(400, "Nessuna riga valida da trasferire")
+
+    if target == "existing":
+        if not target_quote_id:
+            raise HTTPException(400, "target_quote_id richiesto per target=existing")
+        if target_quote_id == quote_id:
+            raise HTTPException(400, "Destinazione coincide con l'origine")
+        dest = db.query(Quote).filter(
+            Quote.id == target_quote_id, Quote.tenant_id == tid
+        ).first()
+        if not dest:
+            raise HTTPException(404, "Quote di destinazione non trovata")
+        if not (dest.status == QuoteStatus.draft and not dest.is_phantom):
+            raise HTTPException(
+                409,
+                "Destinazione non editabile (solo bozze). Crea prima una nuova versione."
+            )
+    else:  # new
+        dest = Quote(
+            number=_next_quote_number_progressive(db),
+            version=1,
+            project_id=source.project_id,
+            client_id=source.client_id,
+            title=f"Copia da {source.number}",
+            status=QuoteStatus.draft,
+            issue_date=_date.today(),
+            valid_until=_date.today() + _td(days=30),
+            currency=source.currency,
+            fx_rate_to_base=source.fx_rate_to_base,
+            tenant_id=tid,
+        )
+        db.add(dest); db.flush()
+
+    new_lines = _copy_quote_lines(selected, dest.id, track_parent=False)
+    for nl in new_lines:
+        nl.position = _next_position(dest)
+        nl.sort_order = _next_sort_order(dest)
+        db.add(nl); db.flush()
+    _recalc_quote_totals(dest)
+
+    removed = 0
+    db.commit()
+    db.refresh(dest)
+    return {
+        "ok": True, "mode": mode, "copied": len(new_lines), "removed": removed,
+        "target_quote_id": dest.id, "target_number": dest.number,
+    }
+
+
 # ── Soft-delete dell'intera Quote (v3.5.0-alpha.7) ───────────
 
 @router.delete("/api/{quote_id}")
