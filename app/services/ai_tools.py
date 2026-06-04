@@ -52,6 +52,27 @@ TOOLS: list[dict] = [
         },
         "handler": "web_search",
     },
+    {
+        "name": "read_quote_lines",
+        "category": "readonly",
+        "description": (
+            "Legge le righe di una quotazione, classificate per natura: "
+            "lavorazione (unità a tempo hr/day/turno = servizi di postproduzione) "
+            "vs consegna/deliverable (pc/TB/lump/lot/version/… = formati di consegna finale). "
+            "USA SEMPRE questo tool per contare o elencare le CONSEGNE (deliverables) o le "
+            "LAVORAZIONI di una quote, anche se non è quella aperta a video. "
+            "Restituisce counts {total, lavorazioni, consegne} + l'elenco righe. "
+            "Identifica la quote per `quote_id` (PK numerico) o `quote_number` (stringa, es. 'Q-2026-008-v4')."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "quote_id": {"type": "integer", "description": "PK numerico della quote. Usa questo se lo conosci."},
+                "quote_number": {"type": "string", "description": "Numero quote (es. 'Q-2026-008-v4'). Alternativa a quote_id."},
+            },
+        },
+        "handler": "read_quote_lines",
+    },
 
     # ────────── MUTATION (gated da Apply utente) ──────────
     {

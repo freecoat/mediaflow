@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.189** — 4 giugno 2026 — Hardening copilot: errori sempre in JSON
+**v3.5.0-alpha.172.190** — 4 giugno 2026 — Copilot vede le consegne delle quote
+
+### α.172.190 ✅ (copilot conteggio consegne/deliverable quote)
+- Contesto AI: overview "QUOTE ESISTENTI" con `lavorazioni N · consegne M` per quote; righe quote attiva taggate per natura. Funziona su TUTTI i provider (anche DeepSeek legacy, no tool).
+- Nuovo tool readonly `read_quote_lines` (quote_id|quote_number → righe + counts per natura) per provider tool-capable.
+- Natura via `unit_nature_for` (time_based=lavorazione, resto=consegna/deliverable). +6 test. 403 test.
+- Verificato live DeepSeek: "quante consegne in Q-2026-008-v4?" → "15 deliverable oltre alle 5 lavorazioni". ✅
+- **Nota provider**: admin usa **DeepSeek** (no tool nativi → path legacy). I tool readonly nuovi servono solo se si passa a Claude/OpenAI/Gemini.
+
+**Prossimo**: test Matteo copilot. Backlog invariato.
+
+### α.172.189 ✅ (hardening endpoint copilot)
 
 ### α.172.189 ✅ (hardening endpoint copilot)
 - `POST /ai/api/chat` wrappato in try/except (`chat` wrapper + `_chat_impl` corpo): qualsiasi eccezione → JSON pulito `error:"internal_error"` (200), mai più 500 plain-text → "Unexpected token" lato UI. HTTPException passa intatta. Rollback DB su errore.

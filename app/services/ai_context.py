@@ -188,10 +188,28 @@ def build_context(db: Session,
 - Totale netto: {_short_money(q.total_after_discount)} | Con IVA: {_short_money(q.total_with_vat)}
 - Sconto pacchetto: {(q.package_discount or 0)*100:.0f}% | Voci: {len(q.lines)} | Stato: {q.status}""")
             if q.lines:
+                # v3.5.0-alpha.172.190 — tag natura (lavorazione vs consegna) +
+                # riepilogo, così l'AI distingue le CONSEGNE (deliverable) dalle
+                # lavorazioni. Per il dettaglio completo di un'ALTRA quote usa il
+                # tool read_quote_lines.
+                from app.services.cost_line_sync import unit_nature_for
+                n_lav = n_cons = 0
                 lines = []
                 for l in q.lines[:20]:
-                    lines.append(f"  [{l.position}] {l.description}: {l.quantity} {l.unit} x {_short_money(l.unit_price)} = {_short_money(l.total)}")
-                parts.append("Voci:\n" + "\n".join(lines))
+                    is_time = (unit_nature_for(l.unit) == "time_based")
+                    if is_time:
+                        n_lav += 1
+                    else:
+                        n_cons += 1
+                    tag = "lavorazione" if is_time else "consegna"
+                    lines.append(f"  [{l.position}] ({tag}) {l.description}: {l.quantity} {l.unit} x {_short_money(l.unit_price)} = {_short_money(l.total)}")
+                # conteggio sull'intero set (non solo le prime 20)
+                for l in q.lines[20:]:
+                    if unit_nature_for(l.unit) == "time_based":
+                        n_lav += 1
+                    else:
+                        n_cons += 1
+                parts.append(f"Righe (Lavorazioni: {n_lav} · Consegne/deliverable: {n_cons}):\n" + "\n".join(lines))
 
     if job_id:
         j = db.query(Job).filter(Job.id == job_id).first()
@@ -343,9 +361,24 @@ def build_context(db: Session,
     # Quote attive (per riferimento veloce su quote_id)
     quote_rows = db.query(Quote).order_by(Quote.id.desc()).limit(15).all()
     if quote_rows:
-        overview.append("QUOTE ESISTENTI (id | number | project_code):")
+        # v3.5.0-alpha.172.190 — conteggio righe per natura (lavorazioni vs
+        # consegne/deliverable) per ogni quote, così l'AI può rispondere a
+        # "quante consegne nella quote X?" anche con provider senza tool nativi
+        # (DeepSeek/Ollama/Perplexity → path legacy, niente read_quote_lines).
+        # Batch unico per evitare N+1.
+        from app.models import QuoteLine as _QL
+        from app.services.cost_line_sync import unit_nature_for
+        qids = [qr.id for qr in quote_rows]
+        nat = {qid: [0, 0] for qid in qids}  # [lavorazioni, consegne]
+        for qid, unit in db.query(_QL.quote_id, _QL.unit).filter(_QL.quote_id.in_(qids)).all():
+            if unit_nature_for(unit) == "time_based":
+                nat[qid][0] += 1
+            else:
+                nat[qid][1] += 1
+        overview.append("QUOTE ESISTENTI (id | number | project_code | lavorazioni · consegne/deliverable):")
         for qr in quote_rows:
-            overview.append(f"  {qr.id} | {qr.number} | {qr.project.code if qr.project else '?'}")
+            lav, cons = nat.get(qr.id, [0, 0])
+            overview.append(f"  {qr.id} | {qr.number} | {qr.project.code if qr.project else '?'} | lav {lav} · consegne {cons}")
 
     if page:
         overview.append(f"Pagina corrente UI: {page}")

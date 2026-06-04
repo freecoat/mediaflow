@@ -4163,6 +4163,63 @@ def _h_propose_holiday_set(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("read_quote_lines")
+def _h_read_quote_lines(db: Session, data: dict) -> dict:
+    """READONLY. Righe di una quotazione classificate per natura:
+    - lavorazione = unità a tempo (hr/day/turno) — servizi di postproduzione;
+    - consegna (deliverable) = pc/TB/lump/lot/version/... — formati di consegna finale.
+
+    Usa SEMPRE questo tool per contare/elencare le CONSEGNE (deliverables) o le
+    LAVORAZIONI di una quote, anche quando la quote non è quella aperta a video.
+
+    Payload: {"quote_id": int} OPPURE {"quote_number": str} (es. "Q-2026-008-v4").
+    """
+    from app.services.cost_line_sync import unit_nature_for
+    CURRENT_TENANT = 1
+    qid = data.get("quote_id")
+    qnum = (data.get("quote_number") or "").strip()
+    q = None
+    if qid:
+        q = db.query(Quote).filter(
+            Quote.id == int(qid), Quote.tenant_id == CURRENT_TENANT
+        ).first()
+    elif qnum:
+        q = db.query(Quote).filter(
+            Quote.number == qnum, Quote.tenant_id == CURRENT_TENANT
+        ).first()
+    else:
+        raise ValueError("Fornisci quote_id o quote_number")
+    if not q:
+        raise ValueError(f"Quotazione non trovata ({qid or qnum})")
+
+    lines = []
+    n_lav = n_cons = 0
+    for l in sorted(q.lines, key=lambda x: x.sort_order or 0):
+        is_time = (unit_nature_for(l.unit) == "time_based")
+        if is_time:
+            n_lav += 1
+        else:
+            n_cons += 1
+        lines.append({
+            "position": l.position,
+            "description": l.description,
+            "unit": l.unit,
+            "quantity": l.quantity,
+            "nature": "lavorazione" if is_time else "consegna",
+            "section_label": l.section_label,
+            "is_optional": bool(l.is_optional),
+            "total": l.total,
+        })
+    return {
+        "quote_id": q.id,
+        "quote_number": q.number,
+        "status": q.status.value if hasattr(q.status, "value") else str(q.status),
+        "total_after_discount": q.total_after_discount,
+        "counts": {"total": len(lines), "lavorazioni": n_lav, "consegne": n_cons},
+        "lines": lines,
+    }
+
+
 # v3.5.0-alpha.66.17.2 (R6.2) — `_ACTION_HANDLERS` derivato dal registry
 # popolato dai decorator `@ai_capability("name")` sopra ogni `_h_*`.
 # Manteniamo l'attributo come dict (non funzione) per compat back-compat

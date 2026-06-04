@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.190 — Copilot vede le consegne (deliverable) delle quote (4 giu 2026)
+
+- Il Copilot non riusciva a contare le **consegne (deliverable)** di una quotazione: il contesto esponeva solo le lavorazioni del job.
+- **Contesto arricchito** (tutti i provider, anche legacy senza tool): la lista "QUOTE ESISTENTI" ora riporta per ogni quote `lavorazioni N · consegne M`; il dettaglio righe della quote attiva è taggato per natura (lavorazione/consegna) + riepilogo. Natura via `unit_nature_for` (time_based=lavorazione, resto=consegna).
+- **Nuovo tool readonly `read_quote_lines`** (provider tool-capable: Claude/OpenAI/Gemini): recupera le righe di una quote per `quote_id` o `quote_number`, classificate per natura, con `counts`. Il copilot lo usa da qualsiasi pagina.
+- **403 test** (+6). Verificato live (DeepSeek, path legacy): "quante consegne in Q-…-v4?" → risposta corretta dal contesto.
+
 ## v3.5.0-alpha.172.189 — Hardening copilot: errori sempre in JSON (4 giu 2026)
 
 - L'endpoint `POST /ai/api/chat` ora **non restituisce mai un 500 plain-text**: qualsiasi eccezione non gestita viene catturata e ritorna JSON pulito `{reply, actions:[], conversation_id:null, error:"internal_error"}` (200), così il copilot mostra un messaggio leggibile invece di "Unexpected token … is not valid JSON".
