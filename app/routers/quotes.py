@@ -2840,6 +2840,75 @@ async def lines_transfer(
     }
 
 
+@router.post("/api/{quote_id}/lines-duplicate", dependencies=[RequireEditQuotes])
+async def lines_duplicate(
+    quote_id: int,
+    line_ids: str = Form(..., description="CSV di line IDs da duplicare"),
+    after: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    """Duplica righe IN-PLACE nella stessa quote, con suffisso " (copia)".
+
+    - `after=True` + una sola riga selezionata → la copia viene inserita
+      subito sotto l'originale (sort_order = orig + 1; le altre righe sono
+      spaziate di 10, quindi +1 si infila senza riordino).
+    - altrimenti (bulk o after=False) → le copie vengono accodate in fondo,
+      ognuna con sort_order/position progressivi e non collidenti.
+
+    Estende la feature multiselect α.172.185. Le copie restano nella stessa
+    categoria/sezione e mantengono il link al capitolato (delivery_item_id,
+    section_label) e il flag is_optional.
+    """
+    from app.services.reverse_quote import _next_position, _next_sort_order, _recalc_quote_totals
+
+    try:
+        ids = [int(x.strip()) for x in line_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(400, "line_ids deve essere CSV di interi")
+    if not ids:
+        raise HTTPException(400, "line_ids vuoto")
+
+    tid = current_tenant_id()
+    quote = db.query(Quote).filter(Quote.id == quote_id, Quote.tenant_id == tid).first()
+    if not quote:
+        raise HTTPException(404, "Quote non trovata")
+
+    # Mirror di add_quote_line: blocca su quote approvata non-Consuntivo (409).
+    _assert_quote_mutable(quote, action="duplica voci")
+
+    # Scope tenant+quote implicito: righe di altre quote vengono ignorate.
+    selected = db.query(QuoteLine).filter(
+        QuoteLine.id.in_(ids), QuoteLine.quote_id == quote.id,
+    ).all()
+    if not selected:
+        raise HTTPException(400, "Nessuna riga valida da duplicare")
+
+    # Ordino la sorgente con la stessa chiave usata da _copy_quote_lines
+    # (sort_order) così la zip copia→sorgente mappa il suffisso sulla riga giusta.
+    src_sorted = sorted(selected, key=lambda x: x.sort_order)
+    new_lines = _copy_quote_lines(src_sorted, quote.id, track_parent=False)
+    for orig, dup in zip(src_sorted, new_lines):
+        dup.description = (orig.description or "") + " (copia)"
+
+    single_after = after and len(new_lines) == 1
+    if single_after:
+        orig = src_sorted[0]
+        dup = new_lines[0]
+        dup.sort_order = (orig.sort_order or 0) + 1   # +1 si infila tra le righe spaziate di 10
+        dup.position = _next_position(quote)
+        quote.lines.append(dup)                       # collection in-memory coerente
+    else:
+        for dup in new_lines:
+            dup.sort_order = _next_sort_order(quote)
+            dup.position = _next_position(quote)
+            quote.lines.append(dup)                   # append PRIMA del prossimo calcolo (no collisioni)
+
+    db.flush()
+    _recalc_quote_totals(quote)
+    db.commit()
+    return {"ok": True, "duplicated": len(new_lines), "quote_id": quote.id}
+
+
 # ── Soft-delete dell'intera Quote (v3.5.0-alpha.7) ───────────
 
 @router.delete("/api/{quote_id}")
