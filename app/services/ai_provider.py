@@ -612,7 +612,7 @@ class ClaudeProvider(AIProvider):
             return None
 
 
-class OpenAIProvider(AIProvider):
+class OpenAIProvider(OpenAICompatToolsMixin, AIProvider):
     def __init__(self, cfg: ProviderConfig):
         try:
             from openai import OpenAI
@@ -650,6 +650,21 @@ class OpenAIProvider(AIProvider):
         # Verifico via model name (tutti i recenti hanno multimodal).
         model = (self.model or "").lower()
         return any(k in model for k in ("4o", "vision", "o1", "gpt-4-turbo"))
+
+    def _post_chat(self, payload: dict) -> dict:
+        resp = self.client.chat.completions.create(**payload)
+        try:
+            return resp.model_dump()
+        except AttributeError:
+            m = resp.choices[0].message
+            return {"choices": [{"message": {
+                "content": m.content or "",
+                "tool_calls": [{
+                    "id": getattr(tc, "id", None),
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                } for tc in (getattr(m, "tool_calls", None) or [])],
+            }}]}
 
 
 class GeminiProvider(AIProvider):
@@ -791,13 +806,28 @@ class DeepseekProvider(OpenAICompatToolsMixin, AIProvider):
                            "temperature": temperature, "messages": msgs})
 
 
-class OllamaProvider(AIProvider):
+class OllamaProvider(OpenAICompatToolsMixin, AIProvider):
     def __init__(self, cfg: ProviderConfig):
         self.base_url = (cfg.base_url or settings.ollama_base_url).rstrip("/")
         self.model = cfg.model or settings.ollama_model
 
     @property
     def name(self) -> str: return f"Ollama ({self.model})"
+
+    def _post_chat(self, payload: dict) -> dict:
+        body = {
+            "model": payload["model"],
+            "messages": payload["messages"],
+            "tools": payload.get("tools") or [],
+            "stream": False,
+            "options": {"num_predict": payload.get("max_tokens", 4000),
+                        "temperature": payload.get("temperature", 0.3)},
+        }
+        with httpx.Client(timeout=180) as client:
+            r = client.post(f"{self.base_url}/api/chat", json=body)
+            r.raise_for_status()
+            data = r.json()
+        return {"choices": [{"message": data.get("message", {"content": ""})}]}
 
     def _call(self, payload):
         try:
