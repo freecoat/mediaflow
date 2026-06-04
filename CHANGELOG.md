@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.192 — Fix deliverable orfani (migrate_job + cleanup + ghost-link) (4 giu 2026)
+
+- **Bug fix (causa)**: `migrate_job`, quando una riga di quote spariva nella nuova versione, faceva soft-detach `quote_line_id=NULL` invece di rimuovere il deliverable → **orfani accumulati a ogni migrazione versione** (+ duplicati per-nome). Ora: **soft-delete guardato** del deliverable della riga rimossa (se "vergine"); se ha impegni a valle (booking/confermato/fatturato) resta tracciato (`deliverables_kept_locked`). Nessun NULL-detach, nessun duplicato. Filtro `deleted_at` sulla query per non riprocessare tombstone.
+- **Cleanup**: `scripts/cleanup_orphan_deliverables.py` (parametrico job/tenant, dry-run di default, guardato). Eseguito su GLO-J007: **20 deliverable orfani rimossi** (82→62, tutti i restanti linkati a v4). Snapshot pre-cleanup in `db_snapshots/`.
+- **Ghost-link**: `POST /jobs/api/deliverables/{id}/link-ghost` + `link_deliverable_to_ghost` → collega un deliverable manuale (senza riga quote) a una **phantom/Consuntivo quote** del progetto → tracciabile, niente più "orfani veri".
+- **Invariante**: ogni deliverable attivo linkato a una riga di quote (versione corrente) o di phantom quote.
+- **434 test** (+13). Verificato live: lista planning GLO 82→62.
+
 ## v3.5.0-alpha.172.191 — Tool-use universale del Copilot (4 giu 2026)
 
 - Il Copilot ora **usa i tool con qualsiasi modello OpenAI-compatible**, non solo Claude: OpenAI, **DeepSeek**, Perplexity, **Ollama** e qualsiasi endpoint locale (LM Studio, vLLM, llama.cpp) via `base_url`.

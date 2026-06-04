@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.191** — 4 giugno 2026 — Tool-use universale del Copilot
+**v3.5.0-alpha.172.192** — 4 giugno 2026 — Fix deliverable orfani
+
+### α.172.192 ✅ (deliverable orfani: causa + cleanup + ghost-link)
+- **Causa RC1**: `migrate_job` faceva soft-detach `quote_line_id=NULL` su riga rimossa → orfani accumulati. Fix: **soft-delete guardato** (`_deliverable_safe_to_remove`); con impegni → `deliverables_kept_locked`. + filtro `deleted_at` sulla query. RC2 (pre-restructure NULL) e RC3 (create manuale senza link) gestiti da cleanup + ghost-link.
+- **Cleanup**: `scripts/cleanup_orphan_deliverables.py` (dry-run default, guardato). GLO-J007: **20 rimossi (82→62)**. Snapshot `db_snapshots/snapshot-3.5.0-alpha.172.192-pre-orphan-cleanup.db`.
+- **Ghost-link**: `POST /jobs/api/deliverables/{id}/link-ghost` → deliverable manuale → phantom/Consuntivo quote. Idempotente.
+- **434 test** (+13). Verificato live (62, tutti v4).
+- Spec/plan: `docs/superpowers/{specs,plans}/2026-06-04-orphan-deliverables-fix*`.
+
+**Prossimo**: test Matteo (lista planning GLO ridotta; ghost-link). Backlog: UI bottone ghost-link nel planning; copilot tool per leggere la lista planning deliverable (non solo le righe quote); readonly-tools nel path legacy; Gemini tool-use.
+
+### α.172.191 ✅ (tool-use universale copilot)
 
 ### α.172.191 ✅ (tool-use universale copilot)
 - Adapter generico OpenAI-compatible: `app/services/openai_tools.py` (conversioni pure) + `OpenAICompatToolsMixin`. Tool-use ora su **OpenAI, DeepSeek, Perplexity, Ollama** + endpoint locali (base_url). Claude native invariato; fallback legacy per provider senza function-calling.
