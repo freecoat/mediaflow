@@ -293,6 +293,27 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
     return job
 
 
+def _deliverable_safe_to_remove(db, d) -> bool:
+    """v3.5.0-alpha.172.192 — True se il deliverable è 'vergine' (mirror della
+    guardia in `_respawn_line_artifacts`): nessuna qty consegnata, non confermato,
+    non in fatturazione, nessun booking linkato. Usato da `migrate_job` per
+    decidere se un deliverable di riga droppata può essere soft-deleted."""
+    from app.models import BookingDeliverable, DeliverableBillingStatus
+    if (d.quantity_delivered or 0.0) > 0.0:
+        return False
+    if d.confirmed_at:
+        return False
+    if d.billing_status in (
+        DeliverableBillingStatus.in_batch,
+        DeliverableBillingStatus.billed,
+        DeliverableBillingStatus.paid,
+    ):
+        return False
+    return db.query(BookingDeliverable).filter(
+        BookingDeliverable.job_deliverable_id == d.id
+    ).count() == 0
+
+
 def _respawn_line_artifacts(db: Session, line: QuoteLine, job: Optional[Job]) -> dict:
     """v3.5.0-alpha.172.99 — Re-spawn JCL/JobDeliverable per una singola QuoteLine.
 
@@ -3970,6 +3991,7 @@ async def migrate_job(
     deliverables_rebound = 0
     deliverables_orphaned = 0
     deliverables_created = 0
+    deliverables_kept_locked = 0
 
     if job:
         # v3.5.0-alpha.172.18 — branching JCL vs Deliverable per nature.
@@ -4021,7 +4043,13 @@ async def migrate_job(
         # v3.5.0-alpha.172.18 — Re-bind dei JobDeliverable via parent_line_id.
         # Stessa logica di JCL: re-bind + sync campi pianificati. Per spawn-per-unit
         # (deliverable_qty), NON ri-sincronizziamo qty_planned (resta 1.0 per row).
-        existing_deliverables = db.query(_JD).filter(_JD.job_id == job.id).all()
+        # v3.5.0-alpha.172.192 — escludi tombstone (deliverable già soft-deleted
+        # da una migrazione precedente): ri-eseguire migrate non deve ri-processarli.
+        existing_deliverables = (
+            db.query(_JD)
+            .filter(_JD.job_id == job.id, _JD.deleted_at.is_(None))
+            .all()
+        )
         for d in existing_deliverables:
             if d.quote_line_id and d.quote_line_id in new_line_by_parent:
                 new_line = new_line_by_parent[d.quote_line_id]
@@ -4041,11 +4069,16 @@ async def migrate_job(
                 d.total_quoted = round((d.quantity_planned or 0.0) * (d.unit_price or 0.0), 2)
                 deliverables_rebound += 1
             elif d.quote_line_id:
-                # Orfano: riga V_old non più in V_new. NON cancello (potrebbero esserci
-                # asset linkati o conferme parziali). Soft-detach: quote_line_id = NULL.
-                if orphan_strategy == "keep_as_extra":
-                    d.quote_line_id = None
-                deliverables_orphaned += 1
+                # v3.5.0-alpha.172.192 — riga V_old non più in V_new → soft-delete
+                # del deliverable se vergine. Il vecchio comportamento (detach a
+                # quote_line_id=NULL) NON rimuoveva la riga e accumulava orfani a
+                # ogni migrazione. Se ha impegni a valle (consegna/conferma/
+                # fatturazione/booking) resta tracciato, non cancellato.
+                if _deliverable_safe_to_remove(db, d):
+                    d.deleted_at = now_utc()
+                    deliverables_orphaned += 1
+                else:
+                    deliverables_kept_locked += 1
 
         # Crea JobCostLine + JobDeliverable per righe NUOVE (V_new ma non V_old).
         existing_new_line_ids_jcl = {jcl.quote_line_id for jcl in job.cost_lines if jcl.quote_line_id}
@@ -4135,6 +4168,7 @@ async def migrate_job(
         "cost_lines_created": cost_lines_created,
         "deliverables_rebound": deliverables_rebound,
         "deliverables_orphaned": deliverables_orphaned,
+        "deliverables_kept_locked": deliverables_kept_locked,
         "deliverables_created": deliverables_created,
         "orphan_strategy": orphan_strategy,
     }
