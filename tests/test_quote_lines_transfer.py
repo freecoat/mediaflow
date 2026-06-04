@@ -193,3 +193,5 @@ def test_transfer_move_blocked_by_active_booking_409(db, monkeypatch):
         _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
                                mode="move", target="existing", target_quote_id=dst.id, db=db))
     assert ei.value.status_code == 409
+    # atomicità: il rollback del 409 deve annullare anche la copia sulla destinazione
+    assert db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).count() == 0

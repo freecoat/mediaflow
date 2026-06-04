@@ -2727,7 +2727,11 @@ async def lines_transfer(
 ):
     """Copia o sposta righe selezionate verso un'altra quote (esistente o nuova).
 
-    Task 2: copy completo (existing + new). Il ramo move arriva nel Task 3.
+    - mode=copy: clona le righe sulla destinazione (origine intatta).
+    - mode=move: clona sulla destinazione e rimuove dall'origine. Consentito solo
+      da quote editabile (422 altrimenti); 409 se una riga ha booking attivi. In
+      entrambi i casi il rollback annulla anche la copia (atomicità).
+    Destinazione: quote esistente (solo bozze) o nuova bozza creata al volo.
     """
     from datetime import date as _date, timedelta as _td
     from app.services.reverse_quote import _next_position, _next_sort_order, _recalc_quote_totals
