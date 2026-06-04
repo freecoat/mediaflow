@@ -195,3 +195,16 @@ def test_transfer_move_blocked_by_active_booking_409(db, monkeypatch):
     assert ei.value.status_code == 409
     # atomicità: il rollback del 409 deve annullare anche la copia sulla destinazione
     assert db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).count() == 0
+
+
+def test_transfer_targets_lists_editable_excludes_self(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, _ = _seed_quote(db, number="Q-2026-100", n_lines=0)
+    d1, _ = _seed_quote(db, number="Q-2026-101", n_lines=0)
+    appr, _ = _seed_quote(db, number="Q-2026-102", status=m.QuoteStatus.approved, n_lines=0)
+    out = _call(q.transfer_targets(exclude=src.id, db=db))
+    ids = {r["id"] for r in out}
+    assert d1.id in ids          # bozza inclusa
+    assert src.id not in ids     # self escluso
+    assert appr.id not in ids    # approvata esclusa
+    assert all(set(r) >= {"id", "number", "title", "project_name", "client_name"} for r in out)

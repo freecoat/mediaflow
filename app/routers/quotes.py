@@ -1001,6 +1001,30 @@ async def create_quote(
             "fx_rate_to_base": q.fx_rate_to_base}
 
 
+@router.get("/api/transfer-targets", dependencies=[RequireEditQuotes])
+async def transfer_targets(exclude: Optional[int] = None, db: Session = Depends(get_db)):
+    """Quote editabili (bozze non-phantom) del tenant, per il picker di trasferimento righe."""
+    tid = current_tenant_id()
+    qry = db.query(Quote).filter(
+        Quote.tenant_id == tid,
+        Quote.status == QuoteStatus.draft,
+        Quote.is_phantom == False,  # noqa: E712
+    )
+    if exclude:
+        qry = qry.filter(Quote.id != exclude)
+    rows = qry.order_by(Quote.number.desc()).all()
+    out = []
+    for r in rows:
+        out.append({
+            "id": r.id,
+            "number": r.number,
+            "title": r.title or "",
+            "project_name": (r.project.title if r.project else ""),
+            "client_name": (r.client.name if r.client else ""),
+        })
+    return out
+
+
 @router.get("/api/{quote_id}")
 async def get_quote(quote_id: int, db: Session = Depends(get_db)):
     q = db.query(Quote).options(
