@@ -54,3 +54,18 @@ def test_duplicate_no_valid_lines_400(db, monkeypatch):
     with pytest.raises(HTTPException) as ei:
         _call(q.lines_duplicate(quote_id=src.id, line_ids=str(olines[0].id), after=False, db=db))
     assert ei.value.status_code == 400
+
+
+def test_duplicate_applies_package_discount(db, monkeypatch):
+    """Recalc canonico: duplicare su una quote con sconto pacchetto deve
+    applicare lo sconto (regressione: _recalc_quote_totals lo ignorava)."""
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-240", n_lines=1)
+    # 1 riga: qty 1 × unit_price 100 = 100 lordo. Sconto pacchetto 10% (frazione negativa).
+    src.package_discount = -0.10
+    db.flush()
+    _call(q.lines_duplicate(quote_id=src.id, line_ids=str(lines[0].id), after=True, db=db))
+    db.refresh(src)
+    # 2 righe → lordo 200; total_after_discount = 200 × (1 − 0.10) = 180.
+    assert src.subtotal_gross == 200.0
+    assert src.total_after_discount == 180.0

@@ -2859,7 +2859,7 @@ async def lines_duplicate(
     categoria/sezione e mantengono il link al capitolato (delivery_item_id,
     section_label) e il flag is_optional.
     """
-    from app.services.reverse_quote import _next_position, _next_sort_order, _recalc_quote_totals
+    from app.services.reverse_quote import _next_position, _next_sort_order
 
     try:
         ids = [int(x.strip()) for x in line_ids.split(",") if x.strip()]
@@ -2904,7 +2904,10 @@ async def lines_duplicate(
             quote.lines.append(dup)                   # append PRIMA del prossimo calcolo (no collisioni)
 
     db.flush()
-    _recalc_quote_totals(quote)
+    # Recalc canonico (come add/edit/delete riga): applica sconti categoria +
+    # pacchetto, non solo i totali grezzi. Duplicare = aggiungere righe a una
+    # quote viva, spesso con sconti già configurati.
+    _recalc_quote(quote)
     db.commit()
     return {"ok": True, "duplicated": len(new_lines), "quote_id": quote.id}
 
