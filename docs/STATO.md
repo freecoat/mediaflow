@@ -8,7 +8,24 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.184** — 3 giugno 2026 — Whitelist container→codec proattivo
+**v3.5.0-alpha.172.185** — 4 giugno 2026 — Multiselect righe quote (elimina/copia/sposta)
+
+### α.172.185 ✅ (multiselect righe quote: elimina / copia / sposta)
+- **Selezione multipla** righe nell'editor quote: checkbox per riga (dentro la cella drag-handle, no colonna nuova) + **barra bulk** flottante.
+- **Elimina** batch (riusa `lines-batch-delete`). **Copia** → altra quote (origine intatta). **Sposta** → altra quote (rimossa dall'origine).
+- Destinazione: **quote esistente** (picker searchable, solo bozze, via `GET /quotes/api/transfer-targets`) o **nuova bozza** (eredita progetto+cliente).
+- Endpoint atomico `POST /quotes/api/{id}/lines-transfer` (mode copy|move, target existing|new). Numerazione progressiva corretta (fix collisione `dest.lines` stale via append). **Move solo da bozze**: 422 da approvata, 409 se booking attivi; rollback annulla anche la copia (atomicità).
+- Refactor DRY `_remove_quote_lines` (condiviso batch-delete + move).
+- **388 test** verdi (+13). Smoke browser E2E completo (checkbox→barra→modal→copia-su-nuova-quote, zero errori console). Subagent-driven (8 task, spec+quality review per task).
+
+**Prossimo**:
+- **Test browser Matteo**: selezione multipla → Elimina; Copia in quote esistente (serve ≥2 bozze); Sposta da bozza; verifica Sposta disabilitato su quote approvata; copia→nuova quote. Restart :8000 già fatto (server con il nuovo codice attivo).
+- **BACKLOG** (ereditato α.172.184):
+  1. Filtro proattivo container→codec anche nel **capitolato editor** (oggi solo enforcement 422).
+  2. Severità R3 ProRes→QuickTime: resta warning — valutare promozione.
+  3. **QC verifica filename** asset vs naming risolta — non ancora implementato.
+  4. **UI override naming per-item manuale** (auto-estrazione c'è, manca widget edit).
+  5. Promuovere fixture `client_admin` a `tests/conftest.py`.
 
 ### α.172.184 ✅ (whitelist container→codec proattivo nell'editor planning)
 - Il dropdown **video codec** nell'editor specs del planning mostra ora **solo i codec ammessi** nel container scelto, **derivati dalle regole ERROR esistenti** (single source): J2K/JPEG2000/JPEG-XS solo in MXF; container audio → nessun video codec. ProRes→QuickTime resta selezionabile (warning, non error).

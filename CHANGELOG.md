@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.185 — Multiselect righe quote: elimina / copia / sposta (4 giu 2026)
+
+- **Selezione multipla** delle righe nell'editor quotazioni: checkbox per riga (dentro la cella drag-handle, nessuna colonna nuova) + **barra bulk** flottante con conteggio.
+- **Elimina** in batch (riusa `lines-batch-delete` esistente, con propagazione su Consuntivo per quote approvate).
+- **Copia** le righe selezionate verso un'altra quotazione (origine intatta) e **Sposta** (rimosse dall'origine). Destinazione: **quote esistente** (picker searchable, solo bozze) o **nuova bozza** creata al volo (eredita progetto + cliente).
+- Endpoint atomico `POST /quotes/api/{id}/lines-transfer` (`mode` copy|move, `target` existing|new): copia via `_copy_quote_lines` + numerazione progressiva corretta; **move solo da bozze** (422 da quote approvata/non editabile, 409 se una riga ha booking attivi). Su 422/409 il rollback annulla anche la copia (atomicità).
+- Endpoint `GET /quotes/api/transfer-targets` per il picker (bozze non-phantom del tenant, esclude la corrente).
+- Refactor DRY: estratto `_remove_quote_lines` condiviso tra batch-delete e move.
+- **388 test** verdi (+13). Smoke browser E2E: checkbox + barra bulk + modal + copia→nuova quote, zero errori console.
+
 ## v3.5.0-alpha.172.184 — Whitelist container→codec proattivo (3 giu 2026)
 
 - Il dropdown **video codec** nell'editor specs del planning ora mostra **solo i codec ammessi** nel container scelto, derivati dalle regole ERROR esistenti: J2K/JPEG2000/JPEG-XS solo in container MXF; container audio → nessun video codec. ProRes→QuickTime resta **selezionabile** (è warning, non error).
