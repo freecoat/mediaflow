@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.188** — 4 giugno 2026 — Fix copilot 500 su /planning
+**v3.5.0-alpha.172.189** — 4 giugno 2026 — Hardening copilot: errori sempre in JSON
+
+### α.172.189 ✅ (hardening endpoint copilot)
+- `POST /ai/api/chat` wrappato in try/except (`chat` wrapper + `_chat_impl` corpo): qualsiasi eccezione → JSON pulito `error:"internal_error"` (200), mai più 500 plain-text → "Unexpected token" lato UI. HTTPException passa intatta. Rollback DB su errore.
+- +2 test (eccezione→JSON, HTTPException pass-through). 399 test. Route verificata live.
+
+**Prossimo**: test Matteo copilot. Backlog invariato.
+
+### α.172.188 ✅ (fix copilot 500 su /planning)
 
 ### α.172.188 ✅ (fix copilot 500 su /planning)
 - Copilot crashava (500 plain-text → "Unexpected token" JSON lato UI) su /planning: `_build_planning_context` usava `UnavailabilityKind.weekend` inesistente → AttributeError. Mappa corretta ai membri reali. +2 test. 397 test.

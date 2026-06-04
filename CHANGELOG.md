@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.189 — Hardening copilot: errori sempre in JSON (4 giu 2026)
+
+- L'endpoint `POST /ai/api/chat` ora **non restituisce mai un 500 plain-text**: qualsiasi eccezione non gestita viene catturata e ritorna JSON pulito `{reply, actions:[], conversation_id:null, error:"internal_error"}` (200), così il copilot mostra un messaggio leggibile invece di "Unexpected token … is not valid JSON".
+- Refactor: corpo handler estratto in `_chat_impl`; `chat` è il wrapper try/except (HTTPException passa intatta → JSON FastAPI). Rollback DB su errore.
+- **399 test** (+2). Verificato live: la route continua a funzionare (200 JSON).
+
 ## v3.5.0-alpha.172.188 — Fix copilot 500 su /planning (4 giu 2026)
 
 - **Fix**: il Copilot AI sulla pagina **/planning** crashava con 500 ("Internal Server Error" → "Unexpected token 'I'… is not valid JSON" lato UI). Causa: `ai_context._build_planning_context` referenziava `UnavailabilityKind.weekend`, membro enum inesistente → `AttributeError` nella label-map indisponibilità.

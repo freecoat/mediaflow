@@ -10,6 +10,7 @@ In v3.2:
 from app.services.clock import now_utc
 from datetime import datetime
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Cookie, Depends, File, Form, HTTPException, Request, UploadFile
@@ -112,6 +113,27 @@ async def chat(
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
 ):
+    # v3.5.0-alpha.172.189 — hardening: qualunque eccezione non gestita nel
+    # copilot deve tornare JSON pulito, non un 500 plain-text ("Internal Server
+    # Error") che lato UI diventa "Unexpected token 'I'… is not valid JSON".
+    # HTTPException passa intatta (FastAPI la serializza già in JSON).
+    try:
+        return await _chat_impl(request, access_token, db)
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        logging.getLogger("ai.chat").exception("copilot /api/chat fallito")
+        return JSONResponse(status_code=200, content={
+            "reply": "Si è verificato un errore interno nell'assistente. Riprova; "
+                     "se il problema persiste, segnalalo.",
+            "actions": [],
+            "conversation_id": None,
+            "error": "internal_error",
+        })
+
+
+async def _chat_impl(request: Request, access_token, db: Session):
     """
     Body JSON: {messages, project_id?, quote_id?, job_id?, page?, conversation_id?}
     Risposta: {reply, actions: [{id, action_type, title, data}], conversation_id}
