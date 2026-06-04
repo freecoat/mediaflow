@@ -2789,7 +2789,8 @@ async def lines_transfer(
     for nl in new_lines:
         nl.position = _next_position(dest)
         nl.sort_order = _next_sort_order(dest)
-        db.add(nl); db.flush()
+        dest.lines.append(nl)   # mantiene la collection in-memory coerente → progressivi corretti
+    db.flush()
     _recalc_quote_totals(dest)
 
     removed = 0

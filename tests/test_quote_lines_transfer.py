@@ -108,3 +108,30 @@ def test_transfer_target_not_editable_409(db, monkeypatch):
         _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
                                mode="copy", target="existing", target_quote_id=dst.id, db=db))
     assert ei.value.status_code == 409
+
+
+def test_transfer_copy_assigns_progressive_numbering(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-070", n_lines=3)
+    dst, _ = _seed_quote(db, number="Q-2026-071", n_lines=0)
+    ids = ",".join(str(l.id) for l in lines)
+    _call(q.lines_transfer(quote_id=src.id, line_ids=ids,
+                           mode="copy", target="existing", target_quote_id=dst.id, db=db))
+    rows = db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).all()
+    positions = [r.position for r in rows]
+    sorts = [r.sort_order for r in rows]
+    assert len(set(positions)) == 3, f"positions collidono: {positions}"
+    assert len(set(sorts)) == 3, f"sort_orders collidono: {sorts}"
+
+
+def test_transfer_copy_into_nonempty_quote_no_collision(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-080", n_lines=2)
+    dst, dst_lines = _seed_quote(db, number="Q-2026-081", n_lines=2)
+    ids = ",".join(str(l.id) for l in lines)
+    _call(q.lines_transfer(quote_id=src.id, line_ids=ids,
+                           mode="copy", target="existing", target_quote_id=dst.id, db=db))
+    rows = db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).all()
+    assert len(rows) == 4
+    assert len(set(r.sort_order for r in rows)) == 4, [r.sort_order for r in rows]
+    assert len(set(r.position for r in rows)) == 4, [r.position for r in rows]
