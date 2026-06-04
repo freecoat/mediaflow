@@ -2281,6 +2281,7 @@ function qlRenderBulkBar() {
   bar.innerHTML = `
     <span><b>${n}</b> selezionate</span>
     <button class="btn btn-secondary btn-sm" onclick="qlSelectAllVisible()">Tutte</button>
+    <button class="btn btn-secondary btn-sm" onclick="qlBulkDuplicate()">Duplica</button>
     <button class="btn btn-secondary btn-sm" style="color:#fb7185;" onclick="qlBulkDelete()">Elimina</button>
     <button class="btn btn-primary btn-sm" onclick="qlOpenTransfer('copy')">Copia in…</button>
     <button class="btn btn-primary btn-sm" onclick="qlOpenTransfer('move')" ${moveDis}>Sposta in…</button>
@@ -2300,6 +2301,19 @@ async function qlBulkDelete() {
     qlClearSel();
     reloadQuote();
   } catch (e) { toast(e.message || 'Errore eliminazione', 'error'); }
+}
+async function qlBulkDuplicate() {
+  const ids = [..._qlSelected];
+  if (!ids.length || !currentQuoteId) return;
+  const fd = new FormData();
+  fd.append('line_ids', ids.join(','));
+  fd.append('after', 'false');
+  try {
+    const r = await api('POST', `/quotes/api/${currentQuoteId}/lines-duplicate`, fd);
+    toast(`Duplicate ${r.duplicated} voci`, 'success');
+    qlClearSel();
+    if (typeof reloadQuote === 'function') reloadQuote();
+  } catch (e) { toast(e.message || 'Errore duplicazione', 'error'); }
 }
 
 // — Modal trasferimento —
@@ -2444,6 +2458,7 @@ function renderLineRow(l) {
         <button class="btn btn-ghost btn-sm" onclick="editLineSection(${l.id})" title="Etichetta sezione (es. SKY, NBCU…)">🏷</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleLineOptional(${l.id})" title="${isOpt ? 'Rendi obbligatoria' : 'Rendi opzionale'}" style="${isOpt ? 'color:#f59e0b;' : ''}">${isOpt ? '◎' : '○'}</button>
         <button class="btn btn-ghost btn-sm" onclick="changeLineCategory(${l.id})" title="Sposta in altra categoria">📁</button>
+        <button class="btn btn-ghost btn-sm" onclick="duplicateLine(${l.id})" title="Duplica questa voce sotto">⧉</button>
         <button class="btn btn-ghost btn-sm color-rose" onclick="deleteLine(${l.id})" title="Rimuovi">✕</button>
       </td>
     </tr>`;
@@ -3681,6 +3696,18 @@ async function addLine() {
     clearSelection();
     await reloadQuote();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+async function duplicateLine(lineId) {
+  if (!currentQuoteId) return;
+  const fd = new FormData();
+  fd.append('line_ids', String(lineId));
+  fd.append('after', 'true');
+  try {
+    await api('POST', `/quotes/api/${currentQuoteId}/lines-duplicate`, fd);
+    toast('Voce duplicata', 'success');
+    if (typeof reloadQuote === 'function') reloadQuote();
+  } catch (e) { toast(e.message || 'Errore duplicazione', 'error'); }
 }
 
 async function deleteLine(lineId) {
