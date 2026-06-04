@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.192** — 4 giugno 2026 — Fix deliverable orfani
+**v3.5.0-alpha.172.193** — 4 giugno 2026 — Copilot legge+rinomina deliverable HUB
+
+### α.172.193 ✅ (capability copilot: read + rename deliverable HUB)
+- `read_job_deliverables` (readonly): lista deliverable di job/progetto (id/nome/unit/qty/sezione/stato). Colma il gap "copilot non vedeva la lista planning".
+- `propose_rename_deliverables` (mutation gated Apply): rinomino batch via mapping `{deliverable_id,new_name}`. Generico: il modello calcola i nomi.
+- Verificato live DeepSeek: richiesta rinomino episodi GLO → copilot ha letto 62, proposto **60 rename** corretti (batch-6→ep.101-106, CD→coppie, NC→dispari), gated da Apply (AIAction #94 in attesa).
+- **440 test** (+6). Spec/plan: `docs/superpowers/plans/2026-06-04-copilot-deliverable-rename.md`.
+
+**Prossimo**: Matteo applica il rinomino GLO dal drawer copilot (AIAction proposta). Backlog: UI bottone ghost-link; readonly-tools nel path legacy; Gemini tool-use; UI episode-sequence nel HUB (opzionale, ora il copilot copre il caso).
+
+### α.172.192 ✅ (deliverable orfani: causa + cleanup + ghost-link)
 
 ### α.172.192 ✅ (deliverable orfani: causa + cleanup + ghost-link)
 - **Causa RC1**: `migrate_job` faceva soft-detach `quote_line_id=NULL` su riga rimossa → orfani accumulati. Fix: **soft-delete guardato** (`_deliverable_safe_to_remove`); con impegni → `deliverables_kept_locked`. + filtro `deleted_at` sulla query. RC2 (pre-restructure NULL) e RC3 (create manuale senza link) gestiti da cleanup + ghost-link.

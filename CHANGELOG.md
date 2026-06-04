@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.193 — Copilot legge + rinomina i deliverable del Planning HUB (4 giu 2026)
+
+- 2 nuove capability AI (funzionano su tutti i provider tool-capable, incl. DeepSeek):
+  - **`read_job_deliverables`** (readonly): elenca i deliverable di un job/progetto (id, nome, unità, quantità, sezione, stato). Colma il gap "il copilot vedeva solo le righe quote, non la lista Planning HUB".
+  - **`propose_rename_deliverables`** (mutation, gated Apply): rinomina in batch i deliverable via mapping `{deliverable_id, new_name}` esplicito. Generico: il modello calcola i nomi (es. suffissi episodio) e propone, l'utente applica.
+- Caso d'uso: "aggiungi suffisso episodio ai deliverable GLO" → il copilot legge, calcola 60 rinomini (batch-6→ep.101-106, CD→coppie, NC→dispari) e propone. Verificato live su DeepSeek (proposta corretta, gated da Apply).
+- **440 test** (+6). Nessuna migrazione.
+
 ## v3.5.0-alpha.172.192 — Fix deliverable orfani (migrate_job + cleanup + ghost-link) (4 giu 2026)
 
 - **Bug fix (causa)**: `migrate_job`, quando una riga di quote spariva nella nuova versione, faceva soft-detach `quote_line_id=NULL` invece di rimuovere il deliverable → **orfani accumulati a ogni migrazione versione** (+ duplicati per-nome). Ora: **soft-delete guardato** del deliverable della riga rimossa (se "vergine"); se ha impegni a valle (booking/confermato/fatturato) resta tracciato (`deliverables_kept_locked`). Nessun NULL-detach, nessun duplicato. Filtro `deleted_at` sulla query per non riprocessare tombstone.
