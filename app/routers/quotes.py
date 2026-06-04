@@ -2481,6 +2481,100 @@ async def delete_quote_line(quote_id: int, line_id: int, db: Session = Depends(g
 # logica di `delete_quote_line` (incluso propagation su Consuntivo per quote
 # approved con booking attivi). Raccoglie risultati e ritorna summary.
 
+def _remove_quote_lines(db, quote, ids):
+    """Rimuove QuoteLine da una quote EDITABILE (non-approved).
+
+    Per ogni line: hard-block 409 se ha booking attivi (oppure se la JCL è
+    legata a un job completed/invoiced, a uno slice-lock di fatturazione, o a
+    una consegna confermata/in-fattura/fatturata). Altrimenti elimina le
+    JobCostLine "pulite" collegate (sganciando i TimePunch), elimina le
+    consegne pulite e poi la line stessa. Ritorna (removed_count, details).
+
+    NON gestisce la propagazione phantom (riservata al ramo approved del
+    batch-delete). Il chiamante è responsabile di commit/rollback (su 409 qui
+    si fa rollback) e del recalc totali.
+    """
+    from app.models import DeliverableBillingStatus
+    quote_id = quote.id
+    removed = 0
+    details = []
+    for lid in ids:
+        line = db.query(QuoteLine).filter(
+            QuoteLine.id == lid, QuoteLine.quote_id == quote_id,
+        ).first()
+        if not line:
+            details.append({"line_id": lid, "skipped": "not_found"})
+            continue
+        cost_lines = db.query(JobCostLine).filter(
+            JobCostLine.quote_line_id == lid
+        ).all()
+        # Hard-block 409 se booking attivi
+        blocking = 0
+        for jcl in cost_lines:
+            blocking += db.query(Booking).filter(
+                Booking.job_cost_line_id == jcl.id,
+                Booking.status != BookingStatus.cancelled,
+            ).count()
+        if blocking > 0:
+            db.rollback()
+            raise HTTPException(
+                409,
+                f"Line #{lid} ha {blocking} booking attivi: annulla i booking "
+                f"prima di eliminare/spostare la voce."
+            )
+        # Pulizia diretta delle JCL collegate
+        for jcl in cost_lines:
+            if jcl.job and jcl.job.status in (JobStatus.completed, JobStatus.invoiced):
+                db.rollback()
+                raise HTTPException(
+                    409,
+                    f"JCL del job {jcl.job.code} è in stato {jcl.job.status.value}, "
+                    f"non cancellabile."
+                )
+            # v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 2) — slice-lock guard
+            try:
+                assert_jcl_lock_safe(db, jcl.id, action="eliminare la voce di costo collegata a")
+            except HTTPException:
+                db.rollback()
+                raise
+            db.query(TimePunch).filter(
+                TimePunch.job_cost_line_id == jcl.id
+            ).update({"job_cost_line_id": None}, synchronize_session=False)
+            db.delete(jcl)
+        # v3.5.0-alpha.172.18 — Cascade Deliverable (block se confermati/billed)
+        deliverables_clean = db.query(JobDeliverable).filter(
+            JobDeliverable.quote_line_id == lid
+        ).all()
+        for d in deliverables_clean:
+            if d.confirmed_at:
+                db.rollback()
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' (line #{lid}) è già confermata: "
+                    f"impossibile eliminare. Annulla conferma o crea nuova versione."
+                )
+            if d.billing_status in (
+                DeliverableBillingStatus.in_batch,
+                DeliverableBillingStatus.billed,
+                DeliverableBillingStatus.paid,
+            ):
+                db.rollback()
+                raise HTTPException(
+                    409,
+                    f"Consegna '{d.name}' (line #{lid}) è {d.billing_status.value}: "
+                    f"impossibile eliminare. Crea nuova versione di quote."
+                )
+            db.delete(d)
+        db.delete(line)
+        removed += 1
+        details.append({
+            "line_id": lid, "deleted_clean": True,
+            "cost_lines_deleted": len(cost_lines),
+            "deliverables_deleted": len(deliverables_clean),
+        })
+    return removed, details
+
+
 @router.post("/api/{quote_id}/lines-batch-delete", dependencies=[RequireEditQuotes])
 async def batch_delete_quote_lines(
     quote_id: int,
@@ -2551,36 +2645,26 @@ async def batch_delete_quote_lines(
     from app.services.reverse_quote import _next_position, _next_sort_order, _recalc_quote_totals as _rqt
     total_moved = 0
     details = []
-    for lid in ids:
-        line = db.query(QuoteLine).filter(
-            QuoteLine.id == lid, QuoteLine.quote_id == quote_id,
-        ).first()
-        if not line:
-            details.append({"line_id": lid, "skipped": "not_found"})
-            continue
-        cost_lines = db.query(JobCostLine).filter(
-            JobCostLine.quote_line_id == lid
-        ).all()
-        # Check booking attivi
-        blocking_count = 0
-        for jcl in cost_lines:
-            blocking_count += db.query(Booking).filter(
-                Booking.job_cost_line_id == jcl.id,
-                Booking.status != BookingStatus.cancelled,
-            ).count()
-        if blocking_count > 0 and not is_approved:
-            db.rollback()
-            raise HTTPException(
-                409,
-                f"Line #{lid} ha {blocking_count} booking attivi: impossibile "
-                f"eliminare in batch su quote non-approved. Annulla i booking "
-                f"prima, oppure approva la quote (la propagazione su Consuntivo "
-                f"avverrà automatica)."
-            )
-        # v3.5.0-alpha.172.18 — Su quote approved propaga SEMPRE (anche senza
-        # booking attivi) per coerenza con regola "quote approvata immutabile".
-        # Include cascade JobDeliverable per evitare consegne fantasma.
-        if is_approved:
+    if not is_approved:
+        # Quote EDITABILE: rimozione "pulita" delegata all'helper condiviso (DRY).
+        # L'helper applica gli stessi hard-block 409 (booking attivi, job
+        # completed/invoiced, slice-lock, consegne confermate/in-fattura) e fa
+        # rollback prima di sollevare.
+        _removed, details = _remove_quote_lines(db, parent_quote, ids)
+    else:
+        for lid in ids:
+            line = db.query(QuoteLine).filter(
+                QuoteLine.id == lid, QuoteLine.quote_id == quote_id,
+            ).first()
+            if not line:
+                details.append({"line_id": lid, "skipped": "not_found"})
+                continue
+            cost_lines = db.query(JobCostLine).filter(
+                JobCostLine.quote_line_id == lid
+            ).all()
+            # v3.5.0-alpha.172.18 — Su quote approved propaga SEMPRE (anche senza
+            # booking attivi) per coerenza con regola "quote approvata immutabile".
+            # Include cascade JobDeliverable per evitare consegne fantasma.
             phantom = _get_or_create_phantom()
             cloned = QuoteLine(
                 quote_id=phantom.id,
@@ -2612,55 +2696,6 @@ async def batch_delete_quote_lines(
                 "cost_lines_moved": len(cost_lines),
                 "deliverables_moved": len(deliverables_to_move),
             })
-            continue
-        # No blocking bookings + quote not approved: pulizia diretta
-        for jcl in cost_lines:
-            if jcl.job and jcl.job.status in (JobStatus.completed, JobStatus.invoiced):
-                db.rollback()
-                raise HTTPException(
-                    409, f"JCL del job {jcl.job.code} è in stato {jcl.job.status.value}, non cancellabile."
-                )
-            # v3.5.0-alpha.172.36 (Sprint 2 BLOCCO 2) — slice-lock guard
-            try:
-                assert_jcl_lock_safe(db, jcl.id, action="eliminare la voce di costo collegata a")
-            except HTTPException as _e:
-                db.rollback()
-                raise
-            db.query(TimePunch).filter(
-                TimePunch.job_cost_line_id == jcl.id
-            ).update({"job_cost_line_id": None}, synchronize_session=False)
-            db.delete(jcl)
-        # v3.5.0-alpha.172.18 — Cascade Deliverable (block se confermati/billed)
-        from app.models import DeliverableBillingStatus
-        deliverables_clean = db.query(JobDeliverable).filter(
-            JobDeliverable.quote_line_id == lid
-        ).all()
-        for d in deliverables_clean:
-            if d.confirmed_at:
-                db.rollback()
-                raise HTTPException(
-                    409,
-                    f"Consegna '{d.name}' (line #{lid}) è già confermata: "
-                    f"impossibile eliminare. Annulla conferma o crea nuova versione."
-                )
-            if d.billing_status in (
-                DeliverableBillingStatus.in_batch,
-                DeliverableBillingStatus.billed,
-                DeliverableBillingStatus.paid,
-            ):
-                db.rollback()
-                raise HTTPException(
-                    409,
-                    f"Consegna '{d.name}' (line #{lid}) è {d.billing_status.value}: "
-                    f"impossibile eliminare. Crea nuova versione di quote."
-                )
-            db.delete(d)
-        db.delete(line)
-        details.append({
-            "line_id": lid, "deleted_clean": True,
-            "cost_lines_deleted": len(cost_lines),
-            "deliverables_deleted": len(deliverables_clean),
-        })
 
     # Recalc parent + phantom
     parent_fresh = db.query(Quote).options(
