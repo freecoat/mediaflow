@@ -4220,6 +4220,73 @@ def _h_read_quote_lines(db: Session, data: dict) -> dict:
     }
 
 
+@ai_capability("read_job_deliverables")
+def _h_read_job_deliverables(db: Session, data: dict) -> dict:
+    """READONLY. Lista dei deliverable (consegne) del Planning HUB di un job o
+    progetto: id, nome, unità, quantità, sezione (section_label della riga quote),
+    stato. Usa per ENUMERARE i deliverable prima di proporne il rinomino con
+    propose_rename_deliverables (es. aggiungere suffissi episodio).
+    Payload: {"job_id": int} OPPURE {"project_code": str} OPPURE {"quote_number": str}.
+    """
+    CURRENT_TENANT = 1
+    job = None
+    if data.get("job_id"):
+        job = db.query(Job).filter(Job.id == int(data["job_id"]), Job.tenant_id == CURRENT_TENANT).first()
+    elif data.get("project_code"):
+        proj = db.query(Project).filter(Project.code == str(data["project_code"]).strip()).first()
+        if proj:
+            job = db.query(Job).filter(Job.project_id == proj.id).first()
+    elif data.get("quote_number"):
+        qz = db.query(Quote).filter(Quote.number == str(data["quote_number"]).strip()).first()
+        if qz:
+            job = db.query(Job).filter(Job.quote_id == qz.id).first()
+    if not job:
+        raise ValueError("Job non trovato (passa job_id, project_code o quote_number)")
+    from app.models import JobDeliverable as _JD, QuoteLine as _QL
+    rows = db.query(_JD).filter(_JD.job_id == job.id, _JD.deleted_at.is_(None)).order_by(_JD.id).all()
+    qlsec = {}
+    qlids = {d.quote_line_id for d in rows if d.quote_line_id}
+    if qlids:
+        for ql in db.query(_QL).filter(_QL.id.in_(qlids)).all():
+            qlsec[ql.id] = ql.section_label
+    items = [{
+        "id": d.id, "name": d.name, "unit": d.unit,
+        "quantity": d.quantity_planned, "section_label": qlsec.get(d.quote_line_id),
+        "status": d.status.value if hasattr(d.status, "value") else str(d.status),
+    } for d in rows]
+    return {"job_id": job.id, "job_code": job.code, "count": len(items), "items": items}
+
+
+@ai_capability("propose_rename_deliverables")
+def _h_propose_rename_deliverables(db: Session, data: dict) -> dict:
+    """MUTATION (gated Apply). Rinomina in batch i deliverable del Planning HUB.
+    Payload: {"renames": [{"deliverable_id": int, "new_name": str}, ...]}.
+    Scope tenant; salta id non trovati (conteggio in 'skipped'). Usato per
+    sequenze episodi: prima read_job_deliverables, poi calcola i new_name.
+    """
+    CURRENT_TENANT = 1
+    renames = data.get("renames") or []
+    if not renames:
+        raise ValueError("renames vuoto")
+    from app.models import JobDeliverable as _JD
+    renamed = 0; skipped = 0; details = []
+    for r in renames:
+        did = r.get("deliverable_id")
+        new_name = (r.get("new_name") or "").strip()
+        if not did or not new_name:
+            skipped += 1; continue
+        d = db.query(_JD).filter(_JD.id == int(did), _JD.tenant_id == CURRENT_TENANT,
+                                 _JD.deleted_at.is_(None)).first()
+        if not d:
+            skipped += 1; continue
+        old = d.name
+        d.name = new_name[:255]
+        renamed += 1
+        details.append({"id": int(did), "old": old, "new": d.name})
+    db.flush()
+    return {"renamed": renamed, "skipped": skipped, "details": details[:100]}
+
+
 # v3.5.0-alpha.66.17.2 (R6.2) — `_ACTION_HANDLERS` derivato dal registry
 # popolato dai decorator `@ai_capability("name")` sopra ogni `_h_*`.
 # Manteniamo l'attributo come dict (non funzione) per compat back-compat

@@ -73,6 +73,19 @@ TOOLS: list[dict] = [
         },
         "handler": "read_quote_lines",
     },
+    {
+        "name": "read_job_deliverables",
+        "category": "readonly",
+        "description": ("Lista i deliverable (consegne) del Planning HUB di un job o progetto: "
+            "id, nome, unità, quantità, sezione, stato. USA per enumerare i deliverable prima "
+            "di rinominarli con propose_rename_deliverables. Identifica via job_id, project_code o quote_number."),
+        "input_schema": {"type": "object", "properties": {
+            "job_id": {"type": "integer"},
+            "project_code": {"type": "string"},
+            "quote_number": {"type": "string"},
+        }},
+        "handler": "read_job_deliverables",
+    },
 
     # ────────── MUTATION (gated da Apply utente) ──────────
     {
@@ -243,6 +256,21 @@ TOOLS: list[dict] = [
             "required": ["quantity"],
         },
         "handler": "propose_quote_line",
+    },
+    {
+        "name": "propose_rename_deliverables",
+        "category": "mutation",
+        "description": ("Rinomina in batch i deliverable del Planning HUB. Prima ENUMERA con "
+            "read_job_deliverables, poi calcola i nuovi nomi e proponi qui. Esempi: aggiungere "
+            "suffissi episodio ' - ep. 101'…' - ep. 106' a un batch di 6; coppie '101+102'; dispari. "
+            "Ogni elemento: {deliverable_id, new_name}."),
+        "input_schema": {"type": "object", "properties": {
+            "renames": {"type": "array", "items": {"type": "object", "properties": {
+                "deliverable_id": {"type": "integer"},
+                "new_name": {"type": "string"},
+            }, "required": ["deliverable_id", "new_name"]}},
+        }, "required": ["renames"]},
+        "handler": "propose_rename_deliverables",
     },
     {
         "name": "propose_price_item",
