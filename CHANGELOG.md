@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.186 — Duplica righe quote in-place (4 giu 2026)
+
+- **Duplica voci nella stessa quotazione** per crearne varianti: **⧉ per riga** (copia subito sotto l'originale) + **Duplica** nella barra bulk (duplica la selezione in fondo alla categoria).
+- Le copie ereditano descrizione + suffisso **" (copia)"**, categoria, sezione (📦), link capitolato (`delivery_item_id`) e flag opzionale. Le modifichi inline dopo.
+- Endpoint `POST /quotes/api/{id}/lines-duplicate` (Form `line_ids` CSV, `after` bool). Riusa `_copy_quote_lines` + numerazione progressiva (no collisioni). Recalc canonico `_recalc_quote` → **sconti categoria + pacchetto applicati**. Gate `_assert_quote_mutable` (409 su quote approvata non-Consuntivo), come "aggiungi voce".
+- **393 test** verdi (+5). Smoke browser: ⧉ singola + bulk Duplica, suffisso, zero errori console.
+
 ## v3.5.0-alpha.172.185 — Multiselect righe quote: elimina / copia / sposta (4 giu 2026)
 
 - **Selezione multipla** delle righe nell'editor quotazioni: checkbox per riga (dentro la cella drag-handle, nessuna colonna nuova) + **barra bulk** flottante con conteggio.

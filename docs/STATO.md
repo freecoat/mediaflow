@@ -8,7 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.185** — 4 giugno 2026 — Multiselect righe quote (elimina/copia/sposta)
+**v3.5.0-alpha.172.186** — 4 giugno 2026 — Duplica righe quote in-place
+
+### α.172.186 ✅ (duplica righe quote in-place)
+- **⧉ per riga** (copia subito sotto l'originale) + **Duplica** nella barra bulk (selezione → copie in fondo alla categoria).
+- Copie con descrizione + **" (copia)"**, ereditano categoria/sezione/link capitolato/opzionale. Editabili inline.
+- `POST /quotes/api/{id}/lines-duplicate` (`line_ids` CSV, `after` bool); riusa `_copy_quote_lines`; recalc canonico `_recalc_quote` (sconti cat+pacchetto); gate `_assert_quote_mutable` (409 approvata). UI usa `currentQuoteId` diretto (no `_ensureEditableQuoteOrVersion`: evita stale-id su nuova versione; coerente con bulk delete/transfer).
+- **393 test** (+5). Smoke browser E2E verde.
+
+**Prossimo**:
+- **Test browser Matteo**: ⧉ su una voce → compare sotto con "(copia)"; selezione multipla → Duplica; verifica sconti quote restano corretti dopo duplica.
+- **BACKLOG** invariato: filtro proattivo capitolato editor; severità R3; QC filename; UI naming per-item; fixture `client_admin`→conftest.
+
+### α.172.185 ✅ (multiselect righe quote: elimina / copia / sposta)
 
 ### α.172.185 ✅ (multiselect righe quote: elimina / copia / sposta)
 - **Selezione multipla** righe nell'editor quote: checkbox per riga (dentro la cella drag-handle, no colonna nuova) + **barra bulk** flottante.
