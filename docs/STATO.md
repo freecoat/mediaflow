@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.190** — 4 giugno 2026 — Copilot vede le consegne delle quote
+**v3.5.0-alpha.172.191** — 4 giugno 2026 — Tool-use universale del Copilot
+
+### α.172.191 ✅ (tool-use universale copilot)
+- Adapter generico OpenAI-compatible: `app/services/openai_tools.py` (conversioni pure) + `OpenAICompatToolsMixin`. Tool-use ora su **OpenAI, DeepSeek, Perplexity, Ollama** + endpoint locali (base_url). Claude native invariato; fallback legacy per provider senza function-calling.
+- Ogni provider espone `_post_chat(payload)→dict`; Ollama normalizzato a `{choices:[{message}]}`; `arguments` via `safe_json_parse` (modelli locali) o oggetto (Ollama). Loop resta canonico Anthropic.
+- **421 test** (+18: 9 openai_tools + 8 wiring + round-trip). Smoke live DeepSeek: copilot ha chiamato `read_quote_lines` e dato il dettaglio righe consegna con quantità di Q-2026-008-v4. ✅
+- Spec/plan: `docs/superpowers/{specs,plans}/2026-06-04-universal-tool-use*`.
+
+**Prossimo**: test Matteo copilot su DeepSeek (domande dettagliate su quote/deliverable). Backlog: readonly-tools nel path legacy (modelli senza function-calling), Gemini tool-use, provider "custom OpenAI endpoint" per LLM locali arbitrari.
+
+### α.172.190 ✅ (copilot conteggio consegne/deliverable quote)
 
 ### α.172.190 ✅ (copilot conteggio consegne/deliverable quote)
 - Contesto AI: overview "QUOTE ESISTENTI" con `lavorazioni N · consegne M` per quote; righe quote attiva taggate per natura. Funziona su TUTTI i provider (anche DeepSeek legacy, no tool).

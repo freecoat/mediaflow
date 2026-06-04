@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.191 — Tool-use universale del Copilot (4 giu 2026)
+
+- Il Copilot ora **usa i tool con qualsiasi modello OpenAI-compatible**, non solo Claude: OpenAI, **DeepSeek**, Perplexity, **Ollama** e qualsiasi endpoint locale (LM Studio, vLLM, llama.cpp) via `base_url`.
+- Nuovo modulo puro `app/services/openai_tools.py` (conversioni canonico Anthropic ↔ OpenAI function-calling: tools, messaggi, risposta) + `OpenAICompatToolsMixin` che implementa `chat_with_tools` riusando il `_post_chat` di ogni provider. Il loop `advance_loop` resta provider-agnostico (formato canonico).
+- Provider aggiornati: DeepSeek/Perplexity (httpx), OpenAI (SDK), Ollama (`/api/chat` normalizzato). `arguments` tollerante (stringa via `safe_json_parse` per i modelli locali, oppure oggetto Ollama). Claude native invariato; provider senza function-calling → fallback legacy markdown.
+- Risultato: con **DeepSeek** (provider attivo, economico) il copilot recupera on-demand il dettaglio completo (es. righe consegna di una quote con quantità) senza gonfiare il contesto.
+- **421 test** (+18). Verificato live (DeepSeek): "elenca righe consegna di Q-2026-008-v4 con quantità" → ha chiamato `read_quote_lines` e risposto col dettaglio reale.
+
 ## v3.5.0-alpha.172.190 — Copilot vede le consegne (deliverable) delle quote (4 giu 2026)
 
 - Il Copilot non riusciva a contare le **consegne (deliverable)** di una quotazione: il contesto esponeva solo le lavorazioni del job.
