@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from app.services.ai_provider import ToolUse, ToolUseResponse
+from app.services.ai_provider import ToolUse, ToolUseResponse, safe_json_parse
 
 
 def to_openai_tools(tools: list[dict]) -> list[dict]:
@@ -89,10 +89,10 @@ def from_openai_message(msg: dict) -> ToolUseResponse:
         fn = tc.get("function") or {}
         args = fn.get("arguments")
         if isinstance(args, str):
-            try:
-                args = json.loads(args)
-            except (ValueError, TypeError):
-                args = {}
+            # safe_json_parse tollera fence/commenti/trailing-comma: i modelli
+            # locali (Ollama/llama.cpp) spesso emettono arguments malformati.
+            parsed = safe_json_parse(args)
+            args = parsed if isinstance(parsed, dict) else {}
         elif not isinstance(args, dict):
             args = {}
         call_id = tc.get("id") or f"call_{i}"

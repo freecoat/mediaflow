@@ -77,3 +77,35 @@ def test_from_openai_message_no_tools_end_turn():
     assert resp.stop_reason == "end_turn"
     assert resp.tool_uses == []
     assert resp.text == "risposta semplice"
+
+
+def test_from_openai_message_lenient_args_trailing_comma():
+    # modello locale emette JSON con trailing comma → safe_json_parse lo tollera
+    msg = {"content": "", "tool_calls": [
+        {"function": {"name": "read_quote_lines", "arguments": "{\"quote_id\": 3,}"}},
+    ]}
+    resp = from_openai_message(msg)
+    assert resp.tool_uses[0].input == {"quote_id": 3}
+
+
+def test_round_trip_id_stability_no_id():
+    """raw_assistant_message di from_openai_message (id generato) deve
+    ri-convertirsi con to_openai_messages mantenendo lo stesso id, così il
+    tool_result successivo combacia. Proprietà critica per advance_loop."""
+    resp = from_openai_message({"content": "calcolo", "tool_calls": [
+        {"function": {"name": "read_quote_lines", "arguments": {"quote_id": 18}}},
+    ]})
+    gen_id = resp.tool_uses[0].id
+    assert gen_id
+    canonical = [
+        {"role": "user", "content": "conta"},
+        resp.raw_assistant_message,
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": gen_id, "content": "{\"counts\": {\"consegne\": 15}}"},
+        ]},
+    ]
+    out = to_openai_messages(canonical, system=None)
+    asst = [m for m in out if m["role"] == "assistant"][0]
+    tool_msg = [m for m in out if m["role"] == "tool"][0]
+    assert asst["tool_calls"][0]["id"] == gen_id
+    assert tool_msg["tool_call_id"] == gen_id
