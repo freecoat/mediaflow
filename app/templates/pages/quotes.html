@@ -273,6 +273,13 @@
   <style>
     .dropdown-menu.open { display:flex !important; }
     .dropdown-item:hover { background: var(--bg3); }
+    /* v3.5.0-alpha.172.185 — multiselect righe quote */
+    .ql-row-selected { outline: 2px solid var(--indigo, #6272f5); outline-offset: -2px; }
+    .ql-bulk-bar { position: sticky; bottom: 12px; z-index: 30; margin: 12px auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+      background: var(--surface, #1c1f2e); border: 1px solid var(--indigo, #6272f5); border-radius: 10px; padding: 8px 14px; width: fit-content; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+    .ql-picker-results { max-height: 240px; overflow-y: auto; margin-top: 6px; }
+    .ql-picker-row { padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+    .ql-picker-row:hover { background: rgba(98,114,245,0.15); }
     /* v3.4.34.2: Listino flottante (position:fixed) — sempre visibile,
        non scorre con la pagina. Solo scroll interno alla lista risultati.
        v3.4.34.3: il padding-right è applicato all'INTERO wrapper editor
@@ -666,6 +673,7 @@
               <tr><td colspan="8" class="text-muted" style="text-align:center;padding:16px;">Nessuna voce — apri il <strong>📋 Listino</strong> e trascina una voce qui</td></tr>
             </tbody>
           </table>
+          <div id="qlBulkBar" class="ql-bulk-bar" style="display:none;"></div>
         </div>
         <div class="text-xs text-muted" style="padding:8px 12px;border-top:1px solid var(--border);">
           Modifica i campi: si salva automaticamente al blur. Maniglia ⠿ riordina voci · maniglia ⋮⋮ sull'header categoria riordina i blocchi. Apri il pannello <strong>📋 Listino</strong> e trascina una voce qui per aggiungerla.
@@ -828,6 +836,34 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-move-quote')">Annulla</button>
       <button class="btn btn-primary" onclick="confirmMoveQuote()">Sposta</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.172.185: trasferimento righe (copia/sposta) -->
+<div class="modal-overlay" id="modal-transfer-lines">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="qlTransferTitle">Trasferisci righe</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-transfer-lines')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" style="display:block;margin-bottom:4px;"><input type="radio" name="ql-tgt" value="existing" checked onchange="qlTransferTargetMode()"> Quote esistente (bozza)</label>
+        <label class="form-label" style="display:block;"><input type="radio" name="ql-tgt" value="new" onchange="qlTransferTargetMode()"> Nuova quote (bozza)</label>
+      </div>
+      <div id="qlTransferExisting" class="form-group">
+        <input type="text" class="form-input" id="qlTransferPicker" placeholder="Cerca quote (numero, titolo, cliente)…" autocomplete="off" oninput="qlFilterTargets(this.value)">
+        <input type="hidden" id="qlTransferTargetId">
+        <div id="qlTransferResults" class="ql-picker-results"></div>
+      </div>
+      <div id="qlTransferNew" class="form-group" style="display:none;">
+        <p class="text-sm text-muted">Crea una nuova bozza che eredita progetto e cliente di origine.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-transfer-lines')">Annulla</button>
+      <button class="btn btn-primary" id="qlTransferSubmit" onclick="qlSubmitTransfer()">Conferma</button>
     </div>
   </div>
 </div>
@@ -2010,6 +2046,10 @@ function closeEditor() {
 // ── Render righe raggruppate per categoria ────────────────────
 function renderLines() {
   // v3.4.34: multi-tbody per categoria → drag&drop sui blocchi categoria.
+  // v3.5.0-alpha.172.185: la selezione multipla è transiente — i checkbox
+  // vengono ricreati unchecked ad ogni render, quindi azzero lo stato JS.
+  _qlSelected.clear();
+  if (typeof qlRenderBulkBar === 'function') qlRenderBulkBar();
   const table = document.getElementById('lines-table');
   const emptyTbody = document.getElementById('lines-tbody-empty');
   const allLines = currentQuote.lines || [];
@@ -2204,6 +2244,127 @@ async function persistCategoryOrder() {
   }
 }
 
+// v3.5.0-alpha.172.185 — multiselect righe quote: elimina / copia / sposta
+const _qlSelected = new Set();
+
+function qlToggleSel(id, on) {
+  if (on) _qlSelected.add(id); else _qlSelected.delete(id);
+  const row = document.querySelector(`.ql-row[data-line-id="${id}"]`);
+  if (row) row.classList.toggle('ql-row-selected', on);
+  qlRenderBulkBar();
+}
+function qlSelectAllVisible() {
+  document.querySelectorAll('.ql-sel').forEach(cb => {
+    if (!cb.checked) { cb.checked = true; qlToggleSel(parseInt(cb.dataset.lineId, 10), true); }
+  });
+}
+function qlClearSel() {
+  _qlSelected.clear();
+  document.querySelectorAll('.ql-sel').forEach(cb => cb.checked = false);
+  document.querySelectorAll('.ql-row-selected').forEach(r => r.classList.remove('ql-row-selected'));
+  qlRenderBulkBar();
+}
+function _qlEditable() {
+  const s = currentQuote && currentQuote.status;
+  return !!currentQuote && s !== 'approved' && s !== 'rejected' && !currentQuote.is_phantom;
+}
+function qlRenderBulkBar() {
+  const bar = document.getElementById('qlBulkBar');
+  if (!bar) return;
+  const n = _qlSelected.size;
+  if (!n) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  const moveDis = _qlEditable() ? '' : 'disabled title="Spostamento solo da bozze"';
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <span><b>${n}</b> selezionate</span>
+    <button class="btn btn-secondary btn-sm" onclick="qlSelectAllVisible()">Tutte</button>
+    <button class="btn btn-secondary btn-sm" style="color:#fb7185;" onclick="qlBulkDelete()">Elimina</button>
+    <button class="btn btn-primary btn-sm" onclick="qlOpenTransfer('copy')">Copia in…</button>
+    <button class="btn btn-primary btn-sm" onclick="qlOpenTransfer('move')" ${moveDis}>Sposta in…</button>
+    <button class="btn btn-ghost btn-sm" onclick="qlClearSel()">✕</button>`;
+}
+async function qlBulkDelete() {
+  const ids = [..._qlSelected];
+  if (!ids.length) return;
+  if (!confirm(`Eliminare ${ids.length} righe selezionate?`)) return;
+  const fd = new FormData();
+  fd.append('line_ids', ids.join(','));
+  try {
+    const r = await api('POST', `/quotes/api/${currentQuoteId}/lines-batch-delete`, fd);
+    let msg = `Eliminate ${r.deleted} righe`;
+    if (r.propagated_to_phantom) msg += ' · propagato su Consuntivo';
+    toast(msg, 'success');
+    qlClearSel();
+    reloadQuote();
+  } catch (e) { toast(e.message || 'Errore eliminazione', 'error'); }
+}
+
+// — Modal trasferimento —
+let _qlTransferMode = 'copy';
+let _qlTargets = [];
+function qlOpenTransfer(mode) {
+  if (!_qlSelected.size) return;
+  if (mode === 'move' && !_qlEditable()) { toast('Spostamento solo da bozze', 'warning'); return; }
+  _qlTransferMode = mode;
+  document.getElementById('qlTransferTitle').textContent =
+    (mode === 'copy' ? 'Copia ' : 'Sposta ') + _qlSelected.size + ' righe';
+  document.querySelector('input[name="ql-tgt"][value="existing"]').checked = true;
+  document.getElementById('qlTransferTargetId').value = '';
+  document.getElementById('qlTransferPicker').value = '';
+  document.getElementById('qlTransferResults').innerHTML = '';
+  qlTransferTargetMode();
+  qlLoadTransferTargets();
+  openModal('modal-transfer-lines');
+}
+function qlTransferTargetMode() {
+  const v = document.querySelector('input[name="ql-tgt"]:checked').value;
+  document.getElementById('qlTransferExisting').style.display = v === 'existing' ? '' : 'none';
+  document.getElementById('qlTransferNew').style.display = v === 'new' ? '' : 'none';
+}
+async function qlLoadTransferTargets() {
+  try {
+    _qlTargets = await api('GET', `/quotes/api/transfer-targets?exclude=${currentQuoteId}`);
+    qlRenderTargets(_qlTargets);
+  } catch (e) { toast(e.message || 'Errore caricamento quote', 'error'); }
+}
+function qlRenderTargets(list) {
+  const box = document.getElementById('qlTransferResults');
+  box.innerHTML = list.map(t =>
+    `<div class="ql-picker-row" onclick="qlPickTarget(${t.id})"><b>${escapeHtml(t.number)}</b> — ${escapeHtml(t.title)} · ${escapeHtml(t.client_name)}</div>`
+  ).join('') || '<div class="text-muted text-sm" style="padding:8px;">Nessuna bozza disponibile.</div>';
+}
+function qlFilterTargets(term) {
+  term = (term || '').toLowerCase();
+  qlRenderTargets(_qlTargets.filter(t => `${t.number} ${t.title} ${t.client_name}`.toLowerCase().includes(term)));
+}
+function qlPickTarget(id) {
+  const t = _qlTargets.find(x => x.id === id);
+  document.getElementById('qlTransferTargetId').value = id;
+  document.getElementById('qlTransferPicker').value = t ? `${t.number} — ${t.title}` : String(id);
+  document.getElementById('qlTransferResults').innerHTML = '';
+}
+async function qlSubmitTransfer() {
+  const target = document.querySelector('input[name="ql-tgt"]:checked').value;
+  const tgtId = document.getElementById('qlTransferTargetId').value;
+  if (target === 'existing' && !tgtId) { toast('Seleziona una quote di destinazione', 'warning'); return; }
+  const btn = document.getElementById('qlTransferSubmit');
+  btn.disabled = true;
+  const fd = new FormData();
+  fd.append('line_ids', [..._qlSelected].join(','));
+  fd.append('mode', _qlTransferMode);
+  fd.append('target', target);
+  if (target === 'existing') fd.append('target_quote_id', tgtId);
+  try {
+    const r = await api('POST', `/quotes/api/${currentQuoteId}/lines-transfer`, fd);
+    toast(`${r.mode === 'move' ? 'Spostate' : 'Copiate'} ${r.copied} righe → ${r.target_number}`, 'success');
+    closeModal('modal-transfer-lines');
+    qlClearSel();
+    reloadQuote();
+  } catch (e) {
+    toast(e.message || 'Errore trasferimento', 'error');
+  } finally { btn.disabled = false; }
+}
+
 function renderLineRow(l) {
   // Base-anchored: l.total è in valuta base; converti per display.
   const cb = (currentQuote && currentQuote.currency_block) || {currency:'EUR', live_rate:1.0};
@@ -2234,7 +2395,7 @@ function renderLineRow(l) {
     : '';
   return `
     <tr class="ql-row${isOpt ? ' ql-row-optional' : ''}" data-line-id="${l.id}" data-optional="${isOpt ? '1' : '0'}">
-      <td><span class="drag-handle" title="Trascina per riordinare">⠿</span></td>
+      <td style="white-space:nowrap;"><input type="checkbox" class="ql-sel" data-line-id="${l.id}" onchange="qlToggleSel(${l.id}, this.checked)" style="vertical-align:middle;margin-right:4px;"><span class="drag-handle" title="Trascina per riordinare">⠿</span></td>
       <td>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <input class="inline-edit" data-field="description" value="${desc}" onblur="saveLineField(this)" style="flex:1;min-width:160px;">
