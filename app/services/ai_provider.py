@@ -362,6 +362,38 @@ class AIProvider(ABC):
         return None
 
 
+# ── Mixin tool-use OpenAI-compatible ──────────────────────────
+
+class OpenAICompatToolsMixin:
+    """Tool-use per provider con API chat-completions OpenAI-compatible.
+    Richiede che il provider esponga `_post_chat(payload: dict) -> dict`
+    (JSON completo, con `choices[0].message`) e abbia `self.model`."""
+
+    def supports_tools(self) -> bool:
+        return True
+
+    def chat_with_tools(self, messages, system, tools, max_tokens=4000, temperature=0.3,
+                        *, usage_db=None, usage_user_id=None,
+                        usage_conversation_id=None, usage_tenant_id: int = 1):
+        from app.services.openai_tools import (
+            to_openai_messages, to_openai_tools, from_openai_message,
+        )
+        payload = {
+            "model": self.model,
+            "messages": to_openai_messages(messages, system),
+            "tools": to_openai_tools(tools),
+            "tool_choice": "auto",
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        data = self._post_chat(payload)
+        try:
+            msg = data["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError):
+            msg = {"content": ""}
+        return from_openai_message(msg)
+
+
 # ── Provider concreti ─────────────────────────────────────────
 
 class ClaudeProvider(AIProvider):
@@ -664,7 +696,7 @@ class GeminiProvider(AIProvider):
         return resp.text or ""
 
 
-class PerplexityProvider(AIProvider):
+class PerplexityProvider(OpenAICompatToolsMixin, AIProvider):
     """
     Perplexity API via httpx (OpenAI-compatible chat completions).
     Endpoint: https://api.perplexity.ai/chat/completions
@@ -680,14 +712,17 @@ class PerplexityProvider(AIProvider):
     @property
     def name(self) -> str: return f"Perplexity ({self.model})"
 
-    def _post(self, payload: dict) -> str:
+    def _post_chat(self, payload: dict) -> dict:
         headers = {"Authorization": f"Bearer {self.api_key}",
                    "Content-Type": "application/json"}
         with httpx.Client(timeout=120) as client:
             r = client.post(f"{self.BASE_URL}/chat/completions",
                             headers=headers, json=payload)
             r.raise_for_status()
-            data = r.json()
+            return r.json()
+
+    def _post(self, payload: dict) -> str:
+        data = self._post_chat(payload)
         return data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
 
     def complete(self, system, user, max_tokens=2000, temperature=0.3):
@@ -703,7 +738,7 @@ class PerplexityProvider(AIProvider):
                            "temperature": temperature, "messages": msgs})
 
 
-class DeepseekProvider(AIProvider):
+class DeepseekProvider(OpenAICompatToolsMixin, AIProvider):
     """
     DeepSeek API (OpenAI/Anthropic-compatible chat completions).
     Endpoint: https://api.deepseek.com/chat/completions
@@ -725,14 +760,17 @@ class DeepseekProvider(AIProvider):
     @property
     def name(self) -> str: return f"DeepSeek ({self.model})"
 
-    def _post(self, payload: dict) -> str:
+    def _post_chat(self, payload: dict) -> dict:
         headers = {"Authorization": f"Bearer {self.api_key}",
                    "Content-Type": "application/json"}
         with httpx.Client(timeout=180) as client:
             r = client.post(f"{self.base_url}/chat/completions",
                             headers=headers, json=payload)
             r.raise_for_status()
-            data = r.json()
+            return r.json()
+
+    def _post(self, payload: dict) -> str:
+        data = self._post_chat(payload)
         return data.get("choices", [{}])[0].get("message", {}).get("content", "") or ""
 
     def complete(self, system, user, max_tokens=2000, temperature=0.3):
