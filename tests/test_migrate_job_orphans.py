@@ -37,11 +37,21 @@ def _seed_job(db):
 def _mk_deliverable(db, job, **kw):
     d = m.JobDeliverable(tenant_id=1, job_id=job.id, name=kw.get("name", "DCP"),
                          quote_line_id=kw.get("quote_line_id"),
+                         delivery_item_id=kw.get("delivery_item_id"),
                          quantity_planned=1.0, quantity_delivered=kw.get("qd", 0.0),
                          billing_status=kw.get("bs", m.DeliverableBillingStatus.not_billed),
                          confirmed_at=kw.get("confirmed_at"))
     db.add(d); db.flush()
     return d
+
+
+def test_safe_to_remove_blocked_by_capitolato_link(db, monkeypatch):
+    """v3.5.0-alpha.172.194 — deliverable con delivery_item_id (capitolato) NON
+    rimovibile, anche se vergine e orfano di riga quote."""
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    p, quote, job = _seed_job(db)
+    d = _mk_deliverable(db, job, quote_line_id=None, delivery_item_id=118)
+    assert q._deliverable_safe_to_remove(db, d) is False
 
 
 def _mk_booking_link(db, job, d):

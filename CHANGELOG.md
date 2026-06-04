@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.194 — Fix guardia cleanup: preserva deliverable capitolato-linked (4 giu 2026)
+
+- **Bug fix (regressione del cleanup α.172.192)**: `_deliverable_safe_to_remove` non considerava il link capitolato → il cleanup orfani aveva rimosso **8 deliverable unici con `delivery_item_id`** (Subtitle Sidecar EBU-STL/TTML, Dialogue/Music/DME Stem, ProRes 422 HQ varianti) di GLO. Ora la guardia ritorna **False se `delivery_item_id` è valorizzato** (un requisito di consegna capitolato va preservato anche se orfano di riga quote). Protegge sia il cleanup sia il soft-delete di `migrate_job`.
+- **Restore dati**: gli 8 deliverable GLO ripristinati (deleted_at→NULL) e **ghost-linkati** a una phantom quote (Consuntivo) → tracciati, capitolato intatto. Snapshot pre-restore in `db_snapshots/`. (Il rename episodi era innocente: 0 `delivery_item_id` persi, verificato id-per-id.)
+- **441 test** (+1). GLO ora 70 deliverable attivi.
+
 ## v3.5.0-alpha.172.193 — Copilot legge + rinomina i deliverable del Planning HUB (4 giu 2026)
 
 - 2 nuove capability AI (funzionano su tutti i provider tool-capable, incl. DeepSeek):

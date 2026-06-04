@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.193** — 4 giugno 2026 — Copilot legge+rinomina deliverable HUB
+**v3.5.0-alpha.172.194** — 4 giugno 2026 — Fix guardia cleanup (preserva capitolato)
+
+### α.172.194 ✅ (fix guardia + restore capitolato)
+- **Regressione α.172.192**: il cleanup orfani aveva rimosso 8 deliverable GLO con `delivery_item_id` (capitolato unico: sottotitoli/stem/ProRes). Causa: `_deliverable_safe_to_remove` non guardava il link capitolato.
+- **Fix**: la guardia ora ritorna False se `delivery_item_id` è valorizzato → mai rimuovere deliverable capitolato-linked (vale per cleanup E migrate_job). +1 test.
+- **Restore**: 8 deliverable ripristinati + ghost-linkati a phantom quote #20. Snapshot `snapshot-3.5.0-alpha.172.194-pre-restore-capitolato.db`.
+- Rename episodi confermato INNOCENTE (0 di persi, verificato vs snapshot). 441 test. GLO ora 70 deliverable.
+
+**Prossimo**: Matteo verifica capitolato tornato sugli 8 + sequenza episodi. Backlog invariato.
+
+### α.172.193 ✅ (capability copilot: read + rename deliverable HUB)
 
 ### α.172.193 ✅ (capability copilot: read + rename deliverable HUB)
 - `read_job_deliverables` (readonly): lista deliverable di job/progetto (id/nome/unit/qty/sezione/stato). Colma il gap "copilot non vedeva la lista planning".

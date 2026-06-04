@@ -297,8 +297,15 @@ def _deliverable_safe_to_remove(db, d) -> bool:
     """v3.5.0-alpha.172.192 — True se il deliverable è 'vergine' (mirror della
     guardia in `_respawn_line_artifacts`): nessuna qty consegnata, non confermato,
     non in fatturazione, nessun booking linkato. Usato da `migrate_job` per
-    decidere se un deliverable di riga droppata può essere soft-deleted."""
+    decidere se un deliverable di riga droppata può essere soft-deleted.
+
+    v3.5.0-alpha.172.194 — NON rimovibile se ha `delivery_item_id` (link a un
+    item di capitolato): è un requisito di consegna noto e va preservato anche
+    se orfano di riga quote. (Caso reale: il cleanup α.172.192 aveva rimosso 8
+    deliverable capitolato-linked unici — sottotitoli/stem/ProRes.)"""
     from app.models import BookingDeliverable, DeliverableBillingStatus
+    if d.delivery_item_id:
+        return False
     if (d.quantity_delivered or 0.0) > 0.0:
         return False
     if d.confirmed_at:
