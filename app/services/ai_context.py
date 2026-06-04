@@ -516,7 +516,8 @@ def _build_planning_context(db: Session,
             UnavailabilityKind.vacation: "Ferie",
             UnavailabilityKind.sick: "Malattia",
             UnavailabilityKind.holiday: "Festività",
-            UnavailabilityKind.weekend: "Weekend",
+            UnavailabilityKind.permit_rol: "Permesso ROL",
+            UnavailabilityKind.recovery: "Recupero",
             UnavailabilityKind.other: "Non disp.",
         }
         parts.append(f"\nINDISPONIBILITÀ prossimi 14gg ({len(unav)} mostrate):")

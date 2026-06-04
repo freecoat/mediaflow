@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.187** — 4 giugno 2026 — Quotazione sorgente nella lista deliverable
+**v3.5.0-alpha.172.188** — 4 giugno 2026 — Fix copilot 500 su /planning
+
+### α.172.188 ✅ (fix copilot 500 su /planning)
+- Copilot crashava (500 plain-text → "Unexpected token" JSON lato UI) su /planning: `_build_planning_context` usava `UnavailabilityKind.weekend` inesistente → AttributeError. Mappa corretta ai membri reali. +2 test. 397 test.
+- **Follow-up noto (offerto, non fatto)**: hardening sistemico endpoint `/ai/api/chat` — wrappare in try/except per ritornare JSON pulito su qualsiasi eccezione (memoria: classe 500-plain-text ricorrente nel copilot).
+
+**Prossimo**: test Matteo copilot su /planning (deve rispondere, non più errore JSON). Eventuale hardening chat endpoint. Backlog invariato.
+
+### α.172.187 ✅ (quote sorgente nella lista deliverable Planning)
 
 ### α.172.187 ✅ (quote sorgente nella lista deliverable Planning)
 - Lista/kanban Deliverable mostra la **quotazione sorgente** (`Job.quote_id → Quote.number`). Card: badge `📄 Q-…`. Lista: colonna **Quote** tra Job e Stato. Ricerca include numero quote.

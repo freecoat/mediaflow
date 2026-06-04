@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.188 — Fix copilot 500 su /planning (4 giu 2026)
+
+- **Fix**: il Copilot AI sulla pagina **/planning** crashava con 500 ("Internal Server Error" → "Unexpected token 'I'… is not valid JSON" lato UI). Causa: `ai_context._build_planning_context` referenziava `UnavailabilityKind.weekend`, membro enum inesistente → `AttributeError` nella label-map indisponibilità.
+- Mappa corretta ai membri reali (`vacation/sick/holiday/permit_rol/recovery/other`).
+- **397 test** (+2 regressione). Verificato: `POST /ai/api/chat` con `page=planning` ora ritorna 200 JSON valido.
+
 ## v3.5.0-alpha.172.187 — Quotazione sorgente nella lista deliverable (4 giu 2026)
 
 - La lista/kanban **Deliverable** del Planning mostra ora la **quotazione sorgente** di ogni item (via `Job.quote_id → Quote.number`, es. `Q-2026-008-v4`).
