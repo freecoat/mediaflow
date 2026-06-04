@@ -2794,6 +2794,16 @@ async def lines_transfer(
     _recalc_quote_totals(dest)
 
     removed = 0
+    if mode == "move":
+        if not (source.status == QuoteStatus.draft and not source.is_phantom):
+            db.rollback()
+            raise HTTPException(
+                422,
+                "Spostamento non consentito da quote non editabile: usa Copia."
+            )
+        removed, _ = _remove_quote_lines(db, source, ids)  # 409 + rollback se booking attivi
+        _recalc_quote_totals(source)
+
     db.commit()
     db.refresh(dest)
     return {

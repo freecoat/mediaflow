@@ -135,3 +135,61 @@ def test_transfer_copy_into_nonempty_quote_no_collision(db, monkeypatch):
     assert len(rows) == 4
     assert len(set(r.sort_order for r in rows)) == 4, [r.sort_order for r in rows]
     assert len(set(r.position for r in rows)) == 4, [r.position for r in rows]
+
+
+def test_transfer_copy_to_new(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-030")
+    res = _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
+                                 mode="copy", target="new", target_quote_id=None, db=db))
+    assert res["copied"] == 1
+    new_q = db.query(m.Quote).filter(m.Quote.id == res["target_quote_id"]).first()
+    assert new_q.project_id == src.project_id
+    assert new_q.client_id == src.client_id
+    assert new_q.status == m.QuoteStatus.draft
+
+
+def test_transfer_move_from_editable(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-040")
+    dst, _ = _seed_quote(db, number="Q-2026-041", n_lines=0)
+    res = _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
+                                 mode="move", target="existing", target_quote_id=dst.id, db=db))
+    assert res["mode"] == "move"
+    assert res["copied"] == 1
+    assert res["removed"] == 1
+    assert db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == src.id).count() == 1
+    assert db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).count() == 1
+
+
+def test_transfer_move_from_approved_422(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    src, lines = _seed_quote(db, number="Q-2026-050", status=m.QuoteStatus.approved)
+    dst, _ = _seed_quote(db, number="Q-2026-051", n_lines=0)
+    with pytest.raises(HTTPException) as ei:
+        _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
+                               mode="move", target="existing", target_quote_id=dst.id, db=db))
+    assert ei.value.status_code == 422
+    # atomicità: la copia NON deve restare sulla destinazione dopo il rollback
+    assert db.query(m.QuoteLine).filter(m.QuoteLine.quote_id == dst.id).count() == 0
+
+
+def test_transfer_move_blocked_by_active_booking_409(db, monkeypatch):
+    monkeypatch.setattr(q, "current_tenant_id", lambda: 1)
+    from datetime import datetime
+    src, lines = _seed_quote(db, number="Q-2026-060")
+    dst, _ = _seed_quote(db, number="Q-2026-061", n_lines=0)
+    job = m.Job(tenant_id=1, project_id=src.project_id, client_id=src.client_id,
+                quote_id=src.id, code="JM", title="J", status=m.JobStatus.active)
+    db.add(job); db.flush()
+    jcl = m.JobCostLine(tenant_id=1, job_id=job.id, quote_line_id=lines[0].id,
+                        description="x", quantity_quoted=1.0, unit="pc",
+                        unit_price=10.0, total_quoted=10.0)
+    db.add(jcl); db.flush()
+    bk = m.Booking(tenant_id=1, job_cost_line_id=jcl.id, status=m.BookingStatus.confirmed,
+                   start_datetime=datetime.now(), end_datetime=datetime.now())
+    db.add(bk); db.flush()
+    with pytest.raises(HTTPException) as ei:
+        _call(q.lines_transfer(quote_id=src.id, line_ids=str(lines[0].id),
+                               mode="move", target="existing", target_quote_id=dst.id, db=db))
+    assert ei.value.status_code == 409
