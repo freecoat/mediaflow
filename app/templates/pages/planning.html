@@ -4776,14 +4776,20 @@ function tlBuildResourceGroups(bookings, rangeStart, rangeEnd) {
     nameEl.textContent = r.name;
     cell.appendChild(nameEl);
 
-    if (r.role) {
-      const roleEl = document.createElement('div');
-      roleEl.className = 'tl-res-role';
-      // v3.5.0-alpha.98: font 9px era illeggibile (Matteo screenshot 12.47).
-      // Eredita CSS .tl-res-role (ora 11px theme-aware).
-      roleEl.textContent = r.role;
-      cell.appendChild(roleEl);
-    }
+    // v3.5.0-alpha.172.200 — Sempre 2 righe nella label risorsa. vis-timeline
+    // calcola l'altezza del group (incluso il layer BACKGROUND) dal contenuto
+    // della label: una label a 1 riga (risorse senza ruolo, es. sale/
+    // attrezzature) produce un bg-group più basso → barre festività/ferie più
+    // basse di quelle delle persone (2 righe nome+ruolo). Soluzione: subtitle
+    // costante — il tipo risorsa quando manca il ruolo, altrimenti uno spazio
+    // unificatore. Altezza riga uniforme su tutte le risorse.
+    const _SUBT = { studio: 'Sala/struttura', equipment: 'Attrezzatura',
+                    software: 'Software', vehicle: 'Veicolo' };
+    const roleEl = document.createElement('div');
+    roleEl.className = 'tl-res-role';
+    // v3.5.0-alpha.98: font 9px era illeggibile → eredita .tl-res-role (11px).
+    roleEl.textContent = r.role || _SUBT[r.type] || ' ';
+    cell.appendChild(roleEl);
 
     // v3.5.0-alpha.111.13 — Heatmap COMPLETAMENTE rimossa (Matteo: "togli
     // completamente per ora"). Overlay si sovrapponeva al testo label.

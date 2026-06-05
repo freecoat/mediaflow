@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.200 — Fix (vero, verificato) altezza bg festività/ferie (5 giu 2026)
+
+- **Root cause misurata nel DOM** (Playwright): vis-timeline calcola l'altezza del group anche nel layer *background* dal **contenuto della label**. Risorse senza ruolo (sale/attrezzature → label 1 riga) producevano bg-group da **24px** vs **39px** delle persone (label 2 righe nome+ruolo) → barre festività/ferie più basse su quelle risorse. Il `min-height` CSS non incide su questo calcolo interno di vis.
+- **Fix**: la label risorsa rende **sempre 2 righe** — sottotitolo = tipo risorsa (`Sala/struttura`, `Attrezzatura`, `Software`, `Veicolo`) quando manca il ruolo, altrimenti spazio unificatore. Niente override di layout (a differenza del tentativo .199 che forzava `height:100%` e rompeva la timeline).
+- **Verificato nel browser** prima del commit: bg-group ora tutti 39px uniformi (era 24 su Conforming 1 / Sala Color 1); timeline integra, nessun blocco gigante.
+
 ## v3.5.0-alpha.172.199.1 — Revert fix altezza bg (rompeva la timeline) (5 giu 2026)
 
 - **Revert** del tentativo di fix altezza bg festività di .199: `vis-item.vis-background { height:100% }` era relativo al **pannello** background, non alla riga → ogni festività si estendeva su TUTTE le righe (blocco arancione/blu gigante che copriva più reparti). Timeline rotta, zoom incluso. Rimosso il blocco CSS → torna al comportamento .198 (funzionante; resta il cosmetico minore "bg leggermente più basso" su risorse senza ruolo, da riaffrontare con metodo più sicuro).
