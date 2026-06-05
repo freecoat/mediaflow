@@ -28,6 +28,16 @@ def tavily_search(query: str, max_results: int = 5,
     if not settings.tavily_api_key:
         logger.warning("TAVILY_API_KEY non configurata — ricerca web disabilitata")
         return None
+    # v3.5.0-alpha.172.195 — Content Lockdown backstop (difesa in profondità).
+    # Blocca l'egress Tavily se il tenant corrente ha web_search lockato, anche
+    # se un call-site dimenticasse il gate esplicito.
+    try:
+        from app.services.egress_guard import web_search_positively_locked
+        if web_search_positively_locked():
+            logger.warning("Content Lockdown: web_search bloccato — Tavily skip")
+            return None
+    except Exception:
+        pass
     try:
         from tavily import TavilyClient
     except ImportError:

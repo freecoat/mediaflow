@@ -127,6 +127,24 @@ def _auto_migrate_columns():
                     conn.execute(text(f"DROP INDEX IF EXISTS {idx_name}"))
             except Exception as e:
                 print(f"[auto-migrate] drop old email UNIQUE FAILED (non-bloccante): {e}")
+    # v3.5.0-alpha.172.195 — Content Lockdown (TPN). Megaswitch egress cloud.
+    # Default OPEN + sub True = retrocompat (tenant esistenti restano aperti).
+    if "tenants" in insp.get_table_names():
+        tcols = {c["name"] for c in insp.get_columns("tenants")}
+        lockdown_alter = [
+            ("lockdown_master", "VARCHAR(10) NOT NULL DEFAULT 'OPEN'"),
+            ("cloud_ai_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+            ("web_search_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+            ("enrichment_enabled", "BOOLEAN NOT NULL DEFAULT 1"),
+            ("lockdown_at", "DATETIME NULL"),
+            ("lockdown_by", "INTEGER NULL"),
+            ("lockdown_reason", "VARCHAR(255) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in lockdown_alter:
+                if col not in tcols:
+                    print(f"[auto-migrate] tenants.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE tenants ADD COLUMN {col} {ddl}"))
     # v3.4.32 — Booking esecutivo (priority/execution_status/overtime_status/...)
     if "bookings" in insp.get_table_names():
         bcols = {c["name"] for c in insp.get_columns("bookings")}
@@ -2150,10 +2168,29 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.194", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.195", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+
+# v3.5.0-alpha.172.195 — Content Lockdown: EgressLocked → 403 pulito.
+# Evita il 500 nudo (plain-text Starlette) quando un vettore cloud è bloccato.
+from app.services.egress_guard import EgressLocked as _EgressLocked
+
+
+@app.exception_handler(_EgressLocked)
+async def _egress_locked_handler(request, exc: _EgressLocked):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=403,
+        content={
+            "error": "content_lockdown",
+            "vector": exc.vector,
+            "detail": f"Egress cloud '{exc.vector}' bloccato dal Content Lockdown. "
+                      f"Riattiva da Impostazioni → Sicurezza.",
+        },
+    )
 
 
 # v3.5.0-alpha.172.144 — i browser richiedono /favicon.ico di default → era 404

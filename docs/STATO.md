@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.194** — 4 giugno 2026 — Fix guardia cleanup (preserva capitolato)
+**v3.5.0-alpha.172.195** — 5 giugno 2026 — Content Lockdown (megaswitch egress cloud TPN)
+
+### α.172.195 ✅ (Content Lockdown — TPN / MPA Content Security)
+- **Contesto**: rivista architettura per compatibilità TPN. Niente API cloud nella content-zone. Scartati "cifra e manda" (LLM legge chiaro + clausola contrattuale) e tokenizzazione (degrada dominio AI sui capitolati). Scelta: **LLM locale + megaswitch attivabile**.
+- **Megaswitch per-tenant**: `lockdown_master` (OPEN|LOCKDOWN) + 3 sub (`cloud_ai`/`web_search`/`enrichment`) + governance (at/by/reason) su `Tenant`. Master vince sui sub (1-click). Default OPEN = retrocompat.
+- **Chokepoint** `egress_guard.py` (fail-closed): cloud_ai off → **provider factory forza Ollama** (kill native web search); web_search off → gate copilot + backstop tavily; enrichment off → 6 endpoint enrich/crosscheck/filmografia.
+- **UI** /settings → 🔒 Sicurezza (admin): master+sub toggle, motivo, self-test+banner. RBAC `manage_cloud_lockdown`. `EgressLocked`→403.
+- **Migrazione** auto-boot + `scripts/migrate_cloud_lockdown.py`. **460 test** (+19). Smoke TestClient live: render, round-trip, force-Ollama (deepseek→Ollama), 401 unauth. 1 bug colto+fixato (User.full_name).
+
+**Prossimo**: Matteo **restart :8000 + browser smoke** del pane Sicurezza (toggle lockdown, banner, save, verifica copilot passa a Ollama). Backlog: self-test che TENTA davvero ogni egress (oltre alla config); fs-scan / integrazioni future registrate al guard; deployment content-plane vs management-plane (indexer separato).
 
 ### α.172.194 ✅ (fix guardia + restore capitolato)
 - **Regressione α.172.192**: il cleanup orfani aveva rimosso 8 deliverable GLO con `delivery_item_id` (capitolato unico: sottotitoli/stem/ProRes). Causa: `_deliverable_safe_to_remove` non guardava il link capitolato.

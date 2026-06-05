@@ -376,6 +376,8 @@ async def cross_check_client(
         "founded_year": c.founded_year,
         "ai_enriched_at": str(c.ai_enriched_at) if c.ai_enriched_at else None,
     }
+    from app.services import egress_guard
+    egress_guard.assert_enrichment_allowed_current(db)
     result = check_client(client_data, provider=provider)
     if not result:
         raise HTTPException(500, "Cross-check fallito")
@@ -409,6 +411,8 @@ async def enrich_client_preview(
     provider = get_provider_for_user(u.id if u else None, db)
     if not provider:
         raise HTTPException(503, "AI provider non configurato")
+    from app.services import egress_guard
+    egress_guard.assert_enrichment_allowed_current(db)
     known_info = None if use_name_only else {"city": c.city, "country": c.country}
     enriched = enrich_client(c.name, known_info=known_info, provider=provider)
     if not enriched:
@@ -511,6 +515,8 @@ async def enrich_client_api(
     if not use_name_only:
         known_info = {"city": c.city, "country": c.country}
 
+    from app.services import egress_guard
+    egress_guard.assert_enrichment_allowed_current(db)
     enriched = enrich_client(c.name, known_info=known_info, provider=provider)
     if not enriched:
         raise HTTPException(500, "Arricchimento fallito. Controlla i log.")
@@ -566,6 +572,8 @@ async def search_and_create(
     if existing:
         raise HTTPException(400, f"Cliente '{existing.name}' già esistente (ID {existing.id})")
 
+    from app.services import egress_guard
+    egress_guard.assert_enrichment_allowed_current(db)
     enriched = enrich_client(name, provider=provider)
     if not enriched:
         raise HTTPException(500, "Arricchimento fallito")
@@ -876,6 +884,8 @@ async def search_filmography_api(
         raise HTTPException(503, "AI provider non configurato. Vai in Impostazioni → AI.")
 
     from app.services.filmography import search_filmography
+    from app.services import egress_guard
+    egress_guard.assert_enrichment_allowed_current(db)
     result = search_filmography(c.name, provider=provider, extra_hint=extra_hint)
     if not result:
         raise HTTPException(500, "Ricerca filmografia fallita")

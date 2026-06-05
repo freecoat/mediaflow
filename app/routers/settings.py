@@ -279,6 +279,91 @@ async def ai_settings_delete(
     return {"ok": True}
 
 
+# ── Content Lockdown (TPN) v3.5.0-alpha.172.195 ────────────────────
+# Megaswitch egress cloud admin-only. Enforcement in egress_guard.py.
+
+def _parse_bool_form(v) -> bool:
+    return str(v).strip().lower() in ("1", "true", "on", "yes", "si", "sì")
+
+
+@router.get("/api/lockdown")
+async def lockdown_get(
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Stato Content Lockdown del tenant corrente + flag effettivi."""
+    from app.models.models import Tenant
+    from app.services import egress_guard, rbac
+    u = _resolve_current_user(db, access_token)
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant non trovato")
+    st = egress_guard.selftest(tenant)
+    by_name = None
+    if tenant.lockdown_by:
+        bu = db.query(User).filter(User.id == tenant.lockdown_by).first()
+        by_name = (bu.full_name or bu.email) if bu else f"user#{tenant.lockdown_by}"
+    return {
+        "master": tenant.lockdown_master or "OPEN",
+        "cloud_ai_enabled": bool(tenant.cloud_ai_enabled),
+        "web_search_enabled": bool(tenant.web_search_enabled),
+        "enrichment_enabled": bool(tenant.enrichment_enabled),
+        "lockdown_at": str(tenant.lockdown_at) if tenant.lockdown_at else None,
+        "lockdown_by": by_name,
+        "lockdown_reason": tenant.lockdown_reason,
+        "effective": st,                       # {master, vectors, locked}
+        "can_manage": rbac.has_permission(u, "manage_cloud_lockdown"),
+    }
+
+
+@router.post("/api/lockdown")
+async def lockdown_set(
+    master: str = Form(...),                   # "OPEN" | "LOCKDOWN"
+    cloud_ai_enabled: str = Form("true"),
+    web_search_enabled: str = Form("true"),
+    enrichment_enabled: str = Form("true"),
+    reason: Optional[str] = Form(None),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Aggiorna il Content Lockdown. ADMIN-ONLY (manage_cloud_lockdown).
+
+    Governance: registra lockdown_at/by/reason ad ogni cambio + log esplicito
+    (traccia richiesta dal pattern audit; lo stato dello switch è esso stesso
+    loggato — vedi nota TPN nel design).
+    """
+    import logging
+    from app.models.models import Tenant
+    from app.services import egress_guard, rbac
+    u = _resolve_current_user(db, access_token)
+    if not rbac.has_permission(u, "manage_cloud_lockdown"):
+        raise HTTPException(403, "Permesso 'manage_cloud_lockdown' richiesto (admin).")
+    tenant = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant non trovato")
+
+    master_norm = (master or "OPEN").strip().upper()
+    if master_norm not in (egress_guard.OPEN, egress_guard.LOCKDOWN):
+        raise HTTPException(400, "master deve essere OPEN o LOCKDOWN")
+
+    prev = egress_guard.selftest(tenant)
+    tenant.lockdown_master = master_norm
+    tenant.cloud_ai_enabled = _parse_bool_form(cloud_ai_enabled)
+    tenant.web_search_enabled = _parse_bool_form(web_search_enabled)
+    tenant.enrichment_enabled = _parse_bool_form(enrichment_enabled)
+    tenant.lockdown_at = now_utc()
+    tenant.lockdown_by = u.id if u else None
+    tenant.lockdown_reason = (reason or "").strip()[:255] or None
+    db.commit()
+
+    new = egress_guard.selftest(tenant)
+    logging.getLogger("mediaflow.lockdown").warning(
+        "Content Lockdown changed by user=%s tenant=%s: %s -> %s (reason=%r)",
+        (u.id if u else None), tenant.id, prev, new, tenant.lockdown_reason,
+    )
+    return {"ok": True, "effective": new, "master": master_norm}
+
+
 # ── Working hours policy (E3 v3.4.17) ──────────────────────────────
 
 CURRENT_TENANT_FALLBACK = 1

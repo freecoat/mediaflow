@@ -110,6 +110,9 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "manage_settings_global":  ["Modifica impostazioni globali (orari, AI, anagrafica)"],
         "manage_users":            ["Gestione utenti"],
         "manage_roles":            ["Gestione ruoli e permessi"],
+        # v3.5.0-alpha.172.195 — Content Lockdown (TPN). Solo admin: attiva/
+        # disattiva l'egress cloud (AI cloud, ricerca web, enrichment).
+        "manage_cloud_lockdown":   ["Gestione Content Lockdown (egress cloud, admin)"],
     },
 }
 

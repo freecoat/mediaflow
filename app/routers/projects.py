@@ -304,6 +304,8 @@ async def cross_check_project(
         "description": p.description,
         "notes": p.notes,
     }
+    from app.services import egress_guard
+    egress_guard.assert_enrichment_allowed_current(db)
     result = check_project(project_data, provider=provider)
     if not result:
         raise HTTPException(500, "Cross-check fallito (tutti i path AI hanno fallito).")

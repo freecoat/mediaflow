@@ -614,6 +614,26 @@ class Tenant(Base):
     # False = solo `Holiday` custom. True (default) = nazionali + custom.
     use_national_holidays: Mapped[bool] = mapped_column(Boolean, default=True)
     holidays_country_code: Mapped[str] = mapped_column(String(8), default="IT")
+    # v3.5.0-alpha.172.195 — Content Lockdown (TPN / MPA Content Security).
+    # Megaswitch egress cloud + 3 sub-switch. master=LOCKDOWN forza tutti i
+    # sub off (1-click). master=OPEN → sub valgono singolarmente. Default
+    # OPEN + sub True = retrocompat totale (tenant esistenti invariati).
+    # Enforcement centralizzato in app/services/egress_guard.py.
+    lockdown_master: Mapped[str] = mapped_column(
+        String(10), default="OPEN", server_default="OPEN"
+    )  # "OPEN" | "LOCKDOWN"
+    cloud_ai_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    web_search_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    enrichment_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="1"
+    )
+    lockdown_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    lockdown_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # user.id
+    lockdown_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)

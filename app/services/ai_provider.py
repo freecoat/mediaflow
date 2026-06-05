@@ -930,6 +930,33 @@ def get_provider_for_user(user_id: Optional[int], db) -> Optional[AIProvider]:
         cfg = _global_config()
     if cfg is None:
         return None
+    # v3.5.0-alpha.172.195 — Content Lockdown: se il tenant ha cloud_ai bloccato
+    # e il provider scelto NON è locale (ollama), forza Ollama. Kill l'egress
+    # cloud incl. la native web search lato modello. Fail-closed: tenant non
+    # risolvibile → trattato come locked (force-local).
+    if cfg.provider != "ollama":
+        try:
+            from app.services import egress_guard
+            tenant = None
+            if user_id and db is not None:
+                from app.models.models import User, Tenant
+                u = db.query(User).filter(User.id == user_id).first()
+                if u is not None:
+                    tenant = db.query(Tenant).filter(
+                        Tenant.id == getattr(u, "tenant_id", 1)
+                    ).first()
+            if not egress_guard.cloud_ai_allowed(tenant):
+                logger.warning(
+                    "Content Lockdown attivo: provider cloud '%s' → forzo Ollama locale",
+                    cfg.provider,
+                )
+                cfg = ProviderConfig(
+                    provider="ollama",
+                    model=(settings.ollama_model or "llama3.1:70b"),
+                    base_url=(settings.ollama_base_url or "http://localhost:11434"),
+                )
+        except Exception as e:  # difensivo: non rompere il provider su errore guard
+            logger.error(f"egress_guard cloud_ai check fallito: {e}")
     try:
         return build_provider(cfg)
     except Exception as e:

@@ -746,6 +746,13 @@ def _h_web_search(db: Session, data: dict) -> dict:
     query = (data.get("query") or "").strip()
     if not query:
         raise ValueError("Manca 'query'")
+    # v3.5.0-alpha.172.195 — Content Lockdown: gate esplicito (messaggio chiaro).
+    from app.services import egress_guard
+    if not egress_guard.web_search_allowed_current(db):
+        return {"query": query, "results": None,
+                "error": "Ricerca web disabilitata: Content Lockdown attivo su "
+                         "questo tenant (egress cloud bloccato). Riattiva da "
+                         "Impostazioni → Sicurezza per usare la ricerca web."}
     # α.172.146 — depth basic (più rapido per copilot) + timeout bound.
     results = tavily_search(query, max_results=5, search_depth="basic", timeout=15)
     if results is None:

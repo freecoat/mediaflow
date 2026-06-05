@@ -93,6 +93,7 @@
     <div class="settings-tab" data-pane="naming" onclick="showPane('naming')"><i data-lucide="file-type" style="width:14px;height:14px;vertical-align:-2px;"></i> Naming asset</div>
     <div class="settings-tab" data-pane="data" onclick="showPane('data')"><i data-lucide="database" style="width:14px;height:14px;vertical-align:-2px;"></i> Dati</div>
     <div class="settings-tab" data-pane="storage" onclick="showPane('storage')"><i data-lucide="hard-drive" style="width:14px;height:14px;vertical-align:-2px;"></i> Storage</div>
+    <div class="settings-tab" data-pane="security" onclick="showPane('security')"><i data-lucide="shield-alert" style="width:14px;height:14px;vertical-align:-2px;"></i> 🔒 Sicurezza</div>
     {% endif %}
   </div>
 
@@ -932,6 +933,61 @@ AWS_S3_DEFAULT_BUCKET=Claqo-prod</pre>
         </div>
         <button class="btn btn-danger btn-sm" onclick="adminImportZip()"><i data-lucide="upload" style="width:14px;height:14px;vertical-align:-2px;"></i> Conferma e importa</button>
         <div id="imp-result" style="margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <!-- ── Pannello Sicurezza / Content Lockdown (TPN) ─────────── -->
+    <div class="settings-pane" id="pane-security">
+      <div id="lockdown-banner" style="display:none;"></div>
+      <div class="card mb-4">
+        <div class="card-title mb-2"><i data-lucide="shield-alert" style="width:16px;height:16px;vertical-align:-3px;"></i> Content Lockdown <span class="text-sm text-muted">(TPN / MPA Content Security)</span></div>
+        <p class="text-sm text-muted" style="margin:0 0 14px;">
+          Blocca l'uscita di dati verso servizi cloud. In <b>Lockdown</b> l'AI usa
+          solo modelli locali (Ollama), la ricerca web e l'arricchimento clienti/progetti
+          sono disattivati. Pensato per ambienti che trattano materiale sotto NDA/TPN.
+        </p>
+
+        <!-- Megaswitch master -->
+        <div style="display:flex;align-items:center;gap:14px;padding:12px;border:1px solid var(--border);border-radius:10px;margin-bottom:16px;">
+          <label class="switch" style="display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:600;">
+            <input type="checkbox" id="ld-master" onchange="lockdownMasterToggle(this.checked)" style="width:20px;height:20px;">
+            <span id="ld-master-label">Master: OPEN (cloud consentito)</span>
+          </label>
+        </div>
+
+        <!-- Sub-switch (greyed quando master=LOCKDOWN) -->
+        <div id="ld-subs" style="display:flex;flex-direction:column;gap:10px;padding-left:4px;">
+          <label class="ld-sub" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="ld-cloud_ai" style="width:16px;height:16px;">
+            <span>AI cloud (Claude/OpenAI/Gemini…) — off = forza Ollama locale</span>
+          </label>
+          <label class="ld-sub" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="ld-web_search" style="width:16px;height:16px;">
+            <span>Ricerca web (Tavily)</span>
+          </label>
+          <label class="ld-sub" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="ld-enrichment" style="width:16px;height:16px;">
+            <span>Arricchimento clienti/progetti + filmografia (manda nomi fuori)</span>
+          </label>
+        </div>
+
+        <div style="margin-top:16px;">
+          <label class="text-sm text-muted" style="display:block;margin-bottom:4px;">Motivo (audit, opzionale)</label>
+          <input type="text" id="ld-reason" class="input" maxlength="255"
+                 placeholder="es. Audit TPN in corso / ingest materiale Gomorra S4"
+                 style="width:100%;max-width:520px;">
+        </div>
+
+        <div class="flex gap-2 mt-3" style="align-items:center;">
+          <button class="btn btn-primary btn-sm" onclick="lockdownSave()"><i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;"></i> Salva</button>
+          <span id="ld-meta" class="text-sm text-muted"></span>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-title mb-2">Stato effettivo (self-test)</div>
+        <p class="text-sm text-muted" style="margin:0 0 10px;">Cosa è realmente permesso adesso, applicato l'override del master.</p>
+        <div id="ld-selftest" class="text-sm">—</div>
       </div>
     </div>
     {% endif %}
@@ -2228,7 +2284,89 @@ window.showPane = function(name) {
   if (typeof _origShowPane === 'function') _origShowPane(name);
   if (name === 'mfa') mfaLoadStatus();
   if (name === 'techsheet') tsoInit();
+  if (name === 'security') lockdownLoad();
 };
+
+// ── Content Lockdown (TPN) v3.5.0-alpha.172.195 ─────────────
+let _ldCanManage = true;
+function _ldEl(id){ return document.getElementById(id); }
+
+function _ldRenderMaster(master){
+  const locked = (master === 'LOCKDOWN');
+  _ldEl('ld-master').checked = locked;
+  _ldEl('ld-master-label').textContent = locked
+    ? 'Master: LOCKDOWN (cloud bloccato)'
+    : 'Master: OPEN (cloud consentito)';
+  // sub greyed quando lockdown (master vince)
+  document.querySelectorAll('#ld-subs .ld-sub').forEach(l => {
+    l.style.opacity = locked ? '0.45' : '1';
+    const cb = l.querySelector('input');
+    if (cb) cb.disabled = locked || !_ldCanManage;
+  });
+}
+
+function lockdownMasterToggle(checked){
+  _ldRenderMaster(checked ? 'LOCKDOWN' : 'OPEN');
+}
+
+function _ldRenderSelftest(st){
+  if (!st) { _ldEl('ld-selftest').textContent = '—'; return; }
+  const v = st.vectors || {};
+  const dot = (ok) => ok
+    ? '<span style="color:#3fb950;">● consentito</span>'
+    : '<span style="color:#f85149;">● bloccato</span>';
+  _ldEl('ld-selftest').innerHTML =
+    `<div>AI cloud: ${dot(v.cloud_ai)}</div>` +
+    `<div>Ricerca web: ${dot(v.web_search)}</div>` +
+    `<div>Enrichment: ${dot(v.enrichment)}</div>` +
+    `<div style="margin-top:6px;font-weight:600;">${st.locked ? '🔒 LOCKED (nessun egress)' : '☁️ Egress attivo'}</div>`;
+  const banner = _ldEl('lockdown-banner');
+  if (st.locked) {
+    banner.style.display = 'block';
+    banner.innerHTML = '<div style="background:#3d1418;border:1px solid #f85149;color:#ffb3ae;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;">🔒 <b>Content Lockdown attivo</b> — nessun dato esce verso il cloud.</div>';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+async function lockdownLoad(){
+  try {
+    const r = await api('GET', '/settings/api/lockdown');
+    _ldCanManage = !!r.can_manage;
+    _ldRenderMaster(r.master);
+    _ldEl('ld-cloud_ai').checked = !!r.cloud_ai_enabled;
+    _ldEl('ld-web_search').checked = !!r.web_search_enabled;
+    _ldEl('ld-enrichment').checked = !!r.enrichment_enabled;
+    _ldEl('ld-reason').value = r.lockdown_reason || '';
+    _ldRenderSelftest(r.effective);
+    _ldRenderMaster(r.master); // ri-applica disabled stato sub
+    _ldEl('ld-meta').textContent = r.lockdown_at
+      ? `Ultimo cambio: ${r.lockdown_at}${r.lockdown_by ? ' — ' + r.lockdown_by : ''}`
+      : '';
+    if (!_ldCanManage) {
+      _ldEl('ld-master').disabled = true;
+      _ldEl('ld-reason').disabled = true;
+    }
+  } catch(e){ toast('Errore caricamento lockdown', 'error'); }
+}
+
+async function lockdownSave(){
+  const master = _ldEl('ld-master').checked ? 'LOCKDOWN' : 'OPEN';
+  const fd = new FormData();
+  fd.append('master', master);
+  fd.append('cloud_ai_enabled', _ldEl('ld-cloud_ai').checked ? 'true' : 'false');
+  fd.append('web_search_enabled', _ldEl('ld-web_search').checked ? 'true' : 'false');
+  fd.append('enrichment_enabled', _ldEl('ld-enrichment').checked ? 'true' : 'false');
+  fd.append('reason', _ldEl('ld-reason').value || '');
+  try {
+    const r = await api('POST', '/settings/api/lockdown', fd);
+    _ldRenderSelftest(r.effective);
+    toast(master === 'LOCKDOWN' ? '🔒 Lockdown attivato' : 'Cloud riattivato', 'success');
+    lockdownLoad();
+  } catch(e){
+    toast('Errore salvataggio (permesso admin richiesto?)', 'error');
+  }
+}
 
 // ── α.172.34 — Opzioni dropdown scheda tecnica ──────────────
 // α.172.62 — human-readable labels mostrate in primo piano, path tecnico secondario.

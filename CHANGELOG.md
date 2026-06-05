@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.195 — Content Lockdown: megaswitch egress cloud (TPN / MPA) (5 giu 2026)
+
+- **Nuovo: Content Lockdown** — megaswitch per-tenant che blocca l'egress verso il cloud, per ambienti che trattano materiale sotto NDA / TPN (MPA Content Security Best Practices). Architettura discussa: niente "cifra e manda" (l'LLM legge il chiaro; resta la clausola contrattuale), niente tokenizzazione (degrada la conoscenza di dominio dell'AI sui capitolati) → **modello locale + megaswitch** come da piano iniziale.
+- **Modello**: `lockdown_master` (OPEN | LOCKDOWN) + 3 sub-switch (`cloud_ai_enabled`, `web_search_enabled`, `enrichment_enabled`) + governance (`lockdown_at`/`by`/`reason`) su `Tenant`. Master=LOCKDOWN forza tutti i sub off (1-click); OPEN → sub singoli. Default OPEN+sub True = **retrocompat totale**.
+- **Chokepoint unico** `app/services/egress_guard.py` (fail-closed: tenant non risolvibile → bloccato):
+  - `cloud_ai` off → il provider factory **forza Ollama locale** (kill anche la native web search lato modello). Verificato live: provider attivo `deepseek` → Ollama.
+  - `web_search` off → gate esplicito nel capability copilot + **backstop** dentro `tavily_search`.
+  - `enrichment` off → gate sui 6 endpoint enrich/cross-check/filmografia (clients + projects).
+- **UI** `/settings → 🔒 Sicurezza` (admin-only): master toggle, 3 sub (greyed sotto lockdown), motivo audit, self-test stato effettivo + banner rosso quando locked.
+- **RBAC**: nuovo permesso `manage_cloud_lockdown` (admin). Endpoint `GET/POST /settings/api/lockdown`. `EgressLocked` → handler 403 pulito (no 500 nudo).
+- **Migrazione**: auto al boot (`_auto_migrate_columns`) + script esplicito `scripts/migrate_cloud_lockdown.py`. Idempotenti.
+- **460 test** (+19: 13 core guard + 6 integration). Smoke E2E TestClient: render pane+JS, round-trip toggle, force-Ollama, 401 unauth.
+
 ## v3.5.0-alpha.172.194 — Fix guardia cleanup: preserva deliverable capitolato-linked (4 giu 2026)
 
 - **Bug fix (regressione del cleanup α.172.192)**: `_deliverable_safe_to_remove` non considerava il link capitolato → il cleanup orfani aveva rimosso **8 deliverable unici con `delivery_item_id`** (Subtitle Sidecar EBU-STL/TTML, Dialogue/Music/DME Stem, ProRes 422 HQ varianti) di GLO. Ora la guardia ritorna **False se `delivery_item_id` è valorizzato** (un requisito di consegna capitolato va preservato anche se orfano di riga quote). Protegge sia il cleanup sia il soft-delete di `migrate_job`.
