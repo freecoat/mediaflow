@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.199 — Fix altezza bg festività + popup AI lockdown (5 giu 2026)
+
+- **Altezza background item uniforme** (festività/weekend/ferie): la barra arancione (festività) appariva **più bassa** sulle risorse senza booking quel giorno (es. sale/attrezzature). Causa: il `min-height:48px` colpiva label + group del layer *foreground* ma NON il group del layer *background*. Fix CSS: `min-height` esteso ai `.vis-background .vis-group[tl-res/project/dept]` + `vis-item.vis-background { top:0; height:100% }`. Ora i bg riempiono l'intera altezza riga, uniformi su tutte le risorse.
+- **Popup AI Content Lockdown**: quando un'azione cloud è bloccata (es. arricchimento cliente in `/clients`) ora compare un **popup esplicativo** invece di un errore generico — spiega che il vettore è disattivato per TPN + mostra la **motivazione** impostata dall'admin + bottone "Apri Impostazioni → Sicurezza". Centralizzato nel global `api()` (intercetta 403 `content_lockdown`) → vale per enrich/cross-check/filmografia e ogni futura azione cloud. Il 403 ora include `vector_label` + `reason`. Contenuto dinamico escapato (XSS-safe).
+- Verificato TestClient: 403 con reason su enrich sotto lockdown (anche parziale, solo enrichment off). JS `node --check` OK.
+
 ## v3.5.0-alpha.172.198 — Fix vero wrap toolbar timeline (5 giu 2026)
 
 - **Causa reale** (il fix .196 sulle altezze non c'entrava): la label `#tl-range` aveva `margin-left:auto` e larghezza **content-based**. Il testo cambia ampiezza col range ("31 mag 2026" più largo di "1 giu 2026") → quei pochi px tipavano il wrap, facendo scendere il "?" alla riga sotto in modo non deterministico.

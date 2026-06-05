@@ -8,7 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.195** — 5 giugno 2026 — Content Lockdown (megaswitch egress cloud TPN)
+**v3.5.0-alpha.172.199** — 5 giugno 2026 — Content Lockdown + polish timeline (sessione TPN)
+
+### α.172.196→199 ✅ (polish post-lockdown, sessione 5 giu)
+- **.196** toolbar altezze 30px + rebalance not_done (hatch su colore pieno, no fade). **.197** warning lockdown evidente + motivazione + stato parziale ambra. **.197.1** fix XSS fallback esc (security review). **.198** vero fix wrap toolbar (`#tl-range` flex elastico, non le altezze). **.199** altezza bg festività uniforme (min-height su layer background + bg full-height) + **popup AI lockdown** (403 content_lockdown → popup con motivazione, centralizzato in api(), es. clienti).
+- Tutto pushato. Server tunnel attivo per test Matteo. **Pendente browser smoke** completo.
+
+### α.172.195 ✅ (Content Lockdown — TPN / MPA Content Security)
 
 ### α.172.195 ✅ (Content Lockdown — TPN / MPA Content Security)
 - **Contesto**: rivista architettura per compatibilità TPN. Niente API cloud nella content-zone. Scartati "cifra e manda" (LLM legge chiaro + clausola contrattuale) e tokenizzazione (degrada dominio AI sui capitolati). Scelta: **LLM locale + megaswitch attivabile**.

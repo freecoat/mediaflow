@@ -578,6 +578,22 @@ async function api(method, url, body, options) {
     const e = new Error(humanMsg);
     e.detail = err.detail;
     e.status = resp.status;
+    // v3.5.0-alpha.172.199 — Content Lockdown (TPN): qualsiasi endpoint cloud
+    // bloccato risponde 403 {error:'content_lockdown', vector, vector_label,
+    // reason}. Mostra un popup esplicativo (perché è bloccato + motivazione)
+    // invece di un toast d'errore generico. Centralizzato qui → vale per
+    // clienti (enrich/cross-check/filmografia) e ogni futura azione cloud.
+    if (err && err.error === 'content_lockdown' && typeof window.showLockdownPopup === 'function') {
+      try {
+        window.showLockdownPopup({
+          vector: err.vector,
+          vectorLabel: err.vector_label || err.vector,
+          reason: err.reason || null,
+        });
+        e._toastShown = true;
+        e._lockdown = true;
+      } catch (_) {}
+    }
     // v3.5.0-alpha.172.48 — Auto-mostra toastBlock per 409 con messaggio
     // human-readable. Differenzia HARD-BLOCK dai semplici 400 (validation):
     // 409 = conflict / business rule violation = warning critico, l'utente
@@ -1698,6 +1714,54 @@ function _mfBindSidebarShortcut() {
     }
   });
 }
+
+// ── Content Lockdown popup (TPN) v3.5.0-alpha.172.199 ────────
+// Mostrato automaticamente da api() quando un endpoint cloud risponde 403
+// content_lockdown. Spiega all'utente PERCHÉ l'azione AI è bloccata + la
+// motivazione impostata dall'admin. Singola istanza (rimpiazza la precedente).
+function showLockdownPopup(info) {
+  info = info || {};
+  const esc = (window.escapeHtml || ((s)=>String(s==null?'':s).replace(/[&<>"']/g,
+    c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))));
+  const vlabel = esc(info.vectorLabel || 'funzione cloud');
+  const prev = document.getElementById('mf-lockdown-popup');
+  if (prev) prev.remove();
+  const ov = document.createElement('div');
+  ov.id = 'mf-lockdown-popup';
+  ov.style.cssText = 'position:fixed; inset:0; z-index:6000; background:rgba(6,8,15,.62);'
+    + 'backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:20px;';
+  const reasonBlock = info.reason
+    ? `<div style="margin-top:12px;padding:10px 13px;background:rgba(0,0,0,.28);border-left:3px solid #f59e0b;border-radius:6px;font-style:italic;color:#fde9c8;">📝 ${esc(info.reason)}</div>`
+    : '';
+  ov.innerHTML =
+    `<div role="alertdialog" aria-modal="true" style="max-width:440px;width:100%;background:linear-gradient(180deg,#1a1d2b,#14161f);border:2px solid #f85149;border-radius:14px;padding:22px 24px;box-shadow:0 18px 50px rgba(0,0,0,.6);color:#e8ecf5;">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:6px;">
+        <div style="font-size:30px;line-height:1;">🔒</div>
+        <div style="font-weight:800;font-size:17px;color:#fff;">AI bloccata — Content Lockdown</div>
+      </div>
+      <div style="font-size:13.5px;line-height:1.5;color:#c9cee0;">
+        <b>${vlabel.charAt(0).toUpperCase()+vlabel.slice(1)}</b> è disattivata su questo tenant per
+        conformità <b>TPN</b> (nessun dato esce verso il cloud). L'azione richiesta non può procedere
+        finché il lockdown è attivo.
+      </div>
+      ${reasonBlock}
+      <div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn btn-ghost btn-sm" id="mf-ld-close">Ho capito</button>
+        <button type="button" class="btn btn-primary btn-sm" id="mf-ld-goto">Apri Impostazioni → Sicurezza</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = () => ov.remove();
+  ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+  ov.querySelector('#mf-ld-close').addEventListener('click', close);
+  ov.querySelector('#mf-ld-goto').addEventListener('click', () => {
+    window.location.href = '/settings#security';
+  });
+  document.addEventListener('keydown', function onEsc(e){
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); }
+  });
+}
+window.showLockdownPopup = showLockdownPopup;
 
 // ── Auto-init ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {

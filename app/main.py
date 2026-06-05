@@ -2168,7 +2168,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.198", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.199", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2179,15 +2179,40 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 from app.services.egress_guard import EgressLocked as _EgressLocked
 
 
+_EGRESS_VECTOR_LABEL = {
+    "cloud_ai": "AI cloud",
+    "web_search": "ricerca web",
+    "enrichment": "arricchimento clienti/progetti",
+}
+
+
 @app.exception_handler(_EgressLocked)
 async def _egress_locked_handler(request, exc: _EgressLocked):
     from fastapi.responses import JSONResponse
+    # v3.5.0-alpha.172.199 — includi la MOTIVAZIONE del lockdown nel 403, così
+    # il popup lato UI può spiegare il "perché". Best-effort: se la lettura del
+    # tenant fallisce, restiamo sul messaggio generico.
+    reason = None
+    try:
+        from app.database import SessionLocal
+        from app.models.models import Tenant
+        _db = SessionLocal()
+        try:
+            t = _db.query(Tenant).filter(Tenant.id == (exc.tenant_id or 1)).first()
+            reason = (t.lockdown_reason if t else None) or None
+        finally:
+            _db.close()
+    except Exception:
+        pass
+    vlabel = _EGRESS_VECTOR_LABEL.get(exc.vector, exc.vector)
     return JSONResponse(
         status_code=403,
         content={
             "error": "content_lockdown",
             "vector": exc.vector,
-            "detail": f"Egress cloud '{exc.vector}' bloccato dal Content Lockdown. "
+            "vector_label": vlabel,
+            "reason": reason,
+            "detail": f"{vlabel.capitalize()} disattivato dal Content Lockdown (TPN). "
                       f"Riattiva da Impostazioni → Sicurezza.",
         },
     )
