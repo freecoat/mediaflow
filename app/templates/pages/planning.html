@@ -512,7 +512,7 @@
             <input type="date" id="tl-goto-date" class="form-input" style="height:30px; padding:2px 8px; font-size:12px; width:auto;">
             <button class="btn btn-ghost btn-sm" onclick="tlGoTo()">Vai a</button>
           </span>
-          <span class="text-sm text-muted" id="tl-range" style="margin-left:auto;"></span>
+          <span class="text-sm text-muted" id="tl-range" style="flex:1 1 0; min-width:0; margin-left:8px; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title=""></span>
           <!-- v3.5.0-alpha.18: undo/redo persistente + bulk-edit -->
           <button class="btn btn-ghost btn-sm" id="tl-undo-btn-toolbar" onclick="tlPerformUndo()" disabled style="opacity:0.4; margin-left:6px;" title="Annulla (Ctrl+Z)">↶</button>
           <button class="btn btn-ghost btn-sm" id="tl-redo-btn-toolbar" onclick="tlPerformRedo()" disabled style="opacity:0.4;" title="Ripeti (Ctrl+Y)">↷</button>
@@ -5192,7 +5192,7 @@ function tlUpdateRangeLabel() {
   const win = tlInstance.getWindow();
   const start = new Date(win.start), end = new Date(win.end);
   const fmt = d => d.toLocaleDateString('it-IT', {day:'numeric', month:'short', year:'numeric'});
-  document.getElementById('tl-range').textContent = fmt(start) + ' → ' + fmt(end);
+  { const _rng = fmt(start) + ' → ' + fmt(end); const _el = document.getElementById('tl-range'); _el.textContent = _rng; _el.title = _rng; }
   // Label settimana/mese sopra
   const mid = new Date((start.getTime() + end.getTime()) / 2);
   const weekN = isoWeekNum(mid);

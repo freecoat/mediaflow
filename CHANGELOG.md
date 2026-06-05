@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.198 — Fix vero wrap toolbar timeline (5 giu 2026)
+
+- **Causa reale** (il fix .196 sulle altezze non c'entrava): la label `#tl-range` aveva `margin-left:auto` e larghezza **content-based**. Il testo cambia ampiezza col range ("31 mag 2026" più largo di "1 giu 2026") → quei pochi px tipavano il wrap, facendo scendere il "?" alla riga sotto in modo non deterministico.
+- **Fix**: `#tl-range` ora è un flex elastico (`flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis`) che assorbe lo slack e shrinka con ellissi. La larghezza del testo non influenza più il wrap → i controlli di coda restano stabili su una riga finché i controlli a larghezza fissa ci stanno. `title` = range completo (tooltip se va in ellissi).
+- Solo template/JS + bump. (.196 = altezze 30px, .197 = warning lockdown, restano.)
+
 ## v3.5.0-alpha.172.197 — Content Lockdown: warning più evidente + motivazione (5 giu 2026)
 
 - **Banner lockdown rinforzato** (`/settings → 🔒 Sicurezza`): da boxino piatto a banner grande con icona 🔒 30px, titolo bold, bordo rosso 2px + alone pulsante (`@keyframes ldPulse`). Mostra la **motivazione** (`reason` tra virgolette) + chi/quando l'ha impostato.
