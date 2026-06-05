@@ -545,12 +545,12 @@
           <!-- v3.5.0-alpha.111.12 — Density compact + spacious rimossi.
                Comfortable era l'unico funzionante (Matteo: "togliamole"). -->
 
-          <!-- v3.5.0-alpha.79 — Color by selector -->
-          <select id="tl-colorby" onchange="tlSetColorBy(this.value)" class="form-select" style="height:30px; padding:2px 8px; font-size:12px; width:auto; margin-left:6px;" title="Colora item in base a">
-            <option value="status">Color: stato (default)</option>
-            <option value="client">Color: cliente</option>
-            <option value="project">Color: progetto</option>
-            <option value="department">Color: reparto</option>
+          <!-- v3.5.0-alpha.79 — Color by selector — RIMOSSO α.172.201 (Matteo:
+               "non serve"). La funzione tlSetColorBy resta per back-compat
+               (default 'status' applicato al init); il widget mf-ss dell'autoenh
+               salta il binding perché il <select> non c'è più. -->
+          <select id="tl-colorby" style="display:none;" data-no-search="true">
+            <option value="status" selected>Color: stato (default)</option>
           </select>
           <!-- v3.5.0-alpha.81 — Preset label risorse -->
           <select id="tl-res-label-style" onchange="tlSetResourceLabelStyle(this.value)" class="form-select" style="height:30px; padding:2px 8px; font-size:12px; width:auto; margin-left:6px;" title="Stile colore label risorse">

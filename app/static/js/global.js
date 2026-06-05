@@ -957,6 +957,10 @@ function mfApplySearchable(root) {
   root = root || document;
   const sels = root.querySelectorAll('select');
   sels.forEach(sel => {
+    // v3.5.0-alpha.172.201 — opt-out via data-no-search="true" (es. <select>
+    // tenuti nel DOM solo come backing-value invisibile). Senza skip, il
+    // wrapper crea comunque il bottone mf-ss-display visibile in toolbar.
+    if (sel.dataset && sel.dataset.noSearch === 'true') return;
     if (sel.classList.contains('mf-ss-native')) {
       // già wrappato: rinfrescà il display per riflettere `value=` programmatico
       if (sel._mfSsRefresh) sel._mfSsRefresh();

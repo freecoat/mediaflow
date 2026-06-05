@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.201 — Rimosso dropdown "Color by" dalla toolbar timeline (5 giu 2026)
+
+- **Toolbar planning**: rimosso il dropdown `Color: stato/cliente/progetto/reparto` (Matteo: "non serve"). Il `<select id="tl-colorby">` resta nel DOM nascosto (`display:none`, value=`status`) per non rompere `tlSetColorBy` chiamata dal restore di `localStorage`. `tlSetColorBy('status')` resta il default attivo (bar colorati per stato).
+- **`mfApplySearchable` (global.js)**: nuova opt-out `data-no-search="true"`. Senza skip, l'auto-enh sostituiva ogni `<select>` con un bottone `mf-ss-display` **visibile** in toolbar — anche per i select tenuti nel DOM come backing-value invisibile. Marker già usato altrove nel template.
+- Verificato browser (Playwright): bottone "Color:" assente, "Label:" resta, `host[data-colorby]=status`, timeline integra.
+
 ## v3.5.0-alpha.172.200 — Fix (vero, verificato) altezza bg festività/ferie (5 giu 2026)
 
 - **Root cause misurata nel DOM** (Playwright): vis-timeline calcola l'altezza del group anche nel layer *background* dal **contenuto della label**. Risorse senza ruolo (sale/attrezzature → label 1 riga) producevano bg-group da **24px** vs **39px** delle persone (label 2 righe nome+ruolo) → barre festività/ferie più basse su quelle risorse. Il `min-height` CSS non incide su questo calcolo interno di vis.
