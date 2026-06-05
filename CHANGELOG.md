@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.196 — Polish timeline: toolbar coerente + rebalance not_done (5 giu 2026)
+
+- **Toolbar timeline (`.tl-bar`)**: normalizzata l'altezza di tutti i controlli a 30px (prima `btn-sm` ~26px vs select/date 30px → righe **frastagliate** quando la barra wrappa su 2 righe) + `row-gap:8px` per respiro verticale al wrap. Coerenza grafica su 1 e 2 righe.
+- **Booking "non fatto" (`tl-exec-not_done`)**: rebalance peso visivo. Pre-fix usava `background` shorthand `!important` che **cancellava il colore pieno** della risorsa → bar sbiadito (opacity .55), "meno presente" degli altri. Ora `background-image` (non shorthand) sovrappone il tratteggio rosso al colore pieno (inline `background-color` preservato), opacity .9. Stesso peso degli altri, ancora chiaramente marcato (hatch + bordo rosso + ✗). Legenda allineata.
+- Solo CSS/template + bump versione. Nessuna migrazione, nessun impatto test (460).
+- *Backlog*: spaziatura colonne al confine mese (quirk vis-timeline, non azzerabile).
+
 ## v3.5.0-alpha.172.195 — Content Lockdown: megaswitch egress cloud (TPN / MPA) (5 giu 2026)
 
 - **Nuovo: Content Lockdown** — megaswitch per-tenant che blocca l'egress verso il cloud, per ambienti che trattano materiale sotto NDA / TPN (MPA Content Security Best Practices). Architettura discussa: niente "cifra e manda" (l'LLM legge il chiaro; resta la clausola contrattuale), niente tokenizzazione (degrada la conoscenza di dominio dell'AI sui capitolati) → **modello locale + megaswitch** come da piano iniziale.

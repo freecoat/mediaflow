@@ -95,7 +95,22 @@
   #cal-host, #ag-host, #todo-host { min-height: 600px; }
   #tl-host { min-height: 600px; }
   .cal-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; }
-  .tl-bar { display:flex; gap:6px; margin-bottom:8px; flex-wrap: wrap; align-items:center; }
+  .tl-bar { display:flex; gap:6px; row-gap:8px; margin-bottom:8px; flex-wrap: wrap; align-items:center; }
+  /* v3.5.0-alpha.172.196 — Coerenza toolbar: normalizza l'altezza di TUTTI i
+     controlli a 30px (prima btn-sm ~26px vs select/date 30px → righe
+     frastagliate al wrap su 2 righe). row-gap dà respiro verticale quando
+     la barra va a capo. */
+  .tl-bar > .btn,
+  .tl-bar .btn-group .btn,
+  .tl-bar > label,
+  .tl-bar .mf-ss .mf-ss-display,
+  .tl-bar .form-input,
+  .tl-bar .form-select {
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+  }
   .tl-bar .btn-group { display:flex; gap:0; }
   .tl-bar .btn-group .btn { border-radius: 0; }
   .tl-bar .btn-group .btn:first-child { border-radius: 4px 0 0 4px; }
@@ -396,9 +411,15 @@
     display: flex; align-items: center; color: #6ee7b7; font-weight: 700; font-size: 12px;
     text-shadow: 0 0 4px rgba(0,0,0,.7); pointer-events: none;
   }
+  /* v3.5.0-alpha.172.196 — Rebalance not_done. Pre-fix: opacity .55 +
+     `background` shorthand !important che CANCELLAVA il colore pieno della
+     risorsa → bar sbiadito, "meno presente" degli altri (Matteo). Ora:
+     `background-image` (non shorthand) → il tratteggio rosso si SOVRAPPONE al
+     colore pieno inline (background-color resta), opacity .9. Stesso peso
+     visivo degli altri, ma chiaramente marcato "non fatto" (hatch + bordo + ✗). */
   .vis-item.tl-exec-not_done {
-    opacity: .55;
-    background: repeating-linear-gradient(45deg, rgba(239,68,68,.3) 0 4px, rgba(0,0,0,.05) 4px 10px) !important;
+    opacity: .9;
+    background-image: repeating-linear-gradient(45deg, rgba(239,68,68,.45) 0 5px, rgba(0,0,0,0) 5px 11px) !important;
     border-color: #ef4444 !important;
   }
   .vis-item .tl-exec-icon { margin-left: 4px; opacity: 0.9; font-weight: 700; }
