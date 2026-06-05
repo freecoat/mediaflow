@@ -2328,7 +2328,10 @@ function _ldRenderSelftest(st, meta){
 
   const banner = _ldEl('lockdown-banner');
   meta = meta || {};
-  const esc = (window.escapeHtml || ((s)=>String(s==null?'':s)));
+  // Fallback che escapa DAVVERO (difesa in profondità: `reason` è input admin
+   // libero, va escapato anche se window.escapeHtml mancasse).
+  const esc = window.escapeHtml || ((s)=>String(s==null?'':s).replace(/[&<>"']/g,
+    c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
   const blocked = [];
   if (!v.cloud_ai) blocked.push('AI cloud');
   if (!v.web_search) blocked.push('Ricerca web');
