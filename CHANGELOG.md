@@ -1,5 +1,10 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.199.1 — Revert fix altezza bg (rompeva la timeline) (5 giu 2026)
+
+- **Revert** del tentativo di fix altezza bg festività di .199: `vis-item.vis-background { height:100% }` era relativo al **pannello** background, non alla riga → ogni festività si estendeva su TUTTE le righe (blocco arancione/blu gigante che copriva più reparti). Timeline rotta, zoom incluso. Rimosso il blocco CSS → torna al comportamento .198 (funzionante; resta il cosmetico minore "bg leggermente più basso" su risorse senza ruolo, da riaffrontare con metodo più sicuro).
+- Il **popup AI lockdown** (.199) resta — wiring corretto e verificato (403 con reason). Se non appariva: `global.js` in cache (hard-refresh della pagina clienti, non solo timeline) o lockdown non attivo al momento del test.
+
 ## v3.5.0-alpha.172.199 — Fix altezza bg festività + popup AI lockdown (5 giu 2026)
 
 - **Altezza background item uniforme** (festività/weekend/ferie): la barra arancione (festività) appariva **più bassa** sulle risorse senza booking quel giorno (es. sale/attrezzature). Causa: il `min-height:48px` colpiva label + group del layer *foreground* ma NON il group del layer *background*. Fix CSS: `min-height` esteso ai `.vis-background .vis-group[tl-res/project/dept]` + `vis-item.vis-background { top:0; height:100% }`. Ora i bg riempiono l'intera altezza riga, uniformi su tutte le risorse.

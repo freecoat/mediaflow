@@ -713,25 +713,6 @@
     min-height: 38px;
     box-sizing: border-box;
   }
-  /* v3.5.0-alpha.172.199 — Fix altezza incoerente background item (festività/
-     weekend/ferie). Causa: il min-height:48px sopra colpiva label + group del
-     layer FOREGROUND, ma NON il group del layer BACKGROUND. Su risorse senza
-     booking quel giorno (es. sale/attrezzature) il bg-group restava più basso
-     → barra festività "più bassa" delle risorse con booking. Ora equalizziamo
-     anche il layer background + forziamo i bg item a piena altezza riga. */
-  #tl-host .vis-background .vis-group[class*="tl-res-"],
-  #tl-host .vis-background .vis-group[class*="tl-project-"] {
-    min-height: 48px;
-    box-sizing: border-box;
-  }
-  #tl-host .vis-background .vis-group[class*="tl-dept-"] {
-    min-height: 38px;
-    box-sizing: border-box;
-  }
-  #tl-host .vis-item.vis-background {
-    top: 0 !important;
-    height: 100% !important;
-  }
 
   /* v3.5.0-alpha.111.13 — Heatmap CSS rimosso (Matteo: togli per ora). */
   /* v3.4.45: Storyboard view — 7 colonne giorno (responsive collapse <960px) */
