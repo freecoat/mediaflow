@@ -16,6 +16,11 @@
   .settings-tab.active { background:var(--indigo-bg); color:var(--indigo2); font-weight:500; }
   .settings-pane { display:none; }
   .settings-pane.active { display:block; }
+  /* v3.5.0-alpha.172.197 — pulse banner Content Lockdown */
+  @keyframes ldPulse {
+    0%,100% { box-shadow:0 0 0 4px rgba(248,81,73,.12),0 6px 22px rgba(0,0,0,.45); }
+    50%     { box-shadow:0 0 0 7px rgba(248,81,73,.22),0 6px 22px rgba(0,0,0,.45); }
+  }
   .theme-card {
     cursor:pointer; padding:14px; border-radius:var(--radius);
     border:2px solid var(--border); transition: border-color var(--t);
@@ -2309,7 +2314,7 @@ function lockdownMasterToggle(checked){
   _ldRenderMaster(checked ? 'LOCKDOWN' : 'OPEN');
 }
 
-function _ldRenderSelftest(st){
+function _ldRenderSelftest(st, meta){
   if (!st) { _ldEl('ld-selftest').textContent = '—'; return; }
   const v = st.vectors || {};
   const dot = (ok) => ok
@@ -2320,10 +2325,48 @@ function _ldRenderSelftest(st){
     `<div>Ricerca web: ${dot(v.web_search)}</div>` +
     `<div>Enrichment: ${dot(v.enrichment)}</div>` +
     `<div style="margin-top:6px;font-weight:600;">${st.locked ? '🔒 LOCKED (nessun egress)' : '☁️ Egress attivo'}</div>`;
+
   const banner = _ldEl('lockdown-banner');
+  meta = meta || {};
+  const esc = (window.escapeHtml || ((s)=>String(s==null?'':s)));
+  const blocked = [];
+  if (!v.cloud_ai) blocked.push('AI cloud');
+  if (!v.web_search) blocked.push('Ricerca web');
+  if (!v.enrichment) blocked.push('Enrichment');
+
+  // Riga motivo + chi/quando (mostrata sia in lockdown totale che parziale).
+  let metaLine = '';
+  if (meta.reason) {
+    metaLine += `<div style="margin-top:8px;padding:7px 11px;background:rgba(0,0,0,.22);border-left:3px solid currentColor;border-radius:5px;font-style:italic;">“${esc(meta.reason)}”</div>`;
+  }
+  if (meta.at) {
+    metaLine += `<div style="margin-top:6px;font-size:12px;opacity:.85;">Impostato ${esc(meta.at)}${meta.by ? ' da ' + esc(meta.by) : ''}</div>`;
+  }
+
   if (st.locked) {
+    // Lockdown TOTALE — banner rosso forte, animato.
     banner.style.display = 'block';
-    banner.innerHTML = '<div style="background:#3d1418;border:1px solid #f85149;color:#ffb3ae;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;">🔒 <b>Content Lockdown attivo</b> — nessun dato esce verso il cloud.</div>';
+    banner.innerHTML =
+      `<div style="display:flex;gap:14px;align-items:flex-start;background:linear-gradient(180deg,#4a141a,#3d1418);border:2px solid #f85149;color:#ffd9d6;padding:16px 18px;border-radius:12px;margin-bottom:16px;box-shadow:0 0 0 4px rgba(248,81,73,.12),0 6px 22px rgba(0,0,0,.45);animation:ldPulse 2s ease-in-out infinite;">
+        <div style="font-size:30px;line-height:1;flex-shrink:0;">🔒</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:16px;letter-spacing:.2px;color:#fff;">Content Lockdown ATTIVO</div>
+          <div style="font-size:13px;margin-top:3px;">Nessun dato esce verso il cloud — AI solo locale (Ollama), ricerca web ed enrichment disattivati.</div>
+          ${metaLine}
+        </div>
+      </div>`;
+  } else if (blocked.length) {
+    // Lockdown PARZIALE — banner ambra (alcuni vettori off, non tutti).
+    banner.style.display = 'block';
+    banner.innerHTML =
+      `<div style="display:flex;gap:14px;align-items:flex-start;background:linear-gradient(180deg,#3a2c10,#2f2410);border:2px solid #f59e0b;color:#fde9c8;padding:14px 18px;border-radius:12px;margin-bottom:16px;box-shadow:0 4px 16px rgba(0,0,0,.4);">
+        <div style="font-size:26px;line-height:1;flex-shrink:0;">⚠️</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:15px;color:#fff;">Egress parziale bloccato</div>
+          <div style="font-size:13px;margin-top:3px;">Vettori disattivati: <b>${blocked.map(esc).join(', ')}</b>. Gli altri restano aperti verso il cloud.</div>
+          ${metaLine}
+        </div>
+      </div>`;
   } else {
     banner.style.display = 'none';
   }
@@ -2338,7 +2381,7 @@ async function lockdownLoad(){
     _ldEl('ld-web_search').checked = !!r.web_search_enabled;
     _ldEl('ld-enrichment').checked = !!r.enrichment_enabled;
     _ldEl('ld-reason').value = r.lockdown_reason || '';
-    _ldRenderSelftest(r.effective);
+    _ldRenderSelftest(r.effective, {reason:r.lockdown_reason, by:r.lockdown_by, at:r.lockdown_at});
     _ldRenderMaster(r.master); // ri-applica disabled stato sub
     _ldEl('ld-meta').textContent = r.lockdown_at
       ? `Ultimo cambio: ${r.lockdown_at}${r.lockdown_by ? ' — ' + r.lockdown_by : ''}`
@@ -2360,7 +2403,7 @@ async function lockdownSave(){
   fd.append('reason', _ldEl('ld-reason').value || '');
   try {
     const r = await api('POST', '/settings/api/lockdown', fd);
-    _ldRenderSelftest(r.effective);
+    _ldRenderSelftest(r.effective, {reason:_ldEl('ld-reason').value});
     toast(master === 'LOCKDOWN' ? '🔒 Lockdown attivato' : 'Cloud riattivato', 'success');
     lockdownLoad();
   } catch(e){

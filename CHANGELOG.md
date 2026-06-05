@@ -1,5 +1,11 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.197 — Content Lockdown: warning più evidente + motivazione (5 giu 2026)
+
+- **Banner lockdown rinforzato** (`/settings → 🔒 Sicurezza`): da boxino piatto a banner grande con icona 🔒 30px, titolo bold, bordo rosso 2px + alone pulsante (`@keyframes ldPulse`). Mostra la **motivazione** (`reason` tra virgolette) + chi/quando l'ha impostato.
+- **Stato parziale**: nuovo banner **ambra** quando il master è OPEN ma uno o più sub-switch sono off (es. solo ricerca web bloccata) → elenca i vettori disattivati. Prima nessun avviso se non era lockdown totale.
+- Reason/by/at escapati (`escapeHtml`). Solo template/JS + bump. Verificato TestClient: reason+by+at popolati in LOCKDOWN, stato parziale rilevato.
+
 ## v3.5.0-alpha.172.196 — Polish timeline: toolbar coerente + rebalance not_done (5 giu 2026)
 
 - **Toolbar timeline (`.tl-bar`)**: normalizzata l'altezza di tutti i controlli a 30px (prima `btn-sm` ~26px vs select/date 30px → righe **frastagliate** quando la barra wrappa su 2 righe) + `row-gap:8px` per respiro verticale al wrap. Coerenza grafica su 1 e 2 righe.
