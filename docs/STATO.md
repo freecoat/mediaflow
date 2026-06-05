@@ -8,9 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.199** — 5 giugno 2026 — Content Lockdown + polish timeline (sessione TPN)
+**v3.5.0-alpha.172.201** — 5 giugno 2026 sera — Content Lockdown + polish timeline (sessione TPN)
 
-### α.172.196→199 ✅ (polish post-lockdown, sessione 5 giu)
+### α.172.200→201 ✅ (fix bg altezza VERO + rimozione Color by)
+- **.200**: causa misurata via Playwright (lezione: verificare DOM, non indovinare CSS). vis-timeline calcola altezza bg-group dal contenuto label → risorse senza ruolo (sale) avevano bg-group 24px vs 39px persone → barre festività più basse. Fix: label sempre 2 righe (subtitle = tipo risorsa quando manca ruolo). Verificato browser: tutti 39px.
+- **.201**: rimosso dropdown "Color by" da toolbar (non serve). Select hidden con backing-value, tlSetColorBy('status') default. `mfApplySearchable` skippa `data-no-search="true"`. Verificato browser.
+
+### α.172.196→199.1 ✅ (polish post-lockdown, sessione 5 giu)
 - **.196** toolbar altezze 30px + rebalance not_done (hatch su colore pieno, no fade). **.197** warning lockdown evidente + motivazione + stato parziale ambra. **.197.1** fix XSS fallback esc (security review). **.198** vero fix wrap toolbar (`#tl-range` flex elastico, non le altezze). **.199** altezza bg festività uniforme (min-height su layer background + bg full-height) + **popup AI lockdown** (403 content_lockdown → popup con motivazione, centralizzato in api(), es. clienti).
 - Tutto pushato. Server tunnel attivo per test Matteo. **Pendente browser smoke** completo.
 
