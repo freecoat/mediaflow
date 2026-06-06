@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.204** — 6 giugno 2026 — Editor capitolato completo
+**v3.5.0-alpha.172.205** — 6 giugno 2026 — Catena capitolato→fisico: gate + nature inference
+
+### α.172.205 ✅ (deliverable↔asset fisico: nodi A+C — 6 giu, subagent-driven)
+- Audit legame deliverable↔PhysicalAsset (3 puntatori paralleli: physical_asset_id FK + DeliverableAsset M:N + PhysicalAsset.job_deliverable_id; AssetMembership scollegata). Implementati A+C:
+- **A gate**: consegna physical → delivered bloccata (409) senza asset fisico, override `allow_missing_physical`. confirm-delivery + update_deliverable. UI job_detail (avviso+override sul 409).
+- **C catena**: DeliveryItem += requires_physical + physical_media_kind (parser popola da archive_specs); editor item (checkbox+select); nature forzata physical alla creazione se item lo richiede; warning kind-mismatch non bloccante; serializer espone has_physical_asset/item_requires_physical/item_physical_media_kind.
+- Smoke browser verde. 464 test. Push fatto.
+- **Backlog audit fisico** (da quell'analisi): B unificare 2 sistemi link (DeliverableAsset fonte verità + ponte AssetMembership→deliverable); D volume TB da MHL (`unit=TB` auto-fill); E auth QR scan (debito TPN); F lifecycle media (condition enum + scadenze verifica). Minore: ai-extract pass-2 non popola i campi fisici.
+
+### α.172.204 — Editor capitolato completo
 
 ### α.172.204 ✅ (editor capitolato per intero — 6 giu, subagent-driven)
 - "+ Nuovo capitolato" (crea blank → apre editor). is_active toggle + lista mostra-inattivi + Riattiva. Naming convention per-item (editor strutturato; backend `naming_convention` su POST items/PUT item). Editor "Specs blocchi" rifatto: card chiave/valore + toggle JSON grezzo per strutture annidate (collectBlockValue round-trip-safe).

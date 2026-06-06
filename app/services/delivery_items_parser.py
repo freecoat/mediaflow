@@ -300,6 +300,9 @@ def materialize_items(db: Session, delivery_template_id: int, parsed: dict,
             ai_extracted=True,
             ai_confidence=float(it.get("confidence") or 0.0),
             pending_review=bool(it.get("pending_review", False)),
+            # catena capitolato→fisico (derivati da archive_specs nel parser)
+            requires_physical=bool(it.get("requires_physical", False)),
+            physical_media_kind=it.get("physical_media_kind") or None,
         )
         db.add(item)
         db.flush()  # popola item.id per audio_tracks

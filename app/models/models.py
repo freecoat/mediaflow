@@ -1004,6 +1004,17 @@ class DeliveryItem(Base):
         ForeignKey("price_items.id"), nullable=True
     )
 
+    # α.172.205 (catena capitolato→fisico) — hint consegna su supporto fisico.
+    # requires_physical: il capitolato richiede consegna su media fisico (LTO/HDD/…)
+    # → il JobDeliverable creato da questo item nasce nature=physical e suggerisce
+    # il kind. physical_media_kind: valore allineato a PhysicalAssetKind
+    # (lto/hdd/cru/bluray/dvd/case/other). Popolati dal parser da archive_specs,
+    # editabili nell'editor item. NULL/False = nessun hint (default digital).
+    requires_physical: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    physical_media_kind: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
     # Freeform per cose non in taxonomy (teste/code/timeline/metadata custom)
     extra_specs: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

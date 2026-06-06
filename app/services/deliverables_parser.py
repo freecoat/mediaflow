@@ -257,7 +257,74 @@ Estrai i blocchi strutturati come da schema."""
         for it in items:
             if isinstance(it, dict):
                 it["naming_convention"] = normalize_naming_convention(it.get("naming_convention"))
+    # Catena capitolato→fisico: deriva requires_physical/physical_media_kind
+    # dall'archive_specs a livello di template e li inietta sia nel risultato
+    # root (per chi salva il template) sia in ogni voce deliverables (usata da
+    # materialize_items in delivery_items_parser.py).
+    _rp, _pmk = derive_physical_from_archive_specs(result.get("archive_specs"))
+    result["requires_physical"] = _rp
+    result["physical_media_kind"] = _pmk
+    if isinstance(items, list):
+        for it in items:
+            if isinstance(it, dict):
+                # Eredita dal template; se l'item avesse specs proprie future
+                # si potrebbe overridare qui — per ora propagazione diretta.
+                it.setdefault("requires_physical", _rp)
+                it.setdefault("physical_media_kind", _pmk)
     return result
+
+
+# ── Heuristica archivio fisico (catena capitolato→fisico) ───
+
+_PHYSICAL_MEDIA_ALLOWED = {"lto", "hdd", "cru", "bluray", "dvd", "case", "other"}
+
+
+def derive_physical_from_archive_specs(archive_specs: Optional[dict]) -> tuple[bool, Optional[str]]:
+    """Deriva (requires_physical, physical_media_kind) dall'archive_specs del template.
+
+    Strategia difensiva: tutte le chiavi opzionali, valori possono essere str/list/dict.
+    Costruisce un blob testuale da tutti i valori scalari (anche annidati) e applica
+    matching per keyword.
+
+    Valori di ritorno:
+      (True,  "lto")    se menziona LTO/LTFS
+      (True,  "cru")    se menziona CRU
+      (True,  "hdd")    se menziona HDD/hard drive/hard disk/drive
+      (True,  "bluray") se menziona Blu-ray/Bluray/BD25/BD50
+      (True,  "dvd")    se menziona DVD
+      (False, None)     se nessun medium fisico riconosciuto
+    """
+    if not archive_specs or not isinstance(archive_specs, dict):
+        return False, None
+
+    def _collect_text(obj) -> str:
+        """Appiattisce ricorsivamente un dict/list in stringa lowercase."""
+        if isinstance(obj, str):
+            return obj.lower()
+        if isinstance(obj, (int, float)):
+            return str(obj).lower()
+        if isinstance(obj, list):
+            return " ".join(_collect_text(v) for v in obj)
+        if isinstance(obj, dict):
+            return " ".join(_collect_text(v) for v in obj.values())
+        return ""
+
+    blob = _collect_text(archive_specs)
+
+    if "lto" in blob or "ltfs" in blob:
+        return True, "lto"
+    if "cru" in blob:
+        return True, "cru"
+    if "hdd" in blob or "hard drive" in blob or "hard disk" in blob:
+        return True, "hdd"
+    # "drive" da solo è troppo generico (es. "drive link"), controlliamo solo
+    # se accompagnato da altri indizi già esclusi sopra — lasciamo fuori.
+    if "blu-ray" in blob or "bluray" in blob or "bd25" in blob or "bd50" in blob:
+        return True, "bluray"
+    if "dvd" in blob:
+        return True, "dvd"
+
+    return False, None
 
 
 # ── Matching voci capitolato ↔ listino prezzi ───────────────

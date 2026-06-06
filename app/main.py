@@ -1132,6 +1132,8 @@ def _auto_migrate_columns():
             ("audio_config_preset_id", "INTEGER NULL"),
             ("audio_config_code", "VARCHAR(40) NULL"),
             ("color_primaries", "VARCHAR(40) NULL"),  # α.172.163
+            ("requires_physical", "BOOLEAN NOT NULL DEFAULT 0"),  # α.172.205
+            ("physical_media_kind", "VARCHAR(20) NULL"),  # α.172.205
         ]
         with engine.begin() as conn:
             for col, ddl in di_add:
@@ -2180,7 +2182,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.204", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.205", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

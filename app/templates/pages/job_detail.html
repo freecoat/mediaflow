@@ -216,6 +216,18 @@
         <label class="form-label">Note</label>
         <textarea class="form-input" id="cd-notes" rows="2" placeholder="Numero registro, recipient, riferimenti…"></textarea>
       </div>
+      <!-- Gate A (α.205): avviso consegna fisica + override -->
+      <div id="cd-physical-notice" style="display:none;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--text2);">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <span>📦</span>
+          <strong style="color:#c084fc;">Consegna su supporto fisico richiesta.</strong>
+        </div>
+        <div id="cd-physical-kind-hint" style="color:var(--text3);font-size:11px;"></div>
+        <label style="display:flex;align-items:center;gap:7px;margin-top:8px;cursor:pointer;user-select:none;" id="cd-allow-missing-wrap">
+          <input type="checkbox" id="cd-allow-missing">
+          <span>Conferma senza asset fisico (ignora requisito supporto)</span>
+        </label>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-confirm-delivery')">Annulla</button>
@@ -979,6 +991,21 @@ async function openConfirmDelivery(deliverableId) {
   } catch(_) {}
   if (d.digital_asset_id) aSel.value = String(d.digital_asset_id);
   if (d.physical_asset_id) pSel.value = String(d.physical_asset_id);
+  // Gate A (α.205) — physical notice
+  const noticeEl = document.getElementById('cd-physical-notice');
+  const kindHintEl = document.getElementById('cd-physical-kind-hint');
+  const allowCb = document.getElementById('cd-allow-missing');
+  const isPhysical = (d.nature === 'physical' || d.item_requires_physical);
+  if (noticeEl) {
+    noticeEl.style.display = isPhysical ? '' : 'none';
+    if (allowCb) { allowCb.checked = false; }
+    if (kindHintEl && d.item_physical_media_kind) {
+      const kindLabels = {lto:'LTO',hdd:'HDD',cru:'CRU',bluray:'Blu-ray',dvd:'DVD',other:'Altro'};
+      kindHintEl.textContent = 'Atteso: ' + (kindLabels[d.item_physical_media_kind] || d.item_physical_media_kind);
+    } else if (kindHintEl) {
+      kindHintEl.textContent = '';
+    }
+  }
   openModal('modal-confirm-delivery');
 }
 
@@ -995,16 +1022,40 @@ async function submitConfirmDelivery() {
   if (p) fd.append('physical_asset_id', p);
   const n = document.getElementById('cd-notes').value.trim();
   if (n) fd.append('notes', n);
+  // Gate A (α.205): include allow_missing_physical se checkbox presente
+  const allowCb = document.getElementById('cd-allow-missing');
+  if (allowCb && allowCb.checked) fd.append('allow_missing_physical', 'true');
   try {
     const r = await fetch(`/jobs/api/deliverables/${id}/confirm-delivery`, {
       method: 'POST', body: fd, credentials: 'same-origin',
     });
     if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || 'Errore conferma');
+      const errBody = await r.json().catch(() => ({}));
+      if (r.status === 409) {
+        // Gate A: asset fisico mancante — mostra messaggio + rivela override
+        const detail = errBody.detail || 'Consegna fisica senza asset fisico collegato.';
+        toast(detail, 'warning', 7000);
+        const noticeEl = document.getElementById('cd-physical-notice');
+        const wrapEl = document.getElementById('cd-allow-missing-wrap');
+        if (noticeEl) {
+          noticeEl.style.display = '';
+          noticeEl.style.borderColor = '#f59e0b';
+        }
+        if (wrapEl) {
+          wrapEl.style.color = '#fbbf24';
+          wrapEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        return;
+      }
+      throw new Error(errBody.detail || 'Errore conferma');
     }
+    const result = await r.json().catch(() => ({}));
     closeModal('modal-confirm-delivery');
     toast('✓ Consegna confermata', 'success');
+    // Gate A: avviso non bloccante se tipo supporto diverso dal previsto
+    if (result.physical_kind_warning) {
+      toast(result.physical_kind_warning, 'warning', 6000);
+    }
     await loadDeliverables();
   } catch(e) {
     toast(e.message || 'Errore', 'error');

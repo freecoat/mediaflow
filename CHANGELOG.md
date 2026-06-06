@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.205 — Catena capitolato→fisico: gate + nature inference (6 giu 2026)
+
+Dall'audit legame deliverable↔asset fisici: implementati i nodi **A** (gate) e **C** (catena capitolato→fisico). Subagent-driven.
+
+- **A — Gate fisico**: una consegna `nature=physical` non può passare a `delivered` senza un asset fisico collegato (`physical_asset_id` o riga `DeliverableAsset` fisica). `confirm-delivery` e `update_deliverable`(→delivered) ritornano **409** con messaggio chiaro, a meno di override esplicito `allow_missing_physical=true`. UI confirm-delivery (job_detail): avviso "consegna fisica" + hint media atteso + checkbox override che compare sul 409 per ri-confermare.
+- **C — Catena capitolato→fisico**: nuovi campi su `DeliveryItem` `requires_physical` + `physical_media_kind` (lto/hdd/cru/bluray/dvd/other). Il parser capitolato li popola da `archive_specs` (euristica keyword LTO/LTFS/CRU/HDD/Blu-ray/DVD). Editor item espone checkbox + select. Alla creazione di un deliverable linkato a un item `requires_physical` → `nature` forzata a physical. Validazione non bloccante: linkando un asset fisico di `kind` diverso da quello richiesto dal capitolato → `physical_kind_warning` nella risposta + toast.
+- Serializer deliverable espone `has_physical_asset`, `item_requires_physical`, `item_physical_media_kind`.
+- Fix: spegnere `requires_physical` azzera anche `physical_media_kind` (aggira il gotcha multipart-vuoto→None).
+- Migrazione auto-boot (2 colonne delivery_items). Smoke browser verde (gate 409+override, inferenza, set/clear, UI). 464 test.
+- **Follow-up noto**: il path pass-2 `ai-extract` items non popola ancora i campi fisici (editabili a mano). Restano dall'audit: B (unificare i 2 sistemi di link), D (volume TB da MHL), E (auth QR scan), F (lifecycle media).
+
 ## v3.5.0-alpha.172.204 — Editor capitolato completo (6 giu 2026)
 
 Il capitolato (DeliveryTemplate) ora è editabile per intero. Subagent-driven.

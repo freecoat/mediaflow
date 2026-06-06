@@ -528,8 +528,52 @@ def _resolve_deliverable_template(db: Optional[Session], d: JobDeliverable):
     return db.get(DeliveryTemplate, tid)
 
 
+def _deliverable_has_physical_asset(db: Optional[Session], d: JobDeliverable) -> bool:
+    """Gate fisico (Task A): un deliverable "ha un asset fisico" se la FK primary
+    `physical_asset_id` è valorizzata, oppure se esiste almeno una riga pivot
+    DeliverableAsset con physical_asset_id non nullo. Richiede db per il lookup
+    pivot; se db è None si limita alla FK primary."""
+    if d.physical_asset_id is not None:
+        return True
+    if db is None:
+        return False
+    from app.models import DeliverableAsset
+    from sqlalchemy import func
+    n = db.query(func.count(DeliverableAsset.id)).filter(
+        DeliverableAsset.job_deliverable_id == d.id,
+        DeliverableAsset.physical_asset_id.isnot(None),
+    ).scalar() or 0
+    return n > 0
+
+
+def _physical_kind_mismatch_warning(
+    db: Session, d: JobDeliverable, physical_asset_id: int
+) -> Optional[str]:
+    """Task C2 — warning non bloccante: se il DeliveryItem collegato ha un
+    physical_media_kind atteso e il PhysicalAsset.kind effettivo diverge,
+    ritorna una stringa di avviso. None se nessun mismatch o dati mancanti."""
+    if not d.delivery_item_id:
+        return None
+    di = db.get(DeliveryItem, d.delivery_item_id)
+    required = di.physical_media_kind if di else None
+    if not required:
+        return None
+    pa = db.get(PhysicalAsset, physical_asset_id)
+    if not pa or pa.kind is None:
+        return None
+    asset_kind = pa.kind.value
+    if asset_kind != required:
+        return (
+            f"Asset kind '{asset_kind}' diverso dal richiesto '{required}' "
+            f"dal capitolato"
+        )
+    return None
+
+
 def _serialize_deliverable(d: JobDeliverable, db: Optional[Session] = None) -> dict:
     tpl = _resolve_deliverable_template(db, d)
+    # Task C3 — catena capitolato→fisico: info dal DeliveryItem collegato.
+    _di = db.get(DeliveryItem, d.delivery_item_id) if (db is not None and d.delivery_item_id) else None
     out = {
         "id": d.id,
         "job_id": d.job_id,
@@ -560,6 +604,13 @@ def _serialize_deliverable(d: JobDeliverable, db: Optional[Session] = None) -> d
         "estimated_hours": d.estimated_hours,
         "digital_asset_id": d.digital_asset_id,
         "physical_asset_id": d.physical_asset_id,
+        # Task C3 — catena capitolato→fisico.
+        "has_physical_asset": (
+            _deliverable_has_physical_asset(db, d) if db is not None
+            else bool(d.physical_asset_id)
+        ),
+        "item_requires_physical": bool(_di.requires_physical) if _di else False,
+        "item_physical_media_kind": _di.physical_media_kind if _di else None,
         "asset_locked_at": d.asset_locked_at.isoformat() + "Z" if d.asset_locked_at else None,
         "qc_report_json": d.qc_report_json,
         "qc_run_at": d.qc_run_at.isoformat() + "Z" if d.qc_run_at else None,
@@ -847,6 +898,17 @@ async def create_deliverable(
         nature_enum = DeliverableNature(nature)
     except ValueError:
         raise HTTPException(400, f"nature invalida: {nature}")
+
+    # Task C1 — nature inference: se il DeliveryItem collegato richiede consegna
+    # fisica e la nature non è già fisica, eleva digital→physical.
+    # (Solo upgrade; non si declassa mai una nature fisica esplicita.)
+    if nature_enum != DeliverableNature.physical and delivery_item_id:
+        _di_nat = db.query(DeliveryItem).filter(
+            DeliveryItem.id == delivery_item_id,
+            DeliveryItem.tenant_id == current_tenant_id(),
+        ).first()
+        if _di_nat and _di_nat.requires_physical:
+            nature_enum = DeliverableNature.physical
 
     # Parsing spec_json se fornito come stringa
     spec_dict: Optional[dict] = None
@@ -1142,6 +1204,8 @@ async def update_deliverable(
     notes: Optional[str] = Form(None),
     digital_asset_id: Optional[int] = Form(None),
     physical_asset_id: Optional[int] = Form(None),
+    # Task A — override esplicito del gate fisico (consegna senza asset fisico).
+    allow_missing_physical: bool = Form(False),
     # α.172.202 — config audio per-deliverable. str (non int) per distinguere
     # "" (clear esplicito) da assente (None → no-op).
     audio_config_preset_id: Optional[str] = Form(None),
@@ -1198,6 +1262,22 @@ async def update_deliverable(
 
         # Path A: main status NON qc -> mutazione diretta legacy (nessun QC event)
         if new_status != DeliverableStatus.qc:
+            # Task A — gate fisico: transizione INTO delivered di natura fisica
+            # senza asset fisico collegato → blocco 409 (override esplicito).
+            # nature effettiva = quella già aggiornata sopra da `d.nature`.
+            if new_status == DeliverableStatus.delivered:
+                _eff_physical = d.nature == DeliverableNature.physical
+                # un physical_asset_id in arrivo nella stessa call conta come "presente"
+                _incoming_phys = bool(physical_asset_id)
+                if (_eff_physical
+                        and not _incoming_phys
+                        and not _deliverable_has_physical_asset(db, d)
+                        and not allow_missing_physical):
+                    raise HTTPException(
+                        409,
+                        "Consegna di natura fisica senza asset fisico collegato. "
+                        "Collega un asset fisico o conferma esplicitamente l'override.",
+                    )
             d.status = new_status
             d.qc_substatus = None
             if new_status == DeliverableStatus.delivered and not d.delivered_date:
@@ -1293,10 +1373,14 @@ async def update_deliverable(
         d.digital_asset_id = digital_asset_id or None
         if digital_asset_id:
             d.asset_locked_at = now_utc()
+    physical_kind_warning = None
     if physical_asset_id is not None:
         d.physical_asset_id = physical_asset_id or None
         if physical_asset_id:
             d.asset_locked_at = now_utc()
+            # Task C2 — warning non bloccante se il kind dell'asset diverge dal
+            # kind richiesto dal capitolato (DeliveryItem.physical_media_kind).
+            physical_kind_warning = _physical_kind_mismatch_warning(db, d, physical_asset_id)
 
     # α.172.202 — config audio per-deliverable (preset + tracce concrete).
     # "" → clear (preset/code a None, tracce lasciate invariate).
@@ -1331,6 +1415,8 @@ async def update_deliverable(
     payload = _serialize_deliverable(d, db)
     if triggered_qc_cascade:
         payload["qc_cascade"] = triggered_qc_cascade
+    if physical_kind_warning:
+        payload["physical_kind_warning"] = physical_kind_warning
     return payload
 
 
@@ -1450,6 +1536,8 @@ async def confirm_deliverable_delivery(
     physical_asset_id: Optional[int] = Form(None),
     source: str = Form("manual"),
     notes: Optional[str] = Form(None),
+    # Task A — override esplicito del gate fisico (consegna senza asset fisico).
+    allow_missing_physical: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     """Conferma consegna di N unita' del deliverable (default 1).
@@ -1505,6 +1593,21 @@ async def confirm_deliverable_delivery(
         d.confirmed_at = now_utc()
         d.confirmed_by_user_id = user.id if user else None
 
+    # Task A — gate fisico: se questa conferma porta a 'delivered' un
+    # deliverable di natura fisica privo di asset fisico → blocco 409.
+    # Un physical_asset_id in arrivo in questa stessa call conta come "presente".
+    _will_be_delivered = new_qty >= planned > 0
+    if (_will_be_delivered
+            and d.nature == DeliverableNature.physical
+            and not bool(physical_asset_id)
+            and not _deliverable_has_physical_asset(db, d)
+            and not allow_missing_physical):
+        raise HTTPException(
+            409,
+            "Consegna di natura fisica senza asset fisico collegato. "
+            "Collega un asset fisico o conferma esplicitamente l'override.",
+        )
+
     d.quantity_delivered = new_qty
     # Update status
     if new_qty >= planned > 0:
@@ -1549,6 +1652,7 @@ async def confirm_deliverable_delivery(
 
     # Optional asset link
     asset_link_created = None
+    physical_kind_warning = None
     if asset_id is not None or physical_asset_id is not None:
         link = DeliverableAsset(
             job_deliverable_id=d.id,
@@ -1565,6 +1669,9 @@ async def confirm_deliverable_delivery(
             d.digital_asset_id = asset_id
         if physical_asset_id and not d.physical_asset_id:
             d.physical_asset_id = physical_asset_id
+        # Task C2 — warning non bloccante su kind divergente dal capitolato.
+        if physical_asset_id:
+            physical_kind_warning = _physical_kind_mismatch_warning(db, d, physical_asset_id)
 
     # F3.3 lazy bridge — al link di un asset digitale con tech_specs, confronta
     # le specs reali con quelle attese del capitolato (non bloccante).
@@ -1591,6 +1698,7 @@ async def confirm_deliverable_delivery(
         "asset_link_id": asset_link_created,
         "warn_no_hours": n_link_bookings_with_hours == 0,
         "qc_compare": qc_compare,
+        "physical_kind_warning": physical_kind_warning,
     }
 
 

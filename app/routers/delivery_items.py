@@ -108,6 +108,9 @@ def _serialize_item(it: DeliveryItem, with_tracks: bool = True) -> dict:
         "timeline_segments": it.timeline_segments or [],
         "audio_config_preset_id": it.audio_config_preset_id,
         "audio_config_code": it.audio_config_code,
+        # catena capitolato→fisico
+        "requires_physical": it.requires_physical,
+        "physical_media_kind": it.physical_media_kind,
     }
     if with_tracks:
         out["audio_tracks"] = [_serialize_track(t) for t in sorted(it.audio_tracks, key=lambda x: x.sort_order)]
@@ -183,6 +186,8 @@ async def create_item_manual(
     suggested_price_item_id: Optional[int] = Form(None),
     naming_convention: Optional[str] = Form(None),  # JSON dict o vuoto
     notes: Optional[str] = Form(None),
+    requires_physical: Optional[bool] = Form(None),
+    physical_media_kind: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     tpl = db.query(DeliveryTemplate).filter(
@@ -201,6 +206,8 @@ async def create_item_manual(
             _naming_conv = normalize_naming_convention(json.loads(naming_convention))
         except json.JSONDecodeError as e:
             raise HTTPException(400, f"naming_convention JSON invalido: {e}")
+    # Normalizza physical_media_kind
+    _pmk = (physical_media_kind or "").strip().lower() or None
     it = DeliveryItem(
         tenant_id=current_tenant_id(),
         delivery_template_id=tid,
@@ -225,6 +232,8 @@ async def create_item_manual(
         naming_convention=_naming_conv,
         notes=notes or None,
         ai_extracted=False,
+        requires_physical=bool(requires_physical) if requires_physical is not None else False,
+        physical_media_kind=_pmk,
     )
     db.add(it)
     db.commit()
@@ -265,6 +274,9 @@ async def update_item(
     timeline_segments_json: Optional[str] = Form(None),
     audio_config_preset_id: Optional[str] = Form(None),
     enforce_coherence: bool = Form(True),
+    # catena capitolato→fisico
+    requires_physical: Optional[bool] = Form(None),
+    physical_media_kind: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     it = db.query(DeliveryItem).filter(
@@ -365,6 +377,18 @@ async def update_item(
         else:
             it.audio_config_preset_id = None
             it.audio_config_code = None
+
+    # catena capitolato→fisico
+    if requires_physical is not None:
+        it.requires_physical = requires_physical
+        # α.172.205 — spegnere il flag fisico azzera anche il kind. Un campo
+        # multipart vuoto arriva come None (no-op), quindi il clear del kind non
+        # passerebbe da physical_media_kind=''; lo deriviamo da requires_physical.
+        if requires_physical is False:
+            it.physical_media_kind = None
+    if physical_media_kind is not None:
+        _pmk = physical_media_kind.strip().lower() or None
+        it.physical_media_kind = _pmk
 
     # v3.5.0-alpha.172.183 — enforcement coerenza: l'edit manuale (planning/capitolato)
     # non può salvare combinazioni ERROR. AI/import non passano da qui (materialize_items)

@@ -1750,6 +1750,52 @@ async function openItemEditor(item, tid) {
   const itemNamingEditor = makeNamingEditor(nameEditorHost, v.naming_convention || {});
   box.appendChild(nameSec);
 
+  // Gate A — Consegna fisica (α.205): sezione dopo naming convention.
+  const physSec = document.createElement('div');
+  physSec.style.cssText = 'margin-top:14px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;';
+  const physTitle = document.createElement('div');
+  physTitle.style.cssText = 'font-weight:600;font-size:13px;margin-bottom:8px;';
+  physTitle.textContent = '📦 Consegna fisica';
+  physSec.appendChild(physTitle);
+  // Checkbox requires_physical
+  const physCbWrap = document.createElement('label');
+  physCbWrap.style.cssText = 'display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;user-select:none;margin-bottom:10px;';
+  const physCb = document.createElement('input');
+  physCb.type = 'checkbox';
+  physCb.id = 'dli-requires-physical';
+  physCb.checked = !!(v.requires_physical);
+  physCbWrap.appendChild(physCb);
+  physCbWrap.appendChild(document.createTextNode('Richiede consegna su supporto fisico'));
+  physSec.appendChild(physCbWrap);
+  // Select physical_media_kind
+  const physKindWrap = document.createElement('div');
+  physKindWrap.style.cssText = 'display:flex;align-items:center;gap:8px;';
+  const physKindLbl = document.createElement('label');
+  physKindLbl.style.cssText = 'font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;';
+  physKindLbl.textContent = 'Tipo supporto';
+  physKindLbl.setAttribute('for', 'dli-physical-kind');
+  physKindWrap.appendChild(physKindLbl);
+  const physKindSel = document.createElement('select');
+  physKindSel.id = 'dli-physical-kind';
+  physKindSel.className = 'form-select';
+  physKindSel.style.maxWidth = '200px';
+  [['', '—'], ['lto','LTO'], ['hdd','HDD'], ['cru','CRU'], ['bluray','Blu-ray'], ['dvd','DVD'], ['other','Altro']].forEach(([val, lbl]) => {
+    const o = document.createElement('option');
+    o.value = val; o.textContent = lbl;
+    if (val === (v.physical_media_kind || '')) o.selected = true;
+    physKindSel.appendChild(o);
+  });
+  physKindWrap.appendChild(physKindSel);
+  physSec.appendChild(physKindWrap);
+  // Aggiorna stato select in base alla checkbox
+  const _updatePhysKind = () => {
+    physKindSel.disabled = !physCb.checked;
+    physKindSel.style.opacity = physCb.checked ? '' : '0.4';
+  };
+  physCb.addEventListener('change', _updatePhysKind);
+  _updatePhysKind();
+  box.appendChild(physSec);
+
   // Render riusabile delle righe tracce: chiamato all'apertura e dopo apply preset.
   function renderAudioRows() {
     audioList.innerHTML = '';
@@ -1929,6 +1975,11 @@ async function openItemEditor(item, tid) {
     // invia '' (server: clear su PUT / nessun valore su POST = eredita dal capitolato).
     const _ncOut = itemNamingEditor ? itemNamingEditor.collect() : {};
     fd.append('naming_convention', Object.keys(_ncOut).length ? JSON.stringify(_ncOut) : '');
+    // Gate A — Consegna fisica (α.205)
+    const _physCb = document.getElementById('dli-requires-physical');
+    const _physKind = document.getElementById('dli-physical-kind');
+    if (_physCb) fd.append('requires_physical', _physCb.checked ? 'true' : 'false');
+    if (_physKind) fd.append('physical_media_kind', _physCb && _physCb.checked ? (_physKind.value || '') : '');
     // Preset audio: invia SOLO se cambiato dall'apertura. Così un salvataggio che
     // non tocca il preset non ri-materializza le tracce (e non cancella eventuali
     // edit manuali). Se cambiato e ci sono tracce esistenti, conferma sostituzione.
