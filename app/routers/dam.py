@@ -287,6 +287,7 @@ async def get_asset_delivery_info(
     # M:N pivot DeliverableAsset
     links = db.query(DeliverableAsset).filter(
         DeliverableAsset.asset_id == asset_id,
+        DeliverableAsset.tenant_id == current_tenant_id(),
     ).all()
     seen = {d["id"] for d in deliverables}
     for link in links:

@@ -178,6 +178,17 @@
           <div id="pa-contents-host" style="font-size:12px;"></div>
         </div>
       </details>
+
+      <!-- Consegne servite — audit B: quali deliverable questo asset fisico serve -->
+      <details id="pa-deliverables-wrap" style="margin-top:14px;display:none;" open>
+        <summary class="form-label" style="cursor:pointer;font-size:13px;">
+          📦 Consegne servite
+          <span id="pa-deliverables-count" class="text-xs text-muted" style="margin-left:6px;"></span>
+        </summary>
+        <div style="padding:10px 0;">
+          <div id="pa-deliverables-host" style="font-size:12px;"></div>
+        </div>
+      </details>
     </div>
     <div class="modal-footer">
       <div style="flex:1;">
@@ -457,6 +468,8 @@ function resetPaForm() {
   // v3.5.0-alpha.92 — contenuti hidden in new mode (richiede id)
   const cw = document.getElementById('pa-contents-wrap');
   if (cw) cw.style.display = 'none';
+  const dw = document.getElementById('pa-deliverables-wrap');
+  if (dw) dw.style.display = 'none';
   ['pa-label','pa-description','pa-serial','pa-manufacturer','pa-barcode',
    'pa-capacity','pa-used','pa-cost','pa-location','pa-delivered-to',
    'pa-delivered-at','pa-courier','pa-tracking','pa-md5','pa-xxhash',
@@ -516,8 +529,13 @@ async function openEditPhysicalAsset(id) {
     document.getElementById('pa-contents-history').checked = false;
     document.getElementById('pa-contents-host').textContent = 'Caricamento…';
     document.getElementById('pa-contents-count').textContent = '';
+    // audit B: consegne servite da questo asset fisico
+    document.getElementById('pa-deliverables-wrap').style.display = '';
+    document.getElementById('pa-deliverables-host').textContent = 'Caricamento…';
+    document.getElementById('pa-deliverables-count').textContent = '';
     openModal('modal-physical-asset');
     reloadPaContents();
+    reloadPaDeliverables();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
 }
 
@@ -586,6 +604,81 @@ async function reloadPaContents() {
   });
   table.appendChild(tbody);
   host.appendChild(table);
+}
+
+// audit B — quali deliverable questo asset fisico serve (diretto o via file)
+async function reloadPaDeliverables() {
+  const id = document.getElementById('pa-id').value;
+  if (!id) return;
+  const host = document.getElementById('pa-deliverables-host');
+  const countEl = document.getElementById('pa-deliverables-count');
+  while (host.firstChild) host.removeChild(host.firstChild);
+  const loading = document.createElement('div');
+  loading.className = 'text-muted'; loading.textContent = 'Caricamento…';
+  host.appendChild(loading);
+  let rows;
+  try {
+    rows = await api('GET', `/physical-assets/api/${id}/deliverables`);
+  } catch(e) {
+    host.removeChild(loading);
+    const err = document.createElement('div');
+    err.style.color = 'var(--rose)';
+    err.textContent = 'Errore: ' + (e.message || 'sconosciuto');
+    host.appendChild(err);
+    return;
+  }
+  host.removeChild(loading);
+  countEl.textContent = rows.length ? `· ${rows.length}` : '';
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted';
+    empty.style.cssText = 'padding:8px 0;text-align:center;font-style:italic;';
+    empty.textContent = 'Nessuna consegna collegata.';
+    host.appendChild(empty);
+    return;
+  }
+  const DLV_STATUS_COLOR_PA = {
+    planned: '#94a3b8', in_progress: '#a7b3f9', qc: '#fbbf24',
+    delivered: '#22c55e', closed: '#c084fc',
+  };
+  const DLV_STATUS_LABEL_PA = {
+    planned: 'Pianificato', in_progress: 'In lavorazione',
+    qc: 'QC', delivered: 'Consegnato', closed: 'Chiuso',
+  };
+  rows.forEach(r => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;';
+
+    const nameEl = document.createElement('span');
+    nameEl.style.cssText = 'flex:1;font-weight:500;min-width:140px;';
+    nameEl.textContent = r.name || ('#' + r.deliverable_id);
+
+    const statusBadge = document.createElement('span');
+    const sc = DLV_STATUS_COLOR_PA[r.status] || '#6b7280';
+    statusBadge.style.cssText = `display:inline-block;padding:1px 7px;border-radius:3px;background:${sc}33;color:${sc};font-size:10px;font-weight:600;`;
+    statusBadge.textContent = DLV_STATUS_LABEL_PA[r.status] || r.status;
+
+    const jobEl = document.createElement('span');
+    jobEl.className = 'text-xs text-muted';
+    jobEl.textContent = r.job_id ? `Job #${r.job_id}` : '';
+
+    const badges = document.createElement('span');
+    badges.style.cssText = 'display:inline-flex;gap:4px;';
+    (r.link_types || []).forEach(lt => {
+      const b = document.createElement('span');
+      b.style.cssText = lt === 'diretto'
+        ? 'display:inline-block;padding:1px 6px;border-radius:3px;background:rgba(168,85,247,0.18);color:#c084fc;font-size:10px;font-weight:600;'
+        : 'display:inline-block;padding:1px 6px;border-radius:3px;background:rgba(107,114,128,0.18);color:#9ca3af;font-size:10px;';
+      b.textContent = lt;
+      badges.appendChild(b);
+    });
+
+    row.appendChild(nameEl);
+    row.appendChild(statusBadge);
+    row.appendChild(jobEl);
+    row.appendChild(badges);
+    host.appendChild(row);
+  });
 }
 
 async function savePhysicalAsset() {

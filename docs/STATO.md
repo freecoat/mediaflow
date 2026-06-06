@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.205** — 6 giugno 2026 — Catena capitolato→fisico: gate + nature inference
+**v3.5.0-alpha.172.206** — 6 giugno 2026 — Unificazione link deliverable↔asset (audit B)
+
+### α.172.206 ✅ (unif. link deliverable↔asset — nodo B audit — 6 giu, subagent-driven)
+- Sync-as-cache: `DeliverableAsset` (M:N) fonte di verità; servizio `deliverable_assets.py` (`link_asset`/`unlink_asset`) deduplica pivot + risincronizza i FK cache (primario = ultimo confermato, no qc_report). Tutti i write-site instradati (confirm/update/qc-report/ingest/qc-cascade). FK readers invariati, desync impossibile.
+- DeliverableAsset += tenant_id (fix gap dam.py). Ponte AssetMembership→deliverable: `deliverables_served_by_physical` + `GET /physical-assets/api/{id}/deliverables` (UI "Consegne servite") + `GET /jobs/api/deliverables/{id}/assets` (UI "asset collegati" job_detail).
+- Migrazione idempotente (tenant_id + reconcile). 470 test (+6). Smoke browser verde (sync, bridge, assets-list). Push fatto.
+- **Backlog audit fisico residuo**: D volume TB MHL, E auth QR scan, F lifecycle media. Minore: clear link primario via UI manda '' (no-op gotcha), usare unlink.
+
+### α.172.205 — Catena capitolato→fisico: gate + nature inference
 
 ### α.172.205 ✅ (deliverable↔asset fisico: nodi A+C — 6 giu, subagent-driven)
 - Audit legame deliverable↔PhysicalAsset (3 puntatori paralleli: physical_asset_id FK + DeliverableAsset M:N + PhysicalAsset.job_deliverable_id; AssetMembership scollegata). Implementati A+C:

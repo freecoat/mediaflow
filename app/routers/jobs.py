@@ -1369,18 +1369,25 @@ async def update_deliverable(
     # Bridge asset (mutually exclusive con nature)
     # v3.5.0-alpha.172.89 (Bundle I): rimosso auto-bump in_production→file_attached
     # (enum collassato). Link asset NON cambia status main; cambio esplicito via UI.
+    # v3.5.0-alpha.172.206 (nodo B): tutto via service deliverable_assets.
+    # Semantica multipart: None = campo assente (no-op); >0 = link; 0 = clear
+    # esplicito (la UI invia 0 per scollegare il primario corrente).
+    from app.services.deliverable_assets import link_asset as _link_asset, unlink_asset as _unlink_asset
+    _actor = user.id if user else None
     if digital_asset_id is not None:
-        d.digital_asset_id = digital_asset_id or None
-        if digital_asset_id:
-            d.asset_locked_at = now_utc()
+        if digital_asset_id > 0:
+            _link_asset(db, d, asset_id=digital_asset_id, source="manual", user_id=_actor)
+        elif digital_asset_id == 0 and d.digital_asset_id:
+            _unlink_asset(db, d, asset_id=d.digital_asset_id)
     physical_kind_warning = None
     if physical_asset_id is not None:
-        d.physical_asset_id = physical_asset_id or None
-        if physical_asset_id:
-            d.asset_locked_at = now_utc()
+        if physical_asset_id > 0:
+            _link_asset(db, d, physical_asset_id=physical_asset_id, source="manual", user_id=_actor)
             # Task C2 — warning non bloccante se il kind dell'asset diverge dal
             # kind richiesto dal capitolato (DeliveryItem.physical_media_kind).
             physical_kind_warning = _physical_kind_mismatch_warning(db, d, physical_asset_id)
+        elif physical_asset_id == 0 and d.physical_asset_id:
+            _unlink_asset(db, d, physical_asset_id=d.physical_asset_id)
 
     # α.172.202 — config audio per-deliverable (preset + tracce concrete).
     # "" → clear (preset/code a None, tracce lasciate invariate).
@@ -1553,7 +1560,8 @@ async def confirm_deliverable_delivery(
       RESTRUCTURE_2026_05_20.md: maturato senza ore = WARN, non blocco)
     """
     from app.services.rbac import current_user_optional, has_permission
-    from app.models import DeliverableAsset, BookingDeliverable, Booking
+    from app.models import BookingDeliverable, Booking
+    from app.services.deliverable_assets import link_asset
     from sqlalchemy import func
 
     user = current_user_optional(request)
@@ -1650,25 +1658,24 @@ async def confirm_deliverable_delivery(
         except Exception as _e:
             pass  # notifica non bloccante
 
-    # Optional asset link
+    # Optional asset link — passa SEMPRE dal service (nodo B): crea/dedup pivot
+    # + risync FK cache + asset_locked_at. XOR garantito dalla validazione 400
+    # sopra; eventuale ValueError del service rilanciato come 400.
     asset_link_created = None
     physical_kind_warning = None
     if asset_id is not None or physical_asset_id is not None:
-        link = DeliverableAsset(
-            job_deliverable_id=d.id,
-            asset_id=asset_id,
-            physical_asset_id=physical_asset_id,
-            source=source,
-            confirmed_by_user_id=user.id if user else None,
-            notes=notes,
-        )
-        db.add(link); db.flush()
+        try:
+            link = link_asset(
+                db, d,
+                asset_id=asset_id,
+                physical_asset_id=physical_asset_id,
+                source=source,
+                user_id=user.id if user else None,
+                notes=notes,
+            )
+        except ValueError as e:
+            raise HTTPException(400, str(e))
         asset_link_created = link.id
-        # Sync FK legacy primary se vuoto
-        if asset_id and not d.digital_asset_id:
-            d.digital_asset_id = asset_id
-        if physical_asset_id and not d.physical_asset_id:
-            d.physical_asset_id = physical_asset_id
         # Task C2 — warning non bloccante su kind divergente dal capitolato.
         if physical_asset_id:
             physical_kind_warning = _physical_kind_mismatch_warning(db, d, physical_asset_id)
@@ -1718,7 +1725,8 @@ async def upload_qc_report(
 ):
     from app.services.rbac import current_user_optional, has_permission
     from app.services.dam import save_upload, resolve_asset_type
-    from app.models import DeliverableAsset, AssetStatus
+    from app.services.deliverable_assets import link_asset
+    from app.models import AssetStatus
 
     user = current_user_optional(request)
     if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
@@ -1753,14 +1761,14 @@ async def upload_qc_report(
     )
     db.add(qc_asset); db.flush()
 
-    link = DeliverableAsset(
-        job_deliverable_id=d.id,
+    # Nodo B: link via service. source='qc_report' resta fuori dal primario cache.
+    link = link_asset(
+        db, d,
         asset_id=qc_asset.id,
         source="qc_report",
-        confirmed_by_user_id=user.id if user else None,
+        user_id=user.id if user else None,
         notes=(notes or "").strip() or None,
     )
-    db.add(link); db.flush()
 
     db.commit()
     return {
@@ -1771,6 +1779,50 @@ async def upload_qc_report(
         "filename": filename,
         "mime_type": mime_type,
     }
+
+
+# ─────────────────────────────────────────────────────────────
+# v3.5.0-alpha.172.206 (nodo B) — Lista asset collegati a un deliverable.
+# Alimenta la UI "asset collegati" (pivot DeliverableAsset, fonte di verità).
+# ─────────────────────────────────────────────────────────────
+@router.get("/api/deliverables/{deliverable_id}/assets")
+async def list_deliverable_assets(
+    deliverable_id: int,
+    db: Session = Depends(get_db),
+):
+    from app.services.deliverable_assets import list_assets
+
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+
+    out = []
+    for row in list_assets(db, d):
+        label = None
+        try:
+            if row.asset_id is not None:
+                a = db.get(Asset, row.asset_id)
+                if a is not None:
+                    label = a.original_name or a.filename
+            elif row.physical_asset_id is not None:
+                pa = db.get(PhysicalAsset, row.physical_asset_id)
+                if pa is not None:
+                    label = pa.label
+        except Exception:
+            label = None
+        out.append({
+            "id": row.id,
+            "asset_id": row.asset_id,
+            "physical_asset_id": row.physical_asset_id,
+            "source": row.source,
+            "confirmed_at": row.confirmed_at.isoformat() if row.confirmed_at else None,
+            "notes": row.notes,
+            "label": label,
+        })
+    return {"ok": True, "deliverable_id": d.id, "assets": out}
 
 
 # ── NAMING HELPER (v3.5.0-alpha.66.9) ────────────────────────

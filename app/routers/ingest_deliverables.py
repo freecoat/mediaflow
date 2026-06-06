@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     User, JobDeliverable, PhysicalAsset, PhysicalAssetKind,
-    DeliverableAsset, DeliverableStatus, AssetOwnerType,
+    DeliverableStatus, AssetOwnerType,
     Job, Project,
 )
 from app.services.rbac import current_user_optional, has_permission
@@ -129,14 +129,15 @@ def _process_ingest(
 
     confirmed_qty = 0
     if deliverable:
-        # Link verifica
-        db.add(DeliverableAsset(
-            job_deliverable_id=deliverable.id,
+        # Link verifica — via service (nodo B): crea pivot + risync FK cache.
+        from app.services.deliverable_assets import link_asset
+        link_asset(
+            db, deliverable,
             physical_asset_id=pa.id,
             source=source,
-            confirmed_by_user_id=user.id if user else None,
+            user_id=user.id if user else None,
             notes=f"Auto-ingest {parsed['n_files']} file da {source}",
-        ))
+        )
         # Auto-confirm 1 unità (la "cassetta" = 1 piece consegnata)
         # Idempotente: solo se quantity_delivered < quantity_planned
         if (deliverable.quantity_delivered or 0) < (deliverable.quantity_planned or 0):
@@ -149,8 +150,7 @@ def _process_ingest(
                 deliverable.delivered_date = now_utc().date()
             else:
                 deliverable.status = DeliverableStatus.in_progress
-            if not deliverable.physical_asset_id:
-                deliverable.physical_asset_id = pa.id
+            # FK cache physical_asset_id già risincronizzato da link_asset sopra.
             confirmed_qty = 1
             recompute_deliverable_cost(db, deliverable)
 

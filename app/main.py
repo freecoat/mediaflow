@@ -1182,6 +1182,15 @@ def _auto_migrate_columns():
     except Exception as e:
         print(f"[auto-migrate] deliverable audio/label FAILED: {e}")
 
+    # v3.5.0-alpha.172.206 — deliverable_assets.tenant_id (unificazione link, B).
+    # Solo ADD COLUMN + backfill al boot; il reconcile pivot gira via script.
+    try:
+        from scripts.migrate_deliverable_asset_unify import add_tenant_column
+        if add_tenant_column(engine):
+            print("[auto-migrate] deliverable_assets.tenant_id aggiunta + backfill")
+    except Exception as e:
+        print(f"[auto-migrate] deliverable_assets.tenant_id FAILED: {e}")
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
@@ -2182,7 +2191,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.205", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.206", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

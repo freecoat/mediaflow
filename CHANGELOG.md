@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.206 — Unificazione link deliverable↔asset (audit nodo B) (6 giu 2026)
+
+Dall'audit legame deliverable↔asset fisici: chiuso il nodo **B** (i 2 sistemi di link erano desincronizzati). Approccio sync-as-cache. Subagent-driven.
+
+- **Servizio centrale** `app/services/deliverable_assets.py`: `DeliverableAsset` (M:N) = fonte di verità; `link_asset`/`unlink_asset` deduplicano la riga pivot e **risincronizzano sempre** i FK cache `JobDeliverable.digital_asset_id`/`physical_asset_id` (primario = ultimo confermato, escluso `source='qc_report'`) + `asset_locked_at`. I readers legacy (serializer, cost report, QC compare, UI) restano invariati ma non possono più desincronizzarsi.
+- **Tutti i write-site** ora passano dal servizio: confirm-delivery, update_deliverable (clear via sentinel 0), upload-qc-report, ingest MHL/CSV, qc-cascade. Eliminato il pattern "backfill solo se vuoto" che lasciava il FK stale dopo il 1° link.
+- **`DeliverableAsset` += `tenant_id`** (denormalizzato dal parent) + scope query; chiuso il gap multi-tenant in `dam.py`.
+- **Ponte AssetMembership→deliverable**: `deliverables_served_by_physical` + `GET /physical-assets/api/{id}/deliverables` rispondono "quali consegne serve questo nastro" (dirette via pivot + transitive via file sul supporto). UI: sezione "📦 Consegne servite" nella pagina asset fisici. + `GET /jobs/api/deliverables/{id}/assets` (tutti gli asset collegati: master+clone+qc) + UI "🔗 asset collegati" in job_detail.
+- **Migrazione** `scripts/migrate_deliverable_asset_unify.py` (idempotente): colonna tenant_id + backfill + reconcile (crea pivot mancanti per FK legacy + risincronizza). Auto-boot per la colonna.
+- **Test**: +6 (`test_deliverable_asset_unify.py`: sync primario, ultimo-confermato, dedup, qc_report escluso, unlink, ponte diretto+transitivo). Suite 470. Smoke browser verde (sync confirm/update, bridge, assets-list).
+- **Backlog audit fisico residuo**: D volume TB da MHL, E auth QR scan, F lifecycle media. Minore: clear link primario via UI manda '' (no-op, gotcha multipart); usare unlink dal pannello asset.
+
 ## v3.5.0-alpha.172.205 — Catena capitolato→fisico: gate + nature inference (6 giu 2026)
 
 Dall'audit legame deliverable↔asset fisici: implementati i nodi **A** (gate) e **C** (catena capitolato→fisico). Subagent-driven.

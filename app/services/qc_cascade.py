@@ -87,15 +87,15 @@ def cascade_qc_reject(
         )
         db.add(placeholder)
         db.flush()
-        # Link al deliverable via DeliverableAsset (source='manual', placeholder)
-        link = DeliverableAsset(
-            job_deliverable_id=deliverable.id,
+        # Link al deliverable via service (nodo B): pivot + risync FK cache.
+        from app.services.deliverable_assets import link_asset
+        link_asset(
+            db, deliverable,
             asset_id=placeholder.id,
             source="manual",
-            confirmed_by_user_id=actor_user_id,
+            user_id=actor_user_id,
             notes=f"Spawn auto post QC reject originale id={original.id}",
         )
-        db.add(link)
         counters["placeholders_spawned"] += 1
 
     # 4. Notifica in-app (non bloccante)

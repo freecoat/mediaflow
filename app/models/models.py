@@ -3600,6 +3600,12 @@ class DeliverableAsset(Base):
     """
     __tablename__ = "deliverable_assets"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # α.172.206 (unificazione link, audit B) — tenant_id denormalizzato dal
+    # JobDeliverable parent: il pivot non l'aveva → query (es. dam.py) erano
+    # tenant-safe solo per associazione. Settato dal servizio link_asset.
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id"), default=1, index=True, server_default="1"
+    )
     job_deliverable_id: Mapped[int] = mapped_column(
         ForeignKey("job_deliverables.id", ondelete="CASCADE"), index=True
     )

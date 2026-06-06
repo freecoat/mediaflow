@@ -345,6 +345,42 @@ async def list_ingest_batches(
     }
 
 
+@router.get("/api/{asset_id}/deliverables")
+async def get_physical_asset_deliverables(asset_id: int, db: Session = Depends(get_db)):
+    """v3.5.0-alpha.206 — Bridge endpoint: deliverable serviti da un asset fisico.
+    Copre link diretto (job_deliverable_id FK) + link transitivo via file digitali
+    sul supporto (AssetMembership → DeliverableAsset).
+    """
+    from app.services.deliverable_assets import deliverables_served_by_physical
+    # Lookup tenant-scoped (404 se mancante o altro tenant)
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id,
+        PhysicalAsset.tenant_id == current_tenant_id(),
+    ).first()
+    if not a:
+        raise HTTPException(404, "Asset fisico non trovato")
+    rows = deliverables_served_by_physical(db, asset_id, current_tenant_id())
+    out = []
+    for row in rows:
+        d = row["deliverable"]
+        link_types = sorted(row["link_types"])
+        # Risali a project_id via job (best-effort, un db.get è accettabile)
+        project_id = None
+        if d.job_id:
+            job = db.get(Job, d.job_id)
+            if job:
+                project_id = job.project_id
+        out.append({
+            "deliverable_id": d.id,
+            "name": d.name,
+            "status": d.status.value if d.status else None,
+            "job_id": d.job_id,
+            "project_id": project_id,
+            "link_types": link_types,
+        })
+    return out
+
+
 @router.get("/api/{asset_id}")
 async def get_physical_asset(asset_id: int, db: Session = Depends(get_db)):
     a = db.query(PhysicalAsset).filter(
