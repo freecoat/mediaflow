@@ -778,7 +778,11 @@
             <strong style="font-size:14px;">📦 Deliverable HUB</strong>
             <span id="dh-counter" class="text-xs text-muted">caricamento…</span>
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <!-- α.172.202 — filtro etichetta (section_label), popolato dopo il caricamento -->
+            <select id="dh-filter-label" class="form-select" style="height:30px; padding:2px 8px; font-size:12px; min-width:160px;" title="Filtra per etichetta sezione">
+              <option value="">Tutte le etichette</option>
+            </select>
             <select id="dh-mode" class="form-select" style="height:30px; padding:2px 8px; font-size:12px;">
               <option value="kanban">Kanban</option>
               <option value="list">Lista</option>
@@ -1880,6 +1884,8 @@ async function renderDeliverableHub() {
       || (d.quote_number || '').toLowerCase().includes(qText)
     ));
     _dhItems = items;
+    // α.172.202 — popola filtro etichetta con i valori distinti presenti
+    _dhPopulateLabelFilter(_dhItems);
     counter.textContent = `${_dhItems.length} deliverable`;
   } catch (e) {
     _dhMakeEmpty(host, 'Errore: ' + (e.message || ''), 'var(--rose)');
@@ -1891,13 +1897,45 @@ async function renderDeliverableHub() {
       _dhTemplates = Array.isArray(res) ? res : (res.items || []);
     } catch(_) { _dhTemplates = []; }
   }
+  _dhRenderFiltered();
+}
+
+// α.172.202 — popola il select etichetta con i valori distinti presenti in _dhItems,
+// preservando la selezione corrente se ancora valida.
+function _dhPopulateLabelFilter(items) {
+  const sel = document.getElementById('dh-filter-label');
+  if (!sel) return;
+  const current = sel.value;
+  const labels = [...new Set(items.map(d => d.section_label).filter(Boolean))].sort();
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const o0 = document.createElement('option');
+  o0.value = ''; o0.textContent = 'Tutte le etichette';
+  sel.appendChild(o0);
+  labels.forEach(lbl => {
+    const o = document.createElement('option');
+    o.value = lbl;
+    o.textContent = '📦 ' + lbl;
+    if (lbl === current) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+// α.172.202 — applica filtro etichetta client-side e renderizza.
+function _dhRenderFiltered() {
+  const host = document.getElementById('dh-host');
+  if (!host) return;
+  const labelFilter = (document.getElementById('dh-filter-label')?.value || '').trim();
+  let items = _dhItems;
+  if (labelFilter) items = items.filter(d => d.section_label === labelFilter);
   const mode = document.getElementById('dh-mode').value;
-  if (mode === 'list') dhRenderList(host, _dhItems);
-  else dhRenderKanban(host, _dhItems);
+  if (mode === 'list') dhRenderList(host, items);
+  else dhRenderKanban(host, items);
 }
 
 document.addEventListener('change', e => {
-  if (e.target && e.target.id === 'dh-mode') renderDeliverableHub();
+  // α.172.202 — cambio vista (kanban/lista) o filtro etichetta: re-render senza reload
+  if (e.target && e.target.id === 'dh-mode') _dhRenderFiltered();
+  if (e.target && e.target.id === 'dh-filter-label') _dhRenderFiltered();
 });
 
 function dhRenderKanban(host, items) {
@@ -1939,6 +1977,13 @@ function dhBuildCard(d, colorFg) {
   sub.className = 'text-xs text-muted';
   sub.textContent = (d.project_code || d.project_title || (d.job_code || `Job #${d.job_id}`)) + ' · ' + (d.unit || '—');
   card.appendChild(sub);
+  // α.172.202 — badge etichetta sezione nella card kanban
+  if (d.section_label) {
+    const labelBadge = document.createElement('span');
+    labelBadge.style.cssText = 'display:inline-block;margin-top:3px;background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:8px;font-size:10px;font-weight:600;padding:1px 6px;';
+    labelBadge.textContent = '📦 ' + d.section_label;
+    card.appendChild(labelBadge);
+  }
   // v3.5.0-alpha.172.187 — quotazione sorgente del deliverable
   if (d.quote_number) {
     const qn = document.createElement('div');
@@ -1986,7 +2031,8 @@ function dhRenderList(host, items) {
   table.style.width = '100%';
   const thead = document.createElement('thead');
   const trh = document.createElement('tr');
-  ['Nome','Progetto','Job','Quote','Stato','QC sub','Unit','Qty','Target','QC'].forEach(h => {
+  // α.172.202 — colonna "Etichetta" aggiunta dopo Nome
+  ['Nome','Etichetta','Progetto','Job','Quote','Stato','QC sub','Unit','Qty','Target','QC'].forEach(h => {
     const th = document.createElement('th'); th.textContent = h; trh.appendChild(th);
   });
   thead.appendChild(trh); table.appendChild(thead);
@@ -1998,6 +2044,24 @@ function dhRenderList(host, items) {
     const tdN = document.createElement('td');
     const b = document.createElement('b'); b.textContent = d.name || ''; tdN.appendChild(b);
     tr.appendChild(tdN);
+    // α.172.202 — badge etichetta sezione (section_label)
+    const tdLabel = document.createElement('td');
+    if (d.section_label) {
+      const badge = document.createElement('span');
+      badge.style.cssText = 'background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);border-radius:8px;font-size:10px;font-weight:600;padding:2px 7px;white-space:nowrap;';
+      badge.textContent = '📦 ' + escapeHtml(d.section_label);
+      tdLabel.appendChild(badge);
+      if (d.broadcaster || d.template_code) {
+        const sub = document.createElement('div');
+        sub.style.cssText = 'font-size:10px;color:var(--text3);margin-top:2px;';
+        sub.textContent = [d.broadcaster, d.template_code].filter(Boolean).join(' · ');
+        tdLabel.appendChild(sub);
+      }
+    } else {
+      tdLabel.textContent = '—';
+      tdLabel.className = 'text-muted text-sm';
+    }
+    tr.appendChild(tdLabel);
     const cols = [
       d.project_code || d.project_title || '—',
       d.job_code || '—',
@@ -2248,6 +2312,10 @@ let _dsmDeliveryItemId = null;
 let _dsmTaxonomy = null;
 // v3.5.0-alpha.172.161 — cache template capitolato per il selettore modal.
 let _dsmCapTemplates = null;
+// α.172.202 — id deliverable correntemente aperto nel modal (thread verso audio section)
+let _dsmCurrentDeliverableId = null;
+// α.172.202 — preset audio al momento dell'apertura modal (per rilevare cambio al Save)
+let _initialDeliverablePreset = '';
 
 async function _dsmLoadTaxonomy() {
   if (_dsmTaxonomy) return _dsmTaxonomy;
@@ -2312,6 +2380,9 @@ async function dsmOpen(deliverableId) {
   _dhClear(host);
   _dsmStructured = false;
   _dsmDeliveryItemId = null;
+  // α.172.202 — traccia id deliverable corrente per la sezione audio
+  _dsmCurrentDeliverableId = d.id;
+  _initialDeliverablePreset = '';
   const loading = document.createElement('div'); loading.className = 'text-muted text-sm';
   loading.textContent = 'Caricamento specifiche…'; host.appendChild(loading);
   // Popola sempre il dropdown capitolati (selettore punto-di-partenza).
@@ -2333,7 +2404,8 @@ async function dsmOpen(deliverableId) {
       _dsmStructured = true;
       _dsmDeliveryItemId = fresh.delivery_item_id;
       if (prefillBar) prefillBar.style.display = 'none';
-      dsmRenderStructured(item, tax);
+      // α.172.202 — passa l'intero oggetto fresh (audio_tracks, audio_config_preset_id)
+      dsmRenderStructured(item, tax, fresh);
     } else {
       // Nessun link: selettore vuoto + editor JSON legacy disponibile.
       // Suggerisce di scegliere un item capitolato dalla barra in alto.
@@ -2408,7 +2480,8 @@ async function dsmCapUnlink() {
 
 // Costruisce i selettori taxonomy del DeliveryItem (parità col menu capitolato
 // in delivery_templates.html / openItemEditor). Edit → PUT /delivery-items/api/{id}.
-function dsmRenderStructured(v, tax) {
+// α.172.202 — deliverableData opzionale: oggetto deliverable con audio_tracks e preset
+function dsmRenderStructured(v, tax, deliverableData) {
   const host = document.getElementById('dsm-blocks-host');
   _dhClear(host);
   const opt = (list, sel, placeholder) => {
@@ -2481,6 +2554,11 @@ function dsmRenderStructured(v, tax) {
     if (el) el.addEventListener('change', dsmApplySpecSchema);
   });
   dsmApplySpecSchema();
+
+  // α.172.202 — Sezione Audio: preset + tracce per-deliverable
+  if (deliverableData) {
+    _dsmRenderAudioSection(host, deliverableData, tax);
+  }
 }
 
 // α.172.183 (SC-T4) — interroga /delivery-items/api/spec-schema e applica
@@ -2535,6 +2613,286 @@ async function dsmApplySpecSchema() {
   }
 }
 
+// α.172.202 — Render sezione audio nella modal tech-specs.
+// Mostra: select preset (deferred), lista tracce con edit/delete, bottone add.
+async function _dsmRenderAudioSection(host, deliverableData, tax) {
+  const did = deliverableData.id;
+  const L = 'font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;display:block;margin-bottom:4px;';
+
+  const section = document.createElement('div');
+  section.id = 'dsm-audio-section';
+  section.style.cssText = 'background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-top:10px;';
+
+  const sHead = document.createElement('label');
+  sHead.style.cssText = L + 'font-size:12px;color:var(--text2);margin-bottom:8px;';
+  sHead.textContent = '🔊 Audio';
+  section.appendChild(sHead);
+
+  // Preset select (deferred — applicato solo al Save)
+  const presetRow = document.createElement('div');
+  presetRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;';
+  const presetLabel = document.createElement('label');
+  presetLabel.style.cssText = L + 'margin:0;white-space:nowrap;';
+  presetLabel.textContent = 'Preset config audio';
+  const presetSel = document.createElement('select');
+  presetSel.id = 'dsm-audio-preset';
+  presetSel.className = 'form-select';
+  presetSel.style.cssText = 'height:30px;font-size:12px;flex:1;min-width:200px;';
+  const o0 = document.createElement('option');
+  o0.value = ''; o0.textContent = '— nessun preset —';
+  presetSel.appendChild(o0);
+  const presetNote = document.createElement('span');
+  presetNote.className = 'text-xs text-muted';
+  presetNote.style.cssText = 'font-style:italic;flex-basis:100%;';
+  presetNote.textContent = 'Applicato al salvataggio. Sostituisce le tracce audio della consegna.';
+  presetRow.appendChild(presetLabel);
+  presetRow.appendChild(presetSel);
+  presetRow.appendChild(presetNote);
+  section.appendChild(presetRow);
+
+  // Carica i preset disponibili per il capitolato di questo deliverable
+  let presets = [];
+  try {
+    const pr = await api('GET', `/jobs/api/deliverables/${did}/audio-presets`);
+    presets = Array.isArray(pr) ? pr : [];
+  } catch(_) { presets = []; }
+  presets.forEach(p => {
+    const op = document.createElement('option');
+    op.value = String(p.id);
+    op.textContent = escapeHtml(p.name || p.code || ('#' + p.id));
+    if (deliverableData.audio_config_preset_id && Number(deliverableData.audio_config_preset_id) === p.id) {
+      op.selected = true;
+    }
+    presetSel.appendChild(op);
+  });
+  // traccia valore iniziale per rilevare cambio al Save
+  _initialDeliverablePreset = deliverableData.audio_config_preset_id
+    ? String(deliverableData.audio_config_preset_id) : '';
+  if (_initialDeliverablePreset) presetSel.value = _initialDeliverablePreset;
+
+  // Area lista tracce
+  const tracksHost = document.createElement('div');
+  tracksHost.id = 'dsm-audio-tracks-host';
+  section.appendChild(tracksHost);
+  _dsmRenderTracksList(tracksHost, deliverableData.audio_tracks || [], tax);
+
+  // Bottone aggiungi traccia
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn btn-ghost btn-sm';
+  addBtn.style.cssText = 'margin-top:8px;font-size:11px;color:var(--indigo2);';
+  addBtn.textContent = '+ Aggiungi traccia';
+  addBtn.addEventListener('click', () => _dsmOpenTrackEditor(did, null, tax));
+  section.appendChild(addBtn);
+
+  host.appendChild(section);
+}
+
+// α.172.202 — render lista tracce audio del deliverable.
+function _dsmRenderTracksList(host, tracks, tax) {
+  while (host.firstChild) host.removeChild(host.firstChild);
+  if (!tracks.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted text-sm';
+    empty.style.cssText = 'padding:6px 0;font-style:italic;';
+    empty.textContent = 'Nessuna traccia audio definita per questa consegna.';
+    host.appendChild(empty);
+    return;
+  }
+  const tbl = document.createElement('table');
+  tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px;';
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  ['Traccia','Canali','Mix type','Standard','Codec','Hz / bit','',''].forEach(h => {
+    const th = document.createElement('th');
+    th.style.cssText = 'font-size:10px;text-transform:uppercase;color:var(--text3);font-weight:600;padding:3px 6px;text-align:left;';
+    th.textContent = h;
+    trh.appendChild(th);
+  });
+  thead.appendChild(trh);
+  tbl.appendChild(thead);
+  const tbody = document.createElement('tbody');
+
+  // Helper di risoluzione taxonomy per id → nome
+  const taxName = (list, id) => {
+    if (!id || !list) return '—';
+    const found = list.find(x => x.id === Number(id));
+    return found ? found.name : '—';
+  };
+
+  tracks.forEach(track => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--border)';
+    const cells = [
+      escapeHtml(track.track_label || ('Traccia #' + track.id)),
+      taxName(tax.channel_configs, track.channel_config_id),
+      taxName(tax.mix_types, track.mix_type_id),
+      taxName(tax.mix_standards, track.mix_standard_id),
+      taxName(tax.audio_codecs, track.audio_codec_id),
+      [track.sample_rate_hz ? track.sample_rate_hz + ' Hz' : null, track.bit_depth ? track.bit_depth + '-bit' : null].filter(Boolean).join(' / ') || '—',
+    ];
+    cells.forEach((val, idx) => {
+      const td = document.createElement('td');
+      td.style.cssText = 'padding:4px 6px;color:var(--text);';
+      td.textContent = val;
+      if (idx === 0) td.style.fontWeight = '600';
+      tr.appendChild(td);
+    });
+    // Badge opzionale
+    if (track.is_optional) {
+      const optTd = document.createElement('td');
+      optTd.style.cssText = 'padding:4px 6px;';
+      const badge = document.createElement('span');
+      badge.style.cssText = 'font-size:10px;color:var(--text3);border:1px solid var(--border);border-radius:4px;padding:1px 4px;';
+      badge.textContent = 'opz.';
+      optTd.appendChild(badge);
+      tr.appendChild(optTd);
+    } else {
+      const td = document.createElement('td'); tr.appendChild(td);
+    }
+    // Bottoni azione
+    const actTd = document.createElement('td');
+    actTd.style.cssText = 'padding:4px 6px;white-space:nowrap;';
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-ghost btn-sm';
+    editBtn.style.cssText = 'padding:1px 5px;font-size:11px;';
+    editBtn.textContent = '✎';
+    editBtn.title = 'Modifica traccia';
+    editBtn.dataset.trackId = String(track.id);
+    editBtn.addEventListener('click', () => {
+      _dsmOpenTrackEditor(_dsmCurrentDeliverableId, track, tax);
+    });
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-ghost btn-sm';
+    delBtn.style.cssText = 'padding:1px 5px;font-size:11px;color:var(--rose);';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Elimina traccia';
+    delBtn.dataset.trackId = String(track.id);
+    delBtn.addEventListener('click', () => _dsmDeleteTrack(track.id));
+    actTd.appendChild(editBtn);
+    actTd.appendChild(delBtn);
+    tr.appendChild(actTd);
+    tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);
+  host.appendChild(tbl);
+}
+
+// α.172.202 — apre un inline-popup leggero per add/edit traccia audio.
+// track=null → crea, track=oggetto → modifica.
+function _dsmOpenTrackEditor(deliverableId, track, tax) {
+  const isEdit = !!track;
+  // Rimuovi eventuale editor precedente
+  const existing = document.getElementById('dsm-track-editor-popup');
+  if (existing) existing.remove();
+
+  const L = 'font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;display:block;margin-bottom:3px;';
+  const buildOpt = (list, selId, placeholder) => {
+    let h = `<option value="">${placeholder || '— nessuno —'}</option>`;
+    (list || []).forEach(r => {
+      const s = (selId !== null && selId !== undefined && Number(selId) === r.id) ? ' selected' : '';
+      h += `<option value="${r.id}"${s}>${escapeHtml(r.name)}</option>`;
+    });
+    return h;
+  };
+
+  const popup = document.createElement('div');
+  popup.id = 'dsm-track-editor-popup';
+  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9000;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:18px 20px;width:420px;max-width:95vw;box-shadow:0 12px 40px rgba(0,0,0,.6);';
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:600;font-size:13px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;';
+  title.innerHTML = (isEdit ? '✎ Modifica traccia audio' : '+ Aggiungi traccia audio')
+    + ' <button id="dsm-track-editor-close" class="btn btn-ghost btn-icon" style="font-size:14px;padding:2px 6px;">✕</button>';
+  popup.appendChild(title);
+
+  popup.innerHTML += `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div style="grid-column:1/-1;"><label style="${L}">Etichetta traccia *</label>
+        <input class="form-input" id="dte-label" value="${escapeHtml(track ? track.track_label || '' : '')}" placeholder="es. Italiano 5.1, M&E Stereo…"></div>
+      <div><label style="${L}">Canali</label>
+        <select class="form-select" id="dte-ch">${buildOpt(tax.channel_configs, track ? track.channel_config_id : null)}</select></div>
+      <div><label style="${L}">Mix type</label>
+        <select class="form-select" id="dte-mt">${buildOpt(tax.mix_types, track ? track.mix_type_id : null)}</select></div>
+      <div><label style="${L}">Mix standard</label>
+        <select class="form-select" id="dte-ms">${buildOpt(tax.mix_standards, track ? track.mix_standard_id : null)}</select></div>
+      <div><label style="${L}">Codec audio</label>
+        <select class="form-select" id="dte-ac">${buildOpt(tax.audio_codecs, track ? track.audio_codec_id : null)}</select></div>
+      <div><label style="${L}">Sample rate (Hz)</label>
+        <input class="form-input" id="dte-sr" type="number" min="0" step="1" value="${track ? (track.sample_rate_hz || '') : ''}" placeholder="es. 48000"></div>
+      <div><label style="${L}">Bit depth</label>
+        <select class="form-select" id="dte-bd">
+          <option value="">—</option>
+          ${[16,20,24,32].map(b => `<option value="${b}"${track && track.bit_depth===b?' selected':''}>${b}-bit</option>`).join('')}
+        </select></div>
+      <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="dte-opt"${track && track.is_optional?' checked':''}>
+        <label for="dte-opt" style="font-size:12px;margin:0;">Traccia opzionale</label></div>
+      <div style="grid-column:1/-1;"><label style="${L}">Note</label>
+        <textarea class="form-input" id="dte-notes" rows="2">${escapeHtml(track ? track.notes || '' : '')}</textarea></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+      <button class="btn btn-ghost" id="dte-cancel">Annulla</button>
+      <button class="btn btn-primary" id="dte-save">💾 Salva</button>
+    </div>
+  `;
+
+  // Overlay di chiusura clic fuori
+  const overlay = document.createElement('div');
+  overlay.id = 'dsm-track-editor-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:8999;background:rgba(0,0,0,.35);';
+  const closePopup = () => { popup.remove(); overlay.remove(); };
+  overlay.addEventListener('click', closePopup);
+  document.body.appendChild(overlay);
+  document.body.appendChild(popup);
+
+  // Riattacca il pulsante close (innerHTML ha sovrascritto il listener)
+  popup.querySelector('#dsm-track-editor-close').addEventListener('click', closePopup);
+  popup.querySelector('#dte-cancel').addEventListener('click', closePopup);
+  popup.querySelector('#dte-save').addEventListener('click', async () => {
+    const label = (popup.querySelector('#dte-label').value || '').trim();
+    if (!label) { toast('Etichetta obbligatoria', 'error'); return; }
+    const fd = new FormData();
+    fd.append('track_label', label);
+    const ch = popup.querySelector('#dte-ch').value; if (ch) fd.append('channel_config_id', ch);
+    const mt = popup.querySelector('#dte-mt').value; if (mt) fd.append('mix_type_id', mt);
+    const ms = popup.querySelector('#dte-ms').value; if (ms) fd.append('mix_standard_id', ms);
+    const ac = popup.querySelector('#dte-ac').value; if (ac) fd.append('audio_codec_id', ac);
+    const sr = popup.querySelector('#dte-sr').value; if (sr) fd.append('sample_rate_hz', sr);
+    const bd = popup.querySelector('#dte-bd').value; if (bd) fd.append('bit_depth', bd);
+    fd.append('is_optional', popup.querySelector('#dte-opt').checked ? '1' : '0');
+    fd.append('notes', popup.querySelector('#dte-notes').value || '');
+    try {
+      let r;
+      if (isEdit) {
+        r = await fetch(`/delivery-audio-tracks/api/${track.id}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
+      } else {
+        r = await fetch(`/jobs/api/deliverables/${deliverableId}/audio-tracks`, { method: 'POST', body: fd, credentials: 'same-origin' });
+      }
+      if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || 'Errore'); }
+      toast(isEdit ? '✎ Traccia aggiornata' : '+ Traccia aggiunta', 'success');
+      closePopup();
+      // Ricarica le tracce aggiornate e re-render lista
+      const fresh = await api('GET', `/jobs/api/deliverables/${deliverableId}`);
+      const tracksHost = document.getElementById('dsm-audio-tracks-host');
+      if (tracksHost) _dsmRenderTracksList(tracksHost, fresh.audio_tracks || [], tax);
+    } catch(e) { toast(e.message || 'Errore', 'error'); }
+  });
+}
+
+// α.172.202 — elimina una traccia audio del deliverable, poi ricarica lista.
+async function _dsmDeleteTrack(trackId) {
+  if (!confirm('Eliminare questa traccia audio?')) return;
+  try {
+    const r = await fetch(`/delivery-audio-tracks/api/${trackId}`, { method: 'DELETE', credentials: 'same-origin' });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || 'Errore'); }
+    toast('Traccia eliminata', 'success');
+    const fresh = await api('GET', `/jobs/api/deliverables/${_dsmCurrentDeliverableId}`);
+    const tax = await _dsmLoadTaxonomy();
+    const tracksHost = document.getElementById('dsm-audio-tracks-host');
+    if (tracksHost) _dsmRenderTracksList(tracksHost, fresh.audio_tracks || [], tax);
+  } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
 async function dsmSaveStructured() {
   const iid = _dsmDeliveryItemId;
   if (!iid) return;
@@ -2574,6 +2932,41 @@ async function dsmSaveStructured() {
       return;
     }
     if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
+
+    // α.172.202 — applica preset audio se cambiato dall'apertura modal
+    const presetSel = document.getElementById('dsm-audio-preset');
+    if (presetSel && _dsmCurrentDeliverableId) {
+      const newPreset = presetSel.value || '';
+      if (newPreset !== _initialDeliverablePreset) {
+        // Conferma se il deliverable ha già tracce e si sta applicando un preset non vuoto
+        const tracksHost = document.getElementById('dsm-audio-tracks-host');
+        const hasExistingTracks = tracksHost && tracksHost.querySelector('table') !== null;
+        if (newPreset && hasExistingTracks) {
+          if (!confirm('Applicare il preset audio sostituirà le tracce audio esistenti della consegna. Continuare?')) {
+            toast('💾 Specifiche capitolato salvate (preset audio non applicato)', 'success');
+            closeModal('modal-deliverable-specs');
+            renderDeliverableHub();
+            return;
+          }
+        }
+        try {
+          const pfd = new FormData();
+          // α.172.202 — un campo multipart vuoto arriva al server come None (no-op),
+          // non come "": per PULIRE il preset si manda il sentinel '0' (gestito
+          // server-side come clear, vedi update_deliverable).
+          pfd.append('audio_config_preset_id', newPreset === '' ? '0' : newPreset);
+          const pr = await fetch(`/jobs/api/deliverables/${_dsmCurrentDeliverableId}`, { method: 'PUT', body: pfd, credentials: 'same-origin' });
+          if (!pr.ok) { const pe = await pr.json().catch(()=>({})); throw new Error(pe.detail || 'Errore preset'); }
+          toast('💾 Specifiche e preset audio salvati', 'success');
+        } catch(pe) {
+          toast('Specifiche salvate, ma preset audio: ' + (pe.message || 'errore'), 'warning', 4000);
+        }
+        closeModal('modal-deliverable-specs');
+        renderDeliverableHub();
+        return;
+      }
+    }
+
     toast('💾 Specifiche capitolato salvate', 'success');
     closeModal('modal-deliverable-specs');
     renderDeliverableHub();

@@ -1168,6 +1168,18 @@ def _auto_migrate_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE delivery_items ADD COLUMN naming_convention TEXT NULL"))
 
+    # v3.5.0-alpha.172.202 — Deliverable audio override + etichetta ereditata +
+    # link capitolato robusto. Colonne additive + rebuild di
+    # delivery_audio_track_specs (rilassa NOT NULL su delivery_item_id). Delega
+    # allo script di migrazione per evitare duplicazione e includere il rebuild.
+    try:
+        from scripts.migrate_deliverable_audio_label import migrate as _mig_dl_audio
+        _res = _mig_dl_audio(engine)
+        if _res.get("columns_added") or _res.get("audio_track_table_rebuilt"):
+            print(f"[auto-migrate] deliverable audio/label: {_res}")
+    except Exception as e:
+        print(f"[auto-migrate] deliverable audio/label FAILED: {e}")
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
@@ -2168,7 +2180,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.201", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.202", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

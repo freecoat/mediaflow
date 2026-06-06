@@ -55,6 +55,7 @@ def _serialize_track(t: AudioTrackSpec) -> dict:
     return {
         "id": t.id,
         "delivery_item_id": t.delivery_item_id,
+        "job_deliverable_id": t.job_deliverable_id,
         "sort_order": t.sort_order,
         "track_label": t.track_label,
         "channel_config_id": t.channel_config_id,
@@ -757,6 +758,26 @@ async def add_audio_track(
     return _serialize_track(tr)
 
 
+def _fetch_track_tenant_scoped(db: Session, aid: int) -> Optional[AudioTrackSpec]:
+    """Recupera una AudioTrackSpec verificando il tenant tramite il genitore
+    valorizzato — sia esso un DeliveryItem (capitolato) O un JobDeliverable
+    (config audio per-deliverable). Ritorna None se non trovata o cross-tenant."""
+    from app.models.models import JobDeliverable
+    tr = db.query(AudioTrackSpec).filter(AudioTrackSpec.id == aid).first()
+    if not tr:
+        return None
+    tid = current_tenant_id()
+    if tr.delivery_item_id:
+        parent = db.get(DeliveryItem, tr.delivery_item_id)
+        if parent and parent.tenant_id == tid:
+            return tr
+    if tr.job_deliverable_id:
+        parent = db.get(JobDeliverable, tr.job_deliverable_id)
+        if parent and parent.tenant_id == tid:
+            return tr
+    return None
+
+
 @router.put("/delivery-audio-tracks/api/{aid}", dependencies=[RequireEdit])
 async def update_audio_track(
     aid: int,
@@ -772,10 +793,7 @@ async def update_audio_track(
     sort_order: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
-    tr = db.query(AudioTrackSpec).join(DeliveryItem).filter(
-        AudioTrackSpec.id == aid,
-        DeliveryItem.tenant_id == current_tenant_id(),
-    ).first()
+    tr = _fetch_track_tenant_scoped(db, aid)
     if not tr:
         raise HTTPException(404, "AudioTrack non trovato")
     if track_label is not None:       tr.track_label = track_label.strip() or tr.track_label
@@ -795,10 +813,7 @@ async def update_audio_track(
 
 @router.delete("/delivery-audio-tracks/api/{aid}", dependencies=[RequireEdit])
 async def delete_audio_track(aid: int, db: Session = Depends(get_db)):
-    tr = db.query(AudioTrackSpec).join(DeliveryItem).filter(
-        AudioTrackSpec.id == aid,
-        DeliveryItem.tenant_id == current_tenant_id(),
-    ).first()
+    tr = _fetch_track_tenant_scoped(db, aid)
     if not tr:
         raise HTTPException(404, "AudioTrack non trovato")
     db.delete(tr)

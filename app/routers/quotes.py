@@ -270,8 +270,11 @@ def _create_job_from_quote(db: Session, q: Quote, user_id: Optional[int] = None)
                     total_accrued=0.0,
                     total_cost_accrued=0.0,
                     billing_status=DeliverableBillingStatus.not_billed,
-                    # v3.5.0-alpha.172.161 — propaga il punto-di-partenza capitolato.
+                    # α.172.161 — propaga il punto-di-partenza capitolato.
                     delivery_item_id=line.delivery_item_id,
+                    # α.172.202 — propaga template + etichetta alla consegna.
+                    delivery_template_id=line.delivery_template_id,
+                    section_label=line.section_label,
                 ))
     db.flush()  # Necessario: JCL.id + Deliverable.id servono al materialize_schedules
 
@@ -453,6 +456,9 @@ def _respawn_line_artifacts(db: Session, line: QuoteLine, job: Optional[Job]) ->
                 total_cost_accrued=0.0,
                 billing_status=DeliverableBillingStatus.not_billed,
                 delivery_item_id=line.delivery_item_id,  # α.172.161
+                # α.172.202 — propaga template + etichetta al re-spawn.
+                delivery_template_id=line.delivery_template_id,
+                section_label=line.section_label,
             ))
         db.flush()
         return {
@@ -2191,6 +2197,11 @@ async def load_from_template_items(
             is_optional=False,
             section_label=cap_label,
             delivery_item_id=_resolve_delivery_item(pid, opt),
+            # α.172.202 — il link al capitolato è impostato SEMPRE, anche quando
+            # delivery_item_id è None (bucket multi-item senza pick esplicito).
+            # Garantisce che section_label e il template sopravvivano alla
+            # conversione quote→job.
+            delivery_template_id=template_id,
         )
         db.add(line)
         existing_keys.add((item.id, cap_label))

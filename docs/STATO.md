@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.201** — 5 giugno 2026 sera — Content Lockdown + polish timeline (sessione TPN)
+**v3.5.0-alpha.172.202** — 6 giugno 2026 — Deliverable: audio override per-consegna + etichetta ereditata + link capitolato robusto
+
+### α.172.202 ✅ (deliverable audio/label/link — sessione 6 giu, subagent-driven)
+- **Audio override per-deliverable**: `JobDeliverable` += `audio_config_preset_id`/`audio_config_code` + tracce proprie. `AudioTrackSpec` generalizzata (item *o* deliverable, invariante esattamente-uno; NOT NULL su `delivery_item_id` rilassato via table-rebuild SQLite). `apply_audio_config_preset(db, target, preset)` polimorfico. UI: sezione 🔊 Audio nel modal spec planning, preset+CRUD tracce, **apply differito** sul Salva.
+- **Stop perdita link** (priorità Matteo): `QuoteLine` += `delivery_template_id` settato sempre dal bucket-picker; convert (quotes ×2 + reverse_quote) propaga `delivery_template_id`+`section_label`+`delivery_item_id`. Backfill script (orfani attuali = righe listino senza capitolato → 0 link falsi, corretto).
+- **Etichetta + filtro**: `JobDeliverable.section_label` ereditata diretta al convert; serializer espone section_label+broadcaster+template_code; badge 📦 in lista/kanban + filtro.
+- **Fix preindotto** (delivery_templates.html): preset audio item capitolato non più applicato all'istante (era distruttivo su Annulla) → differito sul Salva + solo se cambiato.
+- Migrazione idempotente auto-boot. **464 test** (+4). Backend verificato.
+
+**Prossimo / PENDENTE**: **restart :8000 + browser smoke** (modifiche JS pesanti in planning.html + delivery_templates.html). Da verificare nel browser: (1) capitolato item — cambia preset audio + Annulla → tracce intatte; (2) planning deliverables — badge etichetta in lista/kanban + filtro; (3) modal spec deliverable — sezione Audio, dropdown preset, add/edit/del traccia, apply preset solo sul Salva. Poi commit/push. NON ancora committato.
+
+### α.172.200→201 ✅ (fix bg altezza VERO + rimozione Color by) — vedi sotto
 
 ### α.172.200→201 ✅ (fix bg altezza VERO + rimozione Color by)
 - **.200**: causa misurata via Playwright (lezione: verificare DOM, non indovinare CSS). vis-timeline calcola altezza bg-group dal contenuto label → risorse senza ruolo (sale) avevano bg-group 24px vs 39px persone → barre festività più basse. Fix: label sempre 2 righe (subtitle = tipo risorsa quando manca ruolo). Verificato browser: tutti 39px.

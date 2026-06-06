@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.202 — Deliverable: audio override per-consegna + etichetta ereditata + link capitolato robusto (6 giu 2026)
+
+Tre interventi sulla vista `/planning/?view=deliverables` (Deliverable HUB).
+
+- **Audio override per-deliverable** (selezionabile in planning, non nel capitolato): `JobDeliverable` ora ha `audio_config_preset_id` + `audio_config_code` + tracce proprie. `AudioTrackSpec` generalizzata: appartiene a un `DeliveryItem` (capitolato) **oppure** a un `JobDeliverable` (override), invariante esattamente-uno. `apply_audio_config_preset(db, target, preset)` accetta entrambi. Nel modal spec planning: sezione 🔊 Audio con dropdown preset (preset del capitolato della consegna) + CRUD tracce. **Apply differito** sul Salva (selezione preset NON applica al cambio; Annulla non scrive) — stessa semantica del fix capitolato sotto.
+- **Stop perdita link capitolato** (prevenzione, root cause): `QuoteLine` += `delivery_template_id`, settato **sempre** dal bucket-picker (anche bucket multi-item senza scelta item). Il convert quote→job (`quotes.py` ×2, `reverse_quote.py`) propaga ora `delivery_template_id` + `section_label` oltre a `delivery_item_id` → la consegna mantiene il link al capitolato e l'etichetta anche senza item esplicito. Backfill `scripts/backfill_deliverable_links.py` per consegne storiche (idempotente; gli orfani attuali erano righe listino/free senza capitolato → 0 link falsi).
+- **Etichetta deliverable + filtro**: `JobDeliverable` += `section_label` ereditata diretta dalla QuoteLine al convert. Serializer deliverables espone `section_label` + `broadcaster` + `template_code`. In planning: badge 📦 SKY/NBCU in lista+kanban + filtro per etichetta.
+- **Fix capitolato (preindotto)**: nel modal item capitolato il preset audio veniva applicato **subito** (PUT istantaneo che cancellava le tracce) ignorando Annulla. Ora differito sul Salva, e inviato solo se cambiato (no wipe edit manuali). `delivery_templates.html`.
+- **Migrazione** `scripts/migrate_deliverable_audio_label.py` (idempotente): nuove colonne + rebuild `delivery_audio_track_specs` per rilassare il NOT NULL su `delivery_item_id` (SQLite table-rebuild che preserva dati+indici). Auto-eseguita al boot.
+- **Test**: +4 (`test_deliverable_audio_override.py`). Suite 464 passed.
+
 ## v3.5.0-alpha.172.201 — Rimosso dropdown "Color by" dalla toolbar timeline (5 giu 2026)
 
 - **Toolbar planning**: rimosso il dropdown `Color: stato/cliente/progetto/reparto` (Matteo: "non serve"). Il `<select id="tl-colorby">` resta nel DOM nascosto (`display:none`, value=`status`) per non rompere `tlSetColorBy` chiamata dal restore di `localStorage`. `tlSetColorBy('status')` resta il default attivo (bar colorati per stato).

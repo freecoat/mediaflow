@@ -1030,12 +1030,20 @@ class DeliveryItem(Base):
 
 
 class AudioTrackSpec(Base):
-    """Traccia audio singola richiesta per un DeliveryItem. Un DeliveryItem
-    può richiedere N tracce simultaneamente (Mix + M&E + Stems + Dialogue)."""
+    """Traccia audio singola richiesta per un DeliveryItem (template/capitolato)
+    OPPURE per un JobDeliverable (override per-consegna, α.172.202). Esattamente
+    UNO tra delivery_item_id e job_deliverable_id è valorizzato (invariante
+    applicativa, validata nel service). Un parent può richiedere N tracce
+    simultaneamente (Mix + M&E + Stems + Dialogue)."""
     __tablename__ = "delivery_audio_track_specs"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    delivery_item_id: Mapped[int] = mapped_column(
-        ForeignKey("delivery_items.id"), index=True
+    # α.172.202 — reso nullable: una traccia può appartenere a un DeliveryItem
+    # (capitolato) o a un JobDeliverable (override planning), non entrambi.
+    delivery_item_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_items.id"), index=True, nullable=True
+    )
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), index=True, nullable=True
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     track_label: Mapped[str] = mapped_column(String(120))    # "Mix Theatrical 5.1", "M&E 5.1"
@@ -1053,7 +1061,12 @@ class AudioTrackSpec(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
 
-    delivery_item: Mapped["DeliveryItem"] = relationship(back_populates="audio_tracks")
+    delivery_item: Mapped[Optional["DeliveryItem"]] = relationship(
+        back_populates="audio_tracks", foreign_keys=[delivery_item_id]
+    )
+    job_deliverable: Mapped[Optional["JobDeliverable"]] = relationship(
+        back_populates="audio_tracks", foreign_keys=[job_deliverable_id]
+    )
 
 
 class AudioConfigPreset(Base):
@@ -1916,6 +1929,14 @@ class QuoteLine(Base):
     # o bucket multi-item senza scelta restano senza link (selezionabile in modal).
     delivery_item_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("delivery_items.id"), nullable=True, index=True
+    )
+    # α.172.202 — Link al capitolato (DeliveryTemplate) della riga-bucket,
+    # settato SEMPRE dal picker anche per bucket multi-item senza scelta item
+    # esplicita. Così il link al capitolato (e l'etichetta) sopravvive al convert
+    # quote→job anche quando delivery_item_id resta NULL. Si propaga a
+    # JobDeliverable.delivery_template_id. Risolve la perdita di link storica.
+    delivery_template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("delivery_templates.id"), nullable=True, index=True
     )
     # v3.4.39 — Eredità riga-per-riga nelle nuove versioni di quote.
     # Quando una Quote V2 è creata da V1 (new-version), ogni riga di V2 ha
@@ -3386,6 +3407,18 @@ class JobDeliverable(Base):
     delivery_item_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("delivery_items.id"), nullable=True, index=True,
     )
+    # α.172.202 — Override audio per-consegna, selezionabile in planning.
+    # Indipendente dal preset del DeliveryItem (capitolato): il producer può
+    # scegliere qui un preset diverso senza toccare il capitolato condiviso.
+    # Le tracce concrete vivono in AudioTrackSpec con job_deliverable_id set.
+    audio_config_preset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("audio_config_presets.id"), nullable=True
+    )
+    audio_config_code: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # α.172.202 — Etichetta sezione (es. "SKY", "NBCU") ereditata diretta dalla
+    # QuoteLine sorgente al convert. Denormalizzata per badge + filtro in planning
+    # deliverables senza join sulla quote (che può essere modificata/cestinata).
+    section_label: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
     spec_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Produzione
     primary_resource_id: Mapped[Optional[int]] = mapped_column(
@@ -3502,6 +3535,15 @@ class JobDeliverable(Base):
 
     # v3.5.0-alpha.172.13 — relationship esplicita per filtri CR (department/category)
     price_item: Mapped[Optional["PriceItem"]] = relationship(foreign_keys=[price_item_id])
+    # α.172.202 — audio override per-consegna
+    audio_tracks: Mapped[List["AudioTrackSpec"]] = relationship(
+        back_populates="job_deliverable",
+        foreign_keys="AudioTrackSpec.job_deliverable_id",
+        cascade="all, delete-orphan",
+    )
+    audio_config_preset: Mapped[Optional["AudioConfigPreset"]] = relationship(
+        foreign_keys=[audio_config_preset_id]
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────

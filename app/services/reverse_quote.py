@@ -247,6 +247,9 @@ def attach_to_pending_quote(
                     total_cost_accrued=0.0,
                     billing_status=DeliverableBillingStatus.not_billed,
                     delivery_item_id=line.delivery_item_id,  # α.172.161
+                    # α.172.202 — propaga template + etichetta (reverse-flow).
+                    delivery_template_id=line.delivery_template_id,
+                    section_label=line.section_label,
                 )
                 db.add(d); db.flush()
                 spawned_deliverables.append(d.id)

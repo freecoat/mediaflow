@@ -506,8 +506,31 @@ async def delete_cost_line(job_id: int, line_id: int, request: Request, db: Sess
 # CRUD base. UI completa (kanban, modal spec, link asset DAM, copilot QC)
 # in α.66.10+.
 
-def _serialize_deliverable(d: JobDeliverable) -> dict:
-    return {
+def _serialize_track_jd(t) -> dict:
+    """Serializza una AudioTrackSpec riusando il serializer di delivery_items
+    (single source). Import lazy per evitare cicli a import-time."""
+    from app.routers.delivery_items import _serialize_track
+    return _serialize_track(t)
+
+
+def _resolve_deliverable_template(db: Optional[Session], d: JobDeliverable):
+    """Risolve il DeliveryTemplate del capitolato di riferimento:
+    diretto via d.delivery_template_id, altrimenti via d.delivery_item.delivery_template_id.
+    Ritorna il DeliveryTemplate o None. Richiede db per il lookup."""
+    if db is None:
+        return None
+    tid = d.delivery_template_id
+    if not tid and d.delivery_item_id:
+        di = db.get(DeliveryItem, d.delivery_item_id)
+        tid = di.delivery_template_id if di else None
+    if not tid:
+        return None
+    return db.get(DeliveryTemplate, tid)
+
+
+def _serialize_deliverable(d: JobDeliverable, db: Optional[Session] = None) -> dict:
+    tpl = _resolve_deliverable_template(db, d)
+    out = {
         "id": d.id,
         "job_id": d.job_id,
         "job_cost_line_id": d.job_cost_line_id,
@@ -522,6 +545,16 @@ def _serialize_deliverable(d: JobDeliverable) -> dict:
         # v3.5.0-alpha.172.160 (Bug B) — FK al DeliveryItem capitolato strutturato,
         # serve alla modal planning per mostrare/editare le specs con selettori taxonomy.
         "delivery_item_id": d.delivery_item_id,
+        # α.172.202 — config audio per-deliverable + label sezione/capitolato.
+        "section_label": d.section_label,
+        "broadcaster": tpl.broadcaster if tpl else None,
+        "template_code": tpl.code if tpl else None,
+        "audio_config_preset_id": d.audio_config_preset_id,
+        "audio_config_code": d.audio_config_code,
+        "audio_tracks": [
+            _serialize_track_jd(t) for t in
+            sorted(d.audio_tracks or [], key=lambda x: x.sort_order)
+        ],
         "spec_json": d.spec_json or {},
         "primary_resource_id": d.primary_resource_id,
         "estimated_hours": d.estimated_hours,
@@ -536,6 +569,7 @@ def _serialize_deliverable(d: JobDeliverable) -> dict:
         "notes": d.notes,
         "created_at": d.created_at.isoformat() + "Z" if d.created_at else None,
     }
+    return out
 
 
 def _compute_actual_hours(db: Session, deliverable_id: int) -> float:
@@ -697,9 +731,34 @@ async def list_deliverables_tenant_wide(
         ):
             quote_map[qid] = qnum
 
+    # α.172.202 — risoluzione batch broadcaster/template_code per evitare N+1.
+    # template diretto (delivery_template_id) o via delivery_item.delivery_template_id.
+    di_ids = {d.delivery_item_id for d, _, _ in rows if d.delivery_item_id and not d.delivery_template_id}
+    di_tpl: dict[int, Optional[int]] = {}
+    if di_ids:
+        for iid, tplid in (
+            db.query(DeliveryItem.id, DeliveryItem.delivery_template_id)
+            .filter(DeliveryItem.id.in_(di_ids)).all()
+        ):
+            di_tpl[iid] = tplid
+    tpl_ids = {d.delivery_template_id for d, _, _ in rows if d.delivery_template_id}
+    tpl_ids |= {t for t in di_tpl.values() if t}
+    tpl_map: dict[int, tuple] = {}
+    if tpl_ids:
+        for tid_, bc, code in (
+            db.query(DeliveryTemplate.id, DeliveryTemplate.broadcaster, DeliveryTemplate.code)
+            .filter(DeliveryTemplate.id.in_(tpl_ids)).all()
+        ):
+            tpl_map[tid_] = (bc, code)
+
     out = []
     for d, j, p in rows:
+        # db=None: skip lookup per-row, valorizziamo broadcaster/template_code dal batch.
         rec = _serialize_deliverable(d)
+        _tplid = d.delivery_template_id or (di_tpl.get(d.delivery_item_id) if d.delivery_item_id else None)
+        _bc, _code = tpl_map.get(_tplid, (None, None)) if _tplid else (None, None)
+        rec["broadcaster"] = _bc
+        rec["template_code"] = _code
         rec["job_id"] = j.id
         rec["job_code"] = j.code
         rec["job_title"] = j.title
@@ -742,7 +801,7 @@ async def list_deliverables(
     items = q.order_by(JobDeliverable.target_delivery_date.asc(), JobDeliverable.id.asc()).all()
     out = []
     for d in items:
-        rec = _serialize_deliverable(d)
+        rec = _serialize_deliverable(d, db)
         rec["actual_hours"] = _compute_actual_hours(db, d.id)
         out.append(rec)
     return out
@@ -846,7 +905,7 @@ async def create_deliverable(
     return {
         "ok": True,
         "created": len(created),
-        "deliverables": [_serialize_deliverable(d) for d in created],
+        "deliverables": [_serialize_deliverable(d, db) for d in created],
     }
 
 
@@ -858,10 +917,85 @@ async def get_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
     ).first()
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
-    rec = _serialize_deliverable(d)
+    rec = _serialize_deliverable(d, db)
     rec["actual_hours"] = _compute_actual_hours(db, d.id)
     rec["internal_hardcost"] = _compute_internal_hardcost(db, d.id)
     return rec
+
+
+# ── Audio config per-deliverable (α.172.202) ──────────────────
+
+@router.get("/api/deliverables/{deliverable_id}/audio-presets")
+async def deliverable_audio_presets(deliverable_id: int, db: Session = Depends(get_db)):
+    """Lista AudioConfigPreset disponibili per il capitolato del deliverable.
+    Template risolto via delivery_template_id o delivery_item.delivery_template_id.
+    Se nessun template → lista vuota."""
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    tpl = _resolve_deliverable_template(db, d)
+    if not tpl:
+        return []
+    from app.models.models import AudioConfigPreset
+    rows = (db.query(AudioConfigPreset)
+            .filter(AudioConfigPreset.delivery_template_id == tpl.id,
+                    AudioConfigPreset.tenant_id == current_tenant_id(),
+                    AudioConfigPreset.is_active == True)  # noqa: E712
+            .order_by(AudioConfigPreset.sort_order, AudioConfigPreset.code)
+            .all())
+    return [{"id": p.id, "code": p.code, "name": p.name} for p in rows]
+
+
+@router.post("/api/deliverables/{deliverable_id}/audio-tracks")
+async def add_deliverable_audio_track(
+    deliverable_id: int,
+    request: Request,
+    track_label: str = Form(...),
+    channel_config_id: Optional[int] = Form(None),
+    mix_type_id: Optional[int] = Form(None),
+    mix_standard_id: Optional[int] = Form(None),
+    audio_codec_id: Optional[int] = Form(None),
+    sample_rate_hz: Optional[int] = Form(None),
+    bit_depth: Optional[int] = Form(None),
+    is_optional: bool = Form(False),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Crea una AudioTrackSpec OWNED dal deliverable (job_deliverable_id)."""
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente")
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+    from app.models.models import AudioTrackSpec
+    last = db.query(AudioTrackSpec).filter(
+        AudioTrackSpec.job_deliverable_id == deliverable_id
+    ).count() * 10
+    tr = AudioTrackSpec(
+        job_deliverable_id=deliverable_id,
+        sort_order=last,
+        track_label=track_label.strip(),
+        channel_config_id=channel_config_id or None,
+        mix_type_id=mix_type_id or None,
+        mix_standard_id=mix_standard_id or None,
+        audio_codec_id=audio_codec_id or None,
+        sample_rate_hz=sample_rate_hz or None,
+        bit_depth=bit_depth or None,
+        is_optional=is_optional,
+        notes=notes.strip() if notes else None,
+    )
+    db.add(tr)
+    db.commit()
+    db.refresh(tr)
+    return _serialize_track_jd(tr)
 
 
 @router.post("/api/deliverables/{deliverable_id}/qc-compare")
@@ -912,6 +1046,9 @@ async def update_deliverable(
     notes: Optional[str] = Form(None),
     digital_asset_id: Optional[int] = Form(None),
     physical_asset_id: Optional[int] = Form(None),
+    # α.172.202 — config audio per-deliverable. str (non int) per distinguere
+    # "" (clear esplicito) da assente (None → no-op).
+    audio_config_preset_id: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     from app.services.rbac import current_user_optional, has_permission
@@ -1065,8 +1202,37 @@ async def update_deliverable(
         if physical_asset_id:
             d.asset_locked_at = now_utc()
 
+    # α.172.202 — config audio per-deliverable (preset + tracce concrete).
+    # "" → clear (preset/code a None, tracce lasciate invariate).
+    # id numerico → valida ownership template + materializza tracce.
+    if audio_config_preset_id is not None:
+        raw = str(audio_config_preset_id).strip()
+        if raw in ("", "0"):
+            d.audio_config_preset_id = None
+            d.audio_config_code = None
+        else:
+            try:
+                pid = int(raw)
+            except ValueError:
+                raise HTTPException(400, f"audio_config_preset_id non valido: {raw}")
+            from app.models.models import AudioConfigPreset
+            from app.services.audio_config_service import apply_audio_config_preset
+            preset = (db.query(AudioConfigPreset)
+                      .filter(AudioConfigPreset.id == pid,
+                              AudioConfigPreset.tenant_id == current_tenant_id())
+                      .first())
+            if not preset:
+                raise HTTPException(404, "AudioConfigPreset non trovato")
+            tpl = _resolve_deliverable_template(db, d)
+            if not tpl or preset.delivery_template_id != tpl.id:
+                raise HTTPException(
+                    400,
+                    "AudioConfigPreset non appartiene al capitolato del deliverable",
+                )
+            apply_audio_config_preset(db, d, preset)
+
     db.commit()
-    payload = _serialize_deliverable(d)
+    payload = _serialize_deliverable(d, db)
     if triggered_qc_cascade:
         payload["qc_cascade"] = triggered_qc_cascade
     return payload

@@ -1538,7 +1538,7 @@ async function openItemEditor(item, tid) {
     cfgRow.innerHTML = `
       <label style="font-size:11px;color:var(--text3);text-transform:uppercase;">Audio config preset</label>
       <select class="form-select" id="item-audio-config"><option value="">—</option></select>
-      <span style="font-size:11px;color:var(--text3);">Applicato subito: sostituisce le tracce dell'item.</span>`;
+      <span style="font-size:11px;color:var(--text3);">Applicato al salvataggio: sostituisce le tracce dell'item. Annulla ripristina.</span>`;
     audioSec.appendChild(cfgRow);
   }
 
@@ -1603,8 +1603,14 @@ async function openItemEditor(item, tid) {
   }
   renderAudioRows();
 
-  // Popola i preset + handler apply reattivo (dopo che il select è nel DOM).
+  // Popola i preset. NON applica al cambio: la selezione è solo stato del form
+  // e viene applicata su "Salva modifiche" (semantica modal, Annulla ripristina).
+  // _initialPreset memorizza il valore all'apertura per inviare il preset al save
+  // SOLO se è cambiato — evita di ri-materializzare (e quindi cancellare eventuali
+  // modifiche manuali alle tracce) quando l'utente non ha toccato il dropdown.
+  let _initialPreset = '';
   if (!isNew) {
+    _initialPreset = v.audio_config_preset_id != null ? String(v.audio_config_preset_id) : '';
     const templateId = v.delivery_template_id || tid;
     if (templateId) {
       api('GET', `/delivery-templates/api/${templateId}/audio-presets`).then(presets => {
@@ -1613,28 +1619,6 @@ async function openItemEditor(item, tid) {
         sel.innerHTML = '<option value="">—</option>' + (presets || []).map(p =>
           `<option value="${p.id}"${p.id === v.audio_config_preset_id ? ' selected' : ''}>${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`
         ).join('');
-        let _prevPreset = sel.value;
-        sel.onchange = async () => {
-          const pid = sel.value;
-          if ((itemFull.audio_tracks || []).length && pid &&
-              !confirm('Applicare il preset SOSTITUISCE le tracce audio esistenti di questo item. Procedere?')) {
-            sel.value = _prevPreset; return;
-          }
-          try {
-            const fd = new FormData();
-            fd.append('audio_config_preset_id', pid);
-            const r = await fetch(`/delivery-items/api/${itemFull.id}`, { method: 'PUT', body: fd, credentials: 'same-origin' });
-            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'Errore'); }
-            itemFull = await api('GET', `/delivery-items/api/${itemFull.id}`);
-            renderAudioRows();
-            audioLbl.textContent = `🔊 Audio tracks (${(itemFull.audio_tracks||[]).length})`;
-            _prevPreset = pid;
-            toast(pid ? 'Preset applicato' : 'Preset rimosso', 'success', 1500);
-          } catch(e) {
-            sel.value = _prevPreset;
-            toast(`Errore apply preset: ${e.message||''}`, 'error', 3000);
-          }
-        };
       }).catch(() => {});
     }
   }
@@ -1738,8 +1722,19 @@ async function openItemEditor(item, tid) {
     // senza segmenti propri e continua a ereditare dal template. Altrimenti i propri.
     const _tlOut = itemTlInherited ? [] : (itemTl ? itemTl.collect() : []);
     fd.append('timeline_segments_json', JSON.stringify(_tlOut));
+    // Preset audio: invia SOLO se cambiato dall'apertura. Così un salvataggio che
+    // non tocca il preset non ri-materializza le tracce (e non cancella eventuali
+    // edit manuali). Se cambiato e ci sono tracce esistenti, conferma sostituzione.
     const audioConfigSel = document.getElementById('item-audio-config');
-    if (audioConfigSel) fd.append('audio_config_preset_id', audioConfigSel.value);
+    if (audioConfigSel && audioConfigSel.value !== _initialPreset) {
+      if (audioConfigSel.value && (itemFull.audio_tracks || []).length &&
+          !confirm('Applicare il preset SOSTITUISCE le tracce audio esistenti di questo item. Procedere?')) {
+        return;
+      }
+      // α.172.202 — un campo multipart vuoto arriva come None lato server (no-op):
+      // per RIMUOVERE il preset si manda il sentinel '0' (gestito come clear).
+      fd.append('audio_config_preset_id', audioConfigSel.value === '' ? '0' : audioConfigSel.value);
+    }
     try {
       const url = isNew
         ? `/delivery-templates/api/${tid}/items`
