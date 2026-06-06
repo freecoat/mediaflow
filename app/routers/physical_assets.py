@@ -13,18 +13,20 @@ Pattern d'uso:
 - Lega a JobDeliverable quando rappresenta "il file/supporto finale".
 """
 from app.services.clock import now_utc
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from app.database import get_db
 from app.models import (
-    PhysicalAsset, PhysicalAssetKind, JobDeliverable, Job, Project, Client, User,
+    PhysicalAsset, PhysicalAssetKind,
+    JobDeliverable, Job, Project, Client, User,
     AssetMovement, AssetMovementType, AssetOwnerType, Supplier,
     AssetMembership, Asset,
 )
+from app.models.models import PhysicalAssetCondition
 from app.context import current_tenant_id
 
 router = APIRouter(prefix="/physical-assets", tags=["physical_assets"])
@@ -77,6 +79,7 @@ def _serialize(a: PhysicalAsset) -> dict:
         "checksum_xxhash": a.checksum_xxhash,
         "last_verified_at": a.last_verified_at.isoformat() + "Z" if a.last_verified_at else None,
         "next_verification_due": a.next_verification_due.isoformat() if a.next_verification_due else None,
+        "verification_overdue": bool(a.next_verification_due and a.next_verification_due < date.today()),
         "notes": a.notes,
         "created_at": a.created_at.isoformat() + "Z" if a.created_at else None,
         "deleted_at": a.deleted_at.isoformat() + "Z" if a.deleted_at else None,
@@ -103,6 +106,7 @@ async def list_physical_assets(
     to_date: Optional[date] = None,
     only_internal_archive: bool = False,
     only_delivered_external: bool = False,
+    overdue_only: bool = False,
     include_deleted: bool = False,
     limit: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -146,6 +150,8 @@ async def list_physical_assets(
         query = query.filter(PhysicalAsset.is_internal_archive == True)  # noqa: E712
     if only_delivered_external:
         query = query.filter(PhysicalAsset.is_delivered_external == True)  # noqa: E712
+    if overdue_only:
+        query = query.filter(PhysicalAsset.next_verification_due < date.today())
     query = query.order_by(PhysicalAsset.created_at.desc())
     # v3.5.0-alpha.93 — limit per UI compatte (modal Shipment selector).
     if limit and limit > 0:
@@ -413,6 +419,35 @@ def _parse_datetime(s: Optional[str]) -> Optional[datetime]:
             raise HTTPException(400, f"Datetime {s!r} non valido")
 
 
+_CONDITION_VALUES = {c.value for c in PhysicalAssetCondition}
+_CONDITION_SYNONYMS = {
+    "ok": "verified",
+    "good": "verified",
+    "valid": "verified",
+    "bad": "failed",
+    "broken": "failed",
+    "dead": "failed",
+    "damaged": "degraded",
+    "worn": "degraded",
+    "doubt": "suspect",
+    "doubtful": "suspect",
+    "unverified": "unknown",
+    "": "unknown",
+}
+
+
+def _normalize_condition(s: Optional[str], default: str = "unknown") -> str:
+    """Normalizza il valore `condition` al vocabolario PhysicalAssetCondition.
+    Tollerante: lowercased + mappa sinonimi noti; se resta fuori dal set lo
+    conserva comunque lowercased (no 400). None/vuoto → default."""
+    if s is None:
+        return default
+    v = s.strip().lower()
+    if not v:
+        return default
+    return _CONDITION_SYNONYMS.get(v, v)
+
+
 def _require_perm(request: Request, perm: str = "edit_planning_all"):
     """Riusa permessi esistenti — chi può creare booking/assegnare risorse
     può anche gestire asset fisici (sono parte del workflow di consegna).
@@ -487,7 +522,7 @@ async def create_physical_asset(
         barcode=(barcode or "").strip()[:120] or None,
         capacity_gb=capacity_gb,
         used_gb=used_gb,
-        condition=(condition or "").strip()[:40] or None,
+        condition=_normalize_condition(condition, default="unknown")[:40],
         location=(location or "").strip()[:255] or None,
         custodian_user_id=custodian_user_id or None,
         is_internal_archive=is_internal_archive,
@@ -566,7 +601,7 @@ async def update_physical_asset(
     if barcode is not None: a.barcode = barcode.strip()[:120] or None
     if capacity_gb is not None: a.capacity_gb = capacity_gb
     if used_gb is not None: a.used_gb = used_gb
-    if condition is not None: a.condition = condition.strip()[:40] or None
+    if condition is not None: a.condition = _normalize_condition(condition)[:40]
     if location is not None: a.location = location.strip()[:255] or None
     if custodian_user_id is not None: a.custodian_user_id = custodian_user_id or None
     if is_internal_archive is not None: a.is_internal_archive = is_internal_archive
@@ -623,6 +658,39 @@ async def restore_physical_asset(
         raise HTTPException(404, "Asset fisico non trovato")
     a.deleted_at = None
     db.commit()
+    return _serialize(a)
+
+
+@router.post("/api/{asset_id}/verify")
+async def verify_physical_asset(
+    asset_id: int,
+    request: Request,
+    condition: Optional[str] = Form("verified"),
+    interval_months: Optional[int] = Form(12),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Registra una verifica di integrità del supporto: aggiorna condition,
+    last_verified_at e calcola la prossima scadenza di verifica.
+    `condition` è normalizzata al vocabolario PhysicalAssetCondition
+    (default 'verified'). `next_verification_due` è approssimata a
+    interval_months * 30 giorni dall'oggi (approssimazione accettabile,
+    non calendario esatto)."""
+    _require_perm(request)
+    a = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id,
+        PhysicalAsset.tenant_id == current_tenant_id(),
+    ).first()
+    if not a:
+        raise HTTPException(404, "Asset fisico non trovato")
+    a.condition = _normalize_condition(condition, default="verified")[:40]
+    a.last_verified_at = now_utc()
+    months = interval_months if (interval_months and interval_months > 0) else 12
+    # Approssimazione: ~30 giorni/mese (non calendario esatto).
+    a.next_verification_due = date.today() + timedelta(days=months * 30)
+    if notes:
+        a.notes = notes.strip() or None
+    db.commit(); db.refresh(a)
     return _serialize(a)
 
 
@@ -1964,8 +2032,16 @@ async def assets_inout_page(request: Request, db: Session = Depends(get_db)):
 @router.get("/scan/{token}", response_class=HTMLResponse)
 async def scan_asset(token: str, request: Request, db: Session = Depends(get_db)):
     """Mobile-friendly page raggiunta da QR scan. Mostra dettaglio asset
-    + ultimo movimento. NO access control duro per scope corrente (QR è
-    in possesso fisico del supporto). Future: integrare access check TPN."""
+    + ultimo movimento. Autenticazione richiesta: la pagina espone
+    project/owner_client/serial/location, quindi un utente loggato è
+    obbligatorio (non basta il possesso fisico del QR). Future: access
+    check TPN granulare per-asset."""
+    user = getattr(request.state, "current_user", None)
+    if not user:
+        return RedirectResponse(
+            url=f"/auth/login?next=/physical-assets/scan/{token}",
+            status_code=302,
+        )
     a = db.query(PhysicalAsset).filter(
         PhysicalAsset.qr_code_token == token,
         PhysicalAsset.tenant_id == current_tenant_id(),

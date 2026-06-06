@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.206** — 6 giugno 2026 — Unificazione link deliverable↔asset (audit B)
+**v3.5.0-alpha.172.207** — 6 giugno 2026 — Audit fisico: volume TB + auth QR + lifecycle media (D+E+F)
+
+### α.172.207 ✅ (audit fisico D+E+F — 6 giu, subagent-driven)
+- **D**: ingest MHL → consegna `deliverable_volume` incrementa per TB reali (helper `_volume_increment`, 10 test), `pc` resta +1.
+- **E**: scan QR `/physical-assets/scan/{token}` ora richiede login (redirect), chiuso il leak TPN.
+- **F**: enum `PhysicalAssetCondition`; endpoint `/verify` (last_verified_at + next_verification_due); serializer `verification_overdue` + lista `overdue_only`; UI dropdown condizione + badge "verifica scaduta" + filtro + "Segna verificato".
+- 480 test (+10). Smoke verde. **Audit legame deliverable↔asset fisici COMPLETO** (A/C + B + D/E/F). Push fatto.
+- Residui minori (non bloccanti): ai-extract pass-2 campi fisici; orphan PhysicalAsset.job_deliverable_id su hard-delete; clear link primario UI ('' gotcha → unlink); per-file AssetMembership da MHL.
+
+### α.172.206 — Unificazione link deliverable↔asset (audit B)
 
 ### α.172.206 ✅ (unif. link deliverable↔asset — nodo B audit — 6 giu, subagent-driven)
 - Sync-as-cache: `DeliverableAsset` (M:N) fonte di verità; servizio `deliverable_assets.py` (`link_asset`/`unlink_asset`) deduplica pivot + risincronizza i FK cache (primario = ultimo confermato, no qc_report). Tutti i write-site instradati (confirm/update/qc-report/ingest/qc-cascade). FK readers invariati, desync impossibile.

@@ -28,6 +28,7 @@ from app.models import (
     DeliverableStatus, AssetOwnerType,
     Job, Project,
 )
+from app.models.models import DeliverableUnitNature
 from app.services.rbac import current_user_optional, has_permission
 from app.context import current_tenant_id
 from app.services.mhl_parser import parse_mhl_bytes, parse_csv_lto_bytes
@@ -81,6 +82,28 @@ def _spawn_physical_asset_from_parsed(
     )
     db.add(pa); db.flush()
     return pa
+
+
+def _volume_increment(deliverable: JobDeliverable, total_size_bytes: int) -> float:
+    """Calcola l'incremento di quantity_delivered per un ingest MHL/CSV.
+
+    - Se il deliverable è di tipo volume (TB): converte total_size_bytes in TB
+      e applica un cap per non superare quantity_planned.
+    - Altrimenti (pc/qty): flat +1.0, cappato a ciò che manca.
+
+    Restituisce 0.0 se non c'è spazio (delivered >= planned).
+    """
+    planned = deliverable.quantity_planned or 0.0
+    current = deliverable.quantity_delivered or 0.0
+    remaining = max(0.0, planned - current)
+    if remaining <= 0.0:
+        return 0.0
+
+    if deliverable.unit_nature == DeliverableUnitNature.deliverable_volume:
+        tb = round((total_size_bytes or 0) / 1e12, 4)
+        return min(tb, remaining)
+    else:
+        return min(1.0, remaining)
 
 
 def _process_ingest(
@@ -138,10 +161,11 @@ def _process_ingest(
             user_id=user.id if user else None,
             notes=f"Auto-ingest {parsed['n_files']} file da {source}",
         )
-        # Auto-confirm 1 unità (la "cassetta" = 1 piece consegnata)
-        # Idempotente: solo se quantity_delivered < quantity_planned
-        if (deliverable.quantity_delivered or 0) < (deliverable.quantity_planned or 0):
-            deliverable.quantity_delivered = (deliverable.quantity_delivered or 0) + 1.0
+        # Auto-confirm quantità: +TB per volume, +1 per pezzi.
+        # Idempotente: _volume_increment restituisce 0 se delivered >= planned.
+        inc = _volume_increment(deliverable, parsed["total_size_bytes"] or 0)
+        if inc > 0:
+            deliverable.quantity_delivered = (deliverable.quantity_delivered or 0) + inc
             if deliverable.confirmed_at is None:
                 deliverable.confirmed_at = now_utc()
                 deliverable.confirmed_by_user_id = user.id if user else None
@@ -151,7 +175,7 @@ def _process_ingest(
             else:
                 deliverable.status = DeliverableStatus.in_progress
             # FK cache physical_asset_id già risincronizzato da link_asset sopra.
-            confirmed_qty = 1
+            confirmed_qty = inc
             recompute_deliverable_cost(db, deliverable)
 
     db.commit()

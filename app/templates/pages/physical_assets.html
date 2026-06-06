@@ -42,6 +42,10 @@
     <label class="text-sm" style="display:flex; align-items:center; gap:6px;">
       <input type="checkbox" id="f-deleted" onchange="loadAssets()"> Mostra cestino
     </label>
+    <label class="text-sm" style="display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" id="f-overdue" onchange="loadAssets()">
+      <span style="color:var(--rose);font-weight:500;">⚠ Solo verifica scaduta</span>
+    </label>
     <span style="flex:1;"></span>
     <span id="count-info" class="text-sm text-muted"></span>
   </div>
@@ -59,11 +63,12 @@
           <th data-i18n="col.location">Location</th>
           <th data-i18n="col.status">Stato</th>
           <th data-i18n="col.delivery">Consegna</th>
+          <th data-i18n="col.verification">Verifica</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="assets-tbody">
-        <tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;">Caricamento…</td></tr>
+        <tr><td colspan="9" class="text-muted" style="text-align:center;padding:30px;">Caricamento…</td></tr>
       </tbody>
     </table>
   </div>
@@ -107,11 +112,12 @@
           <input class="form-input" id="pa-cost" type="number" step="0.01" min="0" placeholder="es. 80"></div>
         <div class="form-group" style="max-width:160px;"><label class="form-label">Condizione</label>
           <select class="form-select" id="pa-condition">
-            <option value="">— non specificato —</option>
-            <option value="new">Nuovo</option>
+            <option value="">—</option>
+            <option value="unknown">Sconosciuto</option>
             <option value="verified">Verificato</option>
             <option value="suspect">Sospetto</option>
-            <option value="retired">Dismesso</option>
+            <option value="degraded">Degradato</option>
+            <option value="failed">Fallito</option>
           </select></div>
       </div>
       <div class="form-group"><label class="form-label">Location fisica</label>
@@ -191,8 +197,9 @@
       </details>
     </div>
     <div class="modal-footer">
-      <div style="flex:1;">
+      <div style="flex:1;display:flex;gap:8px;align-items:center;">
         <button class="btn btn-ghost btn-sm" id="pa-delete-btn" onclick="deletePhysicalAsset()" style="display:none;color:var(--rose);"><i data-lucide="trash-2" style="width:14px;height:14px;vertical-align:-2px;"></i> Sposta nel cestino</button>
+        <button class="btn btn-ghost btn-sm" id="pa-verify-btn" onclick="openVerifyFromEdit()" style="display:none;color:var(--green);">✓ Segna verificato</button>
       </div>
       <button class="btn btn-secondary" onclick="closeModal('modal-physical-asset')">Annulla</button>
       <button class="btn btn-primary" onclick="savePhysicalAsset()">Salva</button>
@@ -384,14 +391,50 @@
     </div>
   </div>
 </div>
+<!-- Modal verifica integrità rapida -->
+<div class="modal-overlay" id="modal-verify">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">✓ Segna verificato</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-verify')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="vfy-asset-id">
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">Condizione riscontrata</label>
+          <select class="form-select" id="vfy-condition">
+            <option value="verified">Verificato</option>
+            <option value="unknown">Sconosciuto</option>
+            <option value="suspect">Sospetto</option>
+            <option value="degraded">Degradato</option>
+            <option value="failed">Fallito</option>
+          </select>
+        </div>
+        <div class="form-group" style="max-width:130px;">
+          <label class="form-label">Prossima verifica (mesi)</label>
+          <input class="form-input" id="vfy-interval" type="number" min="1" max="120" value="12">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note (opzionale)</label>
+        <textarea class="form-input" id="vfy-notes" rows="2" placeholder="es. Lettura OK, no bad blocks"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-verify')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitVerify()">✓ Conferma verifica</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 const KIND_LABEL = {lto:'LTO', hdd:'HDD', cru:'CRU', bluray:'Blu-Ray', dvd:'DVD', case:'Case', other:'Altro'};
 const KIND_COLOR = {lto:'#0ea5e9', hdd:'#22c55e', cru:'#f59e0b', bluray:'#a855f7', dvd:'#6366f1', case:'#9ca3af', other:'#6b7280'};
-const COND_LABEL = {new:'Nuovo', verified:'Verificato', suspect:'Sospetto', retired:'Dismesso'};
-const COND_COLOR = {new:'#22c55e', verified:'#3b82f6', suspect:'#f59e0b', retired:'#9ca3af'};
+const COND_LABEL = {unknown:'Sconosciuto', verified:'Verificato', suspect:'Sospetto', degraded:'Degradato', failed:'Fallito'};
+const COND_COLOR = {unknown:'#9ca3af', verified:'#3b82f6', suspect:'#f59e0b', degraded:'#f97316', failed:'#ef4444'};
 
 async function loadAssets() {
   const params = new URLSearchParams();
@@ -408,19 +451,20 @@ async function loadAssets() {
   if (document.getElementById('f-internal').checked) params.set('only_internal_archive', 'true');
   if (document.getElementById('f-delivered').checked) params.set('only_delivered_external', 'true');
   if (document.getElementById('f-deleted').checked) params.set('include_deleted', 'true');
+  if (document.getElementById('f-overdue').checked) params.set('overdue_only', 'true');
   const tbody = document.getElementById('assets-tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;">Caricamento…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:30px;">Caricamento…</td></tr>';
   try {
     const list = await api('GET', '/physical-assets/api?' + params.toString());
     document.getElementById('count-info').textContent = `${list.length} asset`;
     if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;">Nessun asset fisico. Crea il primo con "+ Nuovo asset fisico".</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:30px;">Nessun asset fisico. Crea il primo con "+ Nuovo asset fisico".</td></tr>';
       return;
     }
     tbody.innerHTML = list.map(a => renderRow(a)).join('');
     if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-muted" style="text-align:center;padding:30px;color:var(--rose);">${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="text-muted" style="text-align:center;padding:30px;color:var(--rose);">${e.message}</td></tr>`;
   }
 }
 
@@ -430,6 +474,7 @@ function renderRow(a) {
   const cap = a.capacity_gb ? `${a.capacity_gb >= 1000 ? (a.capacity_gb/1000).toFixed(1)+'TB' : a.capacity_gb+'GB'}${a.used_gb ? ' · '+(a.used_gb >= 1000 ? (a.used_gb/1000).toFixed(1)+'TB' : a.used_gb+'GB')+' usati' : ''}` : '—';
   const loc = a.location || '—';
   const condBadge = a.condition ? `<span style="display:inline-block;padding:1px 6px;border-radius:3px;background:${COND_COLOR[a.condition]||'#6b7280'};color:#fff;font-size:10px;">${COND_LABEL[a.condition]||a.condition}</span>` : '';
+  const overdueBadge = a.verification_overdue ? `<span style="display:inline-block;padding:1px 7px;border-radius:3px;background:rgba(239,68,68,0.15);color:#ef4444;font-size:10px;font-weight:600;margin-left:4px;">⚠ verifica scaduta</span>` : '';
   let statusFlags = '';
   if (a.is_internal_archive) statusFlags += `<span class="text-xs text-muted" title="Archivio interno">📦</span> `;
   if (a.is_delivered_external) statusFlags += `<span class="text-xs" title="Consegnato a ${a.delivered_to||'cliente'}" style="color:#0ea5e9;">📤</span> `;
@@ -439,32 +484,47 @@ function renderRow(a) {
     const tracking = a.tracking_number ? ` · <code style="font-size:10px;">${escapeHtml(a.tracking_number)}</code>` : '';
     delivery = `<div style="font-size:12px;"><b>${escapeHtml(a.delivered_to || '?')}</b><br/><span class="text-muted">${date} ${escapeHtml(a.courier||'')}</span>${tracking}</div>`;
   }
+  let verifyCell = '—';
+  if (a.last_verified_at || a.next_verification_due) {
+    const lastTxt = a.last_verified_at ? new Date(a.last_verified_at).toLocaleDateString('it-IT') : '?';
+    const nextTxt = a.next_verification_due ? new Date(a.next_verification_due).toLocaleDateString('it-IT') : '?';
+    verifyCell = `<div style="font-size:11px;line-height:1.4;"><span class="text-muted">ult. ${lastTxt}</span><br/><span style="color:${a.verification_overdue ? '#ef4444' : 'var(--text2)'};">pros. ${nextTxt}</span></div>`;
+  }
   const opacity = a.deleted_at ? 'opacity:0.45;' : '';
   return `
     <tr style="cursor:pointer;${opacity}" onclick='openEditPhysicalAsset(${a.id})'>
       <td>${kindBadge}</td>
-      <td><strong>${escapeHtml(a.label)}</strong>${a.description ? `<div class="text-xs text-muted">${escapeHtml(a.description.substring(0,80))}${a.description.length > 80 ? '…' : ''}</div>` : ''}</td>
+      <td><strong>${escapeHtml(a.label)}</strong>${a.description ? `<div class="text-xs text-muted">${escapeHtml(a.description.substring(0,80))}${a.description.length > 80 ? '…' : ''}</div>` : ''}${overdueBadge}</td>
       <td class="mono text-xs">${escapeHtml(serial)}</td>
       <td class="text-right text-sm">${cap}</td>
       <td class="text-sm">${escapeHtml(loc)}</td>
       <td>${condBadge} ${statusFlags}</td>
       <td>${delivery}</td>
+      <td>${verifyCell}</td>
       <td class="text-right" onclick="event.stopPropagation()" style="white-space:nowrap;">
         ${a.deleted_at
           ? `<button class="btn btn-ghost btn-sm" onclick="restorePhysicalAsset(${a.id})" title="Recupera"><i data-lucide="rotate-ccw" style="width:13px;height:13px;"></i></button>`
           : `
+            <button class="btn btn-ghost btn-sm" data-verify-id="${a.id}" title="Segna verificato" style="color:var(--green);">✓</button>
             <a href="/physical-assets/api/${a.id}/label.png" target="_blank" class="btn btn-ghost btn-sm" title="Etichetta QR stampabile">🏷</a>
-            <button class="btn btn-ghost btn-sm" onclick="openMovementsModal(${a.id}, '${escapeHtml(a.label).replace(/'/g, '&apos;')}')" title="Movimenti / DDT">🚚</button>
+            <button class="btn btn-ghost btn-sm" data-mv-id="${a.id}" data-mv-label="${escapeHtml(a.label).replace(/"/g, '&quot;')}" title="Movimenti / DDT">🚚</button>
             <button class="btn btn-ghost btn-sm" onclick="openEditPhysicalAsset(${a.id})" title="Modifica"><i data-lucide="pencil" style="width:13px;height:13px;"></i></button>
           `}
       </td>
     </tr>`;
 }
 
+function openVerifyFromEdit() {
+  const id = document.getElementById('pa-id').value;
+  if (!id) return;
+  openVerifyModal(parseInt(id));
+}
+
 function resetPaForm() {
   document.getElementById('pa-id').value = '';
   document.getElementById('pa-modal-title').textContent = 'Nuovo asset fisico';
   document.getElementById('pa-delete-btn').style.display = 'none';
+  document.getElementById('pa-verify-btn').style.display = 'none';
   // v3.5.0-alpha.92 — contenuti hidden in new mode (richiede id)
   const cw = document.getElementById('pa-contents-wrap');
   if (cw) cw.style.display = 'none';
@@ -501,6 +561,7 @@ async function openEditPhysicalAsset(id) {
     document.getElementById('pa-id').value = a.id;
     document.getElementById('pa-modal-title').textContent = 'Modifica asset fisico';
     document.getElementById('pa-delete-btn').style.display = '';
+    document.getElementById('pa-verify-btn').style.display = '';
     document.getElementById('pa-kind').value = a.kind || 'lto';
     document.getElementById('pa-label').value = a.label || '';
     document.getElementById('pa-description').value = a.description || '';
@@ -739,6 +800,46 @@ async function restorePhysicalAsset(id) {
     toast('Asset ripristinato', 'success');
     loadAssets();
   } catch(e) { toast(e.message || 'Errore', 'error'); }
+}
+
+// Delega click sulla tbody per verify e movements (evita JSON.stringify in onclick)
+document.getElementById('assets-tbody').addEventListener('click', function(e) {
+  const vBtn = e.target.closest('[data-verify-id]');
+  if (vBtn) { e.stopPropagation(); openVerifyModal(parseInt(vBtn.dataset.verifyId)); return; }
+  const mBtn = e.target.closest('[data-mv-id]');
+  if (mBtn) { e.stopPropagation(); openMovementsModal(parseInt(mBtn.dataset.mvId), mBtn.dataset.mvLabel); return; }
+});
+
+function openVerifyModal(id) {
+  document.getElementById('vfy-asset-id').value = id;
+  document.getElementById('vfy-condition').value = 'verified';
+  document.getElementById('vfy-interval').value = '12';
+  document.getElementById('vfy-notes').value = '';
+  openModal('modal-verify');
+}
+
+async function submitVerify() {
+  const id = document.getElementById('vfy-asset-id').value;
+  if (!id) return;
+  const fd = new FormData();
+  fd.append('condition', document.getElementById('vfy-condition').value);
+  fd.append('interval_months', document.getElementById('vfy-interval').value);
+  const notes = document.getElementById('vfy-notes').value.trim();
+  if (notes) fd.append('notes', notes);
+  try {
+    await api('POST', `/physical-assets/api/${id}/verify`, fd);
+    closeModal('modal-verify');
+    toast('Verifica registrata', 'success');
+    loadAssets();
+    // aggiorna anche il modal di edit se aperto per lo stesso asset
+    const editId = document.getElementById('pa-id').value;
+    if (editId && parseInt(editId) === parseInt(id)) {
+      const a = await api('GET', `/physical-assets/api/${id}`);
+      document.getElementById('pa-condition').value = a.condition || '';
+      document.getElementById('pa-last-verified').value = a.last_verified_at ? a.last_verified_at.substring(0,10) : '';
+      document.getElementById('pa-next-verify').value = a.next_verification_due || '';
+    }
+  } catch(e) { toast(e.message || 'Errore verifica', 'error'); }
 }
 
 // v3.5.0-alpha.72.1 — Batch import + numerazione

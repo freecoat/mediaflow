@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.207 — Audit fisico: volume TB + auth QR + lifecycle media (D+E+F) (6 giu 2026)
+
+Chiusi gli ultimi 3 nodi dell'audit legame deliverable↔asset fisici. Subagent-driven.
+
+- **D — Volume TB da MHL**: l'ingest MHL/CSV di una consegna `unit_nature=deliverable_volume` incrementa `quantity_delivered` per i **TB effettivi** (`total_size_bytes/1e12`, cap a planned), non più +1 fisso. Le consegne a pezzi (`pc`) restano +1. Helper puro `_volume_increment` + 10 unit test.
+- **E — Auth QR scan**: `GET /physical-assets/scan/{token}` ora **richiede login** (prima esponeva progetto/cliente/serial/location a chiunque avesse il token — debito TPN). Unauth → redirect `/auth/login?next=...`.
+- **F — Lifecycle media**: enum `PhysicalAssetCondition` (unknown/verified/suspect/degraded/failed) validato in scrittura (colonna resta String, sinonimi tollerati). Endpoint `POST /physical-assets/api/{id}/verify` (condition + interval_months → set `last_verified_at` + `next_verification_due`). Serializer espone `verification_overdue`; lista con filtro `overdue_only`. UI: dropdown condizione, badge "⚠ verifica scaduta", filtro "solo scadute", azione "✓ Segna verificato".
+- 480 test (+10). Smoke browser verde (E redirect+authed, F overdue/verify/UI). Nessuna migrazione (enum Python, colonne esistenti).
+
+**Audit legame deliverable↔asset fisici COMPLETO** (B+D+E+F + A/C precedenti). Residui minori: ai-extract pass-2 campi fisici; orphan PhysicalAsset.job_deliverable_id su hard-delete; clear link primario via UI ('' gotcha, usare unlink); per-file AssetMembership da MHL (oggi 1 asset/nastro).
+
 ## v3.5.0-alpha.172.206 — Unificazione link deliverable↔asset (audit nodo B) (6 giu 2026)
 
 Dall'audit legame deliverable↔asset fisici: chiuso il nodo **B** (i 2 sistemi di link erano desincronizzati). Approccio sync-as-cache. Subagent-driven.

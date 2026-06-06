@@ -193,6 +193,18 @@ class PhysicalAssetKind(str, enum.Enum):
     other = "other"       # tutto il resto fisico
 
 
+# α.172.207 (audit F — lifecycle media) — stato di salute del supporto fisico.
+# La colonna PhysicalAsset.condition resta String per back-compat (valori
+# storici "verified"/"suspect" compatibili); questo enum è il vocabolario
+# canonico validato in scrittura + dropdown UI.
+class PhysicalAssetCondition(str, enum.Enum):
+    unknown = "unknown"       # non verificato
+    verified = "verified"     # verifica integrità OK
+    suspect = "suspect"       # sospetto (da ricontrollare)
+    degraded = "degraded"     # degrado rilevato (clone consigliato)
+    failed = "failed"         # supporto fallito/illeggibile
+
+
 # v3.5.0-alpha.172.89 (Bundle I) — Stati nested.
 # Main collassa il vecchio enum 9-piatto in 5 stati lineari + qc_substatus.
 # Mapping legacy (migrate_phase_i_deliverable_status.py):
