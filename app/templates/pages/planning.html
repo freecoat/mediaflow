@@ -1927,6 +1927,11 @@ function _dhRenderFiltered() {
   const labelFilter = (document.getElementById('dh-filter-label')?.value || '').trim();
   let items = _dhItems;
   if (labelFilter) items = items.filter(d => d.section_label === labelFilter);
+  // α.172.202 — counter riflette il filtro: "X / Y deliverable" quando filtrato.
+  const counter = document.getElementById('dh-counter');
+  if (counter) counter.textContent = labelFilter
+    ? `${items.length} / ${_dhItems.length} deliverable`
+    : `${_dhItems.length} deliverable`;
   const mode = document.getElementById('dh-mode').value;
   if (mode === 'list') dhRenderList(host, items);
   else dhRenderKanban(host, items);

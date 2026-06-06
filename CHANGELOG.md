@@ -1,5 +1,10 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.202.1 — Follow-up deliverables (6 giu 2026)
+
+- **Counter HUB riflette il filtro**: il contatore Deliverable HUB mostrava sempre il totale anche con filtro etichetta attivo. Ora mostra `X / Y deliverable` quando filtrato (`_dhRenderFiltered`). Verificato browser: 70 → "24 / 70" su NBCU → 70 al reset.
+- **Verificato (non-bug)**: `delivery_item_id=''` unlink capitolato NON è affetto dal gotcha empty-multipart→None — la UI (`dsmCapUnlink`) manda già il sentinel `'0'`. Confermato browser: `''` no-op (nessuna mutazione), `'0'` pulisce.
+
 ## v3.5.0-alpha.172.202 — Deliverable: audio override per-consegna + etichetta ereditata + link capitolato robusto (6 giu 2026)
 
 Tre interventi sulla vista `/planning/?view=deliverables` (Deliverable HUB).

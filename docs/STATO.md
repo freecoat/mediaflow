@@ -8,7 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.202** — 6 giugno 2026 — Deliverable: audio override per-consegna + etichetta ereditata + link capitolato robusto
+**v3.5.0-alpha.172.202.1** — 6 giugno 2026 — Deliverable audio/etichetta/link + follow-up
+
+### α.172.202.1 ✅ (follow-up — 6 giu)
+- Counter HUB ora riflette il filtro etichetta (`X / Y deliverable`). Verificato browser.
+- Verificato non-bug: unlink capitolato (`delivery_item_id`) usa già sentinel `'0'`, immune al gotcco empty-multipart→None.
+- Tutto pushato.
+
 
 ### α.172.202 ✅ (deliverable audio/label/link — sessione 6 giu, subagent-driven)
 - **Audio override per-deliverable**: `JobDeliverable` += `audio_config_preset_id`/`audio_config_code` + tracce proprie. `AudioTrackSpec` generalizzata (item *o* deliverable, invariante esattamente-uno; NOT NULL su `delivery_item_id` rilassato via table-rebuild SQLite). `apply_audio_config_preset(db, target, preset)` polimorfico. UI: sezione 🔊 Audio nel modal spec planning, preset+CRUD tracce, **apply differito** sul Salva.
