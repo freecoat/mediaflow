@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.202.1** — 6 giugno 2026 — Deliverable audio/etichetta/link + follow-up
+**v3.5.0-alpha.172.203** — 6 giugno 2026 — Deliverables: affinamenti audio/etichetta/nome/link
+
+### α.172.203 ✅ (5 affinamenti deliverables — 6 giu, subagent-driven)
+- #1 preset audio non più tagliati (padding-bottom modal). #2 preset custom: CRUD AudioConfigPreset + tab editor capitolato + capitolato "Personale" + "salva come preset" dal planning (dropdown raggruppato capitolato/personale). #3 nome → consegna (JobDeliverable.name), non più il capitolato condiviso. #4 backfill esteso (section_label==broadcaster) → 29 Sky orfani rilinkati. #5 etichetta nella ricerca generica #f-q, dropdown rimosso.
+- Smoke browser Playwright verde su tutti e 5. 464 test. Backend nuovo: `app/services/personal_capitolato.py`. Tutto pushato.
+- **Pendente**: nessuno bloccante. Possibile estensione futura: editor track preset più ricco (riordino, duplica), label preset lunghe nel dropdown (troncamento nativo select).
 
 ### α.172.202.1 ✅ (follow-up — 6 giu)
 - Counter HUB ora riflette il filtro etichetta (`X / Y deliverable`). Verificato browser.

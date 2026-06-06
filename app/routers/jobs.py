@@ -927,26 +927,42 @@ async def get_deliverable(deliverable_id: int, db: Session = Depends(get_db)):
 
 @router.get("/api/deliverables/{deliverable_id}/audio-presets")
 async def deliverable_audio_presets(deliverable_id: int, db: Session = Depends(get_db)):
-    """Lista AudioConfigPreset disponibili per il capitolato del deliverable.
-    Template risolto via delivery_template_id o delivery_item.delivery_template_id.
-    Se nessun template → lista vuota."""
+    """Lista AudioConfigPreset disponibili per il deliverable: i preset del
+    capitolato di riferimento (delivery_template_id o delivery_item.delivery_template_id)
+    PIÙ i preset del "Capitolato Personale" del tenant (α.172.203).
+    Deduplicati per id, solo attivi. Shape [{id, code, name, source}]."""
     d = db.query(JobDeliverable).filter(
         JobDeliverable.id == deliverable_id,
         JobDeliverable.tenant_id == current_tenant_id(),
     ).first()
     if not d:
         raise HTTPException(404, "Deliverable non trovato")
-    tpl = _resolve_deliverable_template(db, d)
-    if not tpl:
-        return []
     from app.models.models import AudioConfigPreset
-    rows = (db.query(AudioConfigPreset)
-            .filter(AudioConfigPreset.delivery_template_id == tpl.id,
-                    AudioConfigPreset.tenant_id == current_tenant_id(),
-                    AudioConfigPreset.is_active == True)  # noqa: E712
-            .order_by(AudioConfigPreset.sort_order, AudioConfigPreset.code)
-            .all())
-    return [{"id": p.id, "code": p.code, "name": p.name} for p in rows]
+    from app.services.personal_capitolato import get_or_create_personal_template
+
+    def _load(template_id: int):
+        return (db.query(AudioConfigPreset)
+                .filter(AudioConfigPreset.delivery_template_id == template_id,
+                        AudioConfigPreset.tenant_id == current_tenant_id(),
+                        AudioConfigPreset.is_active == True)  # noqa: E712
+                .order_by(AudioConfigPreset.sort_order, AudioConfigPreset.code)
+                .all())
+
+    out: list[dict] = []
+    seen: set[int] = set()
+    tpl = _resolve_deliverable_template(db, d)
+    personal = get_or_create_personal_template(db, current_tenant_id())
+    db.commit()  # persiste il capitolato personale se appena creato
+
+    for source, template in (("capitolato", tpl), ("personale", personal)):
+        if not template:
+            continue
+        for p in _load(template.id):
+            if p.id in seen:
+                continue
+            seen.add(p.id)
+            out.append({"id": p.id, "code": p.code, "name": p.name, "source": source})
+    return out
 
 
 @router.post("/api/deliverables/{deliverable_id}/audio-tracks")
@@ -996,6 +1012,86 @@ async def add_deliverable_audio_track(
     db.commit()
     db.refresh(tr)
     return _serialize_track_jd(tr)
+
+
+@router.post("/api/deliverables/{deliverable_id}/save-as-preset")
+async def save_deliverable_as_preset(
+    deliverable_id: int,
+    request: Request,
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    scope: str = Form("personale"),   # "personale" | "capitolato"
+    db: Session = Depends(get_db),
+):
+    """α.172.203 — Salva le tracce audio CORRENTI del deliverable come
+    AudioConfigPreset riutilizzabile. Target: Capitolato Personale del tenant
+    (default) o il capitolato di riferimento del deliverable (scope=capitolato,
+    fallback a personale se assente)."""
+    from app.services.rbac import current_user_optional, has_permission
+    user = current_user_optional(request)
+    if not has_permission(user, "edit_planning_all") and not has_permission(user, "assign_resources"):
+        raise HTTPException(403, "Permesso insufficiente")
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(400, "name obbligatorio")
+
+    d = db.query(JobDeliverable).filter(
+        JobDeliverable.id == deliverable_id,
+        JobDeliverable.tenant_id == current_tenant_id(),
+    ).first()
+    if not d:
+        raise HTTPException(404, "Deliverable non trovato")
+
+    from app.models.models import AudioTrackSpec, AudioConfigPreset
+    tracks = (db.query(AudioTrackSpec)
+              .filter(AudioTrackSpec.job_deliverable_id == deliverable_id)
+              .order_by(AudioTrackSpec.sort_order, AudioTrackSpec.id)
+              .all())
+    if not tracks:
+        raise HTTPException(400, "Nessuna traccia da salvare")
+
+    # track_layout con *_id keys: audio_config_service._resolve_id li accetta
+    # come fallback robusto (no name-resolution necessaria).
+    track_layout = [{
+        "track_label": t.track_label,
+        "channel_config_id": t.channel_config_id,
+        "mix_type_id": t.mix_type_id,
+        "mix_standard_id": t.mix_standard_id,
+        "audio_codec_id": t.audio_codec_id,
+        "sample_rate_hz": t.sample_rate_hz,
+        "bit_depth": t.bit_depth,
+    } for t in tracks]
+
+    # Risolvi template target
+    target = None
+    if scope == "capitolato":
+        target = _resolve_deliverable_template(db, d)
+    if target is None:
+        from app.services.personal_capitolato import get_or_create_personal_template
+        target = get_or_create_personal_template(db, current_tenant_id())
+
+    # code unico nel template
+    from app.routers.delivery_templates import _slug_code_from_name, _unique_preset_code
+    base_code = _slug_code_from_name(name)
+    final_code = _unique_preset_code(db, target.id, base_code)
+
+    p = AudioConfigPreset(
+        tenant_id=current_tenant_id(),
+        delivery_template_id=target.id,
+        code=final_code,
+        name=name,
+        description=(description or "").strip() or None,
+        track_layout=track_layout,
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return {
+        "id": p.id,
+        "code": p.code,
+        "name": p.name,
+        "delivery_template_id": p.delivery_template_id,
+    }
 
 
 @router.post("/api/deliverables/{deliverable_id}/qc-compare")

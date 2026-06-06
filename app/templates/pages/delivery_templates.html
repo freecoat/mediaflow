@@ -899,7 +899,7 @@ async function _loadItemsForTemplate(tid) {
 }
 
 function _tabSwitch(name) {
-  ['blocks','items','listino'].forEach(t => {
+  ['blocks','items','listino','presets'].forEach(t => {
     const tab = document.getElementById('dt-tab-' + t);
     const pane = document.getElementById('dt-pane-' + t);
     if (tab) tab.classList.toggle('is-active', t === name);
@@ -992,6 +992,7 @@ async function openDetail(tid) {
       <div class="tab is-active" id="dt-tab-blocks" onclick="_tabSwitch('blocks')">📋 Specs blocchi (legacy)</div>
       <div class="tab" id="dt-tab-items" onclick="_tabSwitch('items')">📦 Items (${_currentItems.length})</div>
       <div class="tab" id="dt-tab-listino" onclick="_tabSwitch('listino')">💰 Voci listino</div>
+      <div class="tab" id="dt-tab-presets" onclick="_tabSwitch('presets')">🔊 Preset audio</div>
     `;
     body.appendChild(tabsBar);
 
@@ -1054,6 +1055,13 @@ async function openDetail(tid) {
     itemsCard.appendChild(hint);
     paneList.appendChild(itemsCard);
     renderSuggestedRows();
+
+    // Pane: preset audio (α.172.203)
+    const panePresets = document.createElement('div');
+    panePresets.id = 'dt-pane-presets';
+    panePresets.style.display = 'none';
+    body.appendChild(panePresets);
+    renderPresetsPane(panePresets, tid);
 
     // Default: items tab if già popolati, altrimenti blocks
     if (_currentItems.length > 0) _tabSwitch('items');
@@ -1858,6 +1866,393 @@ async function openAudioTrackEditor(track, itemId, parentOverlay) {
     } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 4000); }
   };
   setTimeout(() => box.querySelector('#dlat-label').focus(), 50);
+}
+
+// ── α.172.203 — Preset audio manager per template ─────────────────────────
+// Elenca, crea, modifica, elimina AudioConfigPreset legati al template corrente.
+// Usa _loadTaxonomyOnce() per i dropdown (già in cache dopo openDetail).
+
+async function renderPresetsPane(pane, tid) {
+  while (pane.firstChild) pane.removeChild(pane.firstChild);
+
+  // Header
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;';
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-weight:600;font-size:13px;';
+  lbl.textContent = 'Preset audio';
+  head.appendChild(lbl);
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn btn-primary btn-sm';
+  addBtn.textContent = '+ Nuovo preset';
+  addBtn.addEventListener('click', () => openPresetEditor(null, tid, pane));
+  head.appendChild(addBtn);
+  pane.appendChild(head);
+
+  // Lista preset
+  let presets = [];
+  try {
+    presets = await api('GET', `/delivery-templates/api/${tid}/audio-presets`);
+  } catch(e) {
+    const err = document.createElement('div');
+    err.style.color = 'var(--rose)';
+    err.textContent = 'Errore caricamento preset: ' + (e.message || '');
+    pane.appendChild(err);
+    return;
+  }
+
+  if (!presets || !presets.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:30px;text-align:center;color:var(--text3);font-size:13px;background:var(--bg3);border-radius:6px;';
+    empty.innerHTML = '<div style="font-size:28px;margin-bottom:8px;">🔊</div>' +
+      '<div style="font-weight:600;margin-bottom:6px;">Nessun preset audio</div>' +
+      '<div style="font-size:12px;">Clicca "+ Nuovo preset" per definire layout tracce audio riutilizzabili.</div>';
+    pane.appendChild(empty);
+    return;
+  }
+
+  const list = document.createElement('div');
+  list.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+  presets.forEach(preset => {
+    const tracks = Array.isArray(preset.track_layout) ? preset.track_layout : [];
+    const card = document.createElement('div');
+    card.style.cssText = 'padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:12px;';
+    if (!preset.is_active) card.style.opacity = '0.55';
+
+    const left = document.createElement('div');
+    left.style.cssText = 'flex:1;min-width:0;';
+    const nameLine = document.createElement('div');
+    nameLine.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const codeSpan = document.createElement('span');
+    codeSpan.style.cssText = 'font-family:var(--font-mono);font-size:12px;color:var(--text3);';
+    codeSpan.textContent = preset.code;
+    nameLine.appendChild(codeSpan);
+    const sep = document.createElement('span');
+    sep.style.cssText = 'color:var(--border);';
+    sep.textContent = '—';
+    nameLine.appendChild(sep);
+    const nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'font-weight:600;font-size:13px;';
+    nameSpan.textContent = preset.name;
+    nameLine.appendChild(nameSpan);
+    if (!preset.is_active) {
+      const inactiveBadge = document.createElement('span');
+      inactiveBadge.style.cssText = 'font-size:10px;padding:1px 6px;border-radius:8px;background:rgba(239,68,68,0.18);color:#fca5a5;';
+      inactiveBadge.textContent = 'inattivo';
+      nameLine.appendChild(inactiveBadge);
+    }
+    left.appendChild(nameLine);
+    const summary = document.createElement('div');
+    summary.style.cssText = 'font-size:11px;color:var(--text3);margin-top:3px;';
+    summary.textContent = tracks.length
+      ? `${tracks.length} traccia${tracks.length === 1 ? '' : 'e'}: ${tracks.map(t => t.track_label || '?').join(', ')}`
+      : '(nessuna traccia definita)';
+    left.appendChild(summary);
+    if (preset.description) {
+      const desc = document.createElement('div');
+      desc.style.cssText = 'font-size:11px;color:var(--text2);margin-top:2px;font-style:italic;';
+      desc.textContent = preset.description;
+      left.appendChild(desc);
+    }
+    card.appendChild(left);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'btn btn-ghost btn-sm';
+    editBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+    editBtn.textContent = '✎ Modifica';
+    editBtn.addEventListener('click', () => openPresetEditor(preset, tid, pane));
+    actions.appendChild(editBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-ghost btn-sm';
+    delBtn.style.cssText = 'font-size:11px;padding:2px 8px;color:#ef4444;';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Elimina preset (soft-delete)';
+    delBtn.dataset.presetId = preset.id;
+    delBtn.dataset.presetName = preset.name;
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(`Eliminare preset "${preset.name}"?\n\nGli item che usano questo preset mantengono le tracce già materializzate.`)) return;
+      try {
+        await api('DELETE', `/delivery-templates/api/audio-presets/${preset.id}`);
+        toast(`Preset "${preset.name}" eliminato`, 'success', 2000);
+        await renderPresetsPane(pane, tid);
+      } catch(e) {
+        toast('Errore eliminazione: ' + (e.message || ''), 'error', 3000);
+      }
+    });
+    actions.appendChild(delBtn);
+
+    card.appendChild(actions);
+    list.appendChild(card);
+  });
+  pane.appendChild(list);
+}
+
+// Editor preset (create + edit) come overlay floating.
+// preset = null per nuovo; pane = il contenitore da ricaricare dopo salvataggio.
+async function openPresetEditor(preset, tid, pane) {
+  const tax = await _loadTaxonomyOnce();
+  const isNew = !preset;
+  const v = preset || {};
+  const existingTracks = Array.isArray(v.track_layout) ? v.track_layout : [];
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2150;display:flex;align-items:center;justify-content:center;';
+  ov.className = 'preset-editor-modal';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:18px;width:820px;max-width:96vw;max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:14px;';
+
+  // Titolo
+  const titleDiv = document.createElement('div');
+  titleDiv.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+  const titleText = document.createElement('div');
+  titleText.style.cssText = 'font-weight:600;font-size:14px;';
+  titleText.textContent = isNew ? '+ Nuovo preset audio' : '✎ Modifica preset audio';
+  titleDiv.appendChild(titleText);
+  const closeX = document.createElement('button');
+  closeX.className = 'btn btn-ghost btn-icon';
+  closeX.style.fontSize = '18px';
+  closeX.textContent = '✕';
+  closeX.addEventListener('click', () => ov.remove());
+  titleDiv.appendChild(closeX);
+  box.appendChild(titleDiv);
+
+  // Campi base: name + description
+  const baseGrid = document.createElement('div');
+  baseGrid.style.cssText = 'display:grid;grid-template-columns:1fr 2fr;gap:10px;';
+
+  const nameWrap = document.createElement('div');
+  const nameLbl = document.createElement('label');
+  nameLbl.style.cssText = 'display:block;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;';
+  nameLbl.textContent = 'Nome *';
+  const nameInp = document.createElement('input');
+  nameInp.className = 'form-input';
+  nameInp.value = v.name || '';
+  nameInp.placeholder = 'es. 5.1 Mix OV + Stereo';
+  nameWrap.appendChild(nameLbl);
+  nameWrap.appendChild(nameInp);
+  baseGrid.appendChild(nameWrap);
+
+  const descWrap = document.createElement('div');
+  const descLbl = document.createElement('label');
+  descLbl.style.cssText = 'display:block;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;';
+  descLbl.textContent = 'Descrizione';
+  const descInp = document.createElement('input');
+  descInp.className = 'form-input';
+  descInp.value = v.description || '';
+  descInp.placeholder = 'opzionale';
+  descWrap.appendChild(descLbl);
+  descWrap.appendChild(descInp);
+  baseGrid.appendChild(descWrap);
+
+  box.appendChild(baseGrid);
+
+  // Checkbox is_active (solo in modifica)
+  if (!isNew) {
+    const activeWrap = document.createElement('label');
+    activeWrap.style.cssText = 'display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);cursor:pointer;user-select:none;';
+    const activeCb = document.createElement('input');
+    activeCb.type = 'checkbox';
+    activeCb.id = 'preset-active-cb';
+    activeCb.checked = v.is_active !== false;
+    activeWrap.appendChild(activeCb);
+    activeWrap.appendChild(document.createTextNode('Preset attivo (visibile nei dropdown item)'));
+    box.appendChild(activeWrap);
+  }
+
+  // Track layout builder
+  const tracksSection = document.createElement('div');
+
+  const tracksHeader = document.createElement('div');
+  tracksHeader.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+  const tracksLbl = document.createElement('div');
+  tracksLbl.style.cssText = 'font-weight:600;font-size:13px;';
+  tracksLbl.textContent = 'Tracce audio (track_layout)';
+  tracksHeader.appendChild(tracksLbl);
+  const addTrackBtn = document.createElement('button');
+  addTrackBtn.className = 'btn btn-ghost btn-sm';
+  addTrackBtn.style.cssText = 'font-size:11px;padding:2px 10px;';
+  addTrackBtn.textContent = '+ Aggiungi traccia';
+  tracksHeader.appendChild(addTrackBtn);
+  tracksSection.appendChild(tracksHeader);
+
+  const tracksHost = document.createElement('div');
+  tracksHost.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+  tracksSection.appendChild(tracksHost);
+
+  box.appendChild(tracksSection);
+
+  // Costruisce una riga traccia. trackData = oggetto esistente o null per riga vuota.
+  function buildTrackRow(trackData) {
+    const d = trackData || {};
+    const row = document.createElement('div');
+    row.className = 'preset-track-row';
+    row.style.cssText = 'background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 80px 60px 28px;gap:8px;align-items:end;';
+
+    const mkField = (labelText, el) => {
+      const wrap = document.createElement('div');
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:block;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;';
+      lbl.textContent = labelText;
+      wrap.appendChild(lbl);
+      wrap.appendChild(el);
+      return wrap;
+    };
+
+    const mkSel = (optList, currentVal) => {
+      const sel = document.createElement('select');
+      sel.className = 'form-select';
+      sel.style.fontSize = '12px';
+      const emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '—';
+      sel.appendChild(emptyOpt);
+      (optList || []).forEach(item => {
+        const o = document.createElement('option');
+        o.value = item.name;
+        o.textContent = item.name;
+        if (item.name === currentVal) o.selected = true;
+        sel.appendChild(o);
+      });
+      return sel;
+    };
+
+    const labelInp = document.createElement('input');
+    labelInp.className = 'form-input';
+    labelInp.style.fontSize = '12px';
+    labelInp.placeholder = 'es. 5.1 OV';
+    labelInp.value = d.track_label || '';
+    row.appendChild(mkField('Track label', labelInp));
+
+    const ccSel = mkSel(tax.channel_configs, d.channel_config);
+    row.appendChild(mkField('Ch. config', ccSel));
+
+    const mtSel = mkSel(tax.mix_types, d.mix_type);
+    row.appendChild(mkField('Mix type', mtSel));
+
+    const msSel = mkSel(tax.mix_standards, d.mix_standard);
+    row.appendChild(mkField('Mix standard', msSel));
+
+    const acSel = mkSel(tax.audio_codecs, d.codec);
+    row.appendChild(mkField('Codec', acSel));
+
+    const srInp = document.createElement('input');
+    srInp.type = 'number';
+    srInp.className = 'form-input';
+    srInp.style.fontSize = '12px';
+    srInp.min = '8000';
+    srInp.max = '384000';
+    srInp.step = '1';
+    srInp.placeholder = '48000';
+    srInp.value = d.sample_rate != null ? String(d.sample_rate) : '48000';
+    row.appendChild(mkField('Sample rate', srInp));
+
+    const bdInp = document.createElement('input');
+    bdInp.type = 'number';
+    bdInp.className = 'form-input';
+    bdInp.style.fontSize = '12px';
+    bdInp.min = '8';
+    bdInp.max = '64';
+    bdInp.step = '1';
+    bdInp.placeholder = '24';
+    bdInp.value = d.bit_depth != null ? String(d.bit_depth) : '24';
+    row.appendChild(mkField('Bit depth', bdInp));
+
+    const rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn btn-ghost btn-sm';
+    rmBtn.style.cssText = 'color:#ef4444;padding:2px 6px;font-size:13px;align-self:end;';
+    rmBtn.textContent = '✕';
+    rmBtn.title = 'Rimuovi traccia';
+    rmBtn.addEventListener('click', () => row.remove());
+    row.appendChild(rmBtn);
+
+    return row;
+  }
+
+  // Popola tracce esistenti
+  existingTracks.forEach(t => tracksHost.appendChild(buildTrackRow(t)));
+
+  addTrackBtn.addEventListener('click', () => tracksHost.appendChild(buildTrackRow(null)));
+
+  // Footer
+  const footer = document.createElement('div');
+  footer.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding-top:6px;border-top:1px solid var(--border);';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary btn-sm';
+  cancelBtn.textContent = 'Annulla';
+  cancelBtn.addEventListener('click', () => ov.remove());
+  footer.appendChild(cancelBtn);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-primary btn-sm';
+  saveBtn.textContent = isNew ? 'Crea preset' : 'Salva modifiche';
+  saveBtn.addEventListener('click', async () => {
+    const name = nameInp.value.trim();
+    if (!name) { toast('Nome obbligatorio', 'error'); return; }
+
+    // Raccoglie tracce dal DOM
+    const trackLayout = [];
+    tracksHost.querySelectorAll('.preset-track-row').forEach(row => {
+      const inputs = row.querySelectorAll('input, select');
+      const trackLabelEl = inputs[0];
+      const ccEl = inputs[1];
+      const mtEl = inputs[2];
+      const msEl = inputs[3];
+      const acEl = inputs[4];
+      const srEl = inputs[5];
+      const bdEl = inputs[6];
+
+      const track = { track_label: (trackLabelEl ? trackLabelEl.value.trim() : '') };
+      if (ccEl && ccEl.value) track.channel_config = ccEl.value;
+      if (mtEl && mtEl.value) track.mix_type = mtEl.value;
+      if (msEl && msEl.value) track.mix_standard = msEl.value;
+      if (acEl && acEl.value) track.codec = acEl.value;
+      const sr = srEl ? parseInt(srEl.value, 10) : NaN;
+      if (!isNaN(sr) && sr > 0) track.sample_rate = sr;
+      const bd = bdEl ? parseInt(bdEl.value, 10) : NaN;
+      if (!isNaN(bd) && bd > 0) track.bit_depth = bd;
+
+      trackLayout.push(track);
+    });
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('description', descInp.value.trim());
+    fd.append('track_layout', JSON.stringify(trackLayout));
+
+    if (!isNew) {
+      const activeCb = document.getElementById('preset-active-cb');
+      fd.append('is_active', activeCb && activeCb.checked ? 'true' : 'false');
+    }
+
+    saveBtn.disabled = true;
+    try {
+      if (isNew) {
+        await api('POST', `/delivery-templates/api/${tid}/audio-presets`, fd);
+        toast(`Preset "${name}" creato`, 'success', 2000);
+      } else {
+        await api('PUT', `/delivery-templates/api/audio-presets/${v.id}`, fd);
+        toast(`Preset "${name}" salvato`, 'success', 2000);
+      }
+      ov.remove();
+      await renderPresetsPane(pane, tid);
+    } catch(e) {
+      toast('Errore salvataggio: ' + (e.message || ''), 'error', 4000);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+  footer.appendChild(saveBtn);
+  box.appendChild(footer);
+
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  setTimeout(() => nameInp.focus(), 50);
 }
 
 function renderSuggestedRows() {

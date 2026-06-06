@@ -779,10 +779,8 @@
             <span id="dh-counter" class="text-xs text-muted">caricamento…</span>
           </div>
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <!-- α.172.202 — filtro etichetta (section_label), popolato dopo il caricamento -->
-            <select id="dh-filter-label" class="form-select" style="height:30px; padding:2px 8px; font-size:12px; min-width:160px;" title="Filtra per etichetta sezione">
-              <option value="">Tutte le etichette</option>
-            </select>
+            <!-- α.172.203 (Task 5) — filtro etichetta rimosso: ora integrato nella
+                 ricerca generica #f-q (match su section_label + broadcaster). -->
             <select id="dh-mode" class="form-select" style="height:30px; padding:2px 8px; font-size:12px;">
               <option value="kanban">Kanban</option>
               <option value="list">Lista</option>
@@ -831,7 +829,9 @@
           <button class="btn btn-ghost btn-sm" id="dsm-toggle-mode" onclick="dsmToggleMode()" title="Passa tra rendering human-readable e JSON raw" style="font-size:11px;">📝 Modifica JSON</button>
         </span>
       </div>
-      <div id="dsm-blocks-host" style="display:flex; flex-direction:column; gap:10px;"></div>
+      <!-- α.172.203 (Task 1) — padding-bottom: l'ultima sezione (audio) restava
+           clippata dietro il footer sticky; 24px la rendono raggiungibile. -->
+      <div id="dsm-blocks-host" style="display:flex; flex-direction:column; gap:10px; padding-bottom:24px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modal-deliverable-specs')">Annulla</button>
@@ -1876,16 +1876,18 @@ async function renderDeliverableHub() {
     if (deptIds.length) items = items.filter(d => d.department_id && deptIds.includes(d.department_id));
     if (fromD) items = items.filter(d => !d.target_delivery_date || d.target_delivery_date >= fromD);
     if (toD) items = items.filter(d => !d.target_delivery_date || d.target_delivery_date <= toD);
+    // α.172.203 (Task 5) — ricerca generica estesa a etichetta (section_label)
+    // e broadcaster: digitare "Sky"/"NBCU" in #f-q filtra anche per etichetta.
     if (qText) items = items.filter(d => (
       (d.name || '').toLowerCase().includes(qText)
       || (d.job_code || '').toLowerCase().includes(qText)
       || (d.project_code || '').toLowerCase().includes(qText)
       || (d.project_title || '').toLowerCase().includes(qText)
       || (d.quote_number || '').toLowerCase().includes(qText)
+      || (d.section_label || '').toLowerCase().includes(qText)
+      || (d.broadcaster || '').toLowerCase().includes(qText)
     ));
     _dhItems = items;
-    // α.172.202 — popola filtro etichetta con i valori distinti presenti
-    _dhPopulateLabelFilter(_dhItems);
     counter.textContent = `${_dhItems.length} deliverable`;
   } catch (e) {
     _dhMakeEmpty(host, 'Errore: ' + (e.message || ''), 'var(--rose)');
@@ -1900,47 +1902,22 @@ async function renderDeliverableHub() {
   _dhRenderFiltered();
 }
 
-// α.172.202 — popola il select etichetta con i valori distinti presenti in _dhItems,
-// preservando la selezione corrente se ancora valida.
-function _dhPopulateLabelFilter(items) {
-  const sel = document.getElementById('dh-filter-label');
-  if (!sel) return;
-  const current = sel.value;
-  const labels = [...new Set(items.map(d => d.section_label).filter(Boolean))].sort();
-  while (sel.firstChild) sel.removeChild(sel.firstChild);
-  const o0 = document.createElement('option');
-  o0.value = ''; o0.textContent = 'Tutte le etichette';
-  sel.appendChild(o0);
-  labels.forEach(lbl => {
-    const o = document.createElement('option');
-    o.value = lbl;
-    o.textContent = '📦 ' + lbl;
-    if (lbl === current) o.selected = true;
-    sel.appendChild(o);
-  });
-}
-
-// α.172.202 — applica filtro etichetta client-side e renderizza.
+// α.172.203 (Task 5) — renderizza _dhItems (già filtrati da #f-q in
+// renderDeliverableHub, etichetta inclusa) nella modalità corrente.
 function _dhRenderFiltered() {
   const host = document.getElementById('dh-host');
   if (!host) return;
-  const labelFilter = (document.getElementById('dh-filter-label')?.value || '').trim();
-  let items = _dhItems;
-  if (labelFilter) items = items.filter(d => d.section_label === labelFilter);
-  // α.172.202 — counter riflette il filtro: "X / Y deliverable" quando filtrato.
+  const items = _dhItems;
   const counter = document.getElementById('dh-counter');
-  if (counter) counter.textContent = labelFilter
-    ? `${items.length} / ${_dhItems.length} deliverable`
-    : `${_dhItems.length} deliverable`;
+  if (counter) counter.textContent = `${_dhItems.length} deliverable`;
   const mode = document.getElementById('dh-mode').value;
   if (mode === 'list') dhRenderList(host, items);
   else dhRenderKanban(host, items);
 }
 
 document.addEventListener('change', e => {
-  // α.172.202 — cambio vista (kanban/lista) o filtro etichetta: re-render senza reload
+  // α.172.203 — cambio vista (kanban/lista): re-render senza reload.
   if (e.target && e.target.id === 'dh-mode') _dhRenderFiltered();
-  if (e.target && e.target.id === 'dh-filter-label') _dhRenderFiltered();
 });
 
 function dhRenderKanban(host, items) {
@@ -2321,6 +2298,10 @@ let _dsmCapTemplates = null;
 let _dsmCurrentDeliverableId = null;
 // α.172.202 — preset audio al momento dell'apertura modal (per rilevare cambio al Save)
 let _initialDeliverablePreset = '';
+// α.172.203 (Task 3) — nome ORIGINALE dell'item capitolato: viene rinviato invariato
+// al PUT /delivery-items così le specs si salvano senza rinominare l'item condiviso.
+// Il nome editato in #dsm-s-name va invece sulla CONSEGNA (JobDeliverable).
+let _dsmOriginalItemName = '';
 
 async function _dsmLoadTaxonomy() {
   if (_dsmTaxonomy) return _dsmTaxonomy;
@@ -2489,6 +2470,8 @@ async function dsmCapUnlink() {
 function dsmRenderStructured(v, tax, deliverableData) {
   const host = document.getElementById('dsm-blocks-host');
   _dhClear(host);
+  // α.172.203 (Task 3) — memorizza il nome originale dell'item capitolato.
+  _dsmOriginalItemName = v.name || '';
   const opt = (list, sel, placeholder) => {
     let h = `<option value="">${placeholder || '— nessuno —'}</option>`;
     (list || []).forEach(r => {
@@ -2511,8 +2494,9 @@ function dsmRenderStructured(v, tax, deliverableData) {
   form.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
   const L = 'font-size:11px;color:var(--text3);text-transform:uppercase;';
   form.innerHTML = `
-    <div style="grid-column:1/-1;"><label style="${L}">Nome</label>
-      <input class="form-input" id="dsm-s-name" value="${escapeHtml(v.name||'')}"></div>
+    <div style="grid-column:1/-1;"><label style="${L}">Nome consegna</label>
+      <input class="form-input" id="dsm-s-name" value="${escapeHtml((deliverableData && deliverableData.name) || v.name || '')}">
+      <span class="text-xs text-muted" style="font-style:italic;">Etichetta della consegna (sul deliverable). Le specifiche restano dal capitolato.</span></div>
     <div><label style="${L}">Package</label>
       <select class="form-select" id="dsm-s-package">${opt(tax.packages, v.package_id, '— nessuno (single-file) —')}</select></div>
     <div><label style="${L}">Container</label>
@@ -2681,15 +2665,94 @@ async function _dsmRenderAudioSection(host, deliverableData, tax) {
   section.appendChild(tracksHost);
   _dsmRenderTracksList(tracksHost, deliverableData.audio_tracks || [], tax);
 
-  // Bottone aggiungi traccia
+  // Riga azioni: aggiungi traccia + salva come preset
+  const actionsRow = document.createElement('div');
+  actionsRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;';
+
   const addBtn = document.createElement('button');
   addBtn.className = 'btn btn-ghost btn-sm';
-  addBtn.style.cssText = 'margin-top:8px;font-size:11px;color:var(--indigo2);';
+  addBtn.style.cssText = 'font-size:11px;color:var(--indigo2);';
   addBtn.textContent = '+ Aggiungi traccia';
   addBtn.addEventListener('click', () => _dsmOpenTrackEditor(did, null, tax));
-  section.appendChild(addBtn);
+  actionsRow.appendChild(addBtn);
+
+  // α.172.203 (Task 2) — salva le tracce della consegna come preset (Capitolato
+  // Personale, scope server-side='personale'). Abilitato solo con >=1 traccia.
+  const hasOwnTracks = (deliverableData.audio_tracks || []).length > 0;
+  if (hasOwnTracks) {
+    const savePresetBtn = document.createElement('button');
+    savePresetBtn.className = 'btn btn-ghost btn-sm';
+    savePresetBtn.id = 'dsm-audio-save-preset';
+    savePresetBtn.style.cssText = 'font-size:11px;';
+    savePresetBtn.textContent = '💾 Salva tracce come preset';
+    savePresetBtn.title = 'Salva le tracce audio di questa consegna come preset riutilizzabile';
+    savePresetBtn.addEventListener('click', () => _dsmSaveTracksAsPreset(did));
+    actionsRow.appendChild(savePresetBtn);
+  }
+
+  section.appendChild(actionsRow);
 
   host.appendChild(section);
+}
+
+// α.172.203 (Task 2) — salva le tracce audio della consegna come preset personale,
+// poi ricarica il dropdown preset così il nuovo appare subito.
+async function _dsmSaveTracksAsPreset(deliverableId) {
+  const name = (window.prompt('Nome del preset audio:') || '').trim();
+  if (!name) return;
+  try {
+    const fd = new FormData();
+    fd.append('name', name);  // scope='personale' default server-side
+    const r = await fetch(`/jobs/api/deliverables/${deliverableId}/save-as-preset`, {
+      method: 'POST', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || 'Errore'); }
+    toast('Preset salvato in Capitolato Personale', 'success');
+    await _dsmReloadPresetSelect(deliverableId);
+  } catch(e) {
+    toast(e.message || 'Errore', 'error');
+  }
+}
+
+// α.172.203 (Task 2) — ricarica il dropdown preset audio preservando la selezione.
+// Opzionalmente raggruppa per source (personale/capitolato) se il campo è presente.
+async function _dsmReloadPresetSelect(deliverableId) {
+  const sel = document.getElementById('dsm-audio-preset');
+  if (!sel) return;
+  const current = sel.value;
+  let presets = [];
+  try {
+    const pr = await api('GET', `/jobs/api/deliverables/${deliverableId}/audio-presets`);
+    presets = Array.isArray(pr) ? pr : [];
+  } catch(_) { presets = []; }
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const o0 = document.createElement('option');
+  o0.value = ''; o0.textContent = '— nessun preset —';
+  sel.appendChild(o0);
+  // Raggruppa per source se disponibile, altrimenti lista piatta.
+  const hasSource = presets.some(p => p.source);
+  const addOpt = (p, parent) => {
+    const op = document.createElement('option');
+    op.value = String(p.id);
+    op.textContent = p.name || p.code || ('#' + p.id);
+    if (String(p.id) === current) op.selected = true;
+    parent.appendChild(op);
+  };
+  if (hasSource) {
+    const groups = { personale: 'Capitolato Personale', capitolato: 'Capitolato' };
+    Object.keys(groups).forEach(srcKey => {
+      const subset = presets.filter(p => p.source === srcKey);
+      if (!subset.length) return;
+      const og = document.createElement('optgroup');
+      og.label = groups[srcKey];
+      subset.forEach(p => addOpt(p, og));
+      sel.appendChild(og);
+    });
+    // Eventuali preset senza source riconosciuto: appesi in coda.
+    presets.filter(p => !groups[p.source]).forEach(p => addOpt(p, sel));
+  } else {
+    presets.forEach(p => addOpt(p, sel));
+  }
 }
 
 // α.172.202 — render lista tracce audio del deliverable.
@@ -2907,8 +2970,11 @@ async function dsmSaveStructured() {
     if (el) fd.append(key, el.value !== '' ? el.value : '');
   };
   const name = (document.getElementById('dsm-s-name').value || '').trim();
-  if (!name) { toast('Nome obbligatorio', 'error'); return; }
-  fd.append('name', name);
+  if (!name) { toast('Nome consegna obbligatorio', 'error'); return; }
+  // α.172.203 (Task 3) — il PUT sull'item capitolato NON deve rinominare l'item
+  // condiviso: rinvia il nome ORIGINALE. Il nome editato (#dsm-s-name) va sulla
+  // CONSEGNA (JobDeliverable) più sotto.
+  fd.append('name', _dsmOriginalItemName);
   _set('package_id', 'dsm-s-package');
   _set('container_id', 'dsm-s-container');
   _set('video_codec_id', 'dsm-s-vcodec');
@@ -2938,41 +3004,51 @@ async function dsmSaveStructured() {
     }
     if (!r.ok) { const err = await r.json().catch(()=>({})); throw new Error(err.detail || 'Errore'); }
 
-    // α.172.202 — applica preset audio se cambiato dall'apertura modal
+    // α.172.203 (Task 3) — il nome editato va sulla CONSEGNA (JobDeliverable),
+    // non sull'item capitolato condiviso. Si calcola anche il cambio preset audio
+    // (α.172.202) e si manda tutto in un singolo PUT /jobs/api/deliverables/{id}.
     const presetSel = document.getElementById('dsm-audio-preset');
-    if (presetSel && _dsmCurrentDeliverableId) {
-      const newPreset = presetSel.value || '';
-      if (newPreset !== _initialDeliverablePreset) {
-        // Conferma se il deliverable ha già tracce e si sta applicando un preset non vuoto
+    const newPreset = presetSel ? (presetSel.value || '') : null;
+    const presetChanged = presetSel && (newPreset !== _initialDeliverablePreset);
+
+    if (_dsmCurrentDeliverableId) {
+      // Conferma se si applica un preset non vuoto e ci sono già tracce.
+      if (presetChanged && newPreset) {
         const tracksHost = document.getElementById('dsm-audio-tracks-host');
         const hasExistingTracks = tracksHost && tracksHost.querySelector('table') !== null;
-        if (newPreset && hasExistingTracks) {
-          if (!confirm('Applicare il preset audio sostituirà le tracce audio esistenti della consegna. Continuare?')) {
-            toast('💾 Specifiche capitolato salvate (preset audio non applicato)', 'success');
-            closeModal('modal-deliverable-specs');
-            renderDeliverableHub();
-            return;
+        if (hasExistingTracks && !confirm('Applicare il preset audio sostituirà le tracce audio esistenti della consegna. Continuare?')) {
+          // Salva comunque il nome consegna, ma non il preset.
+          try {
+            const nfd = new FormData();
+            nfd.append('name', name);
+            const nr = await fetch(`/jobs/api/deliverables/${_dsmCurrentDeliverableId}`, { method: 'PUT', body: nfd, credentials: 'same-origin' });
+            if (!nr.ok) { const ne = await nr.json().catch(()=>({})); throw new Error(ne.detail || 'Errore nome'); }
+          } catch(ne) {
+            toast('Specifiche salvate, ma nome consegna: ' + (ne.message || 'errore'), 'warning', 4000);
           }
+          toast('💾 Specifiche e nome consegna salvati (preset audio non applicato)', 'success');
+          closeModal('modal-deliverable-specs');
+          renderDeliverableHub();
+          return;
         }
-        try {
-          const pfd = new FormData();
-          // α.172.202 — un campo multipart vuoto arriva al server come None (no-op),
-          // non come "": per PULIRE il preset si manda il sentinel '0' (gestito
-          // server-side come clear, vedi update_deliverable).
-          pfd.append('audio_config_preset_id', newPreset === '' ? '0' : newPreset);
-          const pr = await fetch(`/jobs/api/deliverables/${_dsmCurrentDeliverableId}`, { method: 'PUT', body: pfd, credentials: 'same-origin' });
-          if (!pr.ok) { const pe = await pr.json().catch(()=>({})); throw new Error(pe.detail || 'Errore preset'); }
-          toast('💾 Specifiche e preset audio salvati', 'success');
-        } catch(pe) {
-          toast('Specifiche salvate, ma preset audio: ' + (pe.message || 'errore'), 'warning', 4000);
-        }
+      }
+      try {
+        const dfd = new FormData();
+        dfd.append('name', name);
+        // α.172.202 — campo vuoto = None server-side (no-op): per PULIRE il preset
+        // si manda il sentinel '0' (gestito come clear in update_deliverable).
+        if (presetChanged) dfd.append('audio_config_preset_id', newPreset === '' ? '0' : newPreset);
+        const dr = await fetch(`/jobs/api/deliverables/${_dsmCurrentDeliverableId}`, { method: 'PUT', body: dfd, credentials: 'same-origin' });
+        if (!dr.ok) { const de = await dr.json().catch(()=>({})); throw new Error(de.detail || 'Errore consegna'); }
+      } catch(de) {
+        toast('Specifiche salvate, ma consegna: ' + (de.message || 'errore'), 'warning', 4000);
         closeModal('modal-deliverable-specs');
         renderDeliverableHub();
         return;
       }
     }
 
-    toast('💾 Specifiche capitolato salvate', 'success');
+    toast(presetChanged ? '💾 Specifiche, nome e preset audio salvati' : '💾 Specifiche e nome consegna salvati', 'success');
     closeModal('modal-deliverable-specs');
     renderDeliverableHub();
   } catch(e) {

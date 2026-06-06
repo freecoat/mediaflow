@@ -67,6 +67,26 @@ def backfill(session) -> dict:
             di_template_cache[di_id] = di.delivery_template_id if di else None
         return di_template_cache[di_id]
 
+    # α.172.203 — mappa broadcaster→template_id per tenant: ultimo fallback per
+    # le consegne orfane che hanno solo section_label (es. bucket multi-item Sky
+    # senza scelta item, riga pre-α.172.202). Il section_label deriva da
+    # DeliveryTemplate.broadcaster, quindi il match esatto rilinka al capitolato
+    # a livello template (l'item specifico resta scegliibile in planning).
+    from app.models import DeliveryTemplate
+    bcast_cache: dict[int, dict[str, int]] = {}
+
+    def _template_by_broadcaster(tenant_id: int, label: str | None) -> int | None:
+        if not label:
+            return None
+        if tenant_id not in bcast_cache:
+            m: dict[str, int] = {}
+            for t in (session.query(DeliveryTemplate)
+                      .filter(DeliveryTemplate.tenant_id == tenant_id).all()):
+                if t.broadcaster:
+                    m.setdefault(t.broadcaster.strip(), t.id)
+            bcast_cache[tenant_id] = m
+        return bcast_cache[tenant_id].get(label.strip())
+
     # Cache QuoteLine per evitare N query ripetute sullo stesso set.
     line_cache: dict[int, QuoteLine | None] = {}
 
@@ -107,6 +127,10 @@ def backfill(session) -> dict:
                     # Secondo fallback: dall'item del deliverable stesso
                     # (potrebbe essere stato settato in altri path).
                     tmpl_id = _di_template(d.delivery_item_id)
+                if tmpl_id is None:
+                    # Terzo fallback (α.172.203): match section_label↔broadcaster.
+                    tmpl_id = _template_by_broadcaster(
+                        d.tenant_id, d.section_label or line.section_label)
             if tmpl_id is not None:
                 d.delivery_template_id = tmpl_id
                 counts["template_filled"] += 1

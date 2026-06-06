@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.203 — Deliverables: affinamenti audio/etichetta/nome/link (6 giu 2026)
+
+Cinque affinamenti richiesti da Matteo sulla vista deliverables, subagent-driven.
+
+- **#1 Preset audio non più tagliati**: la sezione 🔊 Audio (ultimo blocco del modal spec) finiva sotto l'area scrollabile. `padding-bottom:24px` su `#dsm-blocks-host` → tutta la sezione + bottoni raggiungibili scrollando. Verificato browser (add-track bottom 1020 ≤ body 1078).
+- **#2 Preset audio custom in capitolato personalizzato**: nuovo CRUD `AudioConfigPreset` (`POST/PUT/DELETE /delivery-templates/api/.../audio-presets`) + tab "🔊 Preset audio" nell'editor capitolato con builder track_layout (taxonomy). Capitolato "Personale" per-tenant auto-creato (`get_or_create_personal_template`, code PERSONAL-PRESETS). In planning: bottone "💾 Salva tracce come preset" → `POST /jobs/api/deliverables/{id}/save-as-preset` salva nel Personale; il dropdown preset della consegna include ora anche i preset Personale (raggruppati per `source` capitolato/personale).
+- **#3 Nome consegna editabile**: il campo nome nel modal spec ora salva su `JobDeliverable.name` (PUT /jobs/api/deliverables) e NON sul DeliveryItem capitolato condiviso (che resta invariato). Label "Nome consegna". Le specifiche tecniche restano dal capitolato.
+- **#4 Item Sky orfani rilinkati**: backfill esteso con fallback `section_label == DeliveryTemplate.broadcaster` → 29 consegne (incl. Sky XDCam HD422) rilinkate al capitolato a livello template. Prevenzione già attiva per i futuri (α.172.202).
+- **#5 Filtro etichetta nella ricerca generica**: rimosso il dropdown separato in alto a sx; `section_label` + `broadcaster` aggiunti al match della ricerca generica `#f-q`; counter coerente.
+
+Smoke browser Playwright verde su tutti e 5. 464 test (invariati). Backend: `app/services/personal_capitolato.py` nuovo.
+
 ## v3.5.0-alpha.172.202.1 — Follow-up deliverables (6 giu 2026)
 
 - **Counter HUB riflette il filtro**: il contatore Deliverable HUB mostrava sempre il totale anche con filtro etichetta attivo. Ora mostra `X / Y deliverable` quando filtrato (`_dhRenderFiltered`). Verificato browser: 70 → "24 / 70" su NBCU → 70 al reset.

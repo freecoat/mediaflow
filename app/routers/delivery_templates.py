@@ -67,6 +67,52 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
     }
 
 
+def _preset_dict(p) -> dict:
+    """Serializza un AudioConfigPreset (id/code/name/description/track_layout/
+    sort_order/is_active). Allineato a delivery_items._serialize_preset."""
+    return {
+        "id": p.id,
+        "delivery_template_id": p.delivery_template_id,
+        "code": p.code,
+        "name": p.name,
+        "description": p.description,
+        "track_layout": p.track_layout or [],
+        "sort_order": p.sort_order,
+        "is_active": p.is_active,
+    }
+
+
+def _slug_code_from_name(name: str) -> str:
+    """Genera un code da un nome: uppercase, alfanumerici + dash, no doppi dash."""
+    import re
+    s = (name or "").strip().upper()
+    s = re.sub(r"[^A-Z0-9]+", "-", s).strip("-")
+    return s[:40] or "PRESET"
+
+
+def _unique_preset_code(db: Session, template_id: int, base: str) -> str:
+    """Assicura unicità di code entro il template (UniqueConstraint
+    delivery_template_id+code). Suffissa -2/-3… se già preso (anche inattivi)."""
+    from app.models.models import AudioConfigPreset
+    base = (base or "PRESET").upper()[:40]
+
+    def _taken(c: str) -> bool:
+        return db.query(AudioConfigPreset).filter(
+            AudioConfigPreset.delivery_template_id == template_id,
+            AudioConfigPreset.code == c,
+        ).first() is not None
+
+    if not _taken(base):
+        return base
+    n = 2
+    while True:
+        suffix = f"-{n}"
+        cand = base[: 40 - len(suffix)] + suffix
+        if not _taken(cand):
+            return cand
+        n += 1
+
+
 # ── Pagina HTML ───────────────────────────────────────────────────────
 
 
@@ -437,6 +483,131 @@ async def parse_sample_capitolato(
     result["source_document_name"] = filename
     result["text_preview"] = text[:200]
     return result
+
+
+# ── AudioConfigPreset CRUD (v3.5.0-alpha.172.203) ─────────────────────
+# I preset audio sono legati a UN DeliveryTemplate (UniqueConstraint
+# delivery_template_id+code). La GET/POST per-template vivono qui (questo
+# router è incluso PRIMA di delivery_items in main.py, quindi precede le
+# rotte omonime lì). PUT/DELETE usano un path dedicato /api/audio-presets/{id}.
+# Soft-delete via is_active (la tabella non usa deleted_at).
+
+
+@router.get("/api/{template_id}/audio-presets")
+async def list_audio_presets(template_id: int, db: Session = Depends(get_db)):
+    """Lista i preset audio di un capitolato (attivi prima), tenant-scoped."""
+    from app.models.models import AudioConfigPreset
+    rows = (
+        db.query(AudioConfigPreset)
+        .filter(
+            AudioConfigPreset.delivery_template_id == template_id,
+            AudioConfigPreset.tenant_id == current_tenant_id(),
+        )
+        .order_by(
+            AudioConfigPreset.is_active.desc(),
+            AudioConfigPreset.sort_order.asc(),
+            AudioConfigPreset.code.asc(),
+        )
+        .all()
+    )
+    return [_preset_dict(p) for p in rows]
+
+
+@router.post("/api/{template_id}/audio-presets", dependencies=[RequireEditSettings])
+async def create_audio_preset(
+    template_id: int,
+    name: str = Form(...),
+    code: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    track_layout: str = Form(...),   # JSON string (lista di dict)
+    db: Session = Depends(get_db),
+):
+    """Crea un AudioConfigPreset per il capitolato. `code` opzionale:
+    auto-generato dal nome (uppercase, alnum+dash, unico nel template)."""
+    from app.models.models import AudioConfigPreset
+    tpl = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == current_tenant_id(),
+    ).first()
+    if not tpl:
+        raise HTTPException(404, "DeliveryTemplate non trovato")
+    name = (name or "").strip()
+    if not name:
+        raise HTTPException(400, "name obbligatorio")
+    try:
+        layout = json.loads(track_layout) if track_layout and track_layout.strip() else []
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"track_layout JSON malformato: {e}")
+    if not isinstance(layout, list):
+        raise HTTPException(400, "track_layout deve essere una lista")
+    base_code = _slug_code_from_name(code) if (code and code.strip()) else _slug_code_from_name(name)
+    final_code = _unique_preset_code(db, template_id, base_code)
+    p = AudioConfigPreset(
+        tenant_id=current_tenant_id(),
+        delivery_template_id=template_id,
+        code=final_code,
+        name=name,
+        description=(description or "").strip() or None,
+        track_layout=layout,
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return _preset_dict(p)
+
+
+@router.put("/api/audio-presets/{preset_id}", dependencies=[RequireEditSettings])
+async def update_audio_preset(
+    preset_id: int,
+    name: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    track_layout: Optional[str] = Form(None),   # JSON string
+    is_active: Optional[bool] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Aggiorna un preset (tenant-scoped). 404 se non trovato/altro tenant."""
+    from app.models.models import AudioConfigPreset
+    p = db.query(AudioConfigPreset).filter(
+        AudioConfigPreset.id == preset_id,
+        AudioConfigPreset.tenant_id == current_tenant_id(),
+    ).first()
+    if not p:
+        raise HTTPException(404, "Preset non trovato")
+    if name is not None:
+        nm = name.strip()
+        if not nm:
+            raise HTTPException(400, "name non può essere vuoto")
+        p.name = nm
+    if description is not None:
+        p.description = description.strip() or None
+    if track_layout is not None:
+        try:
+            layout = json.loads(track_layout) if track_layout.strip() else []
+        except json.JSONDecodeError as e:
+            raise HTTPException(400, f"track_layout JSON malformato: {e}")
+        if not isinstance(layout, list):
+            raise HTTPException(400, "track_layout deve essere una lista")
+        p.track_layout = layout
+    if is_active is not None:
+        p.is_active = is_active
+    db.commit()
+    db.refresh(p)
+    return _preset_dict(p)
+
+
+@router.delete("/api/audio-presets/{preset_id}", dependencies=[RequireEditSettings])
+async def delete_audio_preset(preset_id: int, db: Session = Depends(get_db)):
+    """Soft-delete (is_active=False), coerente con la convenzione progetto."""
+    from app.models.models import AudioConfigPreset
+    p = db.query(AudioConfigPreset).filter(
+        AudioConfigPreset.id == preset_id,
+        AudioConfigPreset.tenant_id == current_tenant_id(),
+    ).first()
+    if not p:
+        raise HTTPException(404, "Preset non trovato")
+    p.is_active = False
+    db.commit()
+    return {"ok": True, "id": preset_id}
 
 
 # ── Export/Import capitolati in ZIP (multi-template) — v3.5.0-alpha.172.143 ──
