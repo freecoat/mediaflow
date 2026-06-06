@@ -12,6 +12,10 @@
   <button class="btn btn-ghost btn-sm" id="btn-export-zip" onclick="exportSelectedZip()" title="Esporta in ZIP i capitolati selezionati (o tutti gli attivi se nessuna selezione)">📦 Esporta ZIP<span id="sel-count-badge" style="margin-left:4px;"></span></button>
   <button class="btn btn-ghost btn-sm" onclick="document.getElementById('zip-import-input').click()" title="Importa capitolati da un archivio ZIP (export-zip o singoli .json)">📥 Importa ZIP</button>
   <input type="file" id="zip-import-input" accept=".zip,application/zip" style="display:none" onchange="importZip(this)">
+  <!-- v3.5.0-alpha.172.204 — crea capitolato vuoto da zero (poi apre l'editor completo) -->
+  <button class="btn btn-secondary btn-sm" onclick="openNewTemplateModal()" title="Crea un capitolato vuoto da compilare a mano">
+    + Nuovo capitolato
+  </button>
   <button class="btn btn-primary btn-sm" onclick="openImportModal()">
     <i data-lucide="upload"></i> Importa capitolato
   </button>
@@ -129,7 +133,12 @@
             <!-- v3.5.0-alpha.132 (Fase 5 QoL) — export JSON + duplica -->
             <a class="btn btn-ghost btn-sm" href="/delivery-templates/api/{{ t.id }}/export-json" target="_blank" title="Esporta come JSON">⬇</a>
             <button class="btn btn-ghost btn-sm" onclick="duplicateTemplate({{ t.id }}, '{{ t.code|e }}')" title="Duplica come bozza modificabile">📋</button>
+            {% if t.is_active %}
             <button class="btn btn-ghost btn-sm" onclick="confirmDelete({{ t.id }}, '{{ t.code|e }}')" title="Cestina">🗑</button>
+            {% else %}
+            <!-- v3.5.0-alpha.172.204 — riattiva template archiviato -->
+            <button class="btn btn-ghost btn-sm" onclick="reactivateTemplate({{ t.id }}, '{{ t.code|e }}')" title="Riattiva (rimuovi dall'archivio)" style="color:#86efac;">↺ Riattiva</button>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -225,6 +234,38 @@
       <button class="btn btn-secondary" onclick="closeModal('modal-import')">Annulla</button>
       <button id="btn-parse" class="btn btn-primary" onclick="doParseCapitolato()">Analizza con AI</button>
       <button id="btn-save" class="btn btn-success" onclick="doSaveTemplate()" style="display:none;">Salva template</button>
+    </div>
+  </div>
+</div>
+
+<!-- v3.5.0-alpha.172.204 — Modal Nuovo capitolato (crea vuoto da zero) -->
+<div id="modal-new-template" class="modal-overlay">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <span class="modal-title">+ Nuovo capitolato</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-template')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted text-sm" style="margin-bottom:14px;">
+        Crea un capitolato vuoto. Dopo la creazione si apre l'editor completo dove
+        compilare blocchi tecnici, items, voci listino e preset audio.
+      </p>
+      <div class="form-group">
+        <label>Code *</label>
+        <input id="nt-code" class="form-input mono" maxlength="50" style="text-transform:uppercase;" placeholder="es. CLIENTE-2026">
+      </div>
+      <div class="form-group">
+        <label>Nome *</label>
+        <input id="nt-name" class="form-input" placeholder="es. Specifiche di consegna Cliente">
+      </div>
+      <div class="form-group">
+        <label>Emittente / Distributore</label>
+        <input id="nt-broadcaster" class="form-input" placeholder="(opzionale)">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-template')">Annulla</button>
+      <button id="nt-create-btn" class="btn btn-primary" onclick="createBlankTemplate()">Crea e apri editor</button>
     </div>
   </div>
 </div>
@@ -374,6 +415,43 @@ async function dtParseSample(filename) {
 }
 
 document.addEventListener('DOMContentLoaded', dtLoadSamplesStatus);
+
+// v3.5.0-alpha.172.204 — Nuovo capitolato vuoto da zero.
+function openNewTemplateModal() {
+  const c = document.getElementById('nt-code');
+  const n = document.getElementById('nt-name');
+  const b = document.getElementById('nt-broadcaster');
+  if (c) c.value = '';
+  if (n) n.value = '';
+  if (b) b.value = '';
+  openModal('modal-new-template');
+  setTimeout(() => { if (c) c.focus(); }, 50);
+}
+
+async function createBlankTemplate() {
+  const code = (document.getElementById('nt-code').value || '').trim().toUpperCase();
+  const name = (document.getElementById('nt-name').value || '').trim();
+  const broadcaster = (document.getElementById('nt-broadcaster').value || '').trim();
+  if (!code || !name) { toast('Code e Nome sono obbligatori', 'error'); return; }
+  const btn = document.getElementById('nt-create-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('code', code);
+    fd.append('name', name);
+    if (broadcaster) fd.append('broadcaster', broadcaster);
+    const created = await api('POST', '/delivery-templates/api/save', fd);
+    toast(`✓ Capitolato "${created.code}" creato`, 'success', 2500);
+    closeModal('modal-new-template');
+    // Apri subito l'editor completo per compilare il resto.
+    if (created && created.id) openDetail(created.id);
+  } catch (e) {
+    // 409 = code duplicato → mostra il detail del server.
+    toast(e.message || 'Errore creazione', 'error', 6000);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 
 function openImportModal() {
   document.getElementById('import-step1').style.display = '';
@@ -668,23 +746,44 @@ function collectEditedObject(rootHost) {
 }
 
 // Render card di un blocco capitolato (video_specs/audio_specs/…) editabile.
+// α.172.204 — card titolata + righe key/value strutturate (con add "+ Campo" e
+// remove "✕" per riga) + toggle "{ } JSON grezzo" per-blocco che sostituisce le
+// righe strutturate con una <textarea> JSON (per shape annidate complesse, es.
+// array di oggetti). Lo stato del toggle è su card.dataset.rawMode; collectBlock()
+// legge la modalità attiva. Round-trip lossless.
 function renderEditableBlock(blockKey, label, data) {
   const card = document.createElement('div');
-  card.className = 'blk-card has-data';
+  const hasData = !!(data && typeof data === 'object' && Object.keys(data).length);
+  card.className = 'blk-card' + (hasData ? ' has-data' : '');
   card.style.cssText = 'margin-bottom:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;';
   card.dataset.blockKey = blockKey;
+  card.dataset.rawMode = '0';
+
   const header = document.createElement('div');
-  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;';
+  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;';
   const lbl = document.createElement('div');
   lbl.style.cssText = 'font-weight:600;font-size:13px;color:var(--text);';
   lbl.textContent = label;
   header.appendChild(lbl);
+  const headerBtns = document.createElement('div');
+  headerBtns.style.cssText = 'display:flex;gap:6px;align-items:center;';
   const addBtn = document.createElement('button');
+  addBtn.type = 'button';
   addBtn.className = 'btn btn-ghost btn-sm';
   addBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
-  addBtn.textContent = '+ Aggiungi campo';
-  header.appendChild(addBtn);
+  addBtn.textContent = '+ Campo';
+  headerBtns.appendChild(addBtn);
+  const rawToggleBtn = document.createElement('button');
+  rawToggleBtn.type = 'button';
+  rawToggleBtn.className = 'btn btn-ghost btn-sm';
+  rawToggleBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+  rawToggleBtn.textContent = '{ } JSON grezzo';
+  rawToggleBtn.title = 'Modifica il blocco come JSON grezzo (per strutture annidate complesse)';
+  headerBtns.appendChild(rawToggleBtn);
+  header.appendChild(headerBtns);
   card.appendChild(header);
+
+  // Host righe strutturate
   const rowsHost = document.createElement('div');
   rowsHost.className = 'blk-rows';
   addBtn.onclick = () => addEmptyField(rowsHost, 0);
@@ -692,7 +791,78 @@ function renderEditableBlock(blockKey, label, data) {
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     Object.entries(data).forEach(([k, v]) => renderEditableValue(rowsHost, k, v, 0));
   }
+
+  // Host textarea raw JSON (nascosto di default)
+  const rawHost = document.createElement('div');
+  rawHost.className = 'blk-raw';
+  rawHost.style.display = 'none';
+  const rawTa = document.createElement('textarea');
+  rawTa.className = 'blk-raw-ta';
+  rawTa.style.cssText = 'width:100%;min-height:140px;font-family:var(--font-mono);font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;resize:vertical;';
+  rawHost.appendChild(rawTa);
+  const rawErr = document.createElement('div');
+  rawErr.className = 'blk-raw-err';
+  rawErr.style.cssText = 'font-size:11px;color:#fca5a5;margin-top:4px;display:none;';
+  rawHost.appendChild(rawErr);
+  card.appendChild(rawHost);
+
+  // Toggle: structured <-> raw. Entrando in raw, serializza lo stato corrente
+  // (raccolto dalle righe). Tornando a structured, riparsea il JSON e ricostruisce
+  // le righe (così le due viste restano coerenti e il save è lossless).
+  rawToggleBtn.onclick = () => {
+    const toRaw = card.dataset.rawMode !== '1';
+    if (toRaw) {
+      const obj = collectEditedObject(rowsHost);
+      rawTa.value = JSON.stringify(obj, null, 2);
+      rawErr.style.display = 'none';
+      rowsHost.style.display = 'none';
+      addBtn.style.display = 'none';
+      rawHost.style.display = '';
+      card.dataset.rawMode = '1';
+      rawToggleBtn.textContent = '☰ Editor campi';
+    } else {
+      // valida prima di tornare alle righe
+      let parsed;
+      try {
+        parsed = rawTa.value.trim() ? JSON.parse(rawTa.value) : {};
+      } catch (e) {
+        rawErr.textContent = 'JSON malformato: ' + e.message;
+        rawErr.style.display = '';
+        return;
+      }
+      while (rowsHost.firstChild) rowsHost.removeChild(rowsHost.firstChild);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        Object.entries(parsed).forEach(([k, vv]) => renderEditableValue(rowsHost, k, vv, 0));
+      } else {
+        // shape non-oggetto (array/scalare): non rappresentabile in righe →
+        // resta in raw, avvisa l'utente.
+        rawErr.textContent = 'Shape non-oggetto: usa la vista JSON grezzo per questo blocco.';
+        rawErr.style.display = '';
+        return;
+      }
+      rawHost.style.display = 'none';
+      rawErr.style.display = 'none';
+      rowsHost.style.display = '';
+      addBtn.style.display = '';
+      card.dataset.rawMode = '0';
+      rawToggleBtn.textContent = '{ } JSON grezzo';
+    }
+  };
+
   return card;
+}
+
+// α.172.204 — collect del blocco rispettando la modalità (structured vs raw).
+// Ritorna l'oggetto/valore parsato. Lancia su JSON raw malformato.
+function collectBlockValue(card) {
+  if (card.dataset.rawMode === '1') {
+    const ta = card.querySelector('.blk-raw-ta');
+    const raw = (ta && ta.value || '').trim();
+    if (!raw) return {};
+    return JSON.parse(raw);  // l'eccezione è gestita dal chiamante
+  }
+  const rowsHost = card.querySelector('.blk-rows');
+  return rowsHost ? collectEditedObject(rowsHost) : {};
 }
 
 // ── α.172.182 — Editor naming convention strutturato (capitolato) ─────────
@@ -955,6 +1125,13 @@ async function openDetail(tid) {
       </div>
       <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Description</label>
         <textarea class="form-input" id="edt-description" rows="2" style="width:100%;font-size:12px;">${escapeHtml(t.description||'')}</textarea></div>
+      <!-- v3.5.0-alpha.172.204 — toggle Attivo (soft-delete / riattivazione dal dettaglio) -->
+      <div style="margin-top:8px;">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;user-select:none;text-transform:none;letter-spacing:0;">
+          <input type="checkbox" id="edt-active" ${t.is_active ? 'checked' : ''}>
+          Attivo <span style="color:var(--text3);font-size:11px;">(disattiva = archivia, i job collegati restano integri)</span>
+        </label>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
         <div><label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">TC Start default</label>
           <input class="form-input tc-mask" id="edt-default-tc-start" value="${escapeHtml(t.default_tc_start||'')}" placeholder="es. 00:59:59:00" style="font-family:var(--font-mono);" maxlength="11" inputmode="numeric"></div>
@@ -1555,6 +1732,24 @@ async function openItemEditor(item, tid) {
   audioSec.appendChild(audioList);
   box.appendChild(audioSec);
 
+  // v3.5.0-alpha.172.204 — Naming convention per-item (editor strutturato riusato
+  // dal blocco capitolato). Vuoto = eredita dal capitolato. Salvato come JSON string.
+  const nameSec = document.createElement('div');
+  nameSec.style.cssText = 'margin-top:14px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;';
+  const nameTitle = document.createElement('div');
+  nameTitle.style.cssText = 'font-weight:600;font-size:13px;margin-bottom:4px;';
+  nameTitle.textContent = '🏷 Naming convention';
+  nameSec.appendChild(nameTitle);
+  const nameHint = document.createElement('div');
+  nameHint.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:10px;';
+  nameHint.textContent = 'Vuoto = eredita dal capitolato. Compila per sovrascrivere il naming su questo item.';
+  nameSec.appendChild(nameHint);
+  const nameEditorHost = document.createElement('div');
+  nameSec.appendChild(nameEditorHost);
+  // makeNamingEditor ritorna { collect() }; init da item.naming_convention (può essere null).
+  const itemNamingEditor = makeNamingEditor(nameEditorHost, v.naming_convention || {});
+  box.appendChild(nameSec);
+
   // Render riusabile delle righe tracce: chiamato all'apertura e dopo apply preset.
   function renderAudioRows() {
     audioList.innerHTML = '';
@@ -1730,6 +1925,10 @@ async function openItemEditor(item, tid) {
     // senza segmenti propri e continua a ereditare dal template. Altrimenti i propri.
     const _tlOut = itemTlInherited ? [] : (itemTl ? itemTl.collect() : []);
     fd.append('timeline_segments_json', JSON.stringify(_tlOut));
+    // v3.5.0-alpha.172.204 — naming convention per-item. collect()={} se vuoto →
+    // invia '' (server: clear su PUT / nessun valore su POST = eredita dal capitolato).
+    const _ncOut = itemNamingEditor ? itemNamingEditor.collect() : {};
+    fd.append('naming_convention', Object.keys(_ncOut).length ? JSON.stringify(_ncOut) : '');
     // Preset audio: invia SOLO se cambiato dall'apertura. Così un salvataggio che
     // non tocca il preset non ri-materializza le tracce (e non cancella eventuali
     // edit manuali). Se cambiato e ci sono tracce esistenti, conferma sostituzione.
@@ -2441,6 +2640,9 @@ async function saveEditedTemplate() {
   fd.append('broadcaster', document.getElementById('edt-broadcaster').value || '');
   fd.append('version', document.getElementById('edt-version').value || '1.0');
   fd.append('description', document.getElementById('edt-description').value || '');
+  // v3.5.0-alpha.172.204 — toggle Attivo (is_active). Bool Form lato server.
+  const edtActive = document.getElementById('edt-active');
+  if (edtActive) fd.append('is_active', edtActive.checked ? 'true' : 'false');
   // v3.5.0-alpha.172.128 — TC defaults
   const edtDtc = document.getElementById('edt-default-tc-start');
   if (edtDtc) fd.append('default_tc_start', edtDtc.value);
@@ -2460,9 +2662,14 @@ async function saveEditedTemplate() {
     }
     const card = blocksHost.querySelector(`[data-block-key="${key}"]`);
     if (!card) continue;
-    const rowsHost = card.querySelector('.blk-rows');
-    if (!rowsHost) continue;
-    const obj = collectEditedObject(rowsHost);
+    // α.172.204 — rispetta toggle raw-JSON per-blocco (lossless su shape annidate).
+    let obj;
+    try {
+      obj = collectBlockValue(card);
+    } catch (e) {
+      toast(`JSON malformato nel blocco "${key}": ${e.message}`, 'error', 6000);
+      return;
+    }
     fd.append(key, JSON.stringify(obj));
   }
   try {
@@ -2505,6 +2712,26 @@ async function confirmDelete(tid, code) {
     setTimeout(() => window.location.reload(), 400);
   } catch(e) {
     toast(e.message || 'Errore', 'error');
+  }
+}
+
+// v3.5.0-alpha.172.204 — riattiva template archiviato (is_active=true via PUT).
+async function reactivateTemplate(tid, code) {
+  if (!confirm(`Riattivare il template "${code}"?`)) return;
+  try {
+    const fd = new FormData();
+    fd.append('is_active', 'true');
+    const r = await fetch(`/delivery-templates/api/${tid}`, {
+      method: 'PUT', body: fd, credentials: 'same-origin',
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'Errore');
+    }
+    toast(`Template "${code}" riattivato`, 'success');
+    setTimeout(() => window.location.reload(), 400);
+  } catch (e) {
+    toast(e.message || 'Errore riattivazione', 'error');
   }
 }
 

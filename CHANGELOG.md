@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.204 — Editor capitolato completo (6 giu 2026)
+
+Il capitolato (DeliveryTemplate) ora è editabile per intero. Subagent-driven.
+
+- **Crea capitolato da zero**: bottone "+ Nuovo capitolato" (modal code+name+broadcaster) → crea un template vuoto via `POST /delivery-templates/api/save` e apre subito l'editor completo (`openDetail`). Prima i capitolati nascevano solo da import/parsing.
+- **is_active editabile**: checkbox "Attivo" nell'header del dettaglio (salvato nel PUT); lista con toggle "Mostra inattivi" + azione "↺ Riattiva" sui capitolati archiviati.
+- **Naming convention per-item**: l'editor item espone ora l'editor strutturato `makeNamingEditor` (pattern/separator/case/extension/max_length/allowed_chars/examples + preview). Backend: `POST /delivery-templates/api/{tid}/items` e `PUT /delivery-items/api/{id}` accettano `naming_convention` (JSON), normalizzato via `normalize_naming_convention`; serializer lo ritorna. Vuoto = eredita dal capitolato.
+- **Editor "Specs blocchi" rifatto**: i 7 blocchi JSON generici (video/audio/text/head/textless/archive/metadata) ora sono card con righe chiave/valore (+ Campo / ✕) **e un toggle "{ } JSON grezzo"** per editare strutture annidate senza perdita. `collectBlockValue` round-trip-safe (raw→parse JSON, strutturato→righe), warning su JSON malformato invece di perdere dati.
+- Già editabili da prima (confermato): header (code/name/broadcaster/version/description), default TC/timeline, items (20+ campi/taxonomy/timeline/tracce audio), preset audio, voci listino.
+
+Smoke browser Playwright verde su tutti e 4 i nuovi punti. 464 test. Backend: `naming_convention` su item endpoints (`delivery_items.py`).
+
 ## v3.5.0-alpha.172.203 — Deliverables: affinamenti audio/etichetta/nome/link (6 giu 2026)
 
 Cinque affinamenti richiesti da Matteo sulla vista deliverables, subagent-driven.

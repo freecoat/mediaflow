@@ -33,6 +33,7 @@ from app.models.models import (
 from app.services.rbac import requires_permission, current_user_optional
 from app.context import current_tenant_id
 from app.services.delivery_timeline_service import effective_timeline
+from app.services.naming_resolver import normalize_naming_convention
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["delivery_items"])
@@ -95,6 +96,7 @@ def _serialize_item(it: DeliveryItem, with_tracks: bool = True) -> dict:
         "suggested_qty": it.suggested_qty,
         "suggested_price_item_id": it.suggested_price_item_id,
         "extra_specs": it.extra_specs,
+        "naming_convention": it.naming_convention,
         "notes": it.notes,
         "ai_extracted": it.ai_extracted,
         "ai_confidence": it.ai_confidence,
@@ -179,6 +181,7 @@ async def create_item_manual(
     suggested_unit: Optional[str] = Form(None),
     suggested_qty: Optional[float] = Form(None),
     suggested_price_item_id: Optional[int] = Form(None),
+    naming_convention: Optional[str] = Form(None),  # JSON dict o vuoto
     notes: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -191,6 +194,13 @@ async def create_item_manual(
     last_sort = db.query(DeliveryItem).filter(
         DeliveryItem.delivery_template_id == tid,
     ).count() * 10
+    # Parsing naming_convention JSON opzionale
+    _naming_conv = None
+    if naming_convention is not None and naming_convention.strip():
+        try:
+            _naming_conv = normalize_naming_convention(json.loads(naming_convention))
+        except json.JSONDecodeError as e:
+            raise HTTPException(400, f"naming_convention JSON invalido: {e}")
     it = DeliveryItem(
         tenant_id=current_tenant_id(),
         delivery_template_id=tid,
@@ -212,6 +222,7 @@ async def create_item_manual(
         suggested_unit=suggested_unit or None,
         suggested_qty=suggested_qty,
         suggested_price_item_id=suggested_price_item_id,
+        naming_convention=_naming_conv,
         notes=notes or None,
         ai_extracted=False,
     )
@@ -244,6 +255,7 @@ async def update_item(
     suggested_qty: Optional[float] = Form(None),
     suggested_price_item_id: Optional[int] = Form(None),
     extra_specs: Optional[str] = Form(None),  # JSON
+    naming_convention: Optional[str] = Form(None),  # JSON dict o stringa vuota per cancellare
     notes: Optional[str] = Form(None),
     pending_review: Optional[bool] = Form(None),
     sort_order: Optional[int] = Form(None),
@@ -293,6 +305,15 @@ async def update_item(
             it.extra_specs = json.loads(extra_specs) if extra_specs.strip() else None
         except json.JSONDecodeError as e:
             raise HTTPException(400, f"extra_specs JSON invalido: {e}")
+    if naming_convention is not None:
+        if naming_convention.strip():
+            try:
+                it.naming_convention = normalize_naming_convention(json.loads(naming_convention))
+            except json.JSONDecodeError as e:
+                raise HTTPException(400, f"naming_convention JSON invalido: {e}")
+        else:
+            # stringa vuota = cancella (eredita dal template)
+            it.naming_convention = None
     if notes is not None:                    it.notes = notes.strip() or None
     if pending_review is not None:           it.pending_review = pending_review
     if sort_order is not None:               it.sort_order = sort_order

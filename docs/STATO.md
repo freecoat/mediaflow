@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.203** — 6 giugno 2026 — Deliverables: affinamenti audio/etichetta/nome/link
+**v3.5.0-alpha.172.204** — 6 giugno 2026 — Editor capitolato completo
+
+### α.172.204 ✅ (editor capitolato per intero — 6 giu, subagent-driven)
+- "+ Nuovo capitolato" (crea blank → apre editor). is_active toggle + lista mostra-inattivi + Riattiva. Naming convention per-item (editor strutturato; backend `naming_convention` su POST items/PUT item). Editor "Specs blocchi" rifatto: card chiave/valore + toggle JSON grezzo per strutture annidate (collectBlockValue round-trip-safe).
+- Confermato già editabile: header completo, default TC/timeline, items 20+ campi, preset audio, voci listino. → il capitolato è ora editabile per intero.
+- Smoke Playwright verde (4/4). 464 test. Push fatto.
+- **Pendente**: nessuno bloccante.
+
+### α.172.203 — Deliverables: affinamenti audio/etichetta/nome/link
 
 ### α.172.203 ✅ (5 affinamenti deliverables — 6 giu, subagent-driven)
 - #1 preset audio non più tagliati (padding-bottom modal). #2 preset custom: CRUD AudioConfigPreset + tab editor capitolato + capitolato "Personale" + "salva come preset" dal planning (dropdown raggruppato capitolato/personale). #3 nome → consegna (JobDeliverable.name), non più il capitolato condiviso. #4 backfill esteso (section_label==broadcaster) → 29 Sky orfani rilinkati. #5 etichetta nella ricerca generica #f-q, dropdown rimosso.
