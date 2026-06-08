@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.209 — Ricerca deliverable multi-termine (`;` = AND) (8 giu 2026)
+
+La ricerca generica della vista Deliverable (planning, campo `#f-q`) ora combina più termini. Prima un solo termine: "XDCam" trovava, "Sky" trovava, ma non insieme.
+
+- **Separatore `;`**: `XDCam; Sky` → due termini, combinati in **AND** (deliverable che contengono entrambi). Restringe la lista.
+- **Virgolette** per frasi esatte con spazi/`;` dentro: `"XAVC Intra"; HLG` → cerca la frase "xavc intra" *e* "hlg".
+- Match su name/job_code/project_code/project_title/quote_number/section_label/broadcaster (invariato), ma ogni termine deve matchare almeno un campo.
+- Helper puro `_parseSearchTerms` (split rispettando le virgolette). Placeholder + tooltip view-specific (`; per combinare`).
+- Solo client-side in `planning.html`. Zero backend, zero migrazione. Smoke browser: 62→XDCam 12→`XDCam; Sky` 12 (AND, non 60=OR), frase ok, zero errori console.
+
 ## v3.5.0-alpha.172.208 — Cestino Quote: cascade deliverable (fix orfani planning) (8 giu 2026)
 
 Fix bug: cestinare una Quote non cestinava i `JobDeliverable` spawnati dalle sue righe → restavano vivi sul Job e comparivano come **orfani** nel planning deliveries (sorgente cestinata, deliverable no). Scoperto su GLO-J007 "Gomorra": 8 deliverable (6 Fremantle + 2 subtitle) derivati dalla quote cestinata `~B20~Q-2026-010-v1`.

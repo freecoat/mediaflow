@@ -1725,6 +1725,17 @@ function applyFilterVisibilityForView(view) {
       ? (el.dataset.plLabelDeliverables || el.dataset.plLabelDefault || el.textContent)
       : (el.dataset.plLabelDefault || el.textContent);
   });
+  // α.172.209 — placeholder #f-q view-specific: nei deliverable il campo
+  // supporta multi-termine ';' (AND) + "frasi" tra virgolette.
+  const fq = document.getElementById('f-q');
+  if (fq) {
+    fq.placeholder = isDelv
+      ? 'codice, titolo, etichetta…  (; per combinare)'
+      : 'codice, titolo…';
+    fq.title = isDelv
+      ? 'Più termini separati da ";" combinati in AND. Virgolette per frasi esatte. Es: XDCam; Sky'
+      : '';
+  }
 }
 
 function renderActiveFiltersBar() {
@@ -1835,6 +1846,28 @@ function _dhMakeEmpty(host, msg, color) {
   host.appendChild(e);
 }
 
+// α.172.209 — parser ricerca multi-termine per il filtro deliverable.
+// Separa la stringa su ';' (fuori dalle virgolette), così "frasi" tra
+// virgolette restano un unico termine anche se contengono spazi o ';'.
+// Ritorna i termini lowercase non vuoti. Es:
+//   'XDCam; Sky'        -> ['xdcam', 'sky']
+//   '"XAVC Intra"; HLG' -> ['xavc intra', 'hlg']
+function _parseSearchTerms(raw) {
+  const terms = [];
+  let buf = '', inQuote = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === '"') { inQuote = !inQuote; continue; }
+    if (ch === ';' && !inQuote) {
+      const t = buf.trim(); if (t) terms.push(t.toLowerCase());
+      buf = ''; continue;
+    }
+    buf += ch;
+  }
+  const last = buf.trim(); if (last) terms.push(last.toLowerCase());
+  return terms;
+}
+
 async function renderDeliverableHub() {
   const host = document.getElementById('dh-host');
   const counter = document.getElementById('dh-counter');
@@ -1869,7 +1902,10 @@ async function renderDeliverableHub() {
     const deptIds = ((document.getElementById('f-dept')?.value) || '').split(',').map(s => Number(s.trim())).filter(Boolean);
     const fromD = document.getElementById('f-from')?.value || '';
     const toD = document.getElementById('f-to')?.value || '';
-    const qText = ((document.getElementById('f-q')?.value) || '').trim().toLowerCase();
+    // α.172.209 — ricerca multi-termine: separa su ';' (rispettando "frasi"
+    // tra virgolette), termini combinati in AND. Es. 'XDCam; Sky' = deliverable
+    // che contengono ENTRAMBI; '"XAVC Intra"; HLG' = frase esatta + termine.
+    const qTerms = _parseSearchTerms((document.getElementById('f-q')?.value) || '');
     if (projIds.length > 1) items = items.filter(d => projIds.includes(d.project_id));
     if (jobIds.length > 1) items = items.filter(d => jobIds.includes(d.job_id));
     if (resIds.length) items = items.filter(d => d.primary_resource_id && resIds.includes(d.primary_resource_id));
@@ -1878,15 +1914,13 @@ async function renderDeliverableHub() {
     if (toD) items = items.filter(d => !d.target_delivery_date || d.target_delivery_date <= toD);
     // α.172.203 (Task 5) — ricerca generica estesa a etichetta (section_label)
     // e broadcaster: digitare "Sky"/"NBCU" in #f-q filtra anche per etichetta.
-    if (qText) items = items.filter(d => (
-      (d.name || '').toLowerCase().includes(qText)
-      || (d.job_code || '').toLowerCase().includes(qText)
-      || (d.project_code || '').toLowerCase().includes(qText)
-      || (d.project_title || '').toLowerCase().includes(qText)
-      || (d.quote_number || '').toLowerCase().includes(qText)
-      || (d.section_label || '').toLowerCase().includes(qText)
-      || (d.broadcaster || '').toLowerCase().includes(qText)
-    ));
+    // α.172.209 — ogni termine (AND) deve matchare almeno un campo cercabile.
+    if (qTerms.length) items = items.filter(d => {
+      const hay = [d.name, d.job_code, d.project_code, d.project_title,
+                   d.quote_number, d.section_label, d.broadcaster]
+        .map(x => (x || '').toLowerCase()).join('  ');
+      return qTerms.every(t => hay.includes(t));
+    });
     _dhItems = items;
     counter.textContent = `${_dhItems.length} deliverable`;
   } catch (e) {
