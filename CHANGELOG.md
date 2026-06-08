@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.208 — Cestino Quote: cascade deliverable (fix orfani planning) (8 giu 2026)
+
+Fix bug: cestinare una Quote non cestinava i `JobDeliverable` spawnati dalle sue righe → restavano vivi sul Job e comparivano come **orfani** nel planning deliveries (sorgente cestinata, deliverable no). Scoperto su GLO-J007 "Gomorra": 8 deliverable (6 Fremantle + 2 subtitle) derivati dalla quote cestinata `~B20~Q-2026-010-v1`.
+
+- **Causa**: `soft_delete_quote` (soft-path) settava solo `deleted_at`+bin-prefix sulla Quote; la purge-totale gestiva i deliverable, il cestinamento normale no.
+- **Fix generico** in `app/services/soft_delete.py`: `_cascade_soft_delete_deliverables` cestina i `JobDeliverable` vivi collegati alle righe della quote (`quote_line_id`), **solo se puliti** (non fatturati, nessun booking né via `Booking.job_deliverable_id` legacy né via `BookingDeliverable`). Tag `[quote-trash]` in `notes` per restore selettivo. `_cascade_restore_deliverables` ripristina in simmetria nel `restore_quote` (solo i taggati: un deliverable cestinato a mano prima non resuscita).
+- **Cleanup dati**: 8 orfani esistenti soft-deleted (snapshot `pre-orphan-deliverable-cleanup` salvato). Zero orfani residui.
+- **Test**: +4 (`test_quote_trash_deliverable_cascade.py`: cascade delete, restore simmetrico, fatturato non-cascade, cestinato-a-mano non-resuscita). Suite 484. Nessuna migrazione.
+
 ## v3.5.0-alpha.172.207 — Audit fisico: volume TB + auth QR + lifecycle media (D+E+F) (6 giu 2026)
 
 Chiusi gli ultimi 3 nodi dell'audit legame deliverable↔asset fisici. Subagent-driven.

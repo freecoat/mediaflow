@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session, with_loader_criteria
 from app.models.models import (
     Quote, QuoteLine, Job, JobCostLine, Booking, BookingAssignment,
     BookingStatus, JobResourceAssignment, Project, User,
-    PricelistSnapshot, PhysicalAsset, JobDeliverable,
+    PricelistSnapshot, PhysicalAsset, JobDeliverable, BookingDeliverable,
 )
 
 logger = logging.getLogger(__name__)
@@ -228,6 +228,91 @@ def _strip_bin_prefix(number: str) -> Optional[str]:
     return number[m.end():]
 
 
+# ── Cascade JobDeliverable ↔ Quote (v3.5.0-alpha.172.208) ──────
+#
+# Un JobDeliverable nasce da una QuoteLine (`quote_line_id`) e vive sul Job.
+# Cestinare la Quote NON cestinava i deliverable spawnati dalle sue righe:
+# restavano vivi sul Job e comparivano come "orfani" nel planning deliveries
+# (sorgente cestinata, deliverable no). Questi helper rendono il cestinamento
+# simmetrico: delete → cestina i deliverable puliti; restore → li riporta su.
+
+# Marker per ricordare quali deliverable sono stati cestinati DALLA quote
+# (così il restore ne ripristina solo quelli, non quelli cestinati a mano prima).
+_DELIV_CASCADE_TAG = "[quote-trash]"
+
+
+def _quote_line_ids(quote: Quote) -> list[int]:
+    return [ln.id for ln in quote.lines]
+
+
+def _deliverable_is_clean(db: Session, d: JobDeliverable) -> bool:
+    """True se il deliverable può seguire la quote nel cestino senza perdita:
+    non fatturato e nessun booking collegato (né legacy `Booking`, né via la
+    join `BookingDeliverable`)."""
+    if getattr(d, "billing_status", None) not in (None, "not_billed"):
+        return False
+    legacy = (db.query(Booking.id)
+                .filter(Booking.job_deliverable_id == d.id)
+                .first())
+    if legacy is not None:
+        return False
+    assoc = (db.query(BookingDeliverable.id)
+               .filter(BookingDeliverable.job_deliverable_id == d.id)
+               .first())
+    return assoc is None
+
+
+def _cascade_soft_delete_deliverables(db: Session, quote: Quote,
+                                      user: Optional[User]) -> int:
+    """Cestina i JobDeliverable vivi spawnati dalle righe di `quote`.
+    Salta quelli con booking/fatturazione (non-clean), restando difensivo.
+    Ritorna il numero di deliverable cestinati."""
+    line_ids = _quote_line_ids(quote)
+    if not line_ids:
+        return 0
+    delivs = (db.query(JobDeliverable)
+                .filter(JobDeliverable.quote_line_id.in_(line_ids),
+                        JobDeliverable.deleted_at.is_(None))
+                .all())
+    now = now_utc()
+    count = 0
+    for d in delivs:
+        if not _deliverable_is_clean(db, d):
+            logger.warning(
+                "soft_delete_quote: deliverable %s non-clean (booking/billed), "
+                "lasciato vivo nonostante quote %s cestinata", d.id, quote.id)
+            continue
+        d.deleted_at = now
+        d.deleted_by_user_id = user.id if user else None
+        # Tag in notes per restore selettivo (non sovrascrive note esistenti)
+        if _DELIV_CASCADE_TAG not in (d.notes or ""):
+            d.notes = ((d.notes + " ") if d.notes else "") + _DELIV_CASCADE_TAG
+        count += 1
+    return count
+
+
+def _cascade_restore_deliverables(db: Session, quote: Quote) -> int:
+    """Ripristina i JobDeliverable cestinati DALLA quote (tag marker).
+    Simmetrico a `_cascade_soft_delete_deliverables`. Ritorna il conteggio."""
+    line_ids = _quote_line_ids(quote)
+    if not line_ids:
+        return 0
+    delivs = (db.query(JobDeliverable)
+                .execution_options(include_deleted=True)
+                .filter(JobDeliverable.quote_line_id.in_(line_ids),
+                        JobDeliverable.deleted_at.isnot(None))
+                .all())
+    count = 0
+    for d in delivs:
+        if _DELIV_CASCADE_TAG not in (d.notes or ""):
+            continue  # cestinato a mano prima/indipendentemente: non lo tocco
+        d.deleted_at = None
+        d.deleted_by_user_id = None
+        d.notes = (d.notes or "").replace(_DELIV_CASCADE_TAG, "").strip() or None
+        count += 1
+    return count
+
+
 def soft_delete_quote(db: Session, quote: Quote, *, user: User,
                       force: bool = False) -> dict:
     """Soft-delete di una Quote con tutte le regole di integrità v3.4.55+.
@@ -270,12 +355,21 @@ def soft_delete_quote(db: Session, quote: Quote, *, user: User,
             quote.number = _bin_number(quote.id, quote.number)
         quote.deleted_at         = now_utc()
         quote.deleted_by_user_id = user.id if user else None
+        # v3.5.0-alpha.172.208 — cascade soft-delete dei JobDeliverable spawnati
+        # dalle righe di questa quote. Senza questo restavano vivi sul Job e
+        # comparivano come "orfani" nel planning deliveries (la quote sorgente
+        # è cestinata ma il deliverable no). Solo quelli "puliti": non li tocco
+        # se hanno booking attivi o sono già fatturati (quegli scenari sarebbero
+        # già stati bloccati a monte, ma resto difensivo). restore_quote li
+        # ripristina in simmetria.
+        deliv_count = _cascade_soft_delete_deliverables(db, quote, user)
         return {
-            "ok":           True,
-            "mode":         "soft",
-            "quote_id":     quote.id,
-            "lines_count":  len(quote.lines),
-            "had_job":      bool(quote.job),
+            "ok":              True,
+            "mode":            "soft",
+            "quote_id":        quote.id,
+            "lines_count":     len(quote.lines),
+            "had_job":         bool(quote.job),
+            "deliverables_count": deliv_count,
         }
 
     # ── force=True: pulizia totale (hard-delete cascade) ───────
@@ -362,11 +456,15 @@ def restore_quote(db: Session, quote: Quote) -> dict:
             renamed_to = quote.number
     quote.deleted_at         = None
     quote.deleted_by_user_id = None
+    # v3.5.0-alpha.172.208 — simmetria: ripristina i deliverable cestinati
+    # in cascata dal delete della quote (tag marker).
+    deliv_count = _cascade_restore_deliverables(db, quote)
     return {
         "ok": True,
         "quote_id": quote.id,
         "renamed_to": renamed_to,
         "restored_number": quote.number,
+        "deliverables_count": deliv_count,
     }
 
 
