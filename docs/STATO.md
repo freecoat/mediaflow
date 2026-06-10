@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.207** — 6 giugno 2026 — Audit fisico: volume TB + auth QR + lifecycle media (D+E+F)
+**v3.5.0-alpha.172.210** — 10 giugno 2026 — F1: Asset Registry metadata-only + Claqo Agent (fondamenta)
+
+### α.172.210 ✅ (F1 asset registry metadata-only + agent — 10 giu, subagent-driven)
+- **Fondamenta MAM metadata-only**: nessun byte di contenuto sul server. Asset di contenuto vivono sulla SAN facility; il server tiene solo metadata+checksum. Agent separato (pacchetto `agent/`, solo `requests`+`xxhash`, NON importa `app.*`) polla coda via HTTPS outbound, esegue ffprobe/xxhash in facility, riporta JSON. Probe done → proposta Asset `pending_review` → conferma operatore.
+- **3 modelli** (`StorageVolume`/`AgentNode`/`AgentJob`) + 7 colonne `Asset` + 4 enum. Auto-migrate al boot. **2 service** (`agent_queue` token/enqueue/claim FIFO/complete-fail; `asset_registry` proposta/dedup/conferma/guard). **2 router** (`/agent-api` auth X-Agent-Token; `/storage` admin RBAC). **Blocco upload media** in /dam (422). **UI /storage** 4 tab. **Pacchetto agent v0.1**.
+- **11 task TDD, +18 test (502 totali)**. E2E server↔agent 18/18 + browser smoke verde + guard upload (.mov/.wav→422, .pdf→200). Checklist `docs/qc/f1-e2e-checklist.md`.
+- **3 bug E2E fixati**: `/agent-api` dirottato dal middleware auth (esentato in PUBLIC_PATHS) · `list_proposals` 500 (`Asset.is_active` inesistente, rimosso) · `nav.storage` i18n mancante (aggiunto).
+- **Sicurezza** (commit-review): authz aggiunta ai GET /storage list; upload-guard filename-based notato MEDIUM (cap 200MB mitiga, sniff byte → backlog F2).
+
+**Prossimo / PENDENTE**: Matteo **restart :8000 + smoke browser** del pane `/storage` (4 tab, crea volume+agent, register-path). Poi **F2**: watch-dirs auto-scan + match `JobDeliverable` + preview. Backlog F1 residuo: upload-guard via sniff byte reali, dedup proposta che ignora `discarded`.
 
 ### α.172.207 ✅ (audit fisico D+E+F — 6 giu, subagent-driven)
 - **D**: ingest MHL → consegna `deliverable_volume` incrementa per TB reali (helper `_volume_increment`, 10 test), `pc` resta +1.

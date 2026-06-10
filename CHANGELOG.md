@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.210 — F1: Asset Registry metadata-only + Claqo Agent (10 giu 2026)
+
+Fondamenta del **registro asset metadata-only**: nessun byte di contenuto media sul server. Gli asset di contenuto (video/audio/sequenze) vivono sulla SAN della facility; il server tiene solo metadata + checksum. Un **agent** separato gira in facility, polla una coda comandi via HTTPS outbound, esegue probe/checksum localmente e riporta JSON. Pattern "agent propone, operatore dispone". Spec `docs/superpowers/specs/2026-06-10-asset-library-metadata-only-design.md`, piano `docs/superpowers/plans/2026-06-10-f1-asset-registry-agent.md`. Subagent-driven (11 task, TDD).
+
+- **Modelli** (`StorageVolume`, `AgentNode`, `AgentJob`) + estensioni `Asset` metadata-only (`storage_volume_id`, `rel_path`, `content_state`, `proposed_state`, `checksum_xxhash`, `mhl_ref`, `registered_via`). Enum `AssetContentState`/`AssetProposedState`/`AgentJobType`/`AgentJobStatus`. Auto-migrate colonne `assets` al boot (DEFAULT server-side = backfill legacy a `online`/`confirmed`).
+- **Service `agent_queue`**: token agent (sha256, mostrato 1 volta), enqueue, claim FIFO tenant-scoped + agent-pinning, complete/fail.
+- **Service `asset_registry`**: proposta Asset da probe (`pending_review`), dedup checksum+volume, conferma/scarto, guard `is_content_file` (blocca contenuti media, lascia documenti business).
+- **Router `/agent-api`** (auth `X-Agent-Token`, no JWT utente): heartbeat (+config volumi), claim job, push risultato. Probe `done` → crea proposta asset.
+- **Router admin `/storage`**: CRUD volumi, crea/revoca agent (token 1-shot), coda job, lista proposte, conferma/scarto, register-path (accoda probe). RBAC `edit_planning_all` su tutti gli endpoint (read + write).
+- **Blocco upload contenuti media** in `/dam`: `.mov/.wav/.mxf/...` → 422 "registralo via agent"; pdf/jpg/txt/office restano uploadabili.
+- **UI `/storage`**: 4 tab (Proposte / Volumi / Agent / Job), modali Form-based, badge online/offline agent (heartbeat <120s), token agent in box copia-1-volta.
+- **Pacchetto `agent/`** (demone facility v0.1): `config`/`probe`/`client`/`main`. Solo `requests`+`xxhash`, NON importa `app.*`. ffprobe → specs normalizzate, xxhash64 streaming, loop heartbeat+poll. `agent/README.md` con istruzioni install/run.
+- **E2E**: loop integrazione server↔agent 18/18 (`tools/_e2e_f1.py`) + browser smoke `/storage` + guard upload (.mov/.wav→422, .pdf→200). Checklist `docs/qc/f1-e2e-checklist.md`. **3 bug colti+fixati**: `/agent-api` dirottato dal middleware auth (esentato in `PUBLIC_PATHS`), `list_proposals` 500 (`Asset.is_active` inesistente), `nav.storage` i18n mancante. **+18 test** (502 totali).
+- **Backlog F2** (non bloccante): watch-dirs auto-scan, match `JobDeliverable`, preview, upload-guard via sniff byte reali (oggi filename/mime), dedup proposta che ignora `discarded`.
+
 ## v3.5.0-alpha.172.209 — Ricerca deliverable multi-termine (`;` = AND) (8 giu 2026)
 
 La ricerca generica della vista Deliverable (planning, campo `#f-q`) ora combina più termini. Prima un solo termine: "XDCam" trovava, "Sky" trovava, ma non insieme.
