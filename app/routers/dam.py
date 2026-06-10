@@ -27,6 +27,7 @@ from app.services.project_access import (
     user_can_access_project,
 )
 from app.context import current_tenant_id
+from app.services.asset_registry import is_content_file
 import os
 
 router = APIRouter(prefix="/dam", tags=["dam"])
@@ -382,6 +383,16 @@ async def upload_asset(
 ):
     if file.size and file.size > 200 * 1024 * 1024:
         raise HTTPException(413, "File troppo grande (max 200 MB)")
+
+    # F1 (spec 2026-06-10) — Contenuto media MAI sul server Claqo.
+    # Asset di contenuto si registrano metadata-only via agent (/storage).
+    import mimetypes as _mt
+    _guessed_mime, _ = _mt.guess_type(file.filename or "")
+    if is_content_file(file.filename or "", _guessed_mime):
+        raise HTTPException(
+            status_code=422,
+            detail="File di contenuto media: vietato l'upload sul server. "
+                   "Registralo via agent dalla pagina Storage (metadata-only).")
 
     file_bytes = await file.read()
     filename, file_path, mime_type = save_upload(file_bytes, file.filename)
