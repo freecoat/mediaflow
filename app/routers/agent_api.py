@@ -89,7 +89,7 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
         fail_job(db, job, error or "errore agent non specificato")
         return None
     complete_job(db, job, result or {})
-    if job.type == AgentJobType.probe and result:
+    if job.type == AgentJobType.probe and result:  # dict popolato (build_probe_result non torna mai {})
         volume_id = int((job.payload or {}).get("volume_id") or 0)
         asset = create_proposal_from_probe(
             db, tenant_id=job.tenant_id, volume_id=volume_id, probe=result,

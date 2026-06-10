@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models import (
     Asset, AssetType, Tag, AssetTag, User, AssetAccessAction, Job,
 )
+from app.models.models import AssetProposedState
 from app.services.dam import save_upload, generate_thumbnail, resolve_asset_type, delete_asset_files
 from app.services.dam_security import (
     apply_watermark_image, secure_delete_file, is_image_mime,
@@ -57,6 +58,7 @@ async def dam_page(request: Request, db: Session = Depends(get_db)):
     q = db.query(Asset).filter(
         Asset.tenant_id == current_tenant_id(),
         Asset.parent_asset_id == None,  # noqa: E711
+        Asset.proposed_state == AssetProposedState.confirmed,  # F1: no proposte agent
     )
     if is_admin(user):
         pass  # vede tutto
@@ -110,6 +112,10 @@ async def list_assets(
     query = db.query(Asset).filter(
         Asset.tenant_id == current_tenant_id(),
         Asset.parent_asset_id == None,  # noqa: E711
+        # F1 (spec 2026-06-10): proposte agent metadata-only NON visibili nella
+        # gallery finché l'operatore non conferma (pending_review/discarded
+        # escluse). I legacy hanno default server-side 'confirmed' → invariati.
+        Asset.proposed_state == AssetProposedState.confirmed,
     )
     if not is_admin(user):
         filters = []

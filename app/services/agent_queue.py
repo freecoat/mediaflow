@@ -9,7 +9,7 @@ import hashlib
 import secrets
 from typing import Optional
 
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, update
 from sqlalchemy.orm import Session
 
 from app.models.models import AgentJob, AgentJobStatus, AgentJobType, AgentNode
@@ -40,21 +40,33 @@ def enqueue_job(db: Session, *, tenant_id: int, type: AgentJobType,
 
 
 def claim_next_job(db: Session, agent: AgentNode) -> Optional[AgentJob]:
-    job = db.execute(
-        select(AgentJob)
+    """Claim atomico: per ogni candidato FIFO, UPDATE guardato WHERE status=queued.
+    rowcount==0 = un altro agent l'ha preso nel frattempo → prova il successivo.
+    Evita la doppia-esecuzione su tipi distruttivi (copy/delete_verify/lto_*)
+    quando 2 agent pollano insieme; per probe/checksum il dedup basterebbe, ma
+    il claim atomico è corretto a prescindere."""
+    candidates = db.execute(
+        select(AgentJob.id)
         .where(AgentJob.tenant_id == agent.tenant_id,
                AgentJob.status == AgentJobStatus.queued,
                or_(AgentJob.agent_id.is_(None), AgentJob.agent_id == agent.id))
         .order_by(AgentJob.id)
-        .limit(1)
-    ).scalar_one_or_none()
-    if job is None:
-        return None
-    job.status = AgentJobStatus.claimed
-    job.agent_id = agent.id
-    job.claimed_at = now_utc()
-    db.flush()
-    return job
+    ).scalars().all()
+    for jid in candidates:
+        res = db.execute(
+            update(AgentJob)
+            .where(AgentJob.id == jid,
+                   AgentJob.status == AgentJobStatus.queued)
+            .values(status=AgentJobStatus.claimed,
+                    agent_id=agent.id,
+                    claimed_at=now_utc())
+            .execution_options(synchronize_session=False)
+        )
+        if res.rowcount == 1:
+            job = db.get(AgentJob, jid)
+            db.refresh(job)  # ricarica i valori scritti dal bulk UPDATE
+            return job
+    return None
 
 
 def complete_job(db: Session, job: AgentJob, result: dict) -> AgentJob:
