@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -237,3 +238,17 @@ def match_proposal(db: Session, asset: Asset) -> Optional[int]:
     asset.matched_deliverable_id = None
     db.flush()
     return None
+
+
+def link_deliverable_on_confirm(db: Session, asset: Asset, *,
+                                deliverable_id: int, user_id: int) -> JobDeliverable:
+    """Collega l'asset confermato al deliverable: set digital_asset_id +
+    status=qc. Tenant-scoped. Lo stato qc apre la trafila QC."""
+    d = db.get(JobDeliverable, deliverable_id)
+    if d is None or d.tenant_id != asset.tenant_id or d.deleted_at is not None:
+        raise HTTPException(404, "deliverable non trovato")
+    d.digital_asset_id = asset.id
+    if d.status in (DeliverableStatus.planned, DeliverableStatus.in_progress):
+        d.status = DeliverableStatus.qc
+    db.flush()
+    return d

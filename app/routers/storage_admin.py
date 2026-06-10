@@ -1,6 +1,8 @@
 """F1 (spec 2026-06-10) — Admin storage facility: volumi, agent, coda, proposte."""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
@@ -13,6 +15,7 @@ from app.models.models import (
 )
 from app.services.agent_queue import enqueue_job, generate_agent_token
 from app.services.asset_registry import confirm_proposal, discard_proposal
+from app.services.deliverable_match import rank_candidates, link_deliverable_on_confirm
 from app.services.rbac import current_user_optional, requires_permission
 
 CURRENT_TENANT = 1
@@ -215,22 +218,36 @@ def list_proposals(db: Session = Depends(get_db)):
             "checksum_xxhash": a.checksum_xxhash,
             "tech_specs": a.tech_specs_json,
             "volume_id": a.storage_volume_id,
+            "matched_deliverable_id": a.matched_deliverable_id,
         }
         for a in rows
     ]
+
+
+@router.get("/api/proposals/{asset_id}/candidates", dependencies=[RequireStorage])
+def proposal_candidates(asset_id: int, db: Session = Depends(get_db)):
+    a = db.get(Asset, asset_id)
+    if a is None or a.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404)
+    return rank_candidates(db, a)
 
 
 @router.post("/api/proposals/{asset_id}/confirm", dependencies=[RequireStorage])
 def confirm(
     asset_id: int,
     request: Request,
+    deliverable_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
 ):
-    user = current_user_optional(request)
     a = db.get(Asset, asset_id)
     if a is None or a.tenant_id != CURRENT_TENANT:
         raise HTTPException(404)
+    user = current_user_optional(request)
     confirm_proposal(db, a, user_id=getattr(user, "id", None))
+    target = deliverable_id or a.matched_deliverable_id
+    if target:
+        link_deliverable_on_confirm(db, a, deliverable_id=int(target),
+                                    user_id=getattr(user, "id", None))
     db.commit()
     return {"ok": True}
 
