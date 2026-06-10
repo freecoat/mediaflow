@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+{% set active_page = "storage" %}
+{% block title %}Storage — Claqo{% endblock %}
+{% block topbar_title %}Storage · Asset Registry{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-ghost btn-sm" id="storage-topbar-extra" style="display:none;"
+          onclick="openRegisterPathModal()">+ Registra file per percorso</button>
+  <button class="btn btn-primary btn-sm" id="storage-topbar-new" style="display:none;"
+          onclick="onTopbarNew()">+ Nuovo</button>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Tab bar ─────────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;padding:0;">
+  <div style="display:flex;gap:0;">
+    <button class="tab-btn active" id="tab-proposals" onclick="switchStorageTab('proposals')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid var(--indigo2);color:var(--text);cursor:pointer;font-size:13px;font-weight:600;">
+      📥 Proposte
+    </button>
+    <button class="tab-btn" id="tab-volumes" onclick="switchStorageTab('volumes')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      💾 Volumi
+    </button>
+    <button class="tab-btn" id="tab-agents" onclick="switchStorageTab('agents')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      🤖 Agent
+    </button>
+    <button class="tab-btn" id="tab-jobs" onclick="switchStorageTab('jobs')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      📋 Job
+    </button>
+  </div>
+</div>
+
+<div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+
+  <!-- ── Pane: Proposte ──────────────────────────────────────── -->
+  <div id="pane-proposals">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-secondary btn-sm" onclick="openRegisterPathModal()">+ Registra file per percorso</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Percorso</th>
+            <th class="text-right">Dim. (GB)</th>
+            <th>Checksum</th>
+            <th>Specs</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="proposalsBody">
+          <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pane: Volumi ────────────────────────────────────────── -->
+  <div id="pane-volumes" style="display:none;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-volume')">+ Volume</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Mount path</th>
+            <th>Watch dirs</th>
+            <th class="text-right">Spazio libero / totale (GB)</th>
+            <th>Stato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="volumesBody">
+          <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pane: Agent ─────────────────────────────────────────── -->
+  <div id="pane-agents" style="display:none;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-new-agent')">+ Agent</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Versione</th>
+            <th>Heartbeat</th>
+            <th>Stato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="agentsBody">
+          <tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pane: Job ───────────────────────────────────────────── -->
+  <div id="pane-jobs" style="display:none;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tipo</th>
+            <th>Stato</th>
+            <th>Payload</th>
+            <th>Errore</th>
+            <th class="text-right">Progresso</th>
+          </tr>
+        </thead>
+        <tbody id="jobsBody">
+          <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /card -->
+
+
+<!-- ── Modal: Registra file per percorso ──────────────────────── -->
+<div class="modal-overlay" id="modal-register-path">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Registra file per percorso</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-register-path')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Volume *</label>
+        <select class="form-select" id="rp-volume">
+          <option value="">— seleziona —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Percorso relativo *</label>
+        <input class="form-input" id="rp-relpath" placeholder="es. projects/gomorra/master.mxf">
+        <div class="form-hint">Relativo alla mount path del volume.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-register-path')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitRegisterPath()">Accoda job probe</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Nuovo volume ─────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-new-volume">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo volume</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-volume')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input class="form-input" id="nv-name" placeholder="es. NAS-1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mount path *</label>
+        <input class="form-input" id="nv-mount" placeholder="es. /mnt/nas1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Watch dirs (CSV)</label>
+        <input class="form-input" id="nv-watch" placeholder="es. projects, archive">
+        <div class="form-hint">Cartelle da monitorare, separate da virgola. Lascia vuoto per tutto il volume.</div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" id="nv-readonly" checked>
+          <span>Sola lettura (consigliato per archivi)</span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-volume')">Annulla</button>
+      <button class="btn btn-primary" onclick="createVolume()">Crea volume</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Modifica volume ──────────────────────────────────── -->
+<div class="modal-overlay" id="modal-edit-volume">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Modifica volume</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-edit-volume')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ev-id">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input class="form-input" id="ev-name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mount path *</label>
+        <input class="form-input" id="ev-mount">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Watch dirs (CSV)</label>
+        <input class="form-input" id="ev-watch">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="ev-readonly">
+            <span>Sola lettura</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="ev-active">
+            <span>Attivo</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-volume')">Annulla</button>
+      <button class="btn btn-primary" onclick="saveVolume()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Nuovo agent ──────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-new-agent">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo agent</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-agent')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nome *</label>
+        <input class="form-input" id="na-name" placeholder="es. agent-facility-1">
+      </div>
+      <!-- Token mostrato dopo creazione -->
+      <div id="na-token-wrap" style="display:none;margin-top:14px;">
+        <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:12px 14px;">
+          <div style="font-weight:600;font-size:13px;color:var(--rose);margin-bottom:8px;">⚠ Salva il token ORA — non sarà più visibile</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="form-input" id="na-token-value" readonly
+                   style="font-family:monospace;font-size:12px;flex:1;background:var(--bg-2);">
+            <button class="btn btn-secondary btn-sm" onclick="copyAgentToken()">Copia</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="na-cancel-btn" onclick="cancelNewAgent()">Annulla</button>
+      <button class="btn btn-primary" id="na-create-btn" onclick="createAgent()">Crea agent</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let _storageVolumes = [];
+let _currentTab = 'proposals';
+
+// ── Tab switching ─────────────────────────────────────────────────
+const _STORAGE_TABS = ['proposals', 'volumes', 'agents', 'jobs'];
+
+function switchStorageTab(tab) {
+  _currentTab = tab;
+  _STORAGE_TABS.forEach(function(t) {
+    const pane = document.getElementById('pane-' + t);
+    const btn  = document.getElementById('tab-' + t);
+    if (!pane || !btn) return;
+    const isActive = (t === tab);
+    pane.style.display = isActive ? '' : 'none';
+    btn.classList.toggle('active', isActive);
+    btn.style.borderBottomColor = isActive ? 'var(--indigo2)' : 'transparent';
+    btn.style.color = isActive ? 'var(--text)' : 'var(--text3)';
+    btn.style.fontWeight = isActive ? '600' : '500';
+  });
+}
+
+// ── Load functions ────────────────────────────────────────────────
+
+async function loadProposals() {
+  const tbody = document.getElementById('proposalsBody');
+  try {
+    const data = await api('GET', '/storage/api/proposals');
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessuna proposta in attesa di revisione.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(p) {
+      const sizeGb = p.file_size ? (p.file_size / 1073741824).toFixed(2) : '—';
+      const checksum = p.checksum_xxhash ? escapeHtml(p.checksum_xxhash.substring(0, 12)) + '…' : '—';
+      const specsRaw = p.tech_specs ? JSON.stringify(p.tech_specs) : '';
+      const specsLabel = specsRaw ? escapeHtml(specsRaw.substring(0, 60)) + (specsRaw.length > 60 ? '…' : '') : '—';
+      return '<tr>'
+        + '<td><strong>' + escapeHtml(p.filename || '—') + '</strong></td>'
+        + '<td class="text-muted" style="font-size:12px;max-width:260px;word-break:break-all;">' + escapeHtml(p.rel_path || '—') + '</td>'
+        + '<td class="text-right mono">' + escapeHtml(sizeGb) + '</td>'
+        + '<td class="mono" style="font-size:11px;">' + checksum + '</td>'
+        + '<td class="text-muted" style="font-size:11px;max-width:200px;">' + specsLabel + '</td>'
+        + '<td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">'
+        + '<button class="btn btn-ghost btn-sm" style="color:var(--green);" '
+        + 'data-prop-id="' + p.id + '" onclick="confirmProposal(this.dataset.propId)">✓ Conferma</button> '
+        + '<button class="btn btn-ghost btn-sm" style="color:var(--rose);" '
+        + 'data-prop-id="' + p.id + '" onclick="discardProposal(this.dataset.propId)">✗ Scarta</button>'
+        + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento proposte.</td></tr>';
+    toast('Errore caricamento proposte: ' + e.message, 'error');
+  }
+}
+
+async function loadVolumes() {
+  const tbody = document.getElementById('volumesBody');
+  try {
+    const data = await api('GET', '/storage/api/volumes');
+    _storageVolumes = data || [];
+    // Aggiorna select nel modal register-path
+    _populateVolumeSelect();
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessun volume configurato.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(v) {
+      const watchDirs = (v.watch_dirs && v.watch_dirs.length) ? escapeHtml(v.watch_dirs.join(', ')) : '<span class="text-muted">—</span>';
+      const spazio = (v.free_gb != null && v.total_gb != null)
+        ? escapeHtml(String(v.free_gb.toFixed(1))) + ' / ' + escapeHtml(String(v.total_gb.toFixed(1)))
+        : '—';
+      const statoLabel = v.is_active
+        ? '<span style="color:var(--green);font-size:12px;font-weight:600;">attivo</span>'
+        : '<span style="color:var(--text3);font-size:12px;">inattivo</span>';
+      const roLabel = v.read_only ? ' <span style="font-size:10px;background:var(--bg-2);border-radius:4px;padding:1px 5px;">RO</span>' : '';
+      return '<tr>'
+        + '<td><strong>' + escapeHtml(v.name) + '</strong>' + roLabel + '</td>'
+        + '<td class="mono" style="font-size:12px;">' + escapeHtml(v.mount_path || '—') + '</td>'
+        + '<td class="text-muted" style="font-size:12px;">' + watchDirs + '</td>'
+        + '<td class="text-right mono">' + spazio + '</td>'
+        + '<td>' + statoLabel + '</td>'
+        + '<td class="text-right" onclick="event.stopPropagation()">'
+        + '<button class="btn btn-ghost btn-icon btn-sm" title="Modifica" '
+        + 'data-vol-id="' + v.id + '" '
+        + 'data-vol-name="' + escapeHtml(v.name) + '" '
+        + 'data-vol-mount="' + escapeHtml(v.mount_path || '') + '" '
+        + 'data-vol-watch="' + escapeHtml((v.watch_dirs || []).join(', ')) + '" '
+        + 'data-vol-ro="' + (v.read_only ? '1' : '0') + '" '
+        + 'data-vol-active="' + (v.is_active ? '1' : '0') + '" '
+        + 'onclick="editVolumeFromBtn(this)">✏️</button>'
+        + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento volumi.</td></tr>';
+    toast('Errore caricamento volumi: ' + e.message, 'error');
+  }
+}
+
+async function loadAgents() {
+  const tbody = document.getElementById('agentsBody');
+  try {
+    const data = await api('GET', '/storage/api/agents');
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Nessun agent registrato.</td></tr>';
+      return;
+    }
+    const now = Date.now();
+    tbody.innerHTML = data.map(function(a) {
+      let heartbeatLabel = '—';
+      let onlineBadge = '<span style="font-size:11px;color:var(--text3);background:var(--bg-2);padding:2px 7px;border-radius:10px;">offline</span>';
+      if (a.last_heartbeat_at) {
+        const hbMs = new Date(a.last_heartbeat_at).getTime();
+        const elapsed = (now - hbMs) / 1000;
+        heartbeatLabel = escapeHtml(new Date(a.last_heartbeat_at).toLocaleString('it-IT'));
+        if (elapsed <= 120) {
+          onlineBadge = '<span style="font-size:11px;color:#fff;background:var(--green);padding:2px 7px;border-radius:10px;">online</span>';
+        }
+      }
+      const statoLabel = a.is_active
+        ? '<span style="color:var(--green);font-size:12px;">attivo</span>'
+        : '<span style="color:var(--text3);font-size:12px;">revocato</span>';
+      return '<tr>'
+        + '<td><strong>' + escapeHtml(a.name) + '</strong></td>'
+        + '<td class="text-muted" style="font-size:12px;">' + escapeHtml(a.version || '—') + '</td>'
+        + '<td style="font-size:12px;">' + heartbeatLabel + ' ' + onlineBadge + '</td>'
+        + '<td>' + statoLabel + '</td>'
+        + '<td class="text-right" onclick="event.stopPropagation()">'
+        + (a.is_active
+          ? '<button class="btn btn-ghost btn-icon btn-sm" title="Revoca" '
+            + 'data-agent-id="' + a.id + '" data-agent-name="' + escapeHtml(a.name) + '" '
+            + 'onclick="revokeAgent(this.dataset.agentId, this.dataset.agentName)">🗑️</button>'
+          : '')
+        + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento agent.</td></tr>';
+    toast('Errore caricamento agent: ' + e.message, 'error');
+  }
+}
+
+async function loadJobs() {
+  const tbody = document.getElementById('jobsBody');
+  try {
+    const data = await api('GET', '/storage/api/jobs');
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessun job in coda.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(j) {
+      const statusColor = {
+        pending: 'var(--text3)', running: 'var(--indigo2)',
+        done: 'var(--green)', failed: 'var(--rose)'
+      }[j.status] || 'var(--text3)';
+      const payloadStr = j.payload ? JSON.stringify(j.payload) : '—';
+      const payloadLabel = escapeHtml(payloadStr.length > 60 ? payloadStr.substring(0, 60) + '…' : payloadStr);
+      const errorLabel = j.error ? escapeHtml(j.error.substring(0, 80)) : '—';
+      const prog = (j.progress != null) ? escapeHtml(String(j.progress)) + '%' : '—';
+      return '<tr>'
+        + '<td class="mono text-muted" style="font-size:12px;">#' + j.id + '</td>'
+        + '<td><code style="font-size:12px;background:var(--bg-2);padding:2px 5px;border-radius:4px;">' + escapeHtml(j.type) + '</code></td>'
+        + '<td><span style="font-size:12px;font-weight:600;color:' + statusColor + ';">' + escapeHtml(j.status) + '</span></td>'
+        + '<td class="text-muted" style="font-size:11px;max-width:240px;">' + payloadLabel + '</td>'
+        + '<td class="text-muted" style="font-size:11px;max-width:200px;color:var(--rose);">' + errorLabel + '</td>'
+        + '<td class="text-right mono" style="font-size:12px;">' + prog + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento job.</td></tr>';
+    toast('Errore caricamento job: ' + e.message, 'error');
+  }
+}
+
+// ── Proposte ───────────────────────────────────────────────────────
+
+async function confirmProposal(id) {
+  if (!confirm('Confermare questo asset nella libreria?')) return;
+  try {
+    await api('POST', '/storage/api/proposals/' + id + '/confirm');
+    toast('Asset confermato', 'success');
+    loadProposals();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function discardProposal(id) {
+  if (!confirm('Scartare questa proposta? L\'asset verrà rimosso dalla coda.')) return;
+  try {
+    await api('POST', '/storage/api/proposals/' + id + '/discard');
+    toast('Proposta scartata', 'success');
+    loadProposals();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+// ── Register path ──────────────────────────────────────────────────
+
+function openRegisterPathModal() {
+  document.getElementById('rp-relpath').value = '';
+  openModal('modal-register-path');
+}
+
+async function submitRegisterPath() {
+  const volId = document.getElementById('rp-volume').value;
+  const relPath = document.getElementById('rp-relpath').value.trim();
+  if (!volId) { alert('Seleziona un volume'); return; }
+  if (!relPath) { alert('Inserisci il percorso relativo'); return; }
+  const fd = new FormData();
+  fd.append('volume_id', volId);
+  fd.append('rel_path', relPath);
+  try {
+    const r = await api('POST', '/storage/api/register-path', fd);
+    closeModal('modal-register-path');
+    toast('Job probe accodato (job #' + r.job_id + ') — appena l\'agent risponde compare la proposta', 'success', 6000);
+    switchStorageTab('jobs');
+    loadJobs();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+function _populateVolumeSelect() {
+  const sel = document.getElementById('rp-volume');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— seleziona —</option>';
+  _storageVolumes.filter(function(v) { return v.is_active; }).forEach(function(v) {
+    const opt = document.createElement('option');
+    opt.value = String(v.id);
+    opt.textContent = v.name + ' (' + escapeHtml(v.mount_path || '') + ')';
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+}
+
+// ── Volumi ─────────────────────────────────────────────────────────
+
+async function createVolume() {
+  const name = document.getElementById('nv-name').value.trim();
+  const mount = document.getElementById('nv-mount').value.trim();
+  if (!name) { alert('Nome obbligatorio'); return; }
+  if (!mount) { alert('Mount path obbligatorio'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('mount_path', mount);
+  fd.append('watch_dirs', document.getElementById('nv-watch').value.trim());
+  fd.append('read_only', document.getElementById('nv-readonly').checked ? 'true' : 'false');
+  try {
+    await api('POST', '/storage/api/volumes', fd);
+    closeModal('modal-new-volume');
+    toast('Volume creato', 'success');
+    document.getElementById('nv-name').value = '';
+    document.getElementById('nv-mount').value = '';
+    document.getElementById('nv-watch').value = '';
+    document.getElementById('nv-readonly').checked = true;
+    loadVolumes();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+function editVolumeFromBtn(btn) {
+  const d = btn.dataset;
+  document.getElementById('ev-id').value = d.volId;
+  document.getElementById('ev-name').value = d.volName;
+  document.getElementById('ev-mount').value = d.volMount;
+  document.getElementById('ev-watch').value = d.volWatch;
+  document.getElementById('ev-readonly').checked = d.volRo === '1';
+  document.getElementById('ev-active').checked = d.volActive === '1';
+  openModal('modal-edit-volume');
+}
+
+async function saveVolume() {
+  const id = document.getElementById('ev-id').value;
+  const name = document.getElementById('ev-name').value.trim();
+  const mount = document.getElementById('ev-mount').value.trim();
+  if (!name) { alert('Nome obbligatorio'); return; }
+  if (!mount) { alert('Mount path obbligatorio'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('mount_path', mount);
+  fd.append('watch_dirs', document.getElementById('ev-watch').value.trim());
+  fd.append('read_only', document.getElementById('ev-readonly').checked ? 'true' : 'false');
+  fd.append('is_active', document.getElementById('ev-active').checked ? 'true' : 'false');
+  try {
+    await api('PUT', '/storage/api/volumes/' + id, fd);
+    closeModal('modal-edit-volume');
+    toast('Volume aggiornato', 'success');
+    loadVolumes();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+// ── Agent ──────────────────────────────────────────────────────────
+
+async function createAgent() {
+  const name = document.getElementById('na-name').value.trim();
+  if (!name) { alert('Nome obbligatorio'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  try {
+    const r = await api('POST', '/storage/api/agents', fd);
+    // Mostra token (mostrato una sola volta)
+    document.getElementById('na-token-value').value = r.token;
+    document.getElementById('na-token-wrap').style.display = '';
+    document.getElementById('na-create-btn').style.display = 'none';
+    document.getElementById('na-name').disabled = true;
+    document.getElementById('na-cancel-btn').textContent = 'Chiudi';
+    toast('Agent creato — salva il token!', 'success', 8000);
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+function cancelNewAgent() {
+  // Ripristina stato modale per prossima apertura
+  document.getElementById('na-name').value = '';
+  document.getElementById('na-name').disabled = false;
+  document.getElementById('na-token-wrap').style.display = 'none';
+  document.getElementById('na-token-value').value = '';
+  document.getElementById('na-create-btn').style.display = '';
+  document.getElementById('na-cancel-btn').textContent = 'Annulla';
+  closeModal('modal-new-agent');
+  loadAgents();
+}
+
+function copyAgentToken() {
+  const val = document.getElementById('na-token-value').value;
+  if (!val) return;
+  navigator.clipboard.writeText(val).then(function() {
+    toast('Token copiato negli appunti', 'success');
+  }).catch(function() {
+    document.getElementById('na-token-value').select();
+    document.execCommand('copy');
+    toast('Token copiato', 'success');
+  });
+}
+
+async function revokeAgent(id, name) {
+  if (!confirm('Revocare l\'agent "' + name + '"? Non potrà più autenticarsi.')) return;
+  try {
+    await api('DELETE', '/storage/api/agents/' + id);
+    toast('Agent revocato', 'success');
+    loadAgents();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+// ── topbar helper (attivato dal blocco topbar_actions) ─────────────
+// Non usato direttamente (bottoni inline nei pane), ma mantenuto
+// per compatibilità con possibili hotkey future.
+function onTopbarNew() {
+  if (_currentTab === 'volumes') openModal('modal-new-volume');
+  else if (_currentTab === 'agents') openModal('modal-new-agent');
+  else if (_currentTab === 'proposals') openRegisterPathModal();
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  loadProposals();
+  loadVolumes();
+  loadAgents();
+  loadJobs();
+});
+</script>
+
+{% endblock %}

@@ -155,6 +155,9 @@
         {# v3.5.0-alpha.172.128 — /delivery-variants DEPRECATO (Bundle L Stack 1 mai
            completato; rimpiazzato da DeliveryItem/DeliveryTemplate). Link rimosso
            dalla nav; route/modello restano inerti (0 record) finché non si rimuovono. #}
+        <a href="/storage" data-nav-id="storage" class="nav-item {% if active_page == 'storage' %}active{% endif %}">
+          <span class="nav-icon"><i data-lucide="database"></i></span> <span data-i18n="nav.storage">Storage</span>
+        </a>
       </div>
 
       {% if request.state.current_user and request.state.current_user.is_platform_admin %}
