@@ -38,7 +38,7 @@ def storage_page(request: Request):
 
 # ── Volumi ───────────────────────────────────────────────────────────
 
-@router.get("/api/volumes")
+@router.get("/api/volumes", dependencies=[RequireStorage])
 def list_volumes(db: Session = Depends(get_db)):
     vols = db.execute(
         select(StorageVolume)
@@ -105,7 +105,7 @@ def update_volume(
 
 # ── Agent ────────────────────────────────────────────────────────────
 
-@router.get("/api/agents")
+@router.get("/api/agents", dependencies=[RequireStorage])
 def list_agents(db: Session = Depends(get_db)):
     ags = db.execute(
         select(AgentNode)
@@ -148,7 +148,7 @@ def revoke_agent(agent_id: int, db: Session = Depends(get_db)):
 
 # ── Job queue ────────────────────────────────────────────────────────
 
-@router.get("/api/jobs")
+@router.get("/api/jobs", dependencies=[RequireStorage])
 def list_jobs(limit: int = 50, db: Session = Depends(get_db)):
     jobs = db.execute(
         select(AgentJob)
@@ -195,7 +195,7 @@ def register_path(
 
 # ── Proposte ─────────────────────────────────────────────────────────
 
-@router.get("/api/proposals")
+@router.get("/api/proposals", dependencies=[RequireStorage])
 def list_proposals(db: Session = Depends(get_db)):
     rows = db.execute(
         select(Asset)
