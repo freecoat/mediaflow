@@ -1,0 +1,222 @@
+{% extends "mobile/base_mobile.html" %}
+{% block title %}Proposte — Claqo{% endblock %}
+{% block topbar %}Proposte asset{% endblock %}
+
+{% block content %}
+  <div id="m-proposte-root" class="m-section">
+    <div class="m-skeleton">
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+      <div class="m-skeleton-card"></div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  'use strict';
+
+  // ── Helpers ────────────────────────────────────────────────────────────
+
+  function fmtSize(bytes) {
+    if (bytes == null || isNaN(bytes)) return '—';
+    if (bytes >= 1e12) return (bytes / 1e12).toFixed(2) + ' TB';
+    if (bytes >= 1e9)  return (bytes / 1e9).toFixed(2) + ' GB';
+    if (bytes >= 1e6)  return (bytes / 1e6).toFixed(1) + ' MB';
+    return bytes + ' B';
+  }
+
+  function strengthLabel(s) {
+    if (s === 'strong') return { text: 'Forte',  cls: 'm-badge-in' };
+    if (s === 'weak')   return { text: 'Debole', cls: 'm-badge-warn' };
+    return { text: s || '—', cls: 'm-badge-out' };
+  }
+
+  // ── Rendering singola card proposta ───────────────────────────────────
+
+  function renderCard(p, candidates) {
+    const card = document.createElement('div');
+    card.className = 'm-card';
+    card.dataset.id = String(p.id);
+
+    // Titolo filename
+    const titleEl = document.createElement('div');
+    titleEl.className = 'm-card-title';
+    titleEl.textContent = p.filename || '—';
+    card.appendChild(titleEl);
+
+    // rel_path + dimensione
+    if (p.rel_path) {
+      const pathEl = document.createElement('div');
+      pathEl.className = 'm-list-sub';
+      pathEl.style.fontFamily = 'monospace';
+      pathEl.style.fontSize = '0.75rem';
+      pathEl.style.wordBreak = 'break-all';
+      pathEl.textContent = p.rel_path;
+      card.appendChild(pathEl);
+    }
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'm-field';
+    const metaL = document.createElement('div');
+    metaL.className = 'm-field-label';
+    metaL.textContent = 'Dimensione';
+    const metaV = document.createElement('div');
+    metaV.className = 'm-field-val';
+    metaV.textContent = fmtSize(p.file_size);
+    metaEl.appendChild(metaL);
+    metaEl.appendChild(metaV);
+    card.appendChild(metaEl);
+
+    if (p.checksum_xxhash) {
+      const cksEl = document.createElement('div');
+      cksEl.className = 'm-field';
+      const cksL = document.createElement('div');
+      cksL.className = 'm-field-label';
+      cksL.textContent = 'xxHash';
+      const cksV = document.createElement('div');
+      cksV.className = 'm-field-val';
+      cksV.style.fontFamily = 'monospace';
+      cksV.style.fontSize = '0.7rem';
+      cksV.textContent = p.checksum_xxhash;
+      cksEl.appendChild(cksL);
+      cksEl.appendChild(cksV);
+      card.appendChild(cksEl);
+    }
+
+    // Select deliverable candidati
+    const selWrap = document.createElement('div');
+    selWrap.className = 'm-form-group';
+    const selLabel = document.createElement('label');
+    selLabel.className = 'm-label';
+    selLabel.textContent = 'Deliverable';
+    const sel = document.createElement('select');
+    sel.className = 'm-select';
+    sel.dataset.propId = String(p.id);
+
+    const blankOpt = document.createElement('option');
+    blankOpt.value = '';
+    blankOpt.textContent = '— senza link —';
+    sel.appendChild(blankOpt);
+
+    for (const c of candidates) {
+      const opt = document.createElement('option');
+      opt.value = String(c.deliverable_id);
+      const sl = strengthLabel(c.strength);
+      opt.textContent = mEsc(c.name) + ' · ' + sl.text + ' (' + (c.score * 100).toFixed(0) + '%)';
+      if (c.deliverable_id === p.matched_deliverable_id) opt.selected = true;
+      sel.appendChild(opt);
+    }
+
+    selWrap.appendChild(selLabel);
+    selWrap.appendChild(sel);
+    card.appendChild(selWrap);
+
+    // Bottoni azione
+    const actions = document.createElement('div');
+    actions.className = 'm-assign-actions';
+    actions.style.display = 'flex';
+    actions.style.gap = '0.5rem';
+    actions.style.marginTop = '0.75rem';
+
+    const btnConf = document.createElement('button');
+    btnConf.className = 'm-btn m-btn-accept';
+    btnConf.textContent = 'Conferma';
+    btnConf.addEventListener('click', function () {
+      confirmProposal(p.id, sel, card);
+    });
+
+    const btnDiscard = document.createElement('button');
+    btnDiscard.className = 'm-btn m-btn-reject';
+    btnDiscard.textContent = 'Scarta';
+    btnDiscard.addEventListener('click', function () {
+      discardProposal(p.id, card);
+    });
+
+    actions.appendChild(btnConf);
+    actions.appendChild(btnDiscard);
+    card.appendChild(actions);
+
+    return card;
+  }
+
+  // ── Azioni ───────────────────────────────────────────────────────────
+
+  function confirmProposal(id, selEl, cardEl) {
+    var fd = new FormData();
+    if (selEl && selEl.value) fd.append('deliverable_id', selEl.value);
+    var btnConf = cardEl.querySelector('.m-btn-accept');
+    if (btnConf) { btnConf.disabled = true; btnConf.textContent = '…'; }
+    mapi('POST', '/storage/api/proposals/' + id + '/confirm', fd)
+      .then(function () {
+        mToast('Proposta confermata');
+        cardEl.remove();
+        checkEmpty();
+      })
+      .catch(function (e) {
+        mToast('Errore: ' + (e.message || 'impossibile confermare'));
+        if (btnConf) { btnConf.disabled = false; btnConf.textContent = 'Conferma'; }
+      });
+  }
+
+  function discardProposal(id, cardEl) {
+    var btnDiscard = cardEl.querySelector('.m-btn-reject');
+    if (btnDiscard) { btnDiscard.disabled = true; btnDiscard.textContent = '…'; }
+    mapi('POST', '/storage/api/proposals/' + id + '/discard', null)
+      .then(function () {
+        mToast('Proposta scartata');
+        cardEl.remove();
+        checkEmpty();
+      })
+      .catch(function (e) {
+        mToast('Errore: ' + (e.message || 'impossibile scartare'));
+        if (btnDiscard) { btnDiscard.disabled = false; btnDiscard.textContent = 'Scarta'; }
+      });
+  }
+
+  function checkEmpty() {
+    var root = document.getElementById('m-proposte-root');
+    if (root && root.querySelectorAll('.m-card').length === 0) {
+      root.appendChild(mEmpty('Nessuna proposta in attesa.'));
+    }
+  }
+
+  // ── Caricamento principale ─────────────────────────────────────────────
+
+  async function loadProposte() {
+    var root = document.getElementById('m-proposte-root');
+    try {
+      var proposals = await mapi('GET', '/storage/api/proposals');
+      root.innerHTML = '';
+
+      if (!proposals || proposals.length === 0) {
+        root.appendChild(mEmpty('Nessuna proposta in attesa.'));
+        return;
+      }
+
+      // Carica candidati per ogni proposta (in parallelo)
+      var candidatePromises = proposals.map(function (p) {
+        return mapi('GET', '/storage/api/proposals/' + p.id + '/candidates')
+          .catch(function () { return []; });
+      });
+
+      var allCandidates = await Promise.all(candidatePromises);
+
+      for (var i = 0; i < proposals.length; i++) {
+        root.appendChild(renderCard(proposals[i], allCandidates[i] || []));
+      }
+
+      if (window.lucide) lucide.createIcons();
+    } catch (e) {
+      if (e.message !== 'auth') {
+        root.innerHTML = '';
+        root.appendChild(mEmpty('Errore di caricamento: ' + (e.message || 'Riprova.')));
+      }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadProposte);
+}());
+</script>
+{% endblock %}

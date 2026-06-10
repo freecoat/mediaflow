@@ -123,3 +123,9 @@ async def m_copilot(request: Request):
 @router.get("/agenda", response_class=HTMLResponse, include_in_schema=False)
 async def m_agenda(request: Request):
     return _page(request, "agenda", active="agenda")
+
+
+# ── F2 — Asset registry: revisione proposte ───────────────────────────────
+@router.get("/proposte", response_class=HTMLResponse, include_in_schema=False)
+async def m_proposte(request: Request):
+    return _page(request, "proposte", active="proposte")
