@@ -1191,6 +1191,28 @@ def _auto_migrate_columns():
     except Exception as e:
         print(f"[auto-migrate] deliverable_assets.tenant_id FAILED: {e}")
 
+    # ── F1 (spec 2026-06-10) — Asset registry metadata-only ──
+    # Inspector fresco: insp è cached e potrebbe non vedere le colonne aggiunte
+    # nel blocco assets precedente (riga ~757). storage_volumes è già creata da
+    # create_tables() prima di questa funzione, quindi la FK è sicura su SQLite.
+    insp_f1 = inspect(engine)
+    if "assets" in insp_f1.get_table_names():
+        cols = {c["name"] for c in insp_f1.get_columns("assets")}
+        f1_alter = [
+            ("storage_volume_id", "INTEGER NULL REFERENCES storage_volumes(id)"),
+            ("rel_path", "VARCHAR(1024) NULL"),
+            ("content_state", "VARCHAR(20) NOT NULL DEFAULT 'online'"),
+            ("proposed_state", "VARCHAR(20) NOT NULL DEFAULT 'confirmed'"),
+            ("checksum_xxhash", "VARCHAR(32) NULL"),
+            ("mhl_ref", "VARCHAR(512) NULL"),
+            ("registered_via", "VARCHAR(30) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in f1_alter:
+                if col not in cols:
+                    print(f"[auto-migrate] assets.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE assets ADD COLUMN {col} {ddl}"))
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
