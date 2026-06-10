@@ -202,7 +202,6 @@ def list_proposals(db: Session = Depends(get_db)):
         .where(
             Asset.tenant_id == CURRENT_TENANT,
             Asset.proposed_state == AssetProposedState.pending_review,
-            Asset.is_active == True,  # noqa: E712
         )
         .order_by(Asset.id.desc())
     ).scalars().all()
