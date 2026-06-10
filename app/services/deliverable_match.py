@@ -11,6 +11,14 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.models import (
+    Asset, Project, Job, JobDeliverable, DeliverableStatus, DeliveryItem,
+    Container, VideoCodec, Resolution, FrameRate,
+)
+
 _CODEC_ALIASES = {
     "prores": "prores", "apch": "prores", "apcn": "prores", "ap4h": "prores",
     "h264": "h264", "avc": "h264", "avc1": "h264", "x264": "h264",
@@ -141,3 +149,91 @@ def score_match(filename: str, probe: dict, exp: MatchExpectation) -> MatchResul
     return MatchResult(deliverable_id=exp.deliverable_id, score=score,
                        strength=strength, specs_agree=specs_agree,
                        naming_ok=naming_ok)
+
+
+# ── orchestrazione DB ────────────────────────────────────────────────────────
+
+_OPEN_STATUSES = (
+    DeliverableStatus.planned,
+    DeliverableStatus.in_progress,
+    DeliverableStatus.qc,
+)
+
+
+def _project_code_from_relpath(rel_path: Optional[str]) -> Optional[str]:
+    """Convenzione /OUT/{project_code}/... → project_code. Tollerante:
+    prende il primo segmento dopo una watch-dir tipo OUT/EXPORT."""
+    if not rel_path:
+        return None
+    parts = [p for p in rel_path.replace("\\", "/").split("/") if p]
+    if len(parts) >= 2:
+        return parts[1] if parts[0].isupper() and len(parts[0]) <= 8 else parts[0]
+    return parts[0] if parts else None
+
+
+def build_expectation(db: Session, deliv: JobDeliverable) -> MatchExpectation:
+    item = db.get(DeliveryItem, deliv.delivery_item_id) if deliv.delivery_item_id else None
+    cont = db.get(Container, item.container_id) if item and item.container_id else None
+    cod = db.get(VideoCodec, item.video_codec_id) if item and item.video_codec_id else None
+    res = db.get(Resolution, item.resolution_id) if item and item.resolution_id else None
+    fr = db.get(FrameRate, item.frame_rate_id) if item and item.frame_rate_id else None
+    naming = deliv.file_naming
+    if not naming and item is not None:
+        nc = getattr(item, "naming_convention", None)
+        if isinstance(nc, str):
+            naming = nc
+    return MatchExpectation(
+        deliverable_id=deliv.id, file_naming=naming,
+        container_name=cont.name if cont else None,
+        container_ext=cont.extension if cont else None,
+        video_codec_name=cod.name if cod else None,
+        width=res.width if res else None, height=res.height if res else None,
+        fps=fr.fps if fr else None)
+
+
+def candidate_deliverables(db: Session, asset: Asset) -> list[JobDeliverable]:
+    code = _project_code_from_relpath(asset.rel_path)
+    if not code:
+        return []
+    proj = db.execute(
+        select(Project).where(Project.tenant_id == asset.tenant_id,
+                              Project.code == code)
+    ).scalar_one_or_none()
+    if proj is None:
+        return []
+    rows = db.execute(
+        select(JobDeliverable)
+        .join(Job, Job.id == JobDeliverable.job_id)
+        .where(Job.project_id == proj.id,
+               JobDeliverable.tenant_id == asset.tenant_id,
+               JobDeliverable.digital_asset_id.is_(None),
+               JobDeliverable.deleted_at.is_(None),
+               JobDeliverable.status.in_(_OPEN_STATUSES))
+    ).scalars().all()
+    return list(rows)
+
+
+def rank_candidates(db: Session, asset: Asset) -> list[dict]:
+    probe = asset.tech_specs_json or {}
+    out = []
+    for d in candidate_deliverables(db, asset):
+        exp = build_expectation(db, d)
+        r = score_match(asset.filename or "", probe, exp)
+        if r.strength != "none":
+            out.append({"deliverable_id": d.id, "name": d.name,
+                        "score": r.score, "strength": r.strength,
+                        "specs_agree": r.specs_agree, "naming_ok": r.naming_ok})
+    out.sort(key=lambda x: x["score"], reverse=True)
+    return out
+
+
+def match_proposal(db: Session, asset: Asset) -> Optional[int]:
+    ranked = rank_candidates(db, asset)
+    strong = [r for r in ranked if r["strength"] == "strong"]
+    if len(strong) == 1:
+        asset.matched_deliverable_id = strong[0]["deliverable_id"]
+        db.flush()
+        return asset.matched_deliverable_id
+    asset.matched_deliverable_id = None
+    db.flush()
+    return None
