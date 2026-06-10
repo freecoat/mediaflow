@@ -3197,6 +3197,11 @@ class Asset(Base):
     checksum_xxhash: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
     mhl_ref: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     registered_via: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    # ── F2 (spec 2026-06-10) — suggerimento match pre-conferma ──
+    # NB: distinto da JobDeliverable.digital_asset_id (link CONFERMATO).
+    # Qui = proposta dell'auto-match, l'operatore conferma/corregge.
+    matched_deliverable_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True, index=True)
     job: Mapped[Optional["Job"]] = relationship(back_populates="assets")
     uploaded_by_user: Mapped["User"] = relationship(back_populates="assets")
     tags: Mapped[List["Tag"]] = relationship(secondary="asset_tags")

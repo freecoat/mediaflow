@@ -1208,6 +1208,7 @@ def _auto_migrate_columns():
             ("checksum_xxhash", "VARCHAR(32) NULL"),
             ("mhl_ref", "VARCHAR(512) NULL"),
             ("registered_via", "VARCHAR(30) NULL"),
+            ("matched_deliverable_id", "INTEGER NULL REFERENCES job_deliverables(id)"),
         ]
         with engine.begin() as conn:
             for col, ddl in f1_alter:
