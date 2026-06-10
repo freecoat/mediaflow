@@ -84,3 +84,21 @@ def fail_job(db: Session, job: AgentJob, error: str) -> AgentJob:
     job.finished_at = now_utc()
     db.flush()
     return job
+
+
+def enqueue_scan_if_absent(db: Session, *, tenant_id: int, volume_id: int,
+                            requested_by_user_id: Optional[int] = None) -> AgentJob:
+    """Accoda un job scan per il volume solo se non ce n'è già uno queued/claimed.
+    Evita di accumulare scan se l'agent è lento/offline."""
+    existing_scans = db.execute(
+        select(AgentJob).where(
+            AgentJob.tenant_id == tenant_id,
+            AgentJob.type == AgentJobType.scan,
+            AgentJob.status.in_([AgentJobStatus.queued, AgentJobStatus.claimed]))
+    ).scalars().all()
+    for j in existing_scans:
+        if (j.payload or {}).get("volume_id") == volume_id:
+            return j
+    return enqueue_job(db, tenant_id=tenant_id, type=AgentJobType.scan,
+                       payload={"volume_id": volume_id},
+                       requested_by_user_id=requested_by_user_id)

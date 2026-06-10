@@ -13,7 +13,7 @@ from app.models.models import (
     AgentJob, AgentJobType, AgentNode,
     Asset, AssetProposedState, StorageVolume,
 )
-from app.services.agent_queue import enqueue_job, generate_agent_token
+from app.services.agent_queue import enqueue_job, generate_agent_token, enqueue_scan_if_absent
 from app.services.asset_registry import confirm_proposal, discard_proposal
 from app.services.deliverable_match import rank_candidates, link_deliverable_on_confirm
 from app.services.rbac import current_user_optional, requires_permission
@@ -104,6 +104,18 @@ def update_volume(
     v.is_active = is_active
     db.commit()
     return {"ok": True}
+
+
+@router.post("/api/volumes/{vol_id}/scan-now", dependencies=[RequireStorage])
+def scan_now(vol_id: int, request: Request, db: Session = Depends(get_db)):
+    v = db.get(StorageVolume, vol_id)
+    if v is None or v.tenant_id != CURRENT_TENANT or not v.is_active:
+        raise HTTPException(404)
+    user = current_user_optional(request)
+    job = enqueue_scan_if_absent(db, tenant_id=CURRENT_TENANT, volume_id=vol_id,
+                                 requested_by_user_id=getattr(user, "id", None))
+    db.commit()
+    return {"ok": True, "job_id": job.id}
 
 
 # ── Agent ────────────────────────────────────────────────────────────
