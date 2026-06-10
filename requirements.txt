@@ -37,8 +37,8 @@ pillow>=11.0.0
 pyotp>=2.9.0
 qrcode>=8.0
 
-# v3.5.0-alpha.75 — Filesystem scan checksum veloce
-xxhash>=3.0
+# v3.5.0-alpha.75 — Filesystem scan checksum veloce (agent/probe also uses xxhash)
+xxhash>=3.4
 
 # JSON Schema validation (Bundle L Stack 1)
 jsonschema>=4.0.0

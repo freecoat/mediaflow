@@ -1,0 +1,2 @@
+requests>=2.31
+xxhash>=3.4
