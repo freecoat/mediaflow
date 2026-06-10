@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.210** — 10 giugno 2026 — F1: Asset Registry metadata-only + Claqo Agent (fondamenta)
+**v3.5.0-alpha.172.211** — 10 giugno 2026 — F2: Watch + Match (asset registry)
+
+### α.172.211 ✅ (F2 watch + match — 10 giu, subagent-driven)
+- **Watch automatico**: l'agent (`agent/watch.py`, polling listing, size-stable, DCP/IMF via ASSETMAP) propone gli asset appena un file è stabile — niente più "registra per percorso" manuale. Job `scan` ricorrente → proposte `registered_via='agent_watch'`. Solo requests+xxhash, NON importa app.*.
+- **Auto-match** (`app/services/deliverable_match.py`): scoring puro naming+container+codec+risoluzione+fps vs JobDeliverable/DeliveryItem (progetto da convenzione path `/OUT/{code}/`). Forte→`Asset.matched_deliverable_id` pre-collega; debole→candidati; zero→libera. Conferma con deliverable → `digital_asset_id` + `status=qc`.
+- **UI**: `/storage` colonne Match (badge) + dropdown candidati + "Scansiona" per-volume; **mobile `/m/proposte`** review da telefono.
+- **10 task TDD, +18 test (520 totali)**. E2E watch→match→conferma 12/12 (`tools/_e2e_f2.py`) + browser smoke verde. Checklist `docs/qc/f2-e2e-checklist.md`.
+- Nota: ffprobe assente sulla macchina di test → match reale "debole" (solo naming); l'E2E inietta le specs come da facility per provare il forte end-to-end.
+
+**Prossimo / PENDENTE**: Matteo **restart :8000 + smoke** `/storage` (Scansiona volume → proposta con badge match → conferma) + `/m/proposte`. Poi **F3**: preview QC (job preview, relay streaming + opzione S3, player scheda QC). Backlog F2: scheduler scan ricorrente server-side, override output_dir per-progetto, auto-scarto file sparito, persistenza candidati deboli.
 
 ### α.172.210 ✅ (F1 asset registry metadata-only + agent — 10 giu, subagent-driven)
 - **Fondamenta MAM metadata-only**: nessun byte di contenuto sul server. Asset di contenuto vivono sulla SAN facility; il server tiene solo metadata+checksum. Agent separato (pacchetto `agent/`, solo `requests`+`xxhash`, NON importa `app.*`) polla coda via HTTPS outbound, esegue ffprobe/xxhash in facility, riporta JSON. Probe done → proposta Asset `pending_review` → conferma operatore.

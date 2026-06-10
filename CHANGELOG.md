@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.211 — F2: Watch + Match (asset registry) (10 giu 2026)
+
+Seconda fase del registro asset metadata-only: l'agent **watcha** le cartelle output e propone gli asset automaticamente; ogni proposta viene **auto-matchata** col `JobDeliverable` atteso. Pattern invariato "agent propone, operatore dispone". Subagent-driven (10 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-10-f2-watch-match*`.
+
+- **Watch agent** (`agent/watch.py`): polling listing delle `watch_dirs`, file **size-stable** (proposto solo dopo ≥1 ciclo di quiete), package **DCP/IMF** riconosciuto come unità (via `ASSETMAP`). Job `scan` ricorrente ritorna lista probe-result → proposte `registered_via='agent_watch'`. Solo `requests`+`xxhash`+stdlib, NON importa `app.*`.
+- **Match** (`app/services/deliverable_match.py`): scoring puro naming + container + video codec + risoluzione + frame rate (probed vs `JobDeliverable`/`DeliveryItem` con alias codec ffprobe→listino). Progetto derivato dalla convenzione path `/OUT/{project_code}/`. **Forte** (naming + ≥2 specs, o score ≥0.75) → `Asset.matched_deliverable_id` pre-collegato; **debole** → candidati ordinati; **zero** → libera.
+- **Conferma → QC**: confermando con un deliverable (match forte accettato o scelto) → `JobDeliverable.digital_asset_id` + `status=qc`.
+- **UI `/storage`**: colonne Match (badge 🟢/🟡/⚪) + dropdown candidati per correggere il link + bottone "Scansiona" per-volume. **Mobile PWA `/m/proposte`**: review proposte da telefono (conferma/scarta/correggi-link).
+- **Modello**: `Asset += matched_deliverable_id` (suggerimento pre-conferma, distinto da `digital_asset_id` confermato), auto-migrate al boot. Endpoint `scan-now` idempotente (`enqueue_scan_if_absent`).
+- **+18 test (520 totali)**. E2E watch→match→conferma 12/12 (`tools/_e2e_f2.py`) + browser smoke `/storage` + `/m/proposte`. Checklist `docs/qc/f2-e2e-checklist.md`.
+- **Backlog F2**: scheduler scan server-side ricorrente, override `output_dir` per-progetto, auto-scarto proposte con file sparito, persistenza candidati deboli.
+
 ## v3.5.0-alpha.172.210 — F1: Asset Registry metadata-only + Claqo Agent (10 giu 2026)
 
 Fondamenta del **registro asset metadata-only**: nessun byte di contenuto media sul server. Gli asset di contenuto (video/audio/sequenze) vivono sulla SAN della facility; il server tiene solo metadata + checksum. Un **agent** separato gira in facility, polla una coda comandi via HTTPS outbound, esegue probe/checksum localmente e riporta JSON. Pattern "agent propone, operatore dispone". Spec `docs/superpowers/specs/2026-06-10-asset-library-metadata-only-design.md`, piano `docs/superpowers/plans/2026-06-10-f1-asset-registry-agent.md`. Subagent-driven (11 task, TDD).
