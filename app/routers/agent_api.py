@@ -19,6 +19,7 @@ from app.services.agent_queue import (
 )
 from app.services.asset_registry import create_proposal_from_probe
 from app.services.clock import now_utc
+from app.services.deliverable_match import match_proposal
 
 router = APIRouter(prefix="/agent-api", tags=["agent"])
 
@@ -89,15 +90,30 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
         fail_job(db, job, error or "errore agent non specificato")
         return None
     complete_job(db, job, result or {})
-    if job.type == AgentJobType.probe and result:  # dict popolato (build_probe_result non torna mai {})
+    if status != "done" or not result:
+        return None
+    if job.type == AgentJobType.probe:
         volume_id = int((job.payload or {}).get("volume_id") or 0)
         asset = create_proposal_from_probe(
             db, tenant_id=job.tenant_id, volume_id=volume_id, probe=result,
             user_id=job.requested_by_user_id or 1,
             registered_via="manual_path")
         job.asset_id = asset.id
+        match_proposal(db, asset)
         db.flush()
         return asset
+    if job.type == AgentJobType.scan:
+        volume_id = int(result.get("volume_id") or (job.payload or {}).get("volume_id") or 0)
+        created = []
+        for item in result.get("items") or []:
+            asset = create_proposal_from_probe(
+                db, tenant_id=job.tenant_id, volume_id=volume_id, probe=item,
+                user_id=job.requested_by_user_id or 1,
+                registered_via="agent_watch")
+            match_proposal(db, asset)
+            created.append(asset)
+        db.flush()
+        return created[0] if created else None
     return None
 
 
