@@ -2392,7 +2392,10 @@ async def prefer_mobile():
 # auth-bypass su DAM e capitolati copilot. Il browser di un utente loggato
 # manda automaticamente il cookie access_token, quindi gli URL /uploads/*
 # inline nei template continuano a funzionare. Senza login → redirect /auth.
-PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/")
+# v3.5.0-alpha.172.210 (F1): /agent-api/ ha auth propria (header X-Agent-Token →
+# AgentNode sha256, 401 se invalido). Bypassa il middleware admin: l'agent
+# facility non è un utente, non ha cookie JWT. Vedi app/routers/agent_api.py.
+PUBLIC_PATHS = ("/auth/", "/static/", "/health", "/docs", "/openapi.json", "/favicon.ico", "/redoc", "/public/", "/agent-api/")
 # v3.5.0-alpha.97: portale cliente — auth proprio (cookie portal_token).
 # Path UI portale bypassano il middleware admin. Endpoint /portal/api/access*
 # restano protetti dal middleware admin (servono a creare/revocare accessi).
