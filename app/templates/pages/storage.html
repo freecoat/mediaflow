@@ -48,12 +48,13 @@
             <th>Percorso</th>
             <th class="text-right">Dim. (GB)</th>
             <th>Checksum</th>
-            <th>Specs</th>
+            <th>Match</th>
+            <th>Link deliverable</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="proposalsBody">
-          <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+          <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -297,20 +298,19 @@ async function loadProposals() {
   try {
     const data = await api('GET', '/storage/api/proposals');
     if (!data || !data.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessuna proposta in attesa di revisione.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessuna proposta in attesa di revisione.</td></tr>';
       return;
     }
     tbody.innerHTML = data.map(function(p) {
       const sizeGb = p.file_size ? (p.file_size / 1073741824).toFixed(2) : '—';
       const checksum = p.checksum_xxhash ? escapeHtml(p.checksum_xxhash.substring(0, 12)) + '…' : '—';
-      const specsRaw = p.tech_specs ? JSON.stringify(p.tech_specs) : '';
-      const specsLabel = specsRaw ? escapeHtml(specsRaw.substring(0, 60)) + (specsRaw.length > 60 ? '…' : '') : '—';
       return '<tr>'
         + '<td><strong>' + escapeHtml(p.filename || '—') + '</strong></td>'
-        + '<td class="text-muted" style="font-size:12px;max-width:260px;word-break:break-all;">' + escapeHtml(p.rel_path || '—') + '</td>'
+        + '<td class="text-muted" style="font-size:12px;max-width:200px;word-break:break-all;">' + escapeHtml(p.rel_path || '—') + '</td>'
         + '<td class="text-right mono">' + escapeHtml(sizeGb) + '</td>'
         + '<td class="mono" style="font-size:11px;">' + checksum + '</td>'
-        + '<td class="text-muted" style="font-size:11px;max-width:200px;">' + specsLabel + '</td>'
+        + '<td data-match-cell="' + p.id + '" style="font-size:12px;"><span class="text-muted">…</span></td>'
+        + '<td style="min-width:180px;"><select class="form-select" style="font-size:12px;padding:3px 6px;" data-deliv-select="' + p.id + '"></select></td>'
         + '<td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">'
         + '<button class="btn btn-ghost btn-sm" style="color:var(--green);" '
         + 'data-prop-id="' + p.id + '" onclick="confirmProposal(this.dataset.propId)">✓ Conferma</button> '
@@ -319,9 +319,37 @@ async function loadProposals() {
         + '</td>'
         + '</tr>';
     }).join('');
+    // Load candidates for each proposal asynchronously
+    data.forEach(function(p) { loadCandidates(p.id, p.matched_deliverable_id); });
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento proposte.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento proposte.</td></tr>';
     toast('Errore caricamento proposte: ' + e.message, 'error');
+  }
+}
+
+async function loadCandidates(assetId, matchedId) {
+  let cands = [];
+  try { cands = await api('GET', '/storage/api/proposals/' + assetId + '/candidates'); }
+  catch (e) { cands = []; }
+  const sel = document.querySelector('[data-deliv-select="' + assetId + '"]');
+  if (sel) {
+    sel.innerHTML = '<option value="">— nessun collegamento —</option>'
+      + cands.map(function(c) {
+          const isSelected = c.deliverable_id === matchedId ? ' selected' : '';
+          return '<option value="' + c.deliverable_id + '"' + isSelected + '>'
+            + escapeHtml(c.name) + ' · ' + escapeHtml(c.strength) + ' (' + Math.round(c.score * 100) + '%)</option>';
+        }).join('');
+  }
+  const cell = document.querySelector('[data-match-cell="' + assetId + '"]');
+  if (cell) {
+    const strong = cands.find(function(c) { return c.deliverable_id === matchedId; });
+    if (strong) {
+      cell.innerHTML = '🟢 ' + escapeHtml(strong.name);
+    } else if (cands.length) {
+      cell.innerHTML = '🟡 ' + cands.length + ' candidat' + (cands.length > 1 ? 'i' : 'o');
+    } else {
+      cell.innerHTML = '<span class="text-muted">⚪ nessuno</span>';
+    }
   }
 }
 
@@ -359,7 +387,10 @@ async function loadVolumes() {
         + 'data-vol-watch="' + escapeHtml((v.watch_dirs || []).join(', ')) + '" '
         + 'data-vol-ro="' + (v.read_only ? '1' : '0') + '" '
         + 'data-vol-active="' + (v.is_active ? '1' : '0') + '" '
-        + 'onclick="editVolumeFromBtn(this)">✏️</button>'
+        + 'onclick="editVolumeFromBtn(this)">✏️</button> '
+        + '<button class="btn btn-ghost btn-sm" title="Scansiona ora" '
+        + 'data-vol-id="' + v.id + '" '
+        + 'onclick="scanNow(this.dataset.volId)">🔍 Scansiona</button>'
         + '</td>'
         + '</tr>';
     }).join('');
@@ -449,7 +480,10 @@ async function loadJobs() {
 async function confirmProposal(id) {
   if (!confirm('Confermare questo asset nella libreria?')) return;
   try {
-    await api('POST', '/storage/api/proposals/' + id + '/confirm');
+    const sel = document.querySelector('[data-deliv-select="' + id + '"]');
+    const fd = new FormData();
+    if (sel && sel.value) fd.append('deliverable_id', sel.value);
+    await api('POST', '/storage/api/proposals/' + id + '/confirm', fd);
     toast('Asset confermato', 'success');
     loadProposals();
   } catch (e) {
@@ -564,6 +598,17 @@ async function saveVolume() {
     loadVolumes();
   } catch (e) {
     toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function scanNow(id) {
+  try {
+    await api('POST', '/storage/api/volumes/' + id + '/scan-now');
+    toast('Scan accodato — le proposte appariranno appena l\'agent risponde', 'success', 5000);
+    switchStorageTab('jobs');
+    loadJobs();
+  } catch (e) {
+    toast('Errore scan: ' + e.message, 'error');
   }
 }
 
