@@ -12,8 +12,9 @@ from agent import __version__
 from agent.config import Config
 from agent.client import ClaqoClient
 from agent.probe import build_probe_result, xxhash_file
+from agent.watch import WatchState, scan_volume
 
-CAPABILITIES = ["probe", "checksum"]
+CAPABILITIES = ["probe", "checksum", "scan"]
 
 
 def volume_stats(volumes: list[dict]) -> list[dict]:
@@ -29,7 +30,7 @@ def volume_stats(volumes: list[dict]) -> list[dict]:
     return out
 
 
-def handle_job(job: dict, volumes_by_id: dict) -> tuple[str, dict | None, str | None]:
+def handle_job(job: dict, volumes_by_id: dict, watch_states: dict) -> tuple[str, dict | None, str | None]:
     jtype, payload = job["type"], job.get("payload") or {}
     vol = volumes_by_id.get(int(payload.get("volume_id") or 0))
     if vol is None:
@@ -41,6 +42,10 @@ def handle_job(job: dict, volumes_by_id: dict) -> tuple[str, dict | None, str | 
             import os
             full = os.path.join(vol["mount_path"], payload["rel_path"])
             return "done", {"checksum_xxhash": xxhash_file(full)}, None
+        if jtype == "scan":
+            st = watch_states.setdefault(int(payload.get("volume_id") or 0), WatchState())
+            items = scan_volume(vol["mount_path"], vol.get("watch_dirs") or [], st)
+            return "done", {"volume_id": int(payload.get("volume_id") or 0), "items": items}, None
         return "failed", None, f"tipo job non supportato da agent v{__version__}: {jtype}"
     except Exception as e:
         return "failed", None, f"{type(e).__name__}: {e}"
@@ -51,6 +56,7 @@ def run():
     client = ClaqoClient(cfg.server_url, cfg.token)
     volumes: list[dict] = []
     last_hb = 0.0
+    watch_states: dict[int, WatchState] = {}
     print(f"[agent] v{__version__} → {cfg.server_url}")
     while True:
         try:
@@ -64,7 +70,7 @@ def run():
             job = client.claim()
             if job:
                 print(f"[agent] job #{job['id']} {job['type']}")
-                status, result, error = handle_job(job, vols_by_id)
+                status, result, error = handle_job(job, vols_by_id, watch_states)
                 client.post_result(job["id"], status, result, error)
                 continue
         except Exception:
