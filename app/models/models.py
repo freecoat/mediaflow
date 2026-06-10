@@ -242,6 +242,42 @@ class AssetStatus(str, enum.Enum):
     accepted = "accepted"           # validato (post-delivery o post-QC pass)
 
 
+# ── F1 asset registry metadata-only (spec 2026-06-10) ──────────────────────
+class AssetContentState(str, enum.Enum):
+    """Dove vive fisicamente il contenuto. Il record Asset NON muore mai."""
+    online = "online"
+    archived_only = "archived_only"
+    deleted = "deleted"
+
+
+class AssetProposedState(str, enum.Enum):
+    """Workflow proposta: agent/path propone, operatore dispone."""
+    pending_review = "pending_review"
+    confirmed = "confirmed"
+    discarded = "discarded"
+
+
+class AgentJobType(str, enum.Enum):
+    scan = "scan"
+    probe = "probe"
+    checksum = "checksum"
+    preview = "preview"
+    copy = "copy"
+    lto_archive = "lto_archive"
+    lto_restore = "lto_restore"
+    transfer = "transfer"
+    delete_verify = "delete_verify"
+
+
+class AgentJobStatus(str, enum.Enum):
+    queued = "queued"
+    claimed = "claimed"
+    running = "running"
+    done = "done"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
 # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QCEvent event types.
 # 9 originali + 4 estensioni: qc_reopened, note_added, correction_requested,
 # signoff_added. Payload_json dict libero per ogni event (struttura suggerita
@@ -3148,6 +3184,19 @@ class Asset(Base):
     tech_specs_extractor: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     tech_specs_extracted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     tech_specs_schema_version: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # ── F1 (spec 2026-06-10) — registro metadata-only ──
+    storage_volume_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("storage_volumes.id"), nullable=True, index=True)
+    rel_path: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
+    content_state: Mapped[AssetContentState] = mapped_column(
+        SAEnum(AssetContentState), default=AssetContentState.online,
+        server_default="online", index=True)
+    proposed_state: Mapped[AssetProposedState] = mapped_column(
+        SAEnum(AssetProposedState), default=AssetProposedState.confirmed,
+        server_default="confirmed", index=True)
+    checksum_xxhash: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    mhl_ref: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    registered_via: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     job: Mapped[Optional["Job"]] = relationship(back_populates="assets")
     uploaded_by_user: Mapped["User"] = relationship(back_populates="assets")
     tags: Mapped[List["Tag"]] = relationship(secondary="asset_tags")
@@ -3389,6 +3438,62 @@ class PhysicalAsset(Base):
     # Stato logistico corrente (derivato ma denormalizzato per query rapide)
     # Es. "in_storage", "transit_out", "delivered_external", "transit_in"
     logistics_status: Mapped[Optional[str]] = mapped_column(String(40), nullable=True, index=True)
+
+
+# ── F1 (spec 2026-06-10) — Storage facility + agent + coda comandi ─────────
+class StorageVolume(Base):
+    """Volume montato della facility (SAN/NAS). Per-TENANT: la SAN è
+    infrastruttura, i progetti si agganciano via convenzione path
+    (watch_dirs tipo /OUT/{project_code}/) + override per-progetto futuro."""
+    __tablename__ = "storage_volumes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    mount_path: Mapped[str] = mapped_column(String(512))
+    watch_dirs: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    read_only: Mapped[bool] = mapped_column(Boolean, default=True)
+    total_gb: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    free_gb: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class AgentNode(Base):
+    """Agent facility registrato. Token mostrato UNA volta al create,
+    su DB solo sha256. Connessione SOLO outbound (agent → Claqo)."""
+    __tablename__ = "agent_nodes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    auth_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    last_heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    version: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    capabilities: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class AgentJob(Base):
+    """Coda comandi Claqo → agent. Agent polla, esegue, riporta.
+    agent_id NULL = qualsiasi agent del tenant può prenderlo."""
+    __tablename__ = "agent_jobs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    agent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agent_nodes.id"), nullable=True, index=True)
+    type: Mapped[AgentJobType] = mapped_column(SAEnum(AgentJobType), index=True)
+    payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    status: Mapped[AgentJobStatus] = mapped_column(
+        SAEnum(AgentJobStatus), default=AgentJobStatus.queued,
+        server_default="queued", index=True)
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    requested_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True, index=True)
+    physical_asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("physical_assets.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 # v3.5.0-alpha.66.9 — JobDeliverable: nodo di produzione tra JobCostLine
