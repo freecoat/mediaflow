@@ -49,6 +49,7 @@ def create_proposal_from_probe(db: Session, *, tenant_id: int, volume_id: int,
     """Crea Asset `pending_review` dal payload probe agent.
     Dedup: stesso checksum_xxhash sullo stesso volume → ritorna l'esistente."""
     checksum = probe.get("checksum_xxhash")
+    rel_path = (probe.get("rel_path") or "").lstrip("/")
     if checksum:
         existing = db.execute(
             select(Asset).where(Asset.tenant_id == tenant_id,
@@ -57,7 +58,16 @@ def create_proposal_from_probe(db: Session, *, tenant_id: int, volume_id: int,
         ).scalar_one_or_none()
         if existing is not None:
             return existing
-    rel_path = (probe.get("rel_path") or "").lstrip("/")
+    elif rel_path:
+        # Package DCP/IMF: checksum spesso assente → dedup su (volume, rel_path)
+        # per non ri-proporre lo stesso package a ogni scan / riavvio agent.
+        existing = db.execute(
+            select(Asset).where(Asset.tenant_id == tenant_id,
+                                Asset.storage_volume_id == volume_id,
+                                Asset.rel_path == rel_path)
+        ).scalars().first()
+        if existing is not None:
+            return existing
     name = PurePosixPath(rel_path.replace("\\", "/")).name or rel_path
     mime = probe.get("mime_type")
     asset = Asset(

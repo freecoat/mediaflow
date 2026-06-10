@@ -13,7 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import AgentNode, AgentJob, AgentJobType, StorageVolume
+from app.models.models import (
+    AgentNode, AgentJob, AgentJobType, StorageVolume, AssetProposedState,
+)
 from app.services.agent_queue import (
     hash_agent_token, claim_next_job, complete_job, fail_job,
 )
@@ -99,7 +101,10 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
             user_id=job.requested_by_user_id or 1,
             registered_via="manual_path")
         job.asset_id = asset.id
-        match_proposal(db, asset)
+        # NON ri-matchare un asset già confermato/scartato (dedup checksum può
+        # ritornare un esistente): clobbererebbe matched_deliverable_id storico.
+        if asset.proposed_state == AssetProposedState.pending_review:
+            match_proposal(db, asset)
         db.flush()
         return asset
     if job.type == AgentJobType.scan:
@@ -110,7 +115,8 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
                 db, tenant_id=job.tenant_id, volume_id=volume_id, probe=item,
                 user_id=job.requested_by_user_id or 1,
                 registered_via="agent_watch")
-            match_proposal(db, asset)
+            if asset.proposed_state == AssetProposedState.pending_review:
+                match_proposal(db, asset)
             created.append(asset)
         db.flush()
         return created[0] if created else None

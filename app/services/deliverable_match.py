@@ -12,12 +12,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from app.models.models import (
     Asset, Project, Job, JobDeliverable, DeliverableStatus, DeliveryItem,
-    Container, VideoCodec, Resolution, FrameRate,
+    Container, VideoCodec, Resolution, FrameRate, StorageVolume,
 )
 
 _CODEC_ALIASES = {
@@ -160,16 +160,34 @@ _OPEN_STATUSES = (
     DeliverableStatus.qc,
 )
 
+# Nomi cartella di export tipici, usati per dedurre il project_code quando il
+# volume non ha watch_dirs configurate (fallback all'euristica esplicita).
+_COMMON_EXPORT_DIRS = {
+    "out", "output", "export", "exports", "delivery", "deliveries",
+    "outgoing", "masters", "master", "consegne", "consegna",
+}
 
-def _project_code_from_relpath(rel_path: Optional[str]) -> Optional[str]:
-    """Convenzione /OUT/{project_code}/... → project_code. Tollerante:
-    prende il primo segmento dopo una watch-dir tipo OUT/EXPORT."""
+
+def _project_code_from_relpath(rel_path: Optional[str],
+                               watch_dirs: Optional[list] = None) -> Optional[str]:
+    """Convenzione `{watch_dir}/{project_code}/...` → project_code.
+
+    Usa le watch_dirs REALI del volume (non un'euristica case/lunghezza): se il
+    primo segmento è una watch-dir nota, il progetto è il segmento successivo;
+    altrimenti il primo segmento è già il project_code (mount = radice progetti).
+    """
     if not rel_path:
         return None
     parts = [p for p in rel_path.replace("\\", "/").split("/") if p]
-    if len(parts) >= 2:
-        return parts[1] if parts[0].isupper() and len(parts[0]) <= 8 else parts[0]
-    return parts[0] if parts else None
+    if not parts:
+        return None
+    wdset = {w.strip("/\\").lower() for w in (watch_dirs or []) if w and w.strip("/\\")}
+    # fallback quando il volume non espone watch_dirs: nomi cartella export comuni
+    if not wdset:
+        wdset = _COMMON_EXPORT_DIRS
+    if len(parts) >= 2 and parts[0].lower() in wdset:
+        return parts[1]
+    return parts[0]
 
 
 def build_expectation(db: Session, deliv: JobDeliverable) -> MatchExpectation:
@@ -183,6 +201,10 @@ def build_expectation(db: Session, deliv: JobDeliverable) -> MatchExpectation:
         nc = getattr(item, "naming_convention", None)
         if isinstance(nc, str):
             naming = nc
+    # I template di naming ({title}_{episode}...) non sono nomi-file letterali:
+    # tokenizzarli falsa lo score. Saltali → match solo su specs tecniche.
+    if naming and "{" in naming:
+        naming = None
     return MatchExpectation(
         deliverable_id=deliv.id, file_naming=naming,
         container_name=cont.name if cont else None,
@@ -193,12 +215,16 @@ def build_expectation(db: Session, deliv: JobDeliverable) -> MatchExpectation:
 
 
 def candidate_deliverables(db: Session, asset: Asset) -> list[JobDeliverable]:
-    code = _project_code_from_relpath(asset.rel_path)
+    watch_dirs = None
+    if asset.storage_volume_id:
+        vol = db.get(StorageVolume, asset.storage_volume_id)
+        watch_dirs = vol.watch_dirs if vol else None
+    code = _project_code_from_relpath(asset.rel_path, watch_dirs)
     if not code:
         return []
     proj = db.execute(
         select(Project).where(Project.tenant_id == asset.tenant_id,
-                              Project.code == code)
+                              func.lower(Project.code) == code.lower())
     ).scalar_one_or_none()
     if proj is None:
         return []
@@ -247,6 +273,9 @@ def link_deliverable_on_confirm(db: Session, asset: Asset, *,
     d = db.get(JobDeliverable, deliverable_id)
     if d is None or d.tenant_id != asset.tenant_id or d.deleted_at is not None:
         raise HTTPException(404, "deliverable non trovato")
+    if d.digital_asset_id is not None and d.digital_asset_id != asset.id:
+        raise HTTPException(
+            409, "deliverable già collegato a un altro asset: scollega prima quello")
     d.digital_asset_id = asset.id
     if d.status in (DeliverableStatus.planned, DeliverableStatus.in_progress):
         d.status = DeliverableStatus.qc
