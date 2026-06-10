@@ -1,0 +1,246 @@
+"""F1 (spec 2026-06-10) — Admin storage facility: volumi, agent, coda, proposte."""
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models.models import (
+    AgentJob, AgentJobType, AgentNode,
+    Asset, AssetProposedState, StorageVolume,
+)
+from app.services.agent_queue import enqueue_job, generate_agent_token
+from app.services.asset_registry import confirm_proposal, discard_proposal
+from app.services.rbac import current_user_optional, requires_permission
+
+CURRENT_TENANT = 1
+
+router = APIRouter(prefix="/storage", tags=["storage"])
+
+RequireStorage = Depends(requires_permission("edit_planning_all"))
+
+
+def _tpl():
+    from app.main import templates
+    return templates
+
+
+# ── Pagina HTML ──────────────────────────────────────────────────────
+
+@router.get("", response_class=HTMLResponse)
+def storage_page(request: Request):
+    user = current_user_optional(request)
+    return _tpl().TemplateResponse("pages/storage.html",
+                                   {"request": request, "user": user})
+
+
+# ── Volumi ───────────────────────────────────────────────────────────
+
+@router.get("/api/volumes")
+def list_volumes(db: Session = Depends(get_db)):
+    vols = db.execute(
+        select(StorageVolume)
+        .where(StorageVolume.tenant_id == CURRENT_TENANT)
+        .order_by(StorageVolume.name)
+    ).scalars().all()
+    return [
+        {
+            "id": v.id,
+            "name": v.name,
+            "mount_path": v.mount_path,
+            "watch_dirs": v.watch_dirs or [],
+            "read_only": v.read_only,
+            "total_gb": v.total_gb,
+            "free_gb": v.free_gb,
+            "is_active": v.is_active,
+        }
+        for v in vols
+    ]
+
+
+@router.post("/api/volumes", dependencies=[RequireStorage])
+def create_volume(
+    name: str = Form(...),
+    mount_path: str = Form(...),
+    watch_dirs: str = Form(""),
+    read_only: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    dirs = [d.strip() for d in watch_dirs.split(",") if d.strip()]
+    v = StorageVolume(
+        tenant_id=CURRENT_TENANT,
+        name=name,
+        mount_path=mount_path,
+        watch_dirs=dirs,
+        read_only=read_only,
+    )
+    db.add(v)
+    db.commit()
+    return {"ok": True, "id": v.id}
+
+
+@router.put("/api/volumes/{vol_id}", dependencies=[RequireStorage])
+def update_volume(
+    vol_id: int,
+    name: str = Form(...),
+    mount_path: str = Form(...),
+    watch_dirs: str = Form(""),
+    read_only: bool = Form(True),
+    is_active: bool = Form(True),
+    db: Session = Depends(get_db),
+):
+    v = db.get(StorageVolume, vol_id)
+    if v is None or v.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404)
+    v.name = name
+    v.mount_path = mount_path
+    v.watch_dirs = [d.strip() for d in watch_dirs.split(",") if d.strip()]
+    v.read_only = read_only
+    v.is_active = is_active
+    db.commit()
+    return {"ok": True}
+
+
+# ── Agent ────────────────────────────────────────────────────────────
+
+@router.get("/api/agents")
+def list_agents(db: Session = Depends(get_db)):
+    ags = db.execute(
+        select(AgentNode)
+        .where(AgentNode.tenant_id == CURRENT_TENANT)
+        .order_by(AgentNode.name)
+    ).scalars().all()
+    return [
+        {
+            "id": a.id,
+            "name": a.name,
+            "version": a.version,
+            "capabilities": a.capabilities or [],
+            "last_heartbeat_at": (
+                a.last_heartbeat_at.isoformat() if a.last_heartbeat_at else None
+            ),
+            "is_active": a.is_active,
+        }
+        for a in ags
+    ]
+
+
+@router.post("/api/agents", dependencies=[RequireStorage])
+def create_agent(name: str = Form(...), db: Session = Depends(get_db)):
+    plain, token_hash = generate_agent_token()
+    a = AgentNode(tenant_id=CURRENT_TENANT, name=name, auth_token_hash=token_hash)
+    db.add(a)
+    db.commit()
+    return {"ok": True, "id": a.id, "token": plain}
+
+
+@router.delete("/api/agents/{agent_id}", dependencies=[RequireStorage])
+def revoke_agent(agent_id: int, db: Session = Depends(get_db)):
+    a = db.get(AgentNode, agent_id)
+    if a is None or a.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404)
+    a.is_active = False
+    db.commit()
+    return {"ok": True}
+
+
+# ── Job queue ────────────────────────────────────────────────────────
+
+@router.get("/api/jobs")
+def list_jobs(limit: int = 50, db: Session = Depends(get_db)):
+    jobs = db.execute(
+        select(AgentJob)
+        .where(AgentJob.tenant_id == CURRENT_TENANT)
+        .order_by(AgentJob.id.desc())
+        .limit(limit)
+    ).scalars().all()
+    return [
+        {
+            "id": j.id,
+            "type": j.type.value,
+            "status": j.status.value,
+            "payload": j.payload,
+            "error": j.error,
+            "progress": j.progress,
+            "created_at": j.created_at.isoformat(),
+            "asset_id": j.asset_id,
+        }
+        for j in jobs
+    ]
+
+
+@router.post("/api/register-path", dependencies=[RequireStorage])
+def register_path(
+    request: Request,
+    volume_id: int = Form(...),
+    rel_path: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = current_user_optional(request)
+    v = db.get(StorageVolume, volume_id)
+    if v is None or v.tenant_id != CURRENT_TENANT or not v.is_active:
+        raise HTTPException(404, "volume non trovato")
+    job = enqueue_job(
+        db,
+        tenant_id=CURRENT_TENANT,
+        type=AgentJobType.probe,
+        payload={"volume_id": volume_id, "rel_path": rel_path.strip().lstrip("/")},
+        requested_by_user_id=getattr(user, "id", None),
+    )
+    db.commit()
+    return {"ok": True, "job_id": job.id}
+
+
+# ── Proposte ─────────────────────────────────────────────────────────
+
+@router.get("/api/proposals")
+def list_proposals(db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(Asset)
+        .where(
+            Asset.tenant_id == CURRENT_TENANT,
+            Asset.proposed_state == AssetProposedState.pending_review,
+            Asset.is_active == True,  # noqa: E712
+        )
+        .order_by(Asset.id.desc())
+    ).scalars().all()
+    return [
+        {
+            "id": a.id,
+            "filename": a.filename,
+            "rel_path": a.rel_path,
+            "file_size": a.file_size,
+            "mime_type": a.mime_type,
+            "checksum_xxhash": a.checksum_xxhash,
+            "tech_specs": a.tech_specs_json,
+            "volume_id": a.storage_volume_id,
+        }
+        for a in rows
+    ]
+
+
+@router.post("/api/proposals/{asset_id}/confirm", dependencies=[RequireStorage])
+def confirm(
+    asset_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user = current_user_optional(request)
+    a = db.get(Asset, asset_id)
+    if a is None or a.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404)
+    confirm_proposal(db, a, user_id=getattr(user, "id", None))
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/proposals/{asset_id}/discard", dependencies=[RequireStorage])
+def discard(asset_id: int, db: Session = Depends(get_db)):
+    a = db.get(Asset, asset_id)
+    if a is None or a.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404)
+    discard_proposal(db, a)
+    db.commit()
+    return {"ok": True}

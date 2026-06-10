@@ -28,6 +28,7 @@ from app.routers import (
     delivery_items,  # v3.5.0-alpha.172.114 (Tier 2.1) — DeliveryItem + taxonomy router
     mobile as mobile_router,  # v3.5.0-alpha.172.158 — PWA companion staff /m
     agent_api,  # v3.5.0-alpha.172.210 (F1) — API facility-side per Claqo Agent
+    storage_admin,  # v3.5.0-alpha.172.211 (F1) — Admin storage: volumi/agent/job/proposte
 )
 
 
@@ -2607,6 +2608,7 @@ app.include_router(delivery_templates.router)
 app.include_router(finance.router)
 app.include_router(dam.router)
 app.include_router(agent_api.router)  # v3.5.0-alpha.172.210 (F1) — API facility-side per Claqo Agent
+app.include_router(storage_admin.router)  # v3.5.0-alpha.172.211 (F1) — Admin storage: volumi/agent/job/proposte
 app.include_router(pricelist.router)
 app.include_router(quotes.router)
 app.include_router(cr.router)
