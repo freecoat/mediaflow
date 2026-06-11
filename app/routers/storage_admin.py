@@ -358,35 +358,72 @@ def discard(asset_id: int, db: Session = Depends(get_db)):
 # ── F4 — Ticket archivio/restore LTO ────────────────────────────────
 
 
-def _serialize_ticket(t: ArchiveTicket, db: Session) -> dict:
-    """Serializza un ArchiveTicket con riferimenti leggibili."""
+def _build_ticket_lookups(
+    tickets: list[ArchiveTicket],
+    db: Session,
+) -> tuple[dict, dict, dict, dict]:
+    """Batch-fetch tutti gli oggetti collegati ai ticket e restituisce 4 lookup dict.
+
+    Ritorna: (asset_map, deliverable_map, physical_asset_map, user_map)
+    Ogni map: {id: oggetto_orm} oppure {id: full_name} per gli utenti.
+    """
+    asset_ids = {t.asset_id for t in tickets if t.asset_id}
+    deliv_ids = {t.job_deliverable_id for t in tickets if t.job_deliverable_id}
+    pa_ids = {t.physical_asset_id for t in tickets if t.physical_asset_id}
+    user_ids = set()
+    for t in tickets:
+        if t.requested_by_user_id:
+            user_ids.add(t.requested_by_user_id)
+        if t.assigned_to_user_id:
+            user_ids.add(t.assigned_to_user_id)
+
+    asset_map: dict[int, Asset] = (
+        {a.id: a for a in db.execute(select(Asset).where(Asset.id.in_(asset_ids))).scalars().all()}
+        if asset_ids else {}
+    )
+    deliverable_map: dict[int, JobDeliverable] = (
+        {d.id: d for d in db.execute(select(JobDeliverable).where(JobDeliverable.id.in_(deliv_ids))).scalars().all()}
+        if deliv_ids else {}
+    )
+    physical_asset_map: dict[int, PhysicalAsset] = (
+        {pa.id: pa for pa in db.execute(select(PhysicalAsset).where(PhysicalAsset.id.in_(pa_ids))).scalars().all()}
+        if pa_ids else {}
+    )
+    user_map: dict[int, str] = (
+        {u.id: u.full_name for u in db.execute(select(User).where(User.id.in_(user_ids))).scalars().all()}
+        if user_ids else {}
+    )
+    return asset_map, deliverable_map, physical_asset_map, user_map
+
+
+def _serialize_ticket(
+    t: ArchiveTicket,
+    asset_map: dict,
+    deliverable_map: dict,
+    physical_asset_map: dict,
+    user_map: dict,
+) -> dict:
+    """Serializza un ArchiveTicket usando lookup dict pre-caricati (no N+1)."""
     # Asset digitale
     asset_info = None
     if t.asset_id:
-        a = db.get(Asset, t.asset_id)
+        a = asset_map.get(t.asset_id)
         if a:
             asset_info = {"id": a.id, "filename": a.original_name or a.filename}
 
     # Deliverable
     deliv_info = None
     if t.job_deliverable_id:
-        d = db.get(JobDeliverable, t.job_deliverable_id)
+        d = deliverable_map.get(t.job_deliverable_id)
         if d:
             deliv_info = {"id": d.id, "name": d.name}
 
     # Tape (PhysicalAsset) — usa campo `label`
     tape_info = None
     if t.physical_asset_id:
-        pa = db.get(PhysicalAsset, t.physical_asset_id)
+        pa = physical_asset_map.get(t.physical_asset_id)
         if pa:
             tape_info = {"id": pa.id, "name": pa.label}
-
-    # Utenti
-    def _user_name(uid: Optional[int]) -> Optional[str]:
-        if uid is None:
-            return None
-        u = db.get(User, uid)
-        return u.full_name if u else None
 
     return {
         "id": t.id,
@@ -398,8 +435,8 @@ def _serialize_ticket(t: ArchiveTicket, db: Session) -> dict:
         "asset": asset_info,
         "deliverable": deliv_info,
         "tape": tape_info,
-        "requested_by": _user_name(t.requested_by_user_id),
-        "assigned_to": _user_name(t.assigned_to_user_id),
+        "requested_by": user_map.get(t.requested_by_user_id) if t.requested_by_user_id else None,
+        "assigned_to": user_map.get(t.assigned_to_user_id) if t.assigned_to_user_id else None,
     }
 
 
@@ -421,7 +458,13 @@ def list_tickets(
     if status:
         q = q.where(ArchiveTicket.status == status)
     tickets = db.execute(q).scalars().all()
-    return [_serialize_ticket(t, db) for t in tickets]
+    if not tickets:
+        return []
+    asset_map, deliverable_map, physical_asset_map, user_map = _build_ticket_lookups(tickets, db)
+    return [
+        _serialize_ticket(t, asset_map, deliverable_map, physical_asset_map, user_map)
+        for t in tickets
+    ]
 
 
 @router.post("/api/tickets", dependencies=[RequireStorage])
