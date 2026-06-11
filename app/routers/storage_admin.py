@@ -1,4 +1,6 @@
-"""F1 (spec 2026-06-10) — Admin storage facility: volumi, agent, coda, proposte."""
+"""F1 (spec 2026-06-10) — Admin storage facility: volumi, agent, coda, proposte.
+F4 (spec 2026-06-11) — Ticket archivio/restore LTO.
+"""
 from __future__ import annotations
 
 from typing import Optional
@@ -11,7 +13,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import (
     AgentJob, AgentJobType, AgentNode,
-    Asset, AssetProposedState, StorageVolume,
+    ArchiveTicket, Asset, AssetProposedState, JobDeliverable, PhysicalAsset,
+    StorageVolume, User,
 )
 from app.services.agent_installer import build_installer_zip
 from app.services.agent_queue import enqueue_job, generate_agent_token, enqueue_scan_if_absent
@@ -350,3 +353,159 @@ def discard(asset_id: int, db: Session = Depends(get_db)):
     discard_proposal(db, a)
     db.commit()
     return {"ok": True}
+
+
+# ── F4 — Ticket archivio/restore LTO ────────────────────────────────
+
+
+def _serialize_ticket(t: ArchiveTicket, db: Session) -> dict:
+    """Serializza un ArchiveTicket con riferimenti leggibili."""
+    # Asset digitale
+    asset_info = None
+    if t.asset_id:
+        a = db.get(Asset, t.asset_id)
+        if a:
+            asset_info = {"id": a.id, "filename": a.original_name or a.filename}
+
+    # Deliverable
+    deliv_info = None
+    if t.job_deliverable_id:
+        d = db.get(JobDeliverable, t.job_deliverable_id)
+        if d:
+            deliv_info = {"id": d.id, "name": d.name}
+
+    # Tape (PhysicalAsset) — usa campo `label`
+    tape_info = None
+    if t.physical_asset_id:
+        pa = db.get(PhysicalAsset, t.physical_asset_id)
+        if pa:
+            tape_info = {"id": pa.id, "name": pa.label}
+
+    # Utenti
+    def _user_name(uid: Optional[int]) -> Optional[str]:
+        if uid is None:
+            return None
+        u = db.get(User, uid)
+        return u.full_name if u else None
+
+    return {
+        "id": t.id,
+        "kind": t.kind,
+        "status": t.status,
+        "note": t.note,
+        "created_at": t.created_at.isoformat() + "Z" if t.created_at else None,
+        "closed_at": t.closed_at.isoformat() + "Z" if t.closed_at else None,
+        "asset": asset_info,
+        "deliverable": deliv_info,
+        "tape": tape_info,
+        "requested_by": _user_name(t.requested_by_user_id),
+        "assigned_to": _user_name(t.assigned_to_user_id),
+    }
+
+
+@router.get("/api/tickets", dependencies=[RequireStorage])
+def list_tickets(
+    kind: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """F4 — Lista ticket archivio/restore. Filtri: kind, status. Max 200, desc id."""
+    q = (
+        select(ArchiveTicket)
+        .where(ArchiveTicket.tenant_id == CURRENT_TENANT)
+        .order_by(ArchiveTicket.id.desc())
+        .limit(200)
+    )
+    if kind:
+        q = q.where(ArchiveTicket.kind == kind)
+    if status:
+        q = q.where(ArchiveTicket.status == status)
+    tickets = db.execute(q).scalars().all()
+    return [_serialize_ticket(t, db) for t in tickets]
+
+
+@router.post("/api/tickets", dependencies=[RequireStorage])
+def create_ticket(
+    request: Request,
+    kind: str = Form(...),
+    asset_id: Optional[int] = Form(None),
+    deliverable_id: Optional[int] = Form(None),
+    note: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """F4 — Crea un ticket archivio/restore.
+
+    Form fields:
+    - kind: 'archive' o 'restore'
+    - asset_id: id Asset digitale (opzionale, tenant check)
+    - deliverable_id: id JobDeliverable (opzionale, tenant check)
+    - note: testo libero opzionale
+
+    Ritorna: {"ok": True, "id": <ticket_id>}.
+    """
+    from app.services.archive_tickets import create_ticket as svc_create
+
+    user = current_user_optional(request)
+    user_id = getattr(user, "id", None)
+
+    # Risolvi asset con tenant check
+    asset: Optional[Asset] = None
+    if asset_id:
+        asset = db.get(Asset, asset_id)
+        if asset is None or asset.tenant_id != CURRENT_TENANT:
+            raise HTTPException(404, f"Asset #{asset_id} non trovato")
+
+    # Risolvi deliverable con tenant check
+    deliverable: Optional[JobDeliverable] = None
+    if deliverable_id:
+        deliverable = db.get(JobDeliverable, deliverable_id)
+        if deliverable is None or deliverable.tenant_id != CURRENT_TENANT:
+            raise HTTPException(404, f"Deliverable #{deliverable_id} non trovato")
+
+    try:
+        ticket = svc_create(
+            db,
+            kind=kind,
+            asset=asset,
+            deliverable=deliverable,
+            note=(note or "").strip() or None,
+            user_id=user_id,
+            tenant_id=CURRENT_TENANT,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "id": ticket.id}
+
+
+@router.post("/api/tickets/{ticket_id}/transition", dependencies=[RequireStorage])
+def transition_ticket(
+    ticket_id: int,
+    request: Request,
+    status: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """F4 — Avanza lo stato di un ticket.
+
+    Form fields:
+    - status: nuovo stato ('in_progress', 'done', 'cancelled')
+
+    Ritorna: {"ok": True, "status": <nuovo_stato>}.
+    """
+    from app.services.archive_tickets import transition as svc_transition
+
+    ticket = db.get(ArchiveTicket, ticket_id)
+    if ticket is None or ticket.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404, "Ticket non trovato")
+
+    user = current_user_optional(request)
+    user_id = getattr(user, "id", None)
+
+    try:
+        ticket = svc_transition(db, ticket, status, user_id=user_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "status": ticket.status}

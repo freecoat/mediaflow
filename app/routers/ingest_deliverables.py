@@ -178,6 +178,12 @@ def _process_ingest(
             confirmed_qty = inc
             recompute_deliverable_cost(db, deliverable)
 
+    # F4 — Popola AssetMembership dal catalogo MHL/CSV
+    from app.services.lto_catalog import ingest_catalog_entries
+    membership_stats = ingest_catalog_entries(
+        db, pa, parsed.get("entries", []), user_id=user.id if user else None
+    )
+
     db.commit()
     db.refresh(pa)
     if deliverable:
@@ -194,6 +200,7 @@ def _process_ingest(
         "deliverable_quantity_delivered": deliverable.quantity_delivered if deliverable else None,
         "deliverable_quantity_planned": deliverable.quantity_planned if deliverable else None,
         "deliverable_status": deliverable.status.value if deliverable else None,
+        "membership": membership_stats,
     }
 
 

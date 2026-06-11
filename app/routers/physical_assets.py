@@ -1406,6 +1406,116 @@ async def remove_content(
     return {"ok": True, "removed_at": str(m.removed_at)[:19]}
 
 
+@router.post("/api/{asset_id}/catalog-csv")
+async def ingest_catalog_csv(
+    asset_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    mapping: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """F4 — Carica un CSV di catalogo LTO e popola AssetMembership.
+
+    Form fields:
+    - file: file CSV (max 10 MB)
+    - mapping: JSON opzionale {colonna_csv: campo_canonico}
+      (es. {"FILENAME": "filename", "HASH": "checksum"}).
+
+    Ritorna: {"ok": True, "matched": N, "orphan": N, "skipped": N}.
+    """
+    _require_perm(request)
+
+    pa = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id,
+        PhysicalAsset.tenant_id == current_tenant_id(),
+    ).first()
+    if not pa:
+        raise HTTPException(404, "Asset fisico non trovato")
+
+    # Parsing mapping JSON opzionale
+    mapping_dict: Optional[dict] = None
+    if mapping:
+        import json as _json
+        try:
+            mapping_dict = _json.loads(mapping)
+            if not isinstance(mapping_dict, dict):
+                raise ValueError("mapping deve essere un oggetto JSON")
+        except (ValueError, _json.JSONDecodeError) as e:
+            raise HTTPException(400, f"mapping JSON non valido: {e}")
+
+    # Cap 10 MB
+    MAX_SIZE = 10 * 1024 * 1024
+    data = await file.read(MAX_SIZE + 1)
+    if len(data) > MAX_SIZE:
+        raise HTTPException(413, "File CSV troppo grande (max 10 MB)")
+
+    from app.services.lto_catalog import parse_catalog_csv, ingest_catalog_entries
+    try:
+        entries = parse_catalog_csv(data, mapping=mapping_dict)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    user = getattr(request.state, "current_user", None)
+    stats = ingest_catalog_entries(db, pa, entries,
+                                   user_id=user.id if user else None)
+    db.commit()
+    return {"ok": True, **stats}
+
+
+@router.get("/api/{asset_id}/memberships")
+async def list_memberships(
+    asset_id: int,
+    db: Session = Depends(get_db),
+):
+    """F4 — Lista membership ATTIVE (removed_at IS NULL) del supporto fisico.
+
+    Ritorna per ogni membership:
+      {id, asset_id, filename (original_name dell'Asset collegato o None),
+       path_on_media, file_size, checksum, added_at}.
+    """
+    pa = db.query(PhysicalAsset).filter(
+        PhysicalAsset.id == asset_id,
+        PhysicalAsset.tenant_id == current_tenant_id(),
+    ).first()
+    if not pa:
+        raise HTTPException(404, "Asset fisico non trovato")
+
+    memberships = (
+        db.query(AssetMembership)
+        .filter(
+            AssetMembership.physical_asset_id == asset_id,
+            AssetMembership.tenant_id == current_tenant_id(),
+            AssetMembership.removed_at.is_(None),
+        )
+        .order_by(AssetMembership.added_at.desc())
+        .all()
+    )
+
+    # Carica gli Asset collegati in batch
+    asset_ids = [m.asset_id for m in memberships if m.asset_id is not None]
+    a_map: dict[int, Asset] = {}
+    if asset_ids:
+        a_map = {
+            a.id: a
+            for a in db.query(Asset).filter(Asset.id.in_(asset_ids)).all()
+        }
+
+    out = []
+    for m in memberships:
+        linked_asset = a_map.get(m.asset_id) if m.asset_id else None
+        filename = linked_asset.original_name if linked_asset else None
+        out.append({
+            "id": m.id,
+            "asset_id": m.asset_id,
+            "filename": filename,
+            "path_on_media": m.path_on_media,
+            "file_size": m.file_size,
+            "checksum": m.checksum,
+            "added_at": m.added_at.isoformat() + "Z" if m.added_at else None,
+        })
+    return out
+
+
 @router.post("/api/{asset_id}/scan-content")
 async def scan_filesystem_content(
     asset_id: int,
