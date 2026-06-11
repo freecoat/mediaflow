@@ -1104,12 +1104,13 @@ function renderDeliverableCard(d) {
 }
 
 // v3.5.0-alpha.172.100 — wrapper: risolve nome da cache + apre modal + hook refresh
+// F3 — passa digital_asset_id dalla cache per il player preview nel modal QC
 function jdOpenQcModal(deliverableId) {
   const d = (_dlvCache || []).find(x => x.id === deliverableId);
   const name = d ? d.name : ('#' + deliverableId);
   // Hook: dopo ogni QC action, ricarica lista deliverable per aggiornare badge
   window.qcmOnUpdate = function(_did) { loadDeliverables(); };
-  openQcModal(deliverableId, name);
+  openQcModal(deliverableId, name, d ? d.digital_asset_id : null);
 }
 
 async function openNewDeliverable() {

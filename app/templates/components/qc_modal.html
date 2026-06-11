@@ -86,6 +86,17 @@
     </div>
 
     <div class="qcm-body">
+      <!-- F3 — preview proxy watermarked + TC dal player -->
+      <div id="qcm-preview-wrap" style="display:none;margin-bottom:12px;">
+        <video id="qcm-player" controls preload="metadata"
+               style="width:100%;max-height:420px;background:#000;border-radius:8px;"></video>
+        <div id="qcm-preview-meta" class="form-hint" style="margin-top:4px;"></div>
+      </div>
+      <div id="qcm-preview-cta" style="display:none;margin-bottom:12px;">
+        <button class="btn btn-secondary btn-sm" id="qcm-preview-btn"
+                onclick="qcmGeneratePreview()">🎬 Genera preview</button>
+        <span id="qcm-preview-status" class="form-hint"></span>
+      </div>
       <div id="qcm-tab-history">
         <div id="qcm-summary" class="qcm-summary"></div>
         <div id="qcm-events"></div>
@@ -106,7 +117,11 @@
               </div>
               <div>
                 <label>Timecode</label>
-                <input type="text" id="qcm-log-timecode" placeholder="00:12:34">
+                <div style="display:flex;gap:4px;align-items:stretch;">
+                  <input type="text" id="qcm-log-timecode" placeholder="00:12:34" style="width:auto;flex:1;min-width:0;">
+                  <button class="btn btn-ghost btn-sm" type="button" onclick="qcmTcFromPlayer()"
+                          title="Prendi il TC corrente dal player" style="flex:0 0 auto;white-space:nowrap;">📍 TC</button>
+                </div>
               </div>
               <div>
                 <label>Grade</label>
@@ -211,17 +226,23 @@ const QCM_STATUS_META = {
   conditional:  { lbl:'Conditional',   bg:'rgba(251,191,36,0.18)',  color:'#fbbf24', border:'rgba(251,191,36,0.4)'  },
 };
 
-window.openQcModal = async function(deliverableId, deliverableName) {
+window.openQcModal = async function(deliverableId, deliverableName, digitalAssetId) {
   window._qcm.deliverableId = deliverableId;
   window._qcm.deliverableName = deliverableName || ('#' + deliverableId);
   document.getElementById('qcm-deliv-name').textContent = window._qcm.deliverableName;
   qcmSwitchTab('history');
   document.getElementById('qcm-overlay').classList.add('open');
+  qcmInitPreview(digitalAssetId);
   await qcmRefresh();
 };
 
 window.closeQcModal = function() {
   document.getElementById('qcm-overlay').classList.remove('open');
+  // F3 cleanup: stop poll + pausa player
+  _qcmPreviewAssetId = null;
+  if (_qcmPreviewPoll) { clearTimeout(_qcmPreviewPoll); _qcmPreviewPoll = null; }
+  const player = document.getElementById('qcm-player');
+  if (player) { player.pause(); }
 };
 
 window.qcmSwitchTab = function(name) {
@@ -362,6 +383,95 @@ function qcmRenderEvent(ev) {
     <div class="qcm-event-body">${body}</div>
   </div>`;
 }
+
+// ── F3 — Preview proxy + TC dal player ──────────────────────────────────────
+let _qcmPreviewAssetId = null, _qcmPreviewMeta = null, _qcmPreviewPoll = null;
+
+async function qcmInitPreview(assetId) {
+  _qcmPreviewAssetId = assetId || null;
+  _qcmPreviewMeta = null;
+  if (_qcmPreviewPoll) { clearTimeout(_qcmPreviewPoll); _qcmPreviewPoll = null; }
+  const wrap = document.getElementById('qcm-preview-wrap');
+  const cta = document.getElementById('qcm-preview-cta');
+  if (!wrap || !cta) return;
+  wrap.style.display = 'none'; cta.style.display = 'none';
+  const player = document.getElementById('qcm-player');
+  if (player) { player.pause(); player.removeAttribute('src'); player.load(); }
+  if (!_qcmPreviewAssetId) return;
+  await qcmRefreshPreview();
+}
+
+async function qcmRefreshPreview() {
+  if (!_qcmPreviewAssetId) return;
+  const assetId = _qcmPreviewAssetId;
+  let s;
+  try { s = await api('GET', '/qc/api/assets/' + assetId + '/preview/status'); }
+  catch (e) { return; }
+  if (assetId !== _qcmPreviewAssetId) return; // modal chiuso/cambiato nel frattempo
+  const wrap = document.getElementById('qcm-preview-wrap');
+  const cta = document.getElementById('qcm-preview-cta');
+  const lbl = document.getElementById('qcm-preview-status');
+  const btn = document.getElementById('qcm-preview-btn');
+  if (s.status === 'ready') {
+    _qcmPreviewMeta = s.meta || {};
+    wrap.style.display = ''; cta.style.display = '';
+    btn.disabled = false;
+    btn.textContent = '🔁 Rigenera preview';
+    lbl.textContent = '';
+    const player = document.getElementById('qcm-player');
+    const src = '/qc/api/assets/' + assetId + '/preview';
+    if (!player.getAttribute('src')) { player.src = src; }
+    document.getElementById('qcm-preview-meta').innerHTML =
+      (_qcmPreviewMeta.start_tc ? 'TC start ' + escapeHtml(_qcmPreviewMeta.start_tc) + ' · ' : '')
+      + (_qcmPreviewMeta.fps ? escapeHtml(String(_qcmPreviewMeta.fps)) + ' fps · ' : '')
+      + (_qcmPreviewMeta.burned_tc === false ? '⚠ TC non bruciato (ffmpeg senza drawtext) · ' : '')
+      + 'proxy 1080p watermarked';
+  } else if (s.status === 'queued' || s.status === 'generating') {
+    cta.style.display = '';
+    btn.disabled = true;
+    lbl.textContent = '⏳ Generazione in corso (agent)…';
+    _qcmPreviewPoll = setTimeout(qcmRefreshPreview, 4000);
+  } else {
+    cta.style.display = '';
+    btn.disabled = false;
+    btn.textContent = '🎬 Genera preview';
+    lbl.textContent = s.status === 'failed' ? ('❌ ' + (s.error || 'generazione fallita')) : '';
+  }
+}
+
+window.qcmGeneratePreview = async function() {
+  if (!_qcmPreviewAssetId) return;
+  try {
+    await api('POST', '/qc/api/assets/' + _qcmPreviewAssetId + '/preview/generate');
+    if (typeof toast === 'function') toast('Preview accodata — la genera l\'agent in facility', 'success');
+    qcmRefreshPreview();
+  } catch (e) {
+    if (typeof toast === 'function') toast('Errore: ' + (e.message || e), 'error');
+  }
+};
+
+window.qcmTcFromPlayer = function() {
+  const player = document.getElementById('qcm-player');
+  if (!player || !player.duration) {
+    if (typeof toast === 'function') toast('Player non attivo', 'error');
+    return;
+  }
+  const fps = (_qcmPreviewMeta && _qcmPreviewMeta.fps) || 25;
+  const fpsInt = Math.round(fps);
+  const startTc = (_qcmPreviewMeta && _qcmPreviewMeta.start_tc) || '00:00:00:00';
+  const p = startTc.split(/[:;]/).map(Number);
+  const startFrames = ((p[0] * 60 + p[1]) * 60 + p[2]) * fpsInt + (p[3] || 0);
+  const total = startFrames + Math.round(player.currentTime * fps);
+  const ff = total % fpsInt;
+  const ss = Math.floor(total / fpsInt) % 60;
+  const mm = Math.floor(total / (fpsInt * 60)) % 60;
+  const hh = Math.floor(total / (fpsInt * 3600)) % 24;
+  const pad = function(n) { return String(n).padStart(2, '0'); };
+  const tc = pad(hh) + ':' + pad(mm) + ':' + pad(ss) + ':' + pad(ff);
+  const field = document.getElementById('qcm-log-timecode');
+  if (field) { field.value = tc; field.dispatchEvent(new Event('input')); }
+  if (typeof toast === 'function') toast('TC ' + tc, 'success', 1500);
+};
 
 // ── Mutator wrappers ─────────────────────────────────────────────────────────
 async function qcmPostForm(path, fields) {
