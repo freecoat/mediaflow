@@ -284,3 +284,53 @@ def test_parse_catalog_csv_non_numeric_size():
     assert entries[0]["size_bytes"] is None
     assert entries[0]["filename"] == "file.mxf"
     assert entries[0]["checksum"] == "ABCD"
+
+
+# ── test 12: dedup-by-path SOLO su path reale, no checksum no path ────────────
+
+def test_dedup_no_checksum_no_path_two_entries(db):
+    """CSV-entries senza checksum e senza colonna path: 2 entry con stesso
+    filename → entrambe inserite (nessun dedup per path sintetico)."""
+    from app.services.lto_catalog import ingest_catalog_entries
+
+    tape = _tape(db)
+
+    # 'path' non presente nell'entry (None): path_on_media salvato sarà il filename
+    entries = [
+        {"filename": "audio.wav", "size_bytes": 512, "checksum": None, "path": None},
+        {"filename": "audio.wav", "size_bytes": 512, "checksum": None, "path": None},
+    ]
+    stats = ingest_catalog_entries(db, tape, entries)
+
+    # Nessun dedup: entrambe le entry devono essere inserite
+    assert stats["skipped"] == 0
+    assert stats["orphan"] == 2
+    count = db.query(AssetMembership).filter_by(physical_asset_id=tape.id).count()
+    assert count == 2
+
+
+# ── test 13: dedup path case-insensitive ──────────────────────────────────────
+
+def test_dedup_path_case_insensitive(db):
+    """Prima ingest '/TAPE/Audio.wav' senza checksum; re-ingest '/tape/audio.wav'
+    (stesso path, case diverso) → skipped (dedup case-insensitive)."""
+    from app.services.lto_catalog import ingest_catalog_entries
+
+    tape = _tape(db)
+
+    entries_first = [
+        {"filename": "Audio.wav", "size_bytes": 256, "checksum": None, "path": "/TAPE/Audio.wav"},
+    ]
+    stats1 = ingest_catalog_entries(db, tape, entries_first)
+    assert stats1["orphan"] == 1
+    assert stats1["skipped"] == 0
+
+    entries_second = [
+        {"filename": "audio.wav", "size_bytes": 256, "checksum": None, "path": "/tape/audio.wav"},
+    ]
+    stats2 = ingest_catalog_entries(db, tape, entries_second)
+
+    assert stats2["skipped"] == 1
+    assert stats2["orphan"] == 0
+    # Nessuna nuova membership creata
+    assert db.query(AssetMembership).filter_by(physical_asset_id=tape.id).count() == 1

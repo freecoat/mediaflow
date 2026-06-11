@@ -149,14 +149,15 @@ def ingest_catalog_entries(
 
     # Set di checksum già presenti (lowercase) per dedup rapido
     existing_checksums: set[str] = set()
-    # Set di path_on_media per dedup quando checksum assente
+    # Set di path_on_media (lowercase) per dedup quando checksum assente
+    # NOTA: il dedup per path si applica SOLO su path reali (non sintetici da filename)
     existing_paths: set[str] = set()
 
     for m in existing_memberships:
         if m.checksum:
             existing_checksums.add(m.checksum.lower())
         if m.path_on_media:
-            existing_paths.add(m.path_on_media)
+            existing_paths.add(m.path_on_media.lower())
 
     matched = 0
     orphan = 0
@@ -166,15 +167,19 @@ def ingest_catalog_entries(
         checksum = entry.get("checksum")
         filename = entry.get("filename")
         size_bytes = entry.get("size_bytes")
-        path = entry.get("path") or filename  # path_on_media da salvare
+        real_path = entry.get("path")           # path reale dall'entry (può essere None)
+        path = real_path or filename            # path_on_media da salvare
 
         checksum_lower = checksum.lower() if checksum else None
 
         # ── Dedup ────────────────────────────────────────────────────────────
+        # 1. Dedup per checksum (case-insensitive)
         if checksum_lower and checksum_lower in existing_checksums:
             skipped += 1
             continue
-        if not checksum_lower and path and path in existing_paths:
+        # 2. Dedup per path SOLO se l'entry ha un path reale (non sintetico da filename)
+        #    Se non c'è né checksum né path reale → nessun dedup (meglio duplicato che perdita)
+        if not checksum_lower and real_path and real_path.lower() in existing_paths:
             skipped += 1
             continue
 
@@ -224,8 +229,9 @@ def ingest_catalog_entries(
         # Aggiorna set dedup per entries successive nello stesso batch
         if checksum_lower:
             existing_checksums.add(checksum_lower)
-        if path:
-            existing_paths.add(path)
+        # Aggiorna paths solo se path reale (coerente con la logica di dedup sopra)
+        if real_path:
+            existing_paths.add(real_path.lower())
 
         if asset_id is not None:
             matched += 1
