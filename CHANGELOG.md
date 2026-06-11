@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.212 — Storage: browse via agent + installer ZIP (11 giu 2026)
+
+Due quality-of-life sul registro asset (richieste Matteo): niente più percorsi digitati a mano, niente più install agent manuale. Spec `docs/superpowers/specs/2026-06-11-storage-browse-agent-zip-design.md`.
+
+- **Browse storage via agent**: nuovo job `browse` (enum `AgentJobType.browse`) — l'agent lista una directory del volume (`agent/browse.py`: dirs-first alfabetico case-insensitive, cap 500 + flag `truncated`, guard path-traversal con realpath dentro il mount). Endpoint `POST /storage/api/volumes/{id}/browse` (enqueue) + `GET /storage/api/jobs/{id}` (poll singolo job, tenant-scoped).
+- **UI file-browser** (`/storage`): modal con breadcrumb cliccabile, poll 2s/timeout 30s con "Riprova". Bottone "📂 Sfoglia" nel modal register-path (click su file → compila `rel_path`) e "📂 Aggiungi" su watch dirs in modifica volume (sceglie cartella → append al CSV).
+- **Installer agent ZIP**: `GET /storage/api/agents/{id}/installer` (RBAC storage) → ZIP `claqo-agent/` con sorgenti `agent/`, `claqo-agent.json` pre-compilato (`server_url` da query/UI + token), `avvia-agent.bat` (Windows), `avvia-agent.command` (Mac, bit eseguibile 0o755 nello zip) e `LEGGIMI.txt`. **Il download rigenera il token** (il vecchio smette di autenticarsi): il plain vive solo dentro lo ZIP. Servizio `app/services/agent_installer.py`.
+- **UI**: bottone "📦 Scarica ZIP pronto all'uso" nel modal creazione agent + "📦 ZIP" sulla riga agent attivo (con confirm sulla rigenerazione token).
+- **+15 test (535 totali)**: `test_agent_installer.py` (struttura zip, json, rotazione token, exec attr) + `test_storage_browse.py` (listing/cap/traversal + endpoint). E2E offline 15/15 (`tools/_e2e_browse_zip.py`: round-trip con `handle_job` vero + vecchio token 401/nuovo valido). Browser smoke live con agent reale in esecuzione: browse root→subdir→pick file, watch-dir append, download zip 200, 0 errori console.
+
 ## v3.5.0-alpha.172.211 — F2: Watch + Match (asset registry) (10 giu 2026)
 
 Seconda fase del registro asset metadata-only: l'agent **watcha** le cartelle output e propone gli asset automaticamente; ogni proposta viene **auto-matchata** col `JobDeliverable` atteso. Pattern invariato "agent propone, operatore dispone". Subagent-driven (10 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-10-f2-watch-match*`.

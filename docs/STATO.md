@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.211** — 10 giugno 2026 — F2: Watch + Match (asset registry)
+**v3.5.0-alpha.172.212** — 11 giugno 2026 — Storage: browse via agent + installer ZIP
+
+### α.172.212 ✅ (browse + installer ZIP — 11 giu, sessione remota)
+- **Browse via agent**: job `browse` (agent lista dir del volume, traversal-guard, cap 500). UI modal file-browser con breadcrumb+poll: "📂 Sfoglia" su register-path (pick file → rel_path) e "📂 Aggiungi" su watch dirs (modifica volume). `GET /storage/api/jobs/{id}` nuovo per il poll.
+- **Installer ZIP**: `GET /storage/api/agents/{id}/installer` → `claqo-agent/` con sorgenti + `claqo-agent.json` precompilato + `avvia-agent.bat`/`.command` + LEGGIMI. **Rigenera il token** a ogni download (plain solo nello zip). Bottoni UI su creazione agent e riga agent.
+- 535 test (+15). E2E offline 15/15 (`tools/_e2e_browse_zip.py`) + browser smoke live con agent vero (browse 3 livelli, pick file, watch-dir, zip 200, 0 errori console).
+- Nota: "Sfoglia" non c'è sul modal *nuovo* volume (serve il volume_id → prima crea, poi modifica).
+
+**Prossimo / PENDENTE**: Matteo smoke `/storage` (Sfoglia + ZIP) quando torna al PC. Poi **F3 preview QC** (brainstorm iniziato, da riprendere). Backlog F2 invariato.
 
 ### α.172.211 ✅ (F2 watch + match — 10 giu, subagent-driven)
 - **Watch automatico**: l'agent (`agent/watch.py`, polling listing, size-stable, DCP/IMF via ASSETMAP) propone gli asset appena un file è stabile — niente più "registra per percorso" manuale. Job `scan` ricorrente → proposte `registered_via='agent_watch'`. Solo requests+xxhash, NON importa app.*.
