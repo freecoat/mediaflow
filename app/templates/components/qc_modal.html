@@ -386,10 +386,12 @@ function qcmRenderEvent(ev) {
 
 // ── F3 — Preview proxy + TC dal player ──────────────────────────────────────
 let _qcmPreviewAssetId = null, _qcmPreviewMeta = null, _qcmPreviewPoll = null;
+let _qcmPreviewNeedsReload = false;
 
 async function qcmInitPreview(assetId) {
   _qcmPreviewAssetId = assetId || null;
   _qcmPreviewMeta = null;
+  _qcmPreviewNeedsReload = false;
   if (_qcmPreviewPoll) { clearTimeout(_qcmPreviewPoll); _qcmPreviewPoll = null; }
   const wrap = document.getElementById('qcm-preview-wrap');
   const cta = document.getElementById('qcm-preview-cta');
@@ -420,7 +422,12 @@ async function qcmRefreshPreview() {
     lbl.textContent = '';
     const player = document.getElementById('qcm-player');
     const src = '/qc/api/assets/' + assetId + '/preview';
-    if (!player.getAttribute('src')) { player.src = src; }
+    // Dopo una rigenerazione la URL è identica ma il file è nuovo:
+    // cache-bust, altrimenti il browser riusa il vecchio mp4.
+    if (!player.getAttribute('src') || _qcmPreviewNeedsReload) {
+      player.src = src + '?t=' + Date.now();
+      _qcmPreviewNeedsReload = false;
+    }
     document.getElementById('qcm-preview-meta').innerHTML =
       (_qcmPreviewMeta.start_tc ? 'TC start ' + escapeHtml(_qcmPreviewMeta.start_tc) + ' · ' : '')
       + (_qcmPreviewMeta.fps ? escapeHtml(String(_qcmPreviewMeta.fps)) + ' fps · ' : '')
@@ -443,6 +450,7 @@ window.qcmGeneratePreview = async function() {
   if (!_qcmPreviewAssetId) return;
   try {
     await api('POST', '/qc/api/assets/' + _qcmPreviewAssetId + '/preview/generate');
+    _qcmPreviewNeedsReload = true;
     if (typeof toast === 'function') toast('Preview accodata — la genera l\'agent in facility', 'success');
     qcmRefreshPreview();
   } catch (e) {
