@@ -12,10 +12,11 @@ from agent import __version__
 from agent.config import Config
 from agent.client import ClaqoClient
 from agent.browse import list_dir
+from agent.preview import generate_preview, upload_preview
 from agent.probe import build_probe_result, xxhash_file
 from agent.watch import WatchState, scan_volume
 
-CAPABILITIES = ["probe", "checksum", "scan", "browse"]
+CAPABILITIES = ["probe", "checksum", "scan", "browse", "preview"]
 
 
 def volume_stats(volumes: list[dict]) -> list[dict]:
@@ -31,7 +32,8 @@ def volume_stats(volumes: list[dict]) -> list[dict]:
     return out
 
 
-def handle_job(job: dict, volumes_by_id: dict, watch_states: dict) -> tuple[str, dict | None, str | None]:
+def handle_job(job: dict, volumes_by_id: dict, watch_states: dict,
+               *, client=None) -> tuple[str, dict | None, str | None]:
     jtype, payload = job["type"], job.get("payload") or {}
     vol = volumes_by_id.get(int(payload.get("volume_id") or 0))
     if vol is None:
@@ -45,6 +47,15 @@ def handle_job(job: dict, volumes_by_id: dict, watch_states: dict) -> tuple[str,
             return "done", {"checksum_xxhash": xxhash_file(full)}, None
         if jtype == "browse":
             return "done", list_dir(vol["mount_path"], payload.get("rel_path") or ""), None
+        if jtype == "preview":
+            import tempfile
+            with tempfile.TemporaryDirectory() as wd:
+                path, meta = generate_preview(vol["mount_path"], payload["rel_path"],
+                                              payload.get("tenant_name") or "Claqo", wd)
+                uploaded = upload_preview(path, job_id=job["id"],
+                                          upload_cfg=payload.get("upload") or {},
+                                          client=client)
+            return "done", {**meta, "uploaded": uploaded}, None
         if jtype == "scan":
             st = watch_states.setdefault(int(payload.get("volume_id") or 0), WatchState())
             items = scan_volume(vol["mount_path"], vol.get("watch_dirs") or [], st)
@@ -73,7 +84,7 @@ def run():
             job = client.claim()
             if job:
                 print(f"[agent] job #{job['id']} {job['type']}")
-                status, result, error = handle_job(job, vols_by_id, watch_states)
+                status, result, error = handle_job(job, vols_by_id, watch_states, client=client)
                 client.post_result(job["id"], status, result, error)
                 continue
         except Exception:

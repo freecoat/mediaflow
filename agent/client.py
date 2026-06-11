@@ -1,5 +1,6 @@
 """HTTP client verso Claqo. Solo outbound, solo JSON."""
 from __future__ import annotations
+import os
 import requests
 
 
@@ -26,5 +27,18 @@ class ClaqoClient:
         r = self.s.post(f"{self.base}/agent-api/jobs/{job_id}/result", json={
             "status": status, "result": result, "error": error,
         }, timeout=60)
+        r.raise_for_status()
+        return r.json()
+
+    def put_preview(self, job_id: int, path: str) -> dict:
+        with open(path, "rb") as fh:
+            size = os.path.getsize(path)
+            r = self.s.put(
+                f"{self.base}/agent-api/jobs/{job_id}/preview-upload",
+                data=fh,
+                headers={"Content-Type": "video/mp4",
+                         "Content-Length": str(size)},
+                timeout=3600,
+            )
         r.raise_for_status()
         return r.json()
