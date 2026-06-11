@@ -24,9 +24,11 @@ Endpoint:
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.context import current_tenant_id
@@ -34,6 +36,8 @@ from app.database import get_db
 from app.models import (
     JobDeliverable, QCEvent, QCReport,
 )
+from app.models.models import Asset
+import app.services.asset_preview as asset_preview_svc
 from app.services import qc_events
 from app.services.delivery_timeline_service import qc_expected_for_deliverable
 
@@ -41,6 +45,13 @@ router = APIRouter(prefix="/qc", tags=["qc"])
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+def _asset_or_404(db: Session, asset_id: int) -> Asset:
+    a = db.get(Asset, asset_id)
+    if a is None or a.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Asset non trovato")
+    return a
+
 
 def _fetch_deliverable(db: Session, deliverable_id: int) -> JobDeliverable:
     d = db.query(JobDeliverable).filter(
@@ -409,3 +420,71 @@ async def qc_get_report(
         "report": _serialize_report(rep),
         "qc_expected": qc_expected_for_deliverable(db, d),
     }
+
+
+# ── F3 Preview endpoints ───────────────────────────────────────────────────
+
+@router.get("/api/assets/{asset_id}/preview/status")
+async def preview_status(
+    asset_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Ritorna lo stato del preview per l'asset (read-gate)."""
+    _check_read(request)
+    a = _asset_or_404(db, asset_id)
+    return {
+        "status": a.preview_status,
+        "error": a.preview_error,
+        "meta": a.preview_meta,
+        "generated_at": a.preview_generated_at.isoformat() if a.preview_generated_at else None,
+    }
+
+
+@router.post("/api/assets/{asset_id}/preview/generate")
+async def preview_generate(
+    asset_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Accoda job di generazione preview per l'asset (write-gate). Idempotente."""
+    uid = _check_write(request)
+    a = _asset_or_404(db, asset_id)
+    try:
+        job = asset_preview_svc.enqueue_preview(
+            db, a, requested_by_user_id=uid
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    db.commit()
+    return {"ok": True, "job_id": job.id, "status": a.preview_status}
+
+
+@router.get("/api/assets/{asset_id}/preview")
+async def preview_player(
+    asset_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Serve il file proxy preview (read-gate).
+
+    - status != 'ready' o preview_path vuoto → 404
+    - preview_storage == 's3' → 302 redirect presigned GET URL
+    - local: file presente → FileResponse (video/mp4, supporta Range)
+    - local: file mancante → 404
+    """
+    _check_read(request)
+    a = _asset_or_404(db, asset_id)
+
+    if a.preview_status != "ready" or not a.preview_path:
+        raise HTTPException(404, "preview non disponibile")
+
+    if a.preview_storage == "s3":
+        url = asset_preview_svc.presigned_get_url(a)
+        return RedirectResponse(url, status_code=302)
+
+    # Modalità locale
+    p = Path(a.preview_path)
+    if not p.is_file():
+        raise HTTPException(404, "file preview mancante sul server")
+    return FileResponse(str(p), media_type="video/mp4")
