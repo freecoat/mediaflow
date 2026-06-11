@@ -3258,7 +3258,7 @@ class AssetMembership(Base):
     physical_asset_id: Mapped[int] = mapped_column(
         ForeignKey("physical_assets.id"), index=True
     )
-    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), index=True)
+    asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True, index=True)
     # Path/posizione sul supporto fisico (es. "/DCP/feature_2k/", "/MIX/")
     path_on_media: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     # Checksum salvato (per verifica integrità futura)

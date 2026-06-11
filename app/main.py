@@ -1240,6 +1240,94 @@ def _auto_migrate_columns():
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE storage_volumes ADD COLUMN auto_preview BOOLEAN NOT NULL DEFAULT 0"))
 
+    # ── F4 (2026-06-11) — AssetMembership.asset_id nullable (membership orfane) ──
+    _rebuild_asset_memberships_nullable(engine)
+
+
+def _rebuild_asset_memberships_nullable(engine=None):
+    """F4 (2026-06-11) — Rende AssetMembership.asset_id nullable per supportare
+    membership orfane da catalogo LTO/YoYotta (asset non ancora importato nel DB).
+
+    SQLite non supporta ALTER COLUMN → table rebuild se asset_id ha notnull=1.
+    Idempotente: no-op se il constraint è già assente. Preserva dati e indici.
+    """
+    import re as _re
+    from sqlalchemy import inspect as _inspect, text as _text
+    if engine is None:
+        from app.database import engine as _default_engine
+        engine = _default_engine
+
+    if "asset_memberships" not in _inspect(engine).get_table_names():
+        return
+
+    with engine.connect() as conn:
+        rows = conn.execute(_text("PRAGMA table_info(asset_memberships)")).fetchall()
+    # PRAGMA table_info: (cid, name, type, notnull, dflt_value, pk)
+    col_map = {r[1]: r for r in rows}
+    if not col_map.get("asset_id") or col_map["asset_id"][3] == 0:
+        return  # già nullable → no-op
+
+    with engine.begin() as conn:
+        create_sql = conn.execute(_text(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='asset_memberships'"
+        )).scalar()
+        if not create_sql:
+            return
+        index_sqls = [
+            row[0] for row in conn.execute(_text(
+                "SELECT sql FROM sqlite_master WHERE type='index' "
+                "AND tbl_name='asset_memberships' AND sql IS NOT NULL"
+            )).fetchall()
+        ]
+
+        # Rimuovi NOT NULL SOLO da asset_id (lookbehind negativo per non
+        # toccare physical_asset_id che contiene "asset_id" come suffisso).
+        new_create = _re.sub(
+            r'(?<!\w)("?asset_id"?\s+INTEGER)\s+NOT\s+NULL',
+            r'\1',
+            create_sql,
+            count=1,
+            flags=_re.IGNORECASE,
+        )
+        if new_create == create_sql:
+            raise RuntimeError(
+                "_rebuild_asset_memberships_nullable: impossibile localizzare "
+                "NOT NULL su asset_id nello schema; rebuild annullato per sicurezza."
+            )
+        new_create = new_create.replace(
+            "asset_memberships",
+            "asset_memberships_new",
+            1,
+        )
+
+        cols = [r[1] for r in conn.execute(
+            _text("PRAGMA table_info(asset_memberships)")).fetchall()]
+        col_list = ", ".join(f'"{c}"' for c in cols)
+
+        conn.execute(_text("PRAGMA foreign_keys=OFF"))
+        conn.execute(_text(new_create))
+        conn.execute(_text(
+            f"INSERT INTO asset_memberships_new ({col_list}) "
+            f"SELECT {col_list} FROM asset_memberships"
+        ))
+        conn.execute(_text("DROP TABLE asset_memberships"))
+        conn.execute(_text("ALTER TABLE asset_memberships_new RENAME TO asset_memberships"))
+        for isql in index_sqls:
+            conn.execute(_text(isql))
+        # Indici per i FK principali (IF NOT EXISTS → idempotente)
+        conn.execute(_text(
+            "CREATE INDEX IF NOT EXISTS ix_asset_memberships_asset_id "
+            "ON asset_memberships(asset_id)"))
+        conn.execute(_text(
+            "CREATE INDEX IF NOT EXISTS ix_asset_memberships_physical_asset_id "
+            "ON asset_memberships(physical_asset_id)"))
+        conn.execute(_text(
+            "CREATE INDEX IF NOT EXISTS ix_asset_memberships_tenant_id "
+            "ON asset_memberships(tenant_id)"))
+        conn.execute(_text("PRAGMA foreign_keys=ON"))
+    print("[auto-migrate] asset_memberships.asset_id NOT NULL rilassato (F4)")
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking
