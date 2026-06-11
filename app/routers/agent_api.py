@@ -9,6 +9,7 @@ F3 (spec 2026-06-11) — preview-upload: l'agent streama il proxy raw.
 from __future__ import annotations
 import os
 from typing import Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -161,7 +162,10 @@ async def preview_upload(job_id: int, request: Request,
     cap = float(os.environ.get("PREVIEW_MAX_GB", "20")) * 1024 ** 3
     dest = asset_preview.local_path_for(asset)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    part = dest.with_suffix(".mp4.part")
+    # .part unico per richiesta: un retry dell'agent mentre il primo upload è
+    # ancora in corso non deve interleavare i byte sullo stesso file; il
+    # replace atomico fa vincere l'ultimo upload completato.
+    part = dest.with_suffix(f".{uuid4().hex}.part")
     written = 0
     try:
         with open(part, "wb") as fh:
