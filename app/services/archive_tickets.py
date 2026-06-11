@@ -44,13 +44,16 @@ def _label(ticket: ArchiveTicket, db: Session) -> str:
     return f"Ticket #{ticket.id}"
 
 
-def _active_lto_membership(db: Session, asset_id: int) -> Optional[AssetMembership]:
+def _active_lto_membership(db: Session, asset_id: int,
+                           tenant_id: int = 1) -> Optional[AssetMembership]:
     """Restituisce la membership ATTIVA più recente su un PhysicalAsset kind=lto."""
     rows = (
         db.query(AssetMembership, PhysicalAsset)
         .join(PhysicalAsset, PhysicalAsset.id == AssetMembership.physical_asset_id)
         .filter(
             AssetMembership.asset_id == asset_id,
+            AssetMembership.tenant_id == tenant_id,
+            PhysicalAsset.tenant_id == tenant_id,
             AssetMembership.removed_at.is_(None),
             PhysicalAsset.kind == PhysicalAssetKind.lto,
         )
@@ -94,7 +97,7 @@ def create_ticket(
 
     # restore con asset: suggerisci il tape dalla membership attiva più recente
     if kind == "restore" and asset is not None:
-        m = _active_lto_membership(db, asset.id)
+        m = _active_lto_membership(db, asset.id, tenant_id=tenant_id)
         ticket.physical_asset_id = m.physical_asset_id if m else None
 
     db.add(ticket)
@@ -172,7 +175,8 @@ def transition(
         elif ticket.kind == "archive":
             if ticket.asset_id:
                 # Verifica che esista almeno una membership attiva su LTO
-                m = _active_lto_membership(db, ticket.asset_id)
+                m = _active_lto_membership(db, ticket.asset_id,
+                                           tenant_id=ticket.tenant_id)
                 if m is None:
                     raise ValueError(
                         "Ingest prima il catalogo del tape: nessuna membership attiva "
@@ -181,6 +185,12 @@ def transition(
                 asset = db.get(Asset, ticket.asset_id)
                 if asset:
                     asset.content_state = AssetContentState.archived_only
+            else:
+                # Solo deliverable: nessun asset → membership LTO non verificabile.
+                raise ValueError(
+                    "Archive ticket su deliverable senza asset digitale: collega "
+                    "prima l'asset (ingest catalogo) per chiudere il ticket."
+                )
 
     elif new_status == "cancelled":
         ticket.closed_at = now_utc()
