@@ -147,7 +147,10 @@
       </div>
       <div class="form-group">
         <label class="form-label">Percorso relativo *</label>
-        <input class="form-input" id="rp-relpath" placeholder="es. projects/gomorra/master.mxf">
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="rp-relpath" placeholder="es. projects/gomorra/master.mxf" style="flex:1;">
+          <button class="btn btn-secondary btn-sm" onclick="browseForRegisterPath()" title="Sfoglia il volume via agent">📂 Sfoglia</button>
+        </div>
         <div class="form-hint">Relativo alla mount path del volume.</div>
       </div>
     </div>
@@ -212,7 +215,10 @@
       </div>
       <div class="form-group">
         <label class="form-label">Watch dirs (CSV)</label>
-        <input class="form-input" id="ev-watch">
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="ev-watch" style="flex:1;">
+          <button class="btn btn-secondary btn-sm" onclick="browseForWatchDir()" title="Scegli una cartella via agent">📂 Aggiungi</button>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -258,6 +264,10 @@
             <button class="btn btn-secondary btn-sm" onclick="copyAgentToken()">Copia</button>
           </div>
         </div>
+        <div style="margin-top:10px;">
+          <button class="btn btn-primary btn-sm" id="na-zip-btn" onclick="downloadInstaller(this.dataset.agentId, true)">📦 Scarica ZIP pronto all'uso</button>
+          <div class="form-hint">Pacchetto con agent + config già compilata. Nota: il download rigenera il token — vale quello dentro lo ZIP.</div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -267,6 +277,26 @@
   </div>
 </div>
 
+<!-- ── Modal: Sfoglia volume (via agent) ───────────────────────── -->
+<div class="modal-overlay" id="modal-browse">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="bw-title">Sfoglia volume</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-browse')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="bw-breadcrumb" style="font-size:12px;margin-bottom:10px;word-break:break-all;"></div>
+      <div id="bw-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;">
+        <div class="text-muted" style="padding:20px;text-align:center;">…</div>
+      </div>
+      <div id="bw-status" class="form-hint" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-browse')">Annulla</button>
+      <button class="btn btn-primary" id="bw-use-btn" onclick="browseUseCurrent()">Usa questa cartella</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── State ──────────────────────────────────────────────────────────
@@ -430,7 +460,10 @@ async function loadAgents() {
         + '<td>' + statoLabel + '</td>'
         + '<td class="text-right" onclick="event.stopPropagation()">'
         + (a.is_active
-          ? '<button class="btn btn-ghost btn-icon btn-sm" title="Revoca" '
+          ? '<button class="btn btn-ghost btn-sm" title="Scarica installer ZIP (rigenera il token)" '
+            + 'data-agent-id="' + a.id + '" '
+            + 'onclick="downloadInstaller(this.dataset.agentId, false)">📦 ZIP</button> '
+            + '<button class="btn btn-ghost btn-icon btn-sm" title="Revoca" '
             + 'data-agent-id="' + a.id + '" data-agent-name="' + escapeHtml(a.name) + '" '
             + 'onclick="revokeAgent(this.dataset.agentId, this.dataset.agentName)">🗑️</button>'
           : '')
@@ -622,6 +655,7 @@ async function createAgent() {
   try {
     const r = await api('POST', '/storage/api/agents', fd);
     // Mostra token (mostrato una sola volta)
+    document.getElementById('na-zip-btn').dataset.agentId = r.id;
     document.getElementById('na-token-value').value = r.token;
     document.getElementById('na-token-wrap').style.display = '';
     document.getElementById('na-create-btn').style.display = 'none';
@@ -666,6 +700,137 @@ async function revokeAgent(id, name) {
   } catch (e) {
     toast('Errore: ' + e.message, 'error');
   }
+}
+
+// ── Installer ZIP ──────────────────────────────────────────────────
+
+function downloadInstaller(agentId, skipConfirm) {
+  if (!agentId) return;
+  if (!skipConfirm && !confirm('Scaricare l\'installer? Il token dell\'agent verrà RIGENERATO: '
+      + 'un agent già in esecuzione con il vecchio token smetterà di autenticarsi.')) return;
+  window.location.href = '/storage/api/agents/' + agentId + '/installer'
+    + '?server_url=' + encodeURIComponent(window.location.origin);
+  toast('Download installer avviato — il token valido è dentro lo ZIP', 'success', 6000);
+}
+
+// ── Sfoglia volume (browse via agent) ──────────────────────────────
+// mode 'file': click su file = seleziona; bottone = usa cartella corrente.
+// mode 'dir' : file disabilitati; bottone = usa cartella corrente.
+let _bw = {volId: null, rel: '', mode: 'dir', onPick: null, pollTimer: null};
+
+function openBrowse(volId, mode, onPick, startRel) {
+  _bw = {volId: volId, rel: startRel || '', mode: mode, onPick: onPick, pollTimer: null};
+  document.getElementById('bw-use-btn').style.display = '';
+  openModal('modal-browse');
+  browseNavigate(_bw.rel);
+}
+
+async function browseNavigate(rel) {
+  _bw.rel = (rel || '').replace(/^\/+|\/+$/g, '');
+  if (_bw.pollTimer) { clearTimeout(_bw.pollTimer); _bw.pollTimer = null; }
+  _renderBreadcrumb();
+  const list = document.getElementById('bw-list');
+  list.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center;">⏳ Attendo l\'agent…</div>';
+  document.getElementById('bw-status').textContent = '';
+  try {
+    const fd = new FormData();
+    fd.append('rel_path', _bw.rel);
+    const r = await api('POST', '/storage/api/volumes/' + _bw.volId + '/browse', fd);
+    _pollBrowseJob(r.job_id, Date.now());
+  } catch (e) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--rose);">Errore: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function _pollBrowseJob(jobId, startedMs) {
+  try {
+    const j = await api('GET', '/storage/api/jobs/' + jobId);
+    if (j.status === 'done' && j.result) { _renderBrowseList(j.result); return; }
+    if (j.status === 'failed') {
+      document.getElementById('bw-list').innerHTML =
+        '<div style="padding:20px;text-align:center;color:var(--rose);">Errore agent: ' + escapeHtml(j.error || '?') + '</div>';
+      return;
+    }
+  } catch (e) { /* riprova al prossimo giro */ }
+  if (Date.now() - startedMs > 30000) {
+    document.getElementById('bw-list').innerHTML =
+      '<div class="text-muted" style="padding:20px;text-align:center;">⏱ Nessuna risposta in 30s — l\'agent è online?<br>'
+      + '<button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="browseNavigate(_bw.rel)">Riprova</button></div>';
+    return;
+  }
+  _bw.pollTimer = setTimeout(function() { _pollBrowseJob(jobId, startedMs); }, 2000);
+}
+
+function _renderBreadcrumb() {
+  const bc = document.getElementById('bw-breadcrumb');
+  const parts = _bw.rel ? _bw.rel.split('/') : [];
+  let html = '<a href="#" style="color:var(--indigo2);" onclick="browseNavigate(\'\');return false;">📁 radice</a>';
+  let acc = '';
+  parts.forEach(function(p) {
+    acc = acc ? acc + '/' + p : p;
+    html += ' / <a href="#" style="color:var(--indigo2);" data-rel="' + escapeHtml(acc) + '" '
+      + 'onclick="browseNavigate(this.dataset.rel);return false;">' + escapeHtml(p) + '</a>';
+  });
+  bc.innerHTML = html;
+}
+
+function _renderBrowseList(result) {
+  const list = document.getElementById('bw-list');
+  const entries = result.entries || [];
+  if (!entries.length) {
+    list.innerHTML = '<div class="text-muted" style="padding:20px;text-align:center;">Cartella vuota.</div>';
+  } else {
+    list.innerHTML = entries.map(function(e) {
+      const rel = _bw.rel ? _bw.rel + '/' + e.name : e.name;
+      const sizeLabel = e.is_dir ? '' :
+        '<span class="text-muted mono" style="font-size:11px;margin-left:auto;">'
+        + (e.size != null ? (e.size / 1073741824).toFixed(2) + ' GB' : '') + '</span>';
+      const clickable = e.is_dir || _bw.mode === 'file';
+      const style = 'display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);font-size:13px;'
+        + (clickable ? 'cursor:pointer;' : 'opacity:0.45;');
+      const handler = e.is_dir
+        ? 'browseNavigate(this.dataset.rel)'
+        : (_bw.mode === 'file' ? 'browsePickFile(this.dataset.rel)' : '');
+      return '<div style="' + style + '" data-rel="' + escapeHtml(rel) + '"'
+        + (handler ? ' onclick="' + handler + '"' : '') + '>'
+        + '<span>' + (e.is_dir ? '📁' : '📄') + '</span>'
+        + '<span style="word-break:break-all;">' + escapeHtml(e.name) + '</span>'
+        + sizeLabel + '</div>';
+    }).join('');
+  }
+  document.getElementById('bw-status').textContent =
+    (result.truncated ? '⚠ Lista troncata a ' + entries.length + ' elementi. ' : '')
+    + (_bw.mode === 'file' ? 'Clicca un file per selezionarlo, o una cartella per entrarci.' : 'Entra nella cartella da monitorare e premi "Usa questa cartella".');
+}
+
+function browsePickFile(rel) {
+  if (_bw.onPick) _bw.onPick(rel);
+  closeModal('modal-browse');
+}
+
+function browseUseCurrent() {
+  if (_bw.onPick) _bw.onPick(_bw.rel);
+  closeModal('modal-browse');
+}
+
+function browseForRegisterPath() {
+  const volId = document.getElementById('rp-volume').value;
+  if (!volId) { alert('Seleziona prima un volume'); return; }
+  openBrowse(volId, 'file', function(rel) {
+    document.getElementById('rp-relpath').value = rel;
+  }, '');
+}
+
+function browseForWatchDir() {
+  const volId = document.getElementById('ev-id').value;
+  if (!volId) return;
+  openBrowse(volId, 'dir', function(rel) {
+    if (!rel) return;
+    const input = document.getElementById('ev-watch');
+    const dirs = input.value.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    if (dirs.indexOf(rel) === -1) dirs.push(rel);
+    input.value = dirs.join(', ');
+  }, '');
 }
 
 // ── topbar helper (attivato dal blocco topbar_actions) ─────────────

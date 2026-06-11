@@ -261,6 +261,7 @@ class AgentJobType(str, enum.Enum):
     scan = "scan"
     probe = "probe"
     checksum = "checksum"
+    browse = "browse"
     preview = "preview"
     copy = "copy"
     lto_archive = "lto_archive"

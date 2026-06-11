@@ -11,10 +11,11 @@ import traceback
 from agent import __version__
 from agent.config import Config
 from agent.client import ClaqoClient
+from agent.browse import list_dir
 from agent.probe import build_probe_result, xxhash_file
 from agent.watch import WatchState, scan_volume
 
-CAPABILITIES = ["probe", "checksum", "scan"]
+CAPABILITIES = ["probe", "checksum", "scan", "browse"]
 
 
 def volume_stats(volumes: list[dict]) -> list[dict]:
@@ -42,6 +43,8 @@ def handle_job(job: dict, volumes_by_id: dict, watch_states: dict) -> tuple[str,
             import os
             full = os.path.join(vol["mount_path"], payload["rel_path"])
             return "done", {"checksum_xxhash": xxhash_file(full)}, None
+        if jtype == "browse":
+            return "done", list_dir(vol["mount_path"], payload.get("rel_path") or ""), None
         if jtype == "scan":
             st = watch_states.setdefault(int(payload.get("volume_id") or 0), WatchState())
             items = scan_volume(vol["mount_path"], vol.get("watch_dirs") or [], st)

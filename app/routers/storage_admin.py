@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.models.models import (
     AgentJob, AgentJobType, AgentNode,
     Asset, AssetProposedState, StorageVolume,
 )
+from app.services.agent_installer import build_installer_zip
 from app.services.agent_queue import enqueue_job, generate_agent_token, enqueue_scan_if_absent
 from app.services.asset_registry import confirm_proposal, discard_proposal
 from app.services.deliverable_match import rank_candidates, link_deliverable_on_confirm
@@ -118,6 +119,24 @@ def scan_now(vol_id: int, request: Request, db: Session = Depends(get_db)):
     return {"ok": True, "job_id": job.id}
 
 
+@router.post("/api/volumes/{vol_id}/browse", dependencies=[RequireStorage])
+def browse_volume(vol_id: int, request: Request, rel_path: str = Form(""),
+                  db: Session = Depends(get_db)):
+    """Accoda un job browse (listing dir via agent). La UI polla il job."""
+    v = db.get(StorageVolume, vol_id)
+    if v is None or v.tenant_id != CURRENT_TENANT or not v.is_active:
+        raise HTTPException(404)
+    user = current_user_optional(request)
+    job = enqueue_job(
+        db, tenant_id=CURRENT_TENANT, type=AgentJobType.browse,
+        payload={"volume_id": vol_id,
+                 "rel_path": rel_path.strip().strip("/\\")},
+        requested_by_user_id=getattr(user, "id", None),
+    )
+    db.commit()
+    return {"ok": True, "job_id": job.id}
+
+
 # ── Agent ────────────────────────────────────────────────────────────
 
 @router.get("/api/agents", dependencies=[RequireStorage])
@@ -149,6 +168,30 @@ def create_agent(name: str = Form(...), db: Session = Depends(get_db)):
     db.add(a)
     db.commit()
     return {"ok": True, "id": a.id, "token": plain}
+
+
+@router.get("/api/agents/{agent_id}/installer", dependencies=[RequireStorage])
+def download_installer(agent_id: int, request: Request,
+                       server_url: Optional[str] = None,
+                       db: Session = Depends(get_db)):
+    """ZIP pronto-all'uso. RIGENERA il token dell'agent (il vecchio smette
+    di funzionare): il plain vive solo dentro lo zip scaricato."""
+    a = db.get(AgentNode, agent_id)
+    if a is None or a.tenant_id != CURRENT_TENANT or not a.is_active:
+        raise HTTPException(404)
+    plain, token_hash = generate_agent_token()
+    a.auth_token_hash = token_hash
+    db.commit()
+    base = (server_url or str(request.base_url)).rstrip("/")
+    data = build_installer_zip(server_url=base, token_plain=plain,
+                               agent_name=a.name)
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "-" for c in a.name)
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition":
+                 f'attachment; filename="claqo-agent-{safe_name}.zip"'},
+    )
 
 
 @router.delete("/api/agents/{agent_id}", dependencies=[RequireStorage])
@@ -184,6 +227,21 @@ def list_jobs(limit: int = 50, db: Session = Depends(get_db)):
         }
         for j in jobs
     ]
+
+
+@router.get("/api/jobs/{job_id}", dependencies=[RequireStorage])
+def get_job(job_id: int, db: Session = Depends(get_db)):
+    j = db.get(AgentJob, job_id)
+    if j is None or j.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404)
+    return {
+        "id": j.id,
+        "type": j.type.value,
+        "status": j.status.value,
+        "payload": j.payload,
+        "result": j.result,
+        "error": j.error,
+    }
 
 
 @router.post("/api/register-path", dependencies=[RequireStorage])
