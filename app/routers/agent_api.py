@@ -3,18 +3,22 @@
 Auth: header X-Agent-Token (sha256 lookup su AgentNode). SOLO outbound
 dall'agent: heartbeat, claim job, push risultato. Nessun byte di
 contenuto transita: solo JSON metadata.
+
+F3 (spec 2026-06-11) — preview-upload: l'agent streama il proxy raw.
 """
 from __future__ import annotations
+import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import app.services.asset_preview as asset_preview
 from app.database import get_db
 from app.models.models import (
-    AgentNode, AgentJob, AgentJobType, StorageVolume, AssetProposedState,
+    AgentNode, AgentJob, AgentJobType, StorageVolume, AssetProposedState, Asset,
 )
 from app.services.agent_queue import (
     hash_agent_token, claim_next_job, complete_job, fail_job,
@@ -134,3 +138,50 @@ def post_result(job_id: int, body: ResultIn,
                                result=body.result, error=body.error)
     db.commit()
     return {"ok": True, "asset_id": asset.id if asset else None}
+
+
+@router.put("/jobs/{job_id}/preview-upload")
+async def preview_upload(job_id: int, request: Request,
+                         agent: AgentNode = Depends(get_agent),
+                         db: Session = Depends(get_db)):
+    """Riceve il proxy preview dall'agent in streaming (body raw).
+
+    Scrittura atomica: .part poi rename. Cap PREVIEW_MAX_GB (default 20).
+    Il job NON viene marcato done qui: lo fa il successivo POST /result.
+    """
+    job = db.get(AgentJob, job_id)
+    if (job is None or job.tenant_id != agent.tenant_id
+            or job.agent_id != agent.id or job.type != AgentJobType.preview):
+        raise HTTPException(status_code=404, detail="job non trovato")
+
+    asset = db.get(Asset, int((job.payload or {}).get("asset_id") or 0))
+    if asset is None or asset.tenant_id != agent.tenant_id:
+        raise HTTPException(status_code=404, detail="asset non trovato")
+
+    cap = float(os.environ.get("PREVIEW_MAX_GB", "20")) * 1024 ** 3
+    dest = asset_preview.local_path_for(asset)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_suffix(".mp4.part")
+    written = 0
+    try:
+        with open(part, "wb") as fh:
+            async for chunk in request.stream():
+                written += len(chunk)
+                if written > cap:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="preview oltre il limite PREVIEW_MAX_GB",
+                    )
+                fh.write(chunk)
+        part.replace(dest)
+    except HTTPException:
+        part.unlink(missing_ok=True)
+        raise
+    except Exception as e:
+        part.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f"scrittura preview fallita: {e}")
+
+    asset.preview_path = str(dest)
+    asset.preview_storage = "local"
+    db.commit()
+    return {"ok": True, "bytes": written}
