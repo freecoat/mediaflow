@@ -480,7 +480,11 @@ async def preview_player(
         raise HTTPException(404, "preview non disponibile")
 
     if a.preview_storage == "s3":
-        url = asset_preview_svc.presigned_get_url(a)
+        try:
+            url = asset_preview_svc.presigned_get_url(a)
+        except ValueError as exc:
+            # asset salvato su S3 ma bucket non più configurato in env
+            raise HTTPException(503, "S3 preview non disponibile") from exc
         return RedirectResponse(url, status_code=302)
 
     # Modalità locale

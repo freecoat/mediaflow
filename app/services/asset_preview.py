@@ -102,6 +102,10 @@ def _pending_preview_job(db: Session, asset: Asset) -> Optional[AgentJob]:
 
 # ── Enqueue ──────────────────────────────────────────────────────────────────
 
+# NOTA concorrenza: il check di idempotenza è read-then-write senza vincolo
+# UNIQUE — due generate simultanee sullo stesso asset possono creare 2 job.
+# Accettato: SQLite single-writer + finestra minuscola + job duplicato innocuo
+# (il secondo sovrascrive lo stesso file preview).
 def enqueue_preview(
     db: Session,
     asset: Asset,
@@ -239,9 +243,9 @@ def apply_preview_result(
         expected = local_path_for(asset)
         if not expected.is_file():
             asset.preview_status = "failed"
-            asset.preview_error = (
-                f"Result done ma file preview non presente sul server (atteso {expected})"
-            )
+            # Path assoluto SOLO nel log server: preview_error arriva alla UI.
+            print(f"[preview] result done ma file mancante: atteso {expected} (asset {asset.id})")
+            asset.preview_error = "Result done ma file preview non presente sul server"
             db.flush()
             return asset
 
