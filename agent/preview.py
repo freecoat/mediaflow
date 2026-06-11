@@ -6,9 +6,30 @@ verso il server Claqo o S3 (presigned), come deciso dal payload del job.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import time
 
 from agent.probe import run_ffprobe
+
+# Retry policy for upload (seconds between attempts)
+_RETRY_DELAYS = (5, 15)  # 2 delays → 3 total attempts
+
+
+def _sanitize_drawtext(text: str) -> str:
+    """Escape special chars for ffmpeg drawtext filter value.
+
+    Order matters:
+      1. backslash first (avoid double-escaping later substitutions)
+      2. colon  → \\:
+      3. apostrophe → \\'
+      4. comma  → \\,  (comma is the filtergraph separator)
+    """
+    text = text.replace("\\", "\\\\")
+    text = text.replace(":", r"\:")
+    text = text.replace("'", r"\'")
+    text = text.replace(",", r"\,")
+    return text
 
 
 def probe_start_tc(probe: dict) -> tuple[str, str]:
@@ -33,7 +54,7 @@ def build_ffmpeg_cmd(src, dst, *, start_tc, rate, tenant_name, burn):
             f"drawtext=timecode='{tc_esc}':timecode_rate={rate}"
             ":fontsize=h/28:fontcolor=white:box=1:boxcolor=black@0.45"
             ":x=(w-tw)/2:y=h*0.03")
-        wm = f"PREVIEW - QC ONLY - {tenant_name}".replace(":", r"\:").replace("'", "")
+        wm = _sanitize_drawtext(f"PREVIEW - QC ONLY - {tenant_name}")
         filters.append(
             f"drawtext=text='{wm}'"
             ":fontsize=h/16:fontcolor=white@0.18:x=(w-tw)/2:y=(h-th)/2")
@@ -47,6 +68,12 @@ def build_ffmpeg_cmd(src, dst, *, start_tc, rate, tenant_name, burn):
 
 def generate_preview(mount_path: str, rel_path: str, tenant_name: str, workdir: str):
     """Genera proxy 1080p in workdir. Ritorna (dst_path, meta_dict)."""
+    # Fix 2: guard binaries before doing anything
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        raise RuntimeError(
+            "ffmpeg/ffprobe non trovato nel PATH — preview non disponibile su questo agent"
+        )
+
     src = os.path.join(mount_path, rel_path)
     if not os.path.isfile(src):
         raise FileNotFoundError(f"sorgente non trovata: {src}")
@@ -65,14 +92,17 @@ def generate_preview(mount_path: str, rel_path: str, tenant_name: str, workdir: 
     # Primo tentativo: TC burn-in attivo
     cmd = build_ffmpeg_cmd(src, dst, start_tc=start_tc, rate=rate,
                            tenant_name=tenant_name, burn=True)
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=14400)
+    # Fix 5: explicit encoding to avoid cp1252 UnicodeDecodeError on Windows
+    proc = subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                          errors="replace", timeout=14400)
     burned_tc = True
 
     if proc.returncode != 0 and "drawtext" in proc.stderr:
         # ffmpeg senza fontconfig: riprova senza burn
         cmd_nb = build_ffmpeg_cmd(src, dst, start_tc=start_tc, rate=rate,
                                   tenant_name=tenant_name, burn=False)
-        proc = subprocess.run(cmd_nb, capture_output=True, text=True, timeout=14400)
+        proc = subprocess.run(cmd_nb, capture_output=True, encoding="utf-8",
+                              errors="replace", timeout=14400)
         burned_tc = False
 
     if proc.returncode != 0:
@@ -93,16 +123,33 @@ def eval_rate(rate: str) -> float:
 
 
 def upload_preview(path: str, *, job_id: int, upload_cfg: dict, client) -> str:
-    """Carica il proxy. Ritorna "s3" o "server"."""
+    """Carica il proxy. Ritorna "s3" o "server".
+
+    Retry 3 tentativi totali (2 retry) con sleep 5s poi 15s tra i tentativi.
+    """
     mode = (upload_cfg or {}).get("mode", "server")
-    if mode == "s3":
-        import requests
-        put_url = upload_cfg["put_url"]
-        with open(path, "rb") as fh:
-            requests.put(put_url, data=fh,
-                         headers={"Content-Type": "video/mp4"},
-                         timeout=3600).raise_for_status()
-        return "s3"
-    # default: upload al server Claqo
-    client.put_preview(job_id, path)
-    return "server"
+
+    last_exc: Exception | None = None
+    for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
+        try:
+            if mode == "s3":
+                import requests
+                put_url = upload_cfg["put_url"]
+                # Fix 3: include Content-Length so S3 presigned PUT accepts the body
+                size = os.path.getsize(path)
+                with open(path, "rb") as fh:
+                    requests.put(put_url, data=fh,
+                                 headers={"Content-Type": "video/mp4",
+                                          "Content-Length": str(size)},
+                                 timeout=3600).raise_for_status()
+                return "s3"
+            else:
+                # default: upload al server Claqo
+                client.put_preview(job_id, path)
+                return "server"
+        except Exception as exc:
+            last_exc = exc
+            if delay is not None:
+                time.sleep(delay)
+
+    raise last_exc  # type: ignore[misc]
