@@ -1,6 +1,6 @@
 # tests/test_f3_preview_model.py
 """F3 (spec 2026-06-11) — campi preview su Asset + auto_preview su StorageVolume."""
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -28,18 +28,27 @@ def test_asset_preview_fields_default():
         uploaded_by=1,
     )
     db.add(a)
-    db.flush()
+    db.commit()
+    db.expire(a)
+    a = db.get(Asset, a.id)
     assert a.preview_status == "none"
     assert a.preview_path is None
     assert a.preview_storage is None
     assert a.preview_error is None
     assert a.preview_meta is None
     assert a.preview_generated_at is None
+    # Verifica che il server_default "none" sia presente nella colonna reale del DB
+    raw = db.execute(
+        text("SELECT preview_status FROM assets WHERE id=:i"), {"i": a.id}
+    ).scalar()
+    assert raw == "none"
 
 
 def test_volume_auto_preview_default_false():
     db = _session()
     v = StorageVolume(tenant_id=1, name="SAN", mount_path="/mnt/san")
     db.add(v)
-    db.flush()
+    db.commit()
+    db.expire(v)
+    v = db.get(StorageVolume, v.id)
     assert v.auto_preview is False
