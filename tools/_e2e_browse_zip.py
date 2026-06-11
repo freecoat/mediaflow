@@ -117,7 +117,7 @@ with tempfile.TemporaryDirectory() as san:
         check("traversal → failed", status3 == "failed" and "fuori dal volume" in (err3 or ""), str(err3))
 
         print("— installer ZIP —")
-        r = c.get(f"/storage/api/agents/{agent_id}/installer?server_url=https://claqo.example.com")
+        r = c.post(f"/storage/api/agents/{agent_id}/installer", data={"server_url": "https://claqo.example.com"})
         check("download 200 zip", r.status_code == 200 and "application/zip" in r.headers["content-type"])
         zf = zipfile.ZipFile(io.BytesIO(r.content))
         cfg = json.loads(zf.read("claqo-agent/claqo-agent.json"))

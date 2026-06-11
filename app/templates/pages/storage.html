@@ -704,13 +704,29 @@ async function revokeAgent(id, name) {
 
 // ── Installer ZIP ──────────────────────────────────────────────────
 
-function downloadInstaller(agentId, skipConfirm) {
+async function downloadInstaller(agentId, skipConfirm) {
   if (!agentId) return;
   if (!skipConfirm && !confirm('Scaricare l\'installer? Il token dell\'agent verrà RIGENERATO: '
       + 'un agent già in esecuzione con il vecchio token smetterà di autenticarsi.')) return;
-  window.location.href = '/storage/api/agents/' + agentId + '/installer'
-    + '?server_url=' + encodeURIComponent(window.location.origin);
-  toast('Download installer avviato — il token valido è dentro lo ZIP', 'success', 6000);
+  try {
+    const fd = new FormData();
+    fd.append('server_url', window.location.origin);
+    const r = await fetch('/storage/api/agents/' + agentId + '/installer', {method: 'POST', body: fd});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const cd = r.headers.get('content-disposition') || '';
+    const m = cd.match(/filename="([^"]+)"/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = m ? m[1] : ('claqo-agent-' + agentId + '.zip');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+    toast('Installer scaricato — il token valido è dentro lo ZIP', 'success', 6000);
+  } catch (e) {
+    toast('Errore download installer: ' + e.message, 'error');
+  }
 }
 
 // ── Sfoglia volume (browse via agent) ──────────────────────────────

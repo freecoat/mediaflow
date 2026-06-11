@@ -1,6 +1,6 @@
 """tests/test_agent_installer.py — TDD Task 1: installer ZIP self-service.
 
-Verifica endpoint GET /storage/api/agents/{agent_id}/installer:
+Verifica endpoint POST /storage/api/agents/{agent_id}/installer (POST: rotazione token = mutazione, no GET CSRF-abile):
 1. 401/403 senza auth (redirect o 4xx — dipende dal middleware auth_guard)
 2. 404 agent inesistente
 3. 200: content-type zip, ZIP contiene i file attesi
@@ -131,7 +131,7 @@ def test_unauthenticated_cannot_download(monkeypatch):
     main_mod.app.dependency_overrides[get_db] = _override
     try:
         with TestClient(main_mod.app, follow_redirects=False) as c:
-            r = c.get("/storage/api/agents/999/installer")
+            r = c.post("/storage/api/agents/999/installer")
             assert r.status_code in (401, 403, 302, 307), \
                 f"Atteso 401/403/redirect, ottenuto {r.status_code}"
     finally:
@@ -143,7 +143,7 @@ def test_unauthenticated_cannot_download(monkeypatch):
 # ── Test 2: 404 agent inesistente ───────────────────────────────────
 
 def test_installer_404_unknown_agent(client_admin):
-    r = client_admin.get("/storage/api/agents/99999/installer")
+    r = client_admin.post("/storage/api/agents/99999/installer")
     assert r.status_code == 404
 
 
@@ -151,7 +151,7 @@ def test_installer_404_unknown_agent(client_admin):
 
 def test_installer_200_zip_structure(client_admin):
     agent = _make_agent(client_admin.session)
-    r = client_admin.get(f"/storage/api/agents/{agent.id}/installer")
+    r = client_admin.post(f"/storage/api/agents/{agent.id}/installer")
     assert r.status_code == 200, r.text
     assert "application/zip" in r.headers.get("content-type", "")
     assert "attachment" in r.headers.get("content-disposition", "")
@@ -172,7 +172,7 @@ def test_installer_200_zip_structure(client_admin):
 def test_installer_json_fields_present(client_admin):
     import json
     agent = _make_agent(client_admin.session, name="ag-json-test")
-    r = client_admin.get(f"/storage/api/agents/{agent.id}/installer")
+    r = client_admin.post(f"/storage/api/agents/{agent.id}/installer")
     assert r.status_code == 200
 
     zf = zipfile.ZipFile(io.BytesIO(r.content))
@@ -190,7 +190,7 @@ def test_installer_token_persisted_and_valid(client_admin):
     agent = _make_agent(client_admin.session, name="ag-token-test")
     old_hash = agent.auth_token_hash
 
-    r = client_admin.get(f"/storage/api/agents/{agent.id}/installer")
+    r = client_admin.post(f"/storage/api/agents/{agent.id}/installer")
     assert r.status_code == 200
 
     zf = zipfile.ZipFile(io.BytesIO(r.content))
@@ -213,7 +213,7 @@ def test_installer_token_persisted_and_valid(client_admin):
 def test_installer_command_executable_attr(client_admin):
     """avvia-agent.command deve avere external_attr = 0o755 << 16."""
     agent = _make_agent(client_admin.session, name="ag-exec-test")
-    r = client_admin.get(f"/storage/api/agents/{agent.id}/installer")
+    r = client_admin.post(f"/storage/api/agents/{agent.id}/installer")
     assert r.status_code == 200
 
     zf = zipfile.ZipFile(io.BytesIO(r.content))

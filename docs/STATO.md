@@ -12,7 +12,7 @@
 
 ### α.172.212 ✅ (browse + installer ZIP — 11 giu, sessione remota)
 - **Browse via agent**: job `browse` (agent lista dir del volume, traversal-guard, cap 500). UI modal file-browser con breadcrumb+poll: "📂 Sfoglia" su register-path (pick file → rel_path) e "📂 Aggiungi" su watch dirs (modifica volume). `GET /storage/api/jobs/{id}` nuovo per il poll.
-- **Installer ZIP**: `GET /storage/api/agents/{id}/installer` → `claqo-agent/` con sorgenti + `claqo-agent.json` precompilato + `avvia-agent.bat`/`.command` + LEGGIMI. **Rigenera il token** a ogni download (plain solo nello zip). Bottoni UI su creazione agent e riga agent.
+- **Installer ZIP**: `POST /storage/api/agents/{id}/installer` → `claqo-agent/` con sorgenti + `claqo-agent.json` precompilato + `avvia-agent.bat`/`.command` + LEGGIMI. **Rigenera il token** a ogni download (plain solo nello zip). Bottoni UI su creazione agent e riga agent.
 - 535 test (+15). E2E offline 15/15 (`tools/_e2e_browse_zip.py`) + browser smoke live con agent vero (browse 3 livelli, pick file, watch-dir, zip 200, 0 errori console).
 - Nota: "Sfoglia" non c'è sul modal *nuovo* volume (serve il volume_id → prima crea, poi modifica).
 

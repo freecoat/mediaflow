@@ -170,15 +170,22 @@ def create_agent(name: str = Form(...), db: Session = Depends(get_db)):
     return {"ok": True, "id": a.id, "token": plain}
 
 
-@router.get("/api/agents/{agent_id}/installer", dependencies=[RequireStorage])
+@router.post("/api/agents/{agent_id}/installer", dependencies=[RequireStorage])
 def download_installer(agent_id: int, request: Request,
-                       server_url: Optional[str] = None,
+                       server_url: Optional[str] = Form(None),
                        db: Session = Depends(get_db)):
     """ZIP pronto-all'uso. RIGENERA il token dell'agent (il vecchio smette
-    di funzionare): il plain vive solo dentro lo zip scaricato."""
+    di funzionare): il plain vive solo dentro lo zip scaricato.
+    POST (non GET): la rotazione del token è una mutazione — su GET sarebbe
+    CSRF-abile via navigazione cross-site (cookie SameSite=Lax)."""
     a = db.get(AgentNode, agent_id)
     if a is None or a.tenant_id != CURRENT_TENANT or not a.is_active:
         raise HTTPException(404)
+    if server_url:
+        from urllib.parse import urlparse
+        p = urlparse(server_url)
+        if p.scheme not in ("http", "https") or not p.netloc:
+            raise HTTPException(400, "server_url non valido (atteso http(s)://host)")
     plain, token_hash = generate_agent_token()
     a.auth_token_hash = token_hash
     db.commit()
