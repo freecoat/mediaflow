@@ -11,7 +11,7 @@ Terza fase asset registry: **proxy di preview** generato dall'agent in facility 
 - **Endpoint player** (`/qc/api/assets/{id}/preview[/status|/generate]`): gate read/write identici agli altri endpoint QC; local → `FileResponse` con Range (scrub); s3 → 302 presigned GET (503 se bucket rimosso).
 - **Trigger**: bottone "🎬 Genera preview" nel modal QC + **auto alla conferma** proposta se `StorageVolume.auto_preview` (checkbox nei modal volume `/storage`).
 - **UI modal QC** (componente condiviso `qc_modal.html`): player sopra il log eventi, poll 4s durante la generazione, Rigenera con cache-bust, meta TC start/fps/burned. **Bottone "📍 TC"**: tempo corrente del player + TC start → compila il campo timecode del form errori.
-- **+41 test (576 totali)**. E2E `tools/_e2e_f3.py` (clip sintetica ffmpeg + agent vero, 13 check — SKIP su macchine senza ffmpeg). Browser smoke: modal QC con CTA preview, generate 400 gestito su asset legacy senza rel_path, bottone TC presente, 0 errori console spurî.
+- **+41 test (576 totali)**. E2E `tools/_e2e_f3.py` 28/28 check con ffmpeg reale (installato via winget, fix fontfile). Browser smoke: modal QC con CTA preview, generate 400 gestito su asset legacy senza rel_path, bottone TC presente, 0 errori console spurî.
 - **Nota**: ffmpeg/ffprobe richiesti sull'agent in facility; senza, il job preview fallisce con messaggio chiaro.
 
 ## v3.5.0-alpha.172.212 — Storage: browse via agent + installer ZIP (11 giu 2026)

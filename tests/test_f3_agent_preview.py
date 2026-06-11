@@ -8,6 +8,21 @@ import pytest
 from agent.preview import build_ffmpeg_cmd, probe_start_tc, generate_preview, upload_preview
 
 
+def test_build_cmd_fontfile_escaped_in_both_drawtext():
+    cmd = build_ffmpeg_cmd("/i", "/o", start_tc="10:00:00:00", rate="25/1",
+                           tenant_name="X", burn=True,
+                           fontfile="C:/Windows/Fonts/consola.ttf")
+    vf = cmd[cmd.index("-vf") + 1]
+    assert vf.count(r"fontfile='C\:/Windows/Fonts/consola.ttf'") == 2
+
+
+def test_build_cmd_no_fontfile_omits_param():
+    cmd = build_ffmpeg_cmd("/i", "/o", start_tc="10:00:00:00", rate="25/1",
+                           tenant_name="X", burn=True, fontfile=None)
+    vf = cmd[cmd.index("-vf") + 1]
+    assert "fontfile" not in vf
+
+
 def test_probe_start_tc_from_format_tags():
     probe = {"format": {"tags": {"timecode": "09:59:50:00"}},
              "streams": [{"codec_type": "video", "r_frame_rate": "25/1"}]}

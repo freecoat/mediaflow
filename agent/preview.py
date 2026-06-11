@@ -46,17 +46,38 @@ def probe_start_tc(probe: dict) -> tuple[str, str]:
     return (tc or "00:00:00:00"), rate
 
 
-def build_ffmpeg_cmd(src, dst, *, start_tc, rate, tenant_name, burn):
+def _find_fontfile() -> str | None:
+    """Font di sistema per drawtext: su Windows le build ffmpeg comuni (Gyan)
+    non hanno una config fontconfig e CRASHANO senza fontfile esplicito."""
+    candidates = (
+        "C:/Windows/Fonts/consola.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "/System/Library/Fonts/Monaco.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    )
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def build_ffmpeg_cmd(src, dst, *, start_tc, rate, tenant_name, burn,
+                     fontfile: str | None = None):
     filters = ["scale=-2:1080"]
     if burn:
+        font = ""
+        if fontfile:
+            font = f"fontfile='{_sanitize_drawtext(fontfile)}':"
         tc_esc = start_tc.replace(":", r"\:")
         filters.append(
-            f"drawtext=timecode='{tc_esc}':timecode_rate={rate}"
+            f"drawtext={font}timecode='{tc_esc}':timecode_rate={rate}"
             ":fontsize=h/28:fontcolor=white:box=1:boxcolor=black@0.45"
             ":x=(w-tw)/2:y=h*0.03")
         wm = _sanitize_drawtext(f"PREVIEW - QC ONLY - {tenant_name}")
         filters.append(
-            f"drawtext=text='{wm}'"
+            f"drawtext={font}text='{wm}'"
             ":fontsize=h/16:fontcolor=white@0.18:x=(w-tw)/2:y=(h-th)/2")
     return ["ffmpeg", "-y", "-i", src,
             "-vf", ",".join(filters),
@@ -89,16 +110,20 @@ def generate_preview(mount_path: str, rel_path: str, tenant_name: str, workdir: 
 
     dst = os.path.join(workdir, "preview.mp4")
 
-    # Primo tentativo: TC burn-in attivo
+    # Primo tentativo: TC burn-in attivo (fontfile esplicito: senza, le build
+    # Windows crashano in fontconfig — visto live con Gyan 8.1.1, rc=0xC0000005)
     cmd = build_ffmpeg_cmd(src, dst, start_tc=start_tc, rate=rate,
-                           tenant_name=tenant_name, burn=True)
+                           tenant_name=tenant_name, burn=True,
+                           fontfile=_find_fontfile())
     # Fix 5: explicit encoding to avoid cp1252 UnicodeDecodeError on Windows
     proc = subprocess.run(cmd, capture_output=True, encoding="utf-8",
                           errors="replace", timeout=14400)
     burned_tc = True
 
-    if proc.returncode != 0 and "drawtext" in proc.stderr:
-        # ffmpeg senza fontconfig: riprova senza burn
+    if proc.returncode != 0:
+        # Qualsiasi errore col burn attivo (fontconfig assente, drawtext non
+        # compilato, crash): riprova senza burn — meglio un proxy senza TC
+        # che nessun proxy. Se fallisce anche così, l'errore sotto è quello vero.
         cmd_nb = build_ffmpeg_cmd(src, dst, start_tc=start_tc, rate=rate,
                                   tenant_name=tenant_name, burn=False)
         proc = subprocess.run(cmd_nb, capture_output=True, encoding="utf-8",
