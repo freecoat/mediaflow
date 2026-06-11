@@ -31,6 +31,7 @@ from app.models.models import (
     ProjectAccessGrant, AssetAccessAction, AssetAccessLog,
     PhysicalAsset, PhysicalAssetKind, AssetOwnerType,
     AssetMovement, AssetMovementType, IngestBatch, AssetMembership,
+    ArchiveTicket,
     JobDeliverable, DeliverableNature, DeliverableStatus, QCSubstatus,
     # v3.5.0-alpha.172 Restructure
     DeliverableUnitNature, DeliverableBillingStatus,

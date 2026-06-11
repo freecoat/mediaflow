@@ -3271,6 +3271,27 @@ class AssetMembership(Base):
     removed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
+class ArchiveTicket(Base):
+    """F4 (spec 2026-06-11) — Ticket assistito archivio/restore LTO.
+    YoYotta resta manuale: il ticket traccia richiesta → lavorazione → esito."""
+    __tablename__ = "archive_tickets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    kind: Mapped[str] = mapped_column(String(10), index=True)       # archive|restore
+    status: Mapped[str] = mapped_column(String(15), default="requested",
+                                        server_default="requested", index=True)
+    asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True, index=True)
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_deliverables.id"), nullable=True, index=True)
+    physical_asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("physical_assets.id"), nullable=True, index=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    requested_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigned_to_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    closed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class IngestBatch(Base):
     """v3.5.0-alpha.73 — Raggruppa N AssetMovement nello stesso DDT (bolla).
     Use case: cliente consegna 1 disco con 5 file digitali → 1 IngestBatch
