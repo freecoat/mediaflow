@@ -216,9 +216,11 @@ def apply_preview_result(
     if asset is None or asset.tenant_id != job.tenant_id:
         return None
 
-    uploaded = result.get("uploaded", "server")
+    # La modalità è quella DECISA DAL SERVER nel payload del job: il flag
+    # "uploaded" del result (agent, untrusted) non sceglie il ramo.
+    mode = (payload.get("upload") or {}).get("mode", "server")
 
-    if uploaded == "s3":
+    if mode == "s3":
         # Il file è già su S3; la chiave viene SOLO dal payload del job (non dal result
         # dell'agent, che è untrusted). Se manca → failed.
         upload_info = payload.get("upload", {})
@@ -302,7 +304,9 @@ def presigned_get_url(asset: Asset, *, expires: int = 900) -> str:
             "PREVIEW_S3_BUCKET non configurato: presigned URL non disponibile"
         )
     client = _s3_client(cfg)
-    key = asset.preview_path or s3_key_for(asset)
+    # Key sempre derivata server-side (tenant+id): mai fidarsi di un valore
+    # arbitrario in preview_path per la firma (difesa IDOR cross-tenant).
+    key = s3_key_for(asset)
     return client.generate_presigned_url(
         "get_object",
         Params={"Bucket": cfg["bucket"], "Key": key},
