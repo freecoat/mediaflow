@@ -188,6 +188,13 @@
           <span>Sola lettura (consigliato per archivi)</span>
         </label>
       </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" id="nv-autopreview">
+          <span>Auto-preview alla conferma</span>
+        </label>
+        <div class="form-hint">Alla conferma di una proposta su questo volume l'agent genera il proxy di preview.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-volume')">Annulla</button>
@@ -233,6 +240,13 @@
             <span>Attivo</span>
           </label>
         </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+          <input type="checkbox" id="ev-autopreview">
+          <span>Auto-preview alla conferma</span>
+        </label>
+        <div class="form-hint">Alla conferma di una proposta su questo volume l'agent genera il proxy di preview.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -417,6 +431,7 @@ async function loadVolumes() {
         + 'data-vol-watch="' + escapeHtml((v.watch_dirs || []).join(', ')) + '" '
         + 'data-vol-ro="' + (v.read_only ? '1' : '0') + '" '
         + 'data-vol-active="' + (v.is_active ? '1' : '0') + '" '
+        + 'data-vol-autopreview="' + (v.auto_preview ? '1' : '0') + '" '
         + 'onclick="editVolumeFromBtn(this)">✏️</button> '
         + '<button class="btn btn-ghost btn-sm" title="Scansiona ora" '
         + 'data-vol-id="' + v.id + '" '
@@ -587,6 +602,7 @@ async function createVolume() {
   fd.append('mount_path', mount);
   fd.append('watch_dirs', document.getElementById('nv-watch').value.trim());
   fd.append('read_only', document.getElementById('nv-readonly').checked ? 'true' : 'false');
+  fd.append('auto_preview', document.getElementById('nv-autopreview').checked ? 'true' : 'false');
   try {
     await api('POST', '/storage/api/volumes', fd);
     closeModal('modal-new-volume');
@@ -595,6 +611,7 @@ async function createVolume() {
     document.getElementById('nv-mount').value = '';
     document.getElementById('nv-watch').value = '';
     document.getElementById('nv-readonly').checked = true;
+    document.getElementById('nv-autopreview').checked = false;
     loadVolumes();
   } catch (e) {
     toast('Errore: ' + e.message, 'error');
@@ -609,6 +626,7 @@ function editVolumeFromBtn(btn) {
   document.getElementById('ev-watch').value = d.volWatch;
   document.getElementById('ev-readonly').checked = d.volRo === '1';
   document.getElementById('ev-active').checked = d.volActive === '1';
+  document.getElementById('ev-autopreview').checked = d.volAutopreview === '1';
   openModal('modal-edit-volume');
 }
 
@@ -624,6 +642,7 @@ async function saveVolume() {
   fd.append('watch_dirs', document.getElementById('ev-watch').value.trim());
   fd.append('read_only', document.getElementById('ev-readonly').checked ? 'true' : 'false');
   fd.append('is_active', document.getElementById('ev-active').checked ? 'true' : 'false');
+  fd.append('auto_preview', document.getElementById('ev-autopreview').checked ? 'true' : 'false');
   try {
     await api('PUT', '/storage/api/volumes/' + id, fd);
     closeModal('modal-edit-volume');

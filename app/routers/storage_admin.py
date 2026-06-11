@@ -59,6 +59,7 @@ def list_volumes(db: Session = Depends(get_db)):
             "total_gb": v.total_gb,
             "free_gb": v.free_gb,
             "is_active": v.is_active,
+            "auto_preview": v.auto_preview,
         }
         for v in vols
     ]
@@ -70,6 +71,7 @@ def create_volume(
     mount_path: str = Form(...),
     watch_dirs: str = Form(""),
     read_only: bool = Form(True),
+    auto_preview: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     dirs = [d.strip() for d in watch_dirs.split(",") if d.strip()]
@@ -79,6 +81,7 @@ def create_volume(
         mount_path=mount_path,
         watch_dirs=dirs,
         read_only=read_only,
+        auto_preview=auto_preview,
     )
     db.add(v)
     db.commit()
@@ -93,6 +96,7 @@ def update_volume(
     watch_dirs: str = Form(""),
     read_only: bool = Form(True),
     is_active: bool = Form(True),
+    auto_preview: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     v = db.get(StorageVolume, vol_id)
@@ -103,6 +107,7 @@ def update_volume(
     v.watch_dirs = [d.strip() for d in watch_dirs.split(",") if d.strip()]
     v.read_only = read_only
     v.is_active = is_active
+    v.auto_preview = auto_preview
     db.commit()
     return {"ok": True}
 
@@ -325,6 +330,14 @@ def confirm(
     if target:
         link_deliverable_on_confirm(db, a, deliverable_id=int(target),
                                     user_id=getattr(user, "id", None))
+    # Auto-preview: se il volume ha il flag attivo, accoda un job preview
+    vol = db.get(StorageVolume, a.storage_volume_id) if a.storage_volume_id else None
+    if vol is not None and vol.auto_preview:
+        from app.services.asset_preview import enqueue_preview
+        try:
+            enqueue_preview(db, a, requested_by_user_id=getattr(user, "id", None))
+        except ValueError:
+            pass  # asset senza rel_path (upload manuale): nessun preview possibile
     db.commit()
     return {"ok": True}
 
