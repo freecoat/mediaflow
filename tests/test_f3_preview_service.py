@@ -8,7 +8,8 @@ from sqlalchemy.pool import StaticPool
 from app.models.models import (Base, Asset, AssetType, StorageVolume, Tenant,
                                AgentJob, AgentJobType, AgentJobStatus)
 from app.services.asset_preview import (enqueue_preview, apply_preview_result,
-                                        apply_preview_failure, s3_preview_config)
+                                        apply_preview_failure, s3_preview_config,
+                                        local_path_for)
 
 
 @pytest.fixture
@@ -168,7 +169,11 @@ def test_s3_preview_config_presente(monkeypatch):
 # ── Test 6: apply_result server file esistente ───────────────────────────────
 
 def test_apply_result_server_ok(db, tmp_path, monkeypatch):
-    """apply_preview_result con file locale esistente → status ready, meta popolata."""
+    """apply_preview_result con file locale esistente → status ready, meta popolata.
+
+    Il service usa local_path_for(asset) per trovare il file: NON legge
+    result['preview_path']. Il file deve essere nella posizione attesa.
+    """
     monkeypatch.delenv("PREVIEW_S3_BUCKET", raising=False)
     # Monkeypatcha PREVIEW_DIR nel modulo
     import app.services.asset_preview as svc
@@ -178,14 +183,15 @@ def test_apply_result_server_ok(db, tmp_path, monkeypatch):
     a = _asset(db, storage_volume_id=v.id, rel_path="OUT/d.mxf")
     job = enqueue_preview(db, a)
 
-    # Crea il file preview dove il service si aspetta di trovarlo
-    preview_file = tmp_path / str(a.tenant_id) / f"{a.id}.mp4"
-    preview_file.parent.mkdir(parents=True, exist_ok=True)
-    preview_file.write_bytes(b"fake_proxy_content")
+    # Crea il file nella posizione ATTESA dal service (local_path_for),
+    # NON in una path arbitraria ricevuta nel result.
+    expected = local_path_for(a)
+    expected.parent.mkdir(parents=True, exist_ok=True)
+    expected.write_bytes(b"fake_proxy_content")
 
+    # Il result NON include preview_path: il service deve ignorarlo
     result = {
         "uploaded": "server",
-        "preview_path": str(preview_file),
         "start_tc": "01:00:00:00",
         "fps": 25.0,
         "duration_sec": 5400.0,
@@ -198,6 +204,7 @@ def test_apply_result_server_ok(db, tmp_path, monkeypatch):
     db.refresh(asset_out)
     assert asset_out.preview_status == "ready"
     assert asset_out.preview_storage == "local"
+    assert asset_out.preview_path == str(expected)
     assert asset_out.preview_meta is not None
     assert asset_out.preview_meta["fps"] == 25.0
     assert asset_out.preview_generated_at is not None
@@ -206,7 +213,7 @@ def test_apply_result_server_ok(db, tmp_path, monkeypatch):
 # ── Test 7: apply_result server file mancante ────────────────────────────────
 
 def test_apply_result_server_file_mancante(db, tmp_path, monkeypatch):
-    """apply_preview_result con file mancante → status failed con errore."""
+    """apply_preview_result con file mancante nella posizione attesa → status failed."""
     monkeypatch.delenv("PREVIEW_S3_BUCKET", raising=False)
     import app.services.asset_preview as svc
     monkeypatch.setattr(svc, "PREVIEW_DIR", tmp_path)
@@ -215,9 +222,9 @@ def test_apply_result_server_file_mancante(db, tmp_path, monkeypatch):
     a = _asset(db, storage_volume_id=v.id, rel_path="OUT/e.mxf")
     job = enqueue_preview(db, a)
 
+    # Il file atteso (local_path_for) non esiste: nessuna directory creata.
     result = {
         "uploaded": "server",
-        "preview_path": str(tmp_path / "nonexistent" / "file.mp4"),
         "start_tc": "00:00:00:00",
         "fps": 25.0,
         "duration_sec": 100.0,
@@ -231,6 +238,43 @@ def test_apply_result_server_file_mancante(db, tmp_path, monkeypatch):
     assert asset_out.preview_status == "failed"
     assert asset_out.preview_error is not None
     assert len(asset_out.preview_error) > 0
+
+
+# ── Test 7b: path traversal ignorato ─────────────────────────────────────────
+
+def test_apply_result_server_path_traversal_ignorato(db, tmp_path, monkeypatch):
+    """result['preview_path'] con percorso arbitrario (es. /etc/passwd) NON viene
+    usato: il service legge sempre local_path_for(asset). Se il file atteso è
+    assente → failed, preview_path NON impostato al valore dell'attaccante.
+    """
+    monkeypatch.delenv("PREVIEW_S3_BUCKET", raising=False)
+    import app.services.asset_preview as svc
+    monkeypatch.setattr(svc, "PREVIEW_DIR", tmp_path)
+
+    v = _volume(db)
+    a = _asset(db, storage_volume_id=v.id, rel_path="OUT/z.mxf")
+    job = enqueue_preview(db, a)
+
+    # Il file atteso dal service non esiste; l'attaccante tenta di iniettare
+    # un percorso arbitrario nel result.
+    malicious_path = "/etc/passwd"
+    result = {
+        "uploaded": "server",
+        "preview_path": malicious_path,   # tentativo di path traversal
+        "start_tc": "00:00:00:00",
+        "fps": 25.0,
+        "duration_sec": 10.0,
+        "burned_tc": False,
+    }
+
+    asset_out = apply_preview_result(db, job, result)
+
+    assert asset_out is not None
+    db.refresh(asset_out)
+    # Il service deve fallire perché il file atteso non esiste
+    assert asset_out.preview_status == "failed"
+    # preview_path NON deve essere impostato al valore dell'attaccante
+    assert asset_out.preview_path != malicious_path
 
 
 # ── Test 8: apply_failure ────────────────────────────────────────────────────
@@ -249,3 +293,25 @@ def test_apply_failure(db, monkeypatch):
     db.refresh(asset_out)
     assert asset_out.preview_status == "failed"
     assert "ffmpeg" in asset_out.preview_error
+
+
+# ── Test 9: S3 client errore runtime → ValueError ────────────────────────────
+
+def test_enqueue_s3_client_errore_runtime_raise_valueerror(db, monkeypatch):
+    """Se il client S3 solleva un errore runtime (es. credenziali invalide)
+    enqueue_preview deve propagare ValueError (non swallowarlo silenziosamente).
+    """
+    monkeypatch.setenv("PREVIEW_S3_BUCKET", "my-bucket")
+
+    import app.services.asset_preview as svc
+
+    def _bad_s3_client(_cfg):
+        raise RuntimeError("Connection refused: endpoint non raggiungibile")
+
+    monkeypatch.setattr(svc, "_s3_client", _bad_s3_client)
+
+    v = _volume(db)
+    a = _asset(db, storage_volume_id=v.id, rel_path="OUT/g.mxf")
+
+    with pytest.raises(ValueError, match="S3 preview mal configurato"):
+        enqueue_preview(db, a)

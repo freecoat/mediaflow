@@ -138,6 +138,8 @@ def enqueue_preview(
         if cfg is not None:
             client = _s3_client(cfg)
             key = s3_key_for(asset)
+            # Limite noto: se l'agent claima il job dopo 1h il PUT S3 fallisce
+            # (403) → job failed visibile, l'operatore rigenera. Refresh URL = backlog.
             put_url = client.generate_presigned_url(
                 "put_object",
                 Params={"Bucket": cfg["bucket"], "Key": key,
@@ -150,6 +152,8 @@ def enqueue_preview(
     except ImportError:
         # boto3 non installato → degrada a server
         upload = {"mode": "server"}
+    except Exception as e:
+        raise ValueError(f"S3 preview mal configurato: {e}") from e
 
     # Nome tenant per log dell'agent
     tenant_name = "Claqo"
@@ -215,24 +219,32 @@ def apply_preview_result(
     uploaded = result.get("uploaded", "server")
 
     if uploaded == "s3":
-        # Il file è già su S3; la chiave è nel payload del job
+        # Il file è già su S3; la chiave viene SOLO dal payload del job (non dal result
+        # dell'agent, che è untrusted). Se manca → failed.
         upload_info = payload.get("upload", {})
+        s3_key = upload_info.get("key")
+        if not s3_key:
+            asset.preview_status = "failed"
+            asset.preview_error = "Result S3 done ma key mancante nel payload del job"
+            db.flush()
+            return asset
         asset.preview_storage = "s3"
-        asset.preview_path = upload_info.get("key") or result.get("preview_path")
+        asset.preview_path = s3_key
         _mark_ready(asset, result)
     else:
-        # Modalità server: verifica che il file esista localmente
-        preview_path_str = result.get("preview_path")
-        if not preview_path_str or not Path(preview_path_str).exists():
+        # Modalità server: il percorso è deterministico (local_path_for), NON si
+        # legge result['preview_path'] che arriva dall'agent via rete (untrusted).
+        expected = local_path_for(asset)
+        if not expected.is_file():
             asset.preview_status = "failed"
             asset.preview_error = (
-                f"File preview non trovato: {preview_path_str!r}"
+                f"Result done ma file preview non presente sul server (atteso {expected})"
             )
             db.flush()
             return asset
 
         asset.preview_storage = "local"
-        asset.preview_path = preview_path_str
+        asset.preview_path = str(expected)
         _mark_ready(asset, result)
 
     db.flush()
