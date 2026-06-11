@@ -1216,6 +1216,30 @@ def _auto_migrate_columns():
                     print(f"[auto-migrate] assets.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE assets ADD COLUMN {col} {ddl}"))
 
+    # ── F3 (spec 2026-06-11) — Preview QC proxy su Asset + auto_preview su StorageVolume ──
+    insp_f3 = inspect(engine)
+    if "assets" in insp_f3.get_table_names():
+        cols_f3 = {c["name"] for c in insp_f3.get_columns("assets")}
+        f3_asset_alter = [
+            ("preview_status",       "VARCHAR(20) NOT NULL DEFAULT 'none'"),
+            ("preview_path",         "VARCHAR(500) NULL"),
+            ("preview_storage",      "VARCHAR(10) NULL"),
+            ("preview_error",        "TEXT NULL"),
+            ("preview_meta",         "JSON NULL"),
+            ("preview_generated_at", "DATETIME NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in f3_asset_alter:
+                if col not in cols_f3:
+                    print(f"[auto-migrate] assets.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE assets ADD COLUMN {col} {ddl}"))
+    if "storage_volumes" in insp_f3.get_table_names():
+        sv_cols = {c["name"] for c in insp_f3.get_columns("storage_volumes")}
+        if "auto_preview" not in sv_cols:
+            print("[auto-migrate] storage_volumes.auto_preview mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE storage_volumes ADD COLUMN auto_preview BOOLEAN NOT NULL DEFAULT 0"))
+
 
 def _backfill_resource_assignments():
     """v3.5.0-alpha.111 — Backfill JobResourceAssignment per booking

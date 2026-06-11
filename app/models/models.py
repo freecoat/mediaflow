@@ -3203,6 +3203,16 @@ class Asset(Base):
     # Qui = proposta dell'auto-match, l'operatore conferma/corregge.
     matched_deliverable_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("job_deliverables.id"), nullable=True, index=True)
+    # ── F3 (spec 2026-06-11) — preview QC proxy ──
+    # Proxy 1080p generato dall'agent in facility. Stati: none|queued|generating|ready|failed.
+    # preview_meta: {start_tc, fps, duration_sec, burned_tc: bool}
+    preview_status: Mapped[str] = mapped_column(String(20), default="none",
+                                                server_default="none")
+    preview_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    preview_storage: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # local|s3
+    preview_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    preview_meta: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    preview_generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     job: Mapped[Optional["Job"]] = relationship(back_populates="assets")
     uploaded_by_user: Mapped["User"] = relationship(back_populates="assets")
     tags: Mapped[List["Tag"]] = relationship(secondary="asset_tags")
@@ -3462,6 +3472,9 @@ class StorageVolume(Base):
     free_gb: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    # F3 (spec 2026-06-11) — abilita generazione preview automatica su ingest
+    auto_preview: Mapped[bool] = mapped_column(Boolean, default=False,
+                                               server_default="0")
 
 
 class AgentNode(Base):
