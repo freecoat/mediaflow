@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.213 — F3: Preview QC (11 giu 2026)
+
+Terza fase asset registry: **proxy di preview** generato dall'agent in facility e riprodotto nel **modal QC** — guardi il contenuto e logghi gli errori per timecode nello stesso posto. Subagent-driven (8 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-11-f3-preview-qc*`.
+
+- **Agent** (`agent/preview.py`): ffmpeg → proxy 1080p H.264 CRF 20 (max 6 Mbps, AAC stereo) con **TC burn-in** (timecode da ffprobe, fallback 00:00:00:00; retry senza burn se la build ffmpeg manca di drawtext) + **watermark** "PREVIEW - QC ONLY - {tenant}" (escaping drawtext completo). Guard binari mancanti con errore chiaro; retry upload 3 tentativi; stderr UTF-8 (no crash cp1252 Windows).
+- **Upload**: senza S3 l'agent streama al server (`PUT /agent-api/jobs/{id}/preview-upload`, scrittura atomica `.part` unico per richiesta, cap `PREVIEW_MAX_GB` default 20). Con S3 configurato (`.env` `PREVIEW_S3_*`) il server mette un **presigned PUT** nel payload → l'agent carica diretto (key sempre derivata server-side, IDOR-safe).
+- **Modello**: `Asset` += `preview_status/path/storage/error/meta/generated_at`; `StorageVolume` += `auto_preview`. Auto-migrate al boot.
+- **Service** (`app/services/asset_preview.py`): `enqueue_preview` idempotente (no doppio job pending), esiti `apply_preview_result/failure` — path locale SOLO deterministico (`local_path_for`), mai dall'agent (anti path-traversal); modalità dal payload server-side, non dal result.
+- **Endpoint player** (`/qc/api/assets/{id}/preview[/status|/generate]`): gate read/write identici agli altri endpoint QC; local → `FileResponse` con Range (scrub); s3 → 302 presigned GET (503 se bucket rimosso).
+- **Trigger**: bottone "🎬 Genera preview" nel modal QC + **auto alla conferma** proposta se `StorageVolume.auto_preview` (checkbox nei modal volume `/storage`).
+- **UI modal QC** (componente condiviso `qc_modal.html`): player sopra il log eventi, poll 4s durante la generazione, Rigenera con cache-bust, meta TC start/fps/burned. **Bottone "📍 TC"**: tempo corrente del player + TC start → compila il campo timecode del form errori.
+- **+41 test (576 totali)**. E2E `tools/_e2e_f3.py` (clip sintetica ffmpeg + agent vero, 13 check — SKIP su macchine senza ffmpeg). Browser smoke: modal QC con CTA preview, generate 400 gestito su asset legacy senza rel_path, bottone TC presente, 0 errori console spurî.
+- **Nota**: ffmpeg/ffprobe richiesti sull'agent in facility; senza, il job preview fallisce con messaggio chiaro.
+
 ## v3.5.0-alpha.172.212 — Storage: browse via agent + installer ZIP (11 giu 2026)
 
 Due quality-of-life sul registro asset (richieste Matteo): niente più percorsi digitati a mano, niente più install agent manuale. Spec `docs/superpowers/specs/2026-06-11-storage-browse-agent-zip-design.md`.

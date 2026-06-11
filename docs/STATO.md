@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.212** — 11 giugno 2026 — Storage: browse via agent + installer ZIP
+**v3.5.0-alpha.172.213** — 11 giugno 2026 — F3: Preview QC
+
+### α.172.213 ✅ (F3 preview QC — 11 giu, subagent-driven, sessione remota)
+- **Proxy preview nel modal QC**: agent genera 1080p H.264 con TC burn-in + watermark (ffmpeg in facility), upload streaming al server (o S3 presigned), player nel modal QC condiviso con bottone **📍 TC** che compila il timecode del form errori dal tempo del player.
+- Flusso: "🎬 Genera preview" (o auto alla conferma se `volume.auto_preview`) → job `preview` → agent → `PUT /agent-api/jobs/{id}/preview-upload` → result → `Asset.preview_status=ready` → `GET /qc/api/assets/{id}/preview` (Range/302).
+- Hardening da review: path locale solo deterministico, modalità dal payload server, key S3 server-derived, .part unico per richiesta, escaping drawtext, retry upload, preview_error senza path interni.
+- **576 test (+41)**. E2E `tools/_e2e_f3.py` 13 check (SKIP senza ffmpeg — su questa macchina ffmpeg assente). Browser smoke modal QC verde.
+
+**Prossimo / PENDENTE**: Matteo restart :8000 + smoke con agent in facility (ffmpeg presente): conferma proposta con auto_preview / Genera preview dal modal QC → player + 📍 TC. Backlog F3: refresh presigned PUT scaduto, retention/purge preview, player su /storage e mobile, thumbnails scrub, HLS.
 
 ### α.172.212 ✅ (browse + installer ZIP — 11 giu, sessione remota)
 - **Browse via agent**: job `browse` (agent lista dir del volume, traversal-guard, cap 500). UI modal file-browser con breadcrumb+poll: "📂 Sfoglia" su register-path (pick file → rel_path) e "📂 Aggiungi" su watch dirs (modifica volume). `GET /storage/api/jobs/{id}` nuovo per il poll.
