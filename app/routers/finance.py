@@ -3140,3 +3140,17 @@ async def sal_timeline(
     if year is None:
         year = date.today().year
     return sal_metrics.timeline_metrics(db, year=year, granularity=granularity)
+
+
+@router.get("/api/sal/matrix", dependencies=[RequireViewFinance])
+async def sal_matrix(
+    year: Optional[int] = None,
+    granularity: str = "month",
+    db: Session = Depends(get_db),
+):
+    """Calendario SAL: righe progetti × colonne mesi/trimestri, cella = %
+    cumulativa a fine periodo (lavorate cumulate / quotate totali)."""
+    from app.services import sal_metrics
+    if year is None:
+        year = date.today().year
+    return sal_metrics.matrix_metrics(db, year=year, granularity=granularity)

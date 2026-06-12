@@ -337,6 +337,19 @@ def test_timeline_endpoint(client_admin):
     assert len(body["periods"]) == 12
 
 
+# ── GET /finance/api/sal/matrix (calendario progetti × periodi) ──────────────
+
+def test_matrix_endpoint(client_admin):
+    r = client_admin.get("/finance/api/sal/matrix?year=2026&granularity=month")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["year"] == 2026
+    assert len(body["labels"]) == 12
+    assert "projects" in body and "total" in body
+    r2 = client_admin.get("/finance/api/sal/matrix?year=2026&granularity=quarter")
+    assert len(r2.json()["labels"]) == 4
+
+
 # ── GET /finance/sal (pagina) ─────────────────────────────────────────────────
 
 def test_sal_page_200(client_admin):

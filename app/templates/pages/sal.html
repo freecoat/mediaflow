@@ -69,41 +69,31 @@
     </div>
   </div>
 
-  <!-- ── Pane: Temporale ───────────────────────────────────────── -->
+  <!-- ── Pane: Temporale (calendario progetti × periodi) ────────── -->
   <div id="pane-timeline" style="display:none;">
     <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:14px;">
       <div class="form-group" style="min-width:120px;">
         <label class="form-label" style="font-size:11px;">Anno</label>
-        <select class="form-select" id="sal-tl-year" onchange="loadSalTimeline()"></select>
+        <select class="form-select" id="sal-tl-year" onchange="loadSalMatrix()"></select>
       </div>
       <div class="form-group" style="padding-bottom:8px;">
         <label class="form-label" style="font-size:11px;">Granularità</label>
         <div style="display:flex;gap:14px;">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
-            <input type="radio" name="sal-tl-gran" value="month" checked onchange="loadSalTimeline()"> Mese
+            <input type="radio" name="sal-tl-gran" value="month" checked onchange="loadSalMatrix()"> Mese
           </label>
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
-            <input type="radio" name="sal-tl-gran" value="quarter" onchange="loadSalTimeline()"> Trimestre
+            <input type="radio" name="sal-tl-gran" value="quarter" onchange="loadSalMatrix()"> Trimestre
           </label>
         </div>
       </div>
+      <div class="form-hint" style="padding-bottom:10px;">
+        Cella = avanzamento <strong>cumulativo</strong> a fine periodo (ore lavorate cumulate / ore quotate).
+      </div>
     </div>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="min-width:120px;">Periodo</th>
-            <th style="text-align:right;">Pianificate</th>
-            <th style="text-align:right;">Lavorate</th>
-            <th style="text-align:right;">Fatturato</th>
-            <th style="min-width:180px;">% Avanzamento</th>
-          </tr>
-        </thead>
-        <tbody id="sal-timeline-tbody">
-          <tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
-        </tbody>
-      </table>
+    <div class="table-wrap" id="sal-matrix-wrap" style="overflow-x:auto;">
+      <div class="text-muted" style="text-align:center;padding:24px;">Caricamento…</div>
     </div>
   </div>
 
@@ -203,7 +193,7 @@ function switchSalTab(tab) {
   });
   if (tab === 'timeline' && !_salTimelineLoaded) {
     _salTimelineLoaded = true;
-    loadSalTimeline();
+    loadSalMatrix();
   }
 }
 
@@ -417,47 +407,78 @@ function _salPopulateYears() {
   sel.innerHTML = html;
 }
 
-async function loadSalTimeline() {
-  const tbody = document.getElementById('sal-timeline-tbody');
+function _salMatrixCell(c) {
+  // Cella calendario: % cumulativa con heat-color (indaco → pieno; rosso se >100%).
+  const pct = c.pct || 0;
+  if (pct <= 0 && (c.worked_cum || 0) <= 0) {
+    return '<td style="text-align:center;color:var(--text3);font-size:11px;">—</td>';
+  }
+  const pctInt = Math.round(pct * 100);
+  const over = pct > 1.0;
+  const alpha = Math.min(0.85, Math.max(0.08, pct * 0.7));
+  const bg = over ? 'rgba(239,68,68,' + Math.min(0.5, alpha) + ')'
+                  : 'rgba(98,114,245,' + alpha + ')';
+  const fg = (pct >= 0.55 || over) ? '#fff' : 'var(--text)';
+  const title = _salFmtHours(c.worked_cum) + ' cumulate';
+  return '<td style="text-align:center;background:' + bg + ';color:' + fg + ';' +
+    'font-size:11px;font-weight:600;min-width:52px;" title="' + escapeHtml(title) + '">' +
+    pctInt + '%</td>';
+}
+
+async function loadSalMatrix() {
+  const wrap = document.getElementById('sal-matrix-wrap');
   const year = document.getElementById('sal-tl-year').value;
   const granEl = document.querySelector('input[name="sal-tl-gran"]:checked');
   const gran = granEl ? granEl.value : 'month';
 
-  tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>';
+  wrap.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px;">Caricamento…</div>';
 
   let data;
   try {
-    data = await api('GET', `/finance/api/sal/timeline?year=${year}&granularity=${gran}`);
+    data = await api('GET', `/finance/api/sal/matrix?year=${year}&granularity=${gran}`);
   } catch (e) {
-    tbody.innerHTML =
-      `<tr><td colspan="5" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'timeline')}</td></tr>`;
+    wrap.innerHTML = '<div style="text-align:center;color:#ef4444;padding:24px;">Errore: '
+      + escapeHtml(e.message || 'calendario') + '</div>';
     return;
   }
 
-  const periods = data.periods || [];
-  if (!periods.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Nessun dato per il periodo</td></tr>';
+  const labels = data.labels || [];
+  const projects = data.projects || [];
+  if (!projects.length) {
+    wrap.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px;">Nessun progetto con ore quotate o lavorate.</div>';
     return;
   }
-  let html = periods.map(function(p) {
-    return `<tr>
-      <td>${escapeHtml(p.label || '')}</td>
-      <td style="text-align:right;" class="mono">${_salFmtHours(p.planned)}</td>
-      <td style="text-align:right;" class="mono">${_salFmtHours(p.worked)}</td>
-      <td style="text-align:right;" class="mono">${_salFmtEur(p.invoiced)}</td>
-      <td>${_salBar(p.pct)}</td>
-    </tr>`;
+
+  // intestazione mese corta ("01".."12") se mensile, "Q1".."Q4" se trimestre
+  const headCells = labels.map(function(l) {
+    const short = gran === 'month' ? l.slice(-2) : l;
+    return '<th style="text-align:center;font-size:11px;min-width:52px;">' + escapeHtml(short) + '</th>';
   }).join('');
 
+  let html = '<table><thead><tr>'
+    + '<th style="min-width:140px;">Cliente</th>'
+    + '<th style="min-width:200px;">Progetto</th>'
+    + '<th style="text-align:right;">Quotate</th>'
+    + headCells + '</tr></thead><tbody>';
+
+  projects.forEach(function(p) {
+    html += '<tr>'
+      + '<td style="font-size:12px;">' + escapeHtml(p.client || '—') + '</td>'
+      + '<td><strong>' + escapeHtml(p.title || '') + '</strong> '
+      + '<span class="text-muted" style="font-size:11px;">' + escapeHtml(p.code || '') + '</span></td>'
+      + '<td style="text-align:right;" class="mono">' + _salFmtHours(p.quoted) + '</td>'
+      + (p.cells || []).map(_salMatrixCell).join('')
+      + '</tr>';
+  });
+
   const tot = data.total || {};
-  html += `<tr style="font-weight:700;border-top:2px solid var(--border);">
-    <td>TOTALE</td>
-    <td style="text-align:right;" class="mono">${_salFmtHours(tot.planned)}</td>
-    <td style="text-align:right;" class="mono">${_salFmtHours(tot.worked)}</td>
-    <td style="text-align:right;" class="mono">${_salFmtEur(tot.invoiced)}</td>
-    <td>${_salBar(tot.pct)}</td>
-  </tr>`;
-  tbody.innerHTML = html;
+  html += '<tr style="font-weight:700;border-top:2px solid var(--border);">'
+    + '<td colspan="2">TOTALE</td>'
+    + '<td style="text-align:right;" class="mono">' + _salFmtHours(tot.quoted) + '</td>'
+    + (tot.cells || []).map(_salMatrixCell).join('')
+    + '</tr></tbody></table>';
+
+  wrap.innerHTML = html;
 }
 
 // ── Init ────────────────────────────────────────────────────────

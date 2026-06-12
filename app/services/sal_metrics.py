@@ -328,3 +328,106 @@ def timeline_metrics(db, *, year: int, granularity: str = "month") -> dict:
         "periods": periods,
         "total": total,
     }
+
+
+def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
+    """Calendario SAL: righe = progetti, colonne = mesi/trimestri dell'anno,
+    cella = % CUMULATIVA a fine periodo (ore lavorate cumulate, anni precedenti
+    inclusi, / ore quotate totali del progetto).
+
+    Include i progetti del tenant non cestinati con ore quotate > 0 oppure con
+    lavorato cumulato > 0 a fine anno. Riga "total" = Σ sui progetti inclusi.
+    """
+    from datetime import datetime as _dt
+    from sqlalchemy.orm import joinedload
+    from app.models import (
+        Project, Job, JobCostLine, Booking, BookingAssignment,
+        BookingStatus, BookingExecutionStatus,
+    )
+    from app.context import current_tenant_id
+
+    tid = current_tenant_id()
+    gran = (granularity or "month").strip().lower()
+    if gran not in ("month", "quarter"):
+        gran = "month"
+
+    # Cutoff di fine periodo: primo istante del periodo successivo.
+    if gran == "quarter":
+        labels = ["Q1", "Q2", "Q3", "Q4"]
+        cutoffs = [_dt(year, 4, 1), _dt(year, 7, 1), _dt(year, 10, 1),
+                   _dt(year + 1, 1, 1)]
+    else:
+        labels = [f"{year:04d}-{m:02d}" for m in range(1, 13)]
+        cutoffs = [(_dt(year, m + 1, 1) if m < 12 else _dt(year + 1, 1, 1))
+                   for m in range(1, 13)]
+
+    projects = (
+        db.query(Project)
+        .options(
+            joinedload(Project.client),
+            joinedload(Project.jobs).joinedload(Job.cost_lines),
+            joinedload(Project.jobs).joinedload(Job.bookings)
+            .joinedload(Booking.assignments)
+            .joinedload(BookingAssignment.resource),
+        )
+        .filter(Project.tenant_id == tid, Project.deleted_at.is_(None))
+        .order_by(Project.title)
+        .all()
+    )
+
+    rows = []
+    total_quoted = 0.0
+    total_cum = [0.0] * len(cutoffs)
+    for prj in projects:
+        quoted = 0.0
+        # (booking_start, ore) dei soli done non-cancelled, tutti gli anni
+        done_events: list[tuple] = []
+        for job in (prj.jobs or []):
+            dh = _daily_hours_for_job(db, job)
+            quoted += quoted_hours(job, daily_hours=dh)
+            for b in _non_cancelled_bookings(job):
+                if b.execution_status != BookingExecutionStatus.done:
+                    continue
+                sd = getattr(b, "start_datetime", None)
+                if sd is None:
+                    continue
+                h = _booking_billable_hours(b)
+                if h > 0:
+                    done_events.append((sd, h))
+
+        cum_cells = []
+        for i, cutoff in enumerate(cutoffs):
+            cum = sum(h for sd, h in done_events if sd < cutoff)
+            pct = (cum / quoted) if quoted > 0 else 0.0
+            cum_cells.append({"label": labels[i], "worked_cum": round(cum, 2),
+                              "pct": pct})
+
+        final_cum = cum_cells[-1]["worked_cum"] if cum_cells else 0.0
+        if quoted <= 0 and final_cum <= 0:
+            continue  # progetto senza quotato né lavorato: fuori dal calendario
+
+        rows.append({
+            "id": prj.id,
+            "code": prj.code,
+            "title": prj.title,
+            "client": prj.client.name if prj.client else None,
+            "quoted": round(quoted, 2),
+            "cells": cum_cells,
+        })
+        total_quoted += quoted
+        for i, c in enumerate(cum_cells):
+            total_cum[i] += c["worked_cum"]
+
+    total_cells = [
+        {"label": labels[i], "worked_cum": round(total_cum[i], 2),
+         "pct": (total_cum[i] / total_quoted) if total_quoted > 0 else 0.0}
+        for i in range(len(cutoffs))
+    ]
+
+    return {
+        "year": year,
+        "granularity": gran,
+        "labels": labels,
+        "projects": rows,
+        "total": {"quoted": round(total_quoted, 2), "cells": total_cells},
+    }

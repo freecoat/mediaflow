@@ -389,3 +389,82 @@ def test_project_metrics_pct_zero_when_quoted_zero(db):
     m = sal_metrics.project_metrics(db, prj)
     assert m["pct"] == 0.0
     assert m["job_count"] == 1
+
+
+# ── matrix_metrics (calendario progetti × periodi, % cumulativa) ─────
+
+def _done_booking(db, job, start, end):
+    from app.models import BookingExecutionStatus
+    return _booking(db, job, start=start, end=end,
+                    execution=BookingExecutionStatus.done)
+
+
+def test_matrix_cumulative_per_month(db):
+    """Cella = lavorate CUMULATE a fine mese / quotate totali.
+    Include il lavorato degli anni precedenti nel cumulativo."""
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    _jcl(db, job, unit="hr", qty=20)  # 20h quotate
+    # 2h anno precedente, 8h gennaio, 4h marzo
+    _done_booking(db, job, datetime(2025, 11, 3, 9), datetime(2025, 11, 3, 11))
+    _done_booking(db, job, datetime(2026, 1, 10, 9), datetime(2026, 1, 10, 17))
+    _done_booking(db, job, datetime(2026, 3, 5, 9), datetime(2026, 3, 5, 13))
+    db.commit(); db.refresh(prj)
+    m = sal_metrics.matrix_metrics(db, year=2026, granularity="month")
+    assert len(m["labels"]) == 12
+    row = next(p for p in m["projects"] if p["id"] == prj.id)
+    assert row["quoted"] == 20.0
+    cells = row["cells"]
+    assert cells[0]["pct"] == pytest.approx(0.5)    # gen: (2+8)/20
+    assert cells[1]["pct"] == pytest.approx(0.5)    # feb invariato
+    assert cells[2]["pct"] == pytest.approx(0.7)    # mar: +4
+    assert cells[11]["pct"] == pytest.approx(0.7)   # dic = attuale
+    assert cells[2]["worked_cum"] == pytest.approx(14.0)
+
+
+def test_matrix_quarter(db):
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    _jcl(db, job, unit="hr", qty=10)
+    _done_booking(db, job, datetime(2026, 2, 10, 9), datetime(2026, 2, 10, 14))  # 5h Q1
+    _done_booking(db, job, datetime(2026, 5, 10, 9), datetime(2026, 5, 10, 14))  # 5h Q2
+    db.commit(); db.refresh(prj)
+    m = sal_metrics.matrix_metrics(db, year=2026, granularity="quarter")
+    row = next(p for p in m["projects"] if p["id"] == prj.id)
+    assert [c["label"] for c in row["cells"]] == ["Q1", "Q2", "Q3", "Q4"]
+    assert row["cells"][0]["pct"] == pytest.approx(0.5)
+    assert row["cells"][1]["pct"] == pytest.approx(1.0)
+
+
+def test_matrix_excludes_empty_and_counts_only_done(db):
+    from app.models import BookingStatus, BookingExecutionStatus, Project
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    _jcl(db, job, unit="hr", qty=8)
+    # non-done e cancelled non contano nel cumulativo
+    _booking(db, job, start=datetime(2026, 1, 5, 9), end=datetime(2026, 1, 5, 17))
+    _booking(db, job, start=datetime(2026, 2, 5, 9), end=datetime(2026, 2, 5, 17),
+             status=BookingStatus.cancelled,
+             execution=BookingExecutionStatus.done)
+    # progetto senza quotato né lavorato → escluso dalla matrice
+    prj2 = Project(tenant_id=1, code="P-VUOTO", title="Vuoto", client_id=cli.id)
+    db.add(prj2); db.commit(); db.refresh(prj)
+    m = sal_metrics.matrix_metrics(db, year=2026, granularity="month")
+    row = next(p for p in m["projects"] if p["id"] == prj.id)
+    assert all(c["pct"] == 0.0 for c in row["cells"])
+    assert prj2.id not in {p["id"] for p in m["projects"]}
+
+
+def test_matrix_total_row(db):
+    cli, prj = _hierarchy(db)
+    j1 = _job(db, prj, cli, code="J-1")
+    j2 = _job(db, prj, cli, code="J-2")
+    _jcl(db, j1, unit="hr", qty=10)
+    _jcl(db, j2, unit="hr", qty=10)
+    _done_booking(db, j1, datetime(2026, 1, 7, 9), datetime(2026, 1, 7, 14))  # 5h
+    _done_booking(db, j2, datetime(2026, 1, 8, 9), datetime(2026, 1, 8, 14))  # 5h
+    db.commit(); db.refresh(prj)
+    m = sal_metrics.matrix_metrics(db, year=2026, granularity="month")
+    assert m["total"]["quoted"] == 20.0
+    assert m["total"]["cells"][0]["pct"] == pytest.approx(0.5)
+    assert m["total"]["cells"][0]["worked_cum"] == pytest.approx(10.0)
