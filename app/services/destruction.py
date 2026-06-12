@@ -133,7 +133,8 @@ def approve(
         ValueError: stato ≠ requested, o user_id == requested_by_user_id.
     """
     _check_transition(req, "approved")
-    if user_id is not None and user_id == req.requested_by_user_id:
+    # user_id None NON bypassa la doppia conferma: serve un approvatore reale
+    if user_id is None or user_id == req.requested_by_user_id:
         raise ValueError(
             "Doppia conferma: serve un approvatore diverso dal richiedente."
         )
@@ -316,10 +317,12 @@ def transition(
     new_status: str,
     *,
     user_id: Optional[int] = None,
+    is_admin: bool = False,
 ) -> DestructionRequest:
     """Transizione generica — supporta SOLO 'cancelled' (da requested/approved).
 
     approve/reject/execute hanno funzioni dedicate con le loro invarianti.
+    Spec: cancelled SOLO dal richiedente o da un admin (is_admin dal router).
 
     Raises:
         ValueError: transizione non permessa, o stato gestito da funzione dedicata.
@@ -329,6 +332,12 @@ def transition(
         raise ValueError(
             f"Stato {new_status!r}: usare la funzione dedicata "
             "(approve/reject/execute_manual)."
+        )
+    if (not is_admin
+            and req.requested_by_user_id is not None
+            and user_id != req.requested_by_user_id):
+        raise ValueError(
+            "Annullamento consentito solo al richiedente originale o a un admin."
         )
     req.status = "cancelled"
     req.closed_at = now_utc()
@@ -350,6 +359,8 @@ def _finalize(
     content_state: membership tape ATTIVE presenti → archived_only (copie
     residue su LTO), altrimenti deleted. Il record Asset resta (storia TPN).
     """
+    if req.status == "done":
+        return req  # idempotente: niente doppio movimento su race manual/verify
     asset = db.get(Asset, req.asset_id)
 
     mv = AssetMovement(
