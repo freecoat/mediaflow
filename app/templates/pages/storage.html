@@ -38,6 +38,10 @@
             style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
       🚚 Transfer
     </button>
+    <button class="tab-btn" id="tab-map" onclick="switchStorageTab('map')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      🗺 Mappa
+    </button>
   </div>
 </div>
 
@@ -215,6 +219,79 @@
         </thead>
         <tbody id="transfersBody">
           <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pane: Mappa ──────────────────────────────────────────── -->
+  <div id="pane-map" style="display:none;">
+
+    <!-- Card riepilogo report -->
+    <div id="mapReportCards"
+         style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:18px;">
+      <div class="text-muted" style="padding:24px;">Caricamento report…</div>
+    </div>
+
+    <!-- Filtri -->
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <label class="text-sm" style="display:flex;align-items:center;gap:6px;">Stato:
+        <select class="form-select" id="map-filter-state" onchange="onMapFilterChange()" style="max-width:170px;">
+          <option value="">Tutti</option>
+          <option value="online">Online</option>
+          <option value="archived_only">Solo archivio</option>
+          <option value="deleted">Distrutto</option>
+        </select>
+      </label>
+      <label class="text-sm" style="display:flex;align-items:center;gap:6px;">Volume:
+        <select class="form-select" id="map-filter-volume" onchange="onMapFilterChange()" style="max-width:180px;">
+          <option value="">Tutti</option>
+        </select>
+      </label>
+      <label class="text-sm" style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;">
+        <input class="form-input" id="map-filter-q" placeholder="🔎 Cerca file…"
+               oninput="onMapSearchInput()" style="flex:1;">
+      </label>
+    </div>
+
+    <!-- Tabella mappa -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Stato</th>
+            <th>Volume</th>
+            <th>Tape(s)</th>
+            <th class="text-center">Preview</th>
+            <th class="text-right">Transfer</th>
+            <th>Deliverable</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="mapBody">
+          <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="mapTruncated" class="form-hint" style="margin-top:6px;display:none;color:var(--amber,#fbbf24);"></div>
+
+    <!-- Distruzioni in corso -->
+    <h3 style="margin:22px 0 10px;font-size:14px;font-weight:600;">🗑 Distruzioni in corso</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Asset</th>
+            <th>Stato</th>
+            <th>Motivo</th>
+            <th>Richiesto da</th>
+            <th>Approvato da</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="destructionsBody">
+          <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -530,13 +607,39 @@
   </div>
 </div>
 
+<!-- ── Modal: Richiedi distruzione ──────────────────────────────── -->
+<div class="modal-overlay" id="modal-request-destruction">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="rd-title">Richiedi distruzione asset</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-request-destruction')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rd-asset-id">
+      <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--text2);">
+        ⚠ La distruzione richiede una <strong>seconda approvazione</strong> (TPN). Il record asset
+        resta in archivio storico anche dopo l'esecuzione.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Motivo *</label>
+        <textarea class="form-input" id="rd-reason" rows="3"
+                  placeholder="Motivazione della distruzione (audit obbligatorio)…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-request-destruction')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitDestruction()">Richiedi distruzione</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────
 let _storageVolumes = [];
 let _currentTab = 'proposals';
 
 // ── Tab switching ─────────────────────────────────────────────────
-const _STORAGE_TABS = ['proposals', 'volumes', 'agents', 'jobs', 'tickets', 'transfers'];
+const _STORAGE_TABS = ['proposals', 'volumes', 'agents', 'jobs', 'tickets', 'transfers', 'map'];
 
 function switchStorageTab(tab) {
   _currentTab = tab;
@@ -622,6 +725,8 @@ async function loadVolumes() {
     _storageVolumes = data || [];
     // Aggiorna select nel modal register-path
     _populateVolumeSelect();
+    // Aggiorna filtro volume nella mappa
+    _populateMapVolumeFilter();
     if (!data || !data.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessun volume configurato.</td></tr>';
       return;
@@ -1440,6 +1545,314 @@ async function cancelTransfer(id) {
   }
 }
 
+// ── Mappa: dove vive ogni asset (F6) ───────────────────────────────
+
+const MAP_STATE_META = {
+  online:        {label: 'Online',        color: '#22c55e', bg: 'rgba(34,197,94,.16)',  strike: false},
+  archived_only: {label: 'Solo archivio', color: '#fbbf24', bg: 'rgba(251,191,36,.16)', strike: false},
+  deleted:       {label: 'Distrutto',     color: '#9ca3af', bg: 'rgba(156,163,175,.16)', strike: true}
+};
+
+const DESTRUCTION_STATUS_LABEL = {
+  requested: 'Richiesta', approved: 'Approvata',
+  done: 'Fatto', rejected: 'Rifiutata', cancelled: 'Annullata'
+};
+const DESTRUCTION_STATUS_COLOR = {
+  requested: '#fbbf24', approved: '#6272f5',
+  done: '#22c55e', rejected: '#ef4444', cancelled: '#9ca3af'
+};
+const DESTRUCTION_STATUS_BG = {
+  requested: 'rgba(251,191,36,.16)', approved: 'rgba(98,114,245,.16)',
+  done: 'rgba(34,197,94,.16)', rejected: 'rgba(239,68,68,.16)',
+  cancelled: 'rgba(156,163,175,.16)'
+};
+
+let _mapSearchTimer = null;
+
+function _fmtBytesGb(bytes) {
+  if (bytes == null) return '—';
+  return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
+async function loadStorageReport() {
+  const wrap = document.getElementById('mapReportCards');
+  let r;
+  try {
+    r = await api('GET', '/storage/api/storage-report');
+  } catch (e) {
+    wrap.innerHTML = '<div style="color:var(--rose);padding:16px;">Errore caricamento report: ' + escapeHtml(e.message) + '</div>';
+    return;
+  }
+  const cards = [];
+
+  // 1) Volumi con barra libero/totale
+  const vols = (r.volumes || []).map(function(v) {
+    const free = v.free_gb, tot = v.total_gb;
+    let bar = '';
+    if (free != null && tot != null && tot > 0) {
+      const usedPct = Math.max(0, Math.min(100, Math.round((1 - free / tot) * 100)));
+      bar = '<div style="height:6px;background:var(--bg-2);border-radius:4px;overflow:hidden;margin-top:4px;">'
+        + '<div style="height:100%;width:' + usedPct + '%;background:var(--indigo2);"></div></div>'
+        + '<div class="text-muted" style="font-size:11px;margin-top:2px;">'
+        + escapeHtml(free.toFixed(1)) + ' / ' + escapeHtml(tot.toFixed(1)) + ' GB liberi</div>';
+    } else {
+      bar = '<div class="text-muted" style="font-size:11px;margin-top:2px;">spazio n/d</div>';
+    }
+    return '<div style="margin-bottom:8px;"><div style="font-size:12px;font-weight:600;">'
+      + escapeHtml(v.name) + ' <span class="text-muted" style="font-weight:400;">· '
+      + v.asset_count + ' file</span></div>' + bar + '</div>';
+  }).join('');
+  cards.push(_mapCard('💾 Volumi', vols || '<span class="text-muted">Nessun volume.</span>'));
+
+  // 2) Tape
+  const tapes = r.tapes || [];
+  const tapeFiles = tapes.reduce(function(s, t) { return s + (t.file_count || 0); }, 0);
+  cards.push(_mapCard('📼 Tape LTO',
+    '<div style="font-size:24px;font-weight:700;">' + tapes.length + '</div>'
+    + '<div class="text-muted" style="font-size:12px;">' + tapeFiles + ' file su tape</div>'));
+
+  // 3) Stati contenuto
+  const cs = r.content_states || {};
+  const csRows = Object.keys(MAP_STATE_META).map(function(k) {
+    const meta = MAP_STATE_META[k];
+    return '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+      + '<span style="color:' + meta.color + ';">' + escapeHtml(meta.label) + '</span>'
+      + '<strong>' + (cs[k] || 0) + '</strong></div>';
+  }).join('');
+  cards.push(_mapCard('📊 Stati contenuto', csRows));
+
+  // 4) Pendenti
+  const p = r.pending || {};
+  const pendRows = [
+    ['Proposte', p.proposals], ['Ticket aperti', p.tickets_open],
+    ['Transfer aperti', p.transfers_open], ['Distruzioni aperte', p.destructions_open]
+  ].map(function(row) {
+    return '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">'
+      + '<span class="text-muted">' + escapeHtml(row[0]) + '</span>'
+      + '<strong>' + (row[1] || 0) + '</strong></div>';
+  }).join('');
+  cards.push(_mapCard('⏳ In coda', pendRows));
+
+  // 5) Orfane
+  cards.push(_mapCard('🧩 Membership orfane',
+    '<div style="font-size:24px;font-weight:700;">' + (r.orphan_memberships || 0) + '</div>'
+    + '<div class="text-muted" style="font-size:12px;">tape senza asset collegato</div>'));
+
+  // 6) Preview
+  const prev = r.previews || {};
+  cards.push(_mapCard('🎬 Preview locali',
+    '<div style="font-size:24px;font-weight:700;">' + (prev.count || 0) + '</div>'
+    + '<div class="text-muted" style="font-size:12px;">' + _fmtBytesGb(prev.bytes_total) + ' su disco</div>'));
+
+  wrap.innerHTML = cards.join('');
+}
+
+function _mapCard(title, bodyHtml) {
+  return '<div class="card" style="margin:0;padding:14px 16px;">'
+    + '<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">'
+    + escapeHtml(title) + '</div>' + bodyHtml + '</div>';
+}
+
+function _populateMapVolumeFilter() {
+  const sel = document.getElementById('map-filter-volume');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Tutti</option>'
+    + _storageVolumes.map(function(v) {
+        return '<option value="' + v.id + '">' + escapeHtml(v.name) + '</option>';
+      }).join('');
+  if (current) sel.value = current;
+}
+
+function onMapFilterChange() {
+  loadAssetMap();
+}
+
+function onMapSearchInput() {
+  if (_mapSearchTimer) clearTimeout(_mapSearchTimer);
+  _mapSearchTimer = setTimeout(loadAssetMap, 300);
+}
+
+async function loadAssetMap() {
+  const tbody = document.getElementById('mapBody');
+  const truncEl = document.getElementById('mapTruncated');
+  const params = new URLSearchParams();
+  const fState = document.getElementById('map-filter-state').value;
+  const fVol = document.getElementById('map-filter-volume').value;
+  const fQ = document.getElementById('map-filter-q').value.trim();
+  if (fState) params.set('content_state', fState);
+  if (fVol) params.set('volume_id', fVol);
+  if (fQ) params.set('q', fQ);
+  try {
+    const qs = params.toString();
+    const data = await api('GET', '/storage/api/asset-map' + (qs ? '?' + qs : ''));
+    const items = (data && data.items) || [];
+    if (!items.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessun asset.</td></tr>';
+      truncEl.style.display = 'none';
+      return;
+    }
+    tbody.innerHTML = items.map(function(it) {
+      const meta = MAP_STATE_META[it.content_state] || {label: it.content_state, color: '#9ca3af', bg: 'rgba(156,163,175,.16)', strike: false};
+      const badge = '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;'
+        + 'background:' + meta.bg + ';color:' + meta.color + ';">' + escapeHtml(meta.label) + '</span>';
+      const nameStyle = meta.strike ? 'text-decoration:line-through;color:var(--text3);' : '';
+      const fileCell = '<strong style="' + nameStyle + '">' + escapeHtml(it.filename || '—') + '</strong>';
+      const volLabel = it.volume ? escapeHtml(it.volume.name) : '<span class="text-muted">—</span>';
+      const tapeLabel = (it.tapes && it.tapes.length)
+        ? it.tapes.map(function(t) { return escapeHtml(t.label || ('#' + t.id)); }).join(', ')
+        : '<span class="text-muted">—</span>';
+      const previewCell = it.preview_status === 'ready'
+        ? '<span style="color:var(--green);">✓</span>' : '<span class="text-muted">—</span>';
+      const transferCell = it.transfer_count || 0;
+      const delivLabel = it.deliverable ? escapeHtml(it.deliverable.name || ('#' + it.deliverable.id)) : '<span class="text-muted">—</span>';
+      let action;
+      if (it.destruction_pending) {
+        action = '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;'
+          + 'background:rgba(251,191,36,.16);color:#fbbf24;">🗑 richiesta</span>';
+      } else {
+        action = '<button class="btn btn-ghost btn-sm" style="color:var(--rose);" '
+          + 'data-asset-id="' + it.id + '" data-asset-name="' + escapeHtml(it.filename || '') + '" '
+          + 'onclick="requestDestruction(this.dataset.assetId, this.dataset.assetName)">🗑 Richiedi distruzione</button>';
+      }
+      return '<tr>'
+        + '<td>' + fileCell + '</td>'
+        + '<td>' + badge + '</td>'
+        + '<td style="font-size:12px;">' + volLabel + '</td>'
+        + '<td style="font-size:12px;">' + tapeLabel + '</td>'
+        + '<td class="text-center">' + previewCell + '</td>'
+        + '<td class="text-right mono">' + transferCell + '</td>'
+        + '<td style="font-size:12px;">' + delivLabel + '</td>'
+        + '<td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">' + action + '</td>'
+        + '</tr>';
+    }).join('');
+    if (data.truncated) {
+      truncEl.textContent = '⚠ Lista troncata a 500 asset. Restringi con i filtri.';
+      truncEl.style.display = '';
+    } else {
+      truncEl.style.display = 'none';
+    }
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento mappa.</td></tr>';
+    truncEl.style.display = 'none';
+    toast('Errore caricamento mappa: ' + e.message, 'error');
+  }
+}
+
+async function loadDestructions() {
+  const tbody = document.getElementById('destructionsBody');
+  try {
+    // Una sola fetch, filtro client su requested/approved (gli "in corso")
+    const data = await api('GET', '/storage/api/destructions') || [];
+    const open = data.filter(function(d) {
+      return d.status === 'requested' || d.status === 'approved';
+    });
+    if (!open.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Nessuna distruzione in corso.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = open.map(function(d) {
+      const assetLabel = (d.asset && d.asset.filename)
+        ? '<strong>' + escapeHtml(d.asset.filename) + '</strong>'
+        : '<span class="text-muted">Asset #' + (d.asset ? d.asset.id : '?') + '</span>';
+      const sc = DESTRUCTION_STATUS_COLOR[d.status] || '#9ca3af';
+      const sbg = DESTRUCTION_STATUS_BG[d.status] || 'rgba(156,163,175,.16)';
+      const badge = '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;'
+        + 'background:' + sbg + ';color:' + sc + ';">'
+        + escapeHtml(DESTRUCTION_STATUS_LABEL[d.status] || d.status) + '</span>';
+      const reason = d.reason
+        ? '<span style="font-size:12px;max-width:240px;display:inline-block;">' + escapeHtml(d.reason) + '</span>'
+        : '<span class="text-muted">—</span>';
+      let actions = '';
+      if (d.status === 'requested') {
+        actions = '<button class="btn btn-ghost btn-sm" style="color:var(--green);" data-d-id="' + d.id + '" '
+          + 'onclick="destructionAction(this.dataset.dId, \'approve\')">✔ Approva</button> '
+          + '<button class="btn btn-ghost btn-sm" style="color:var(--rose);" data-d-id="' + d.id + '" '
+          + 'onclick="destructionAction(this.dataset.dId, \'reject\')">✕ Rifiuta</button> '
+          + '<button class="btn btn-ghost btn-sm" data-d-id="' + d.id + '" '
+          + 'onclick="destructionAction(this.dataset.dId, \'cancel\')">Annulla</button>';
+      } else if (d.status === 'approved') {
+        actions = '<button class="btn btn-ghost btn-sm" style="color:var(--green);" data-d-id="' + d.id + '" '
+          + 'onclick="destructionAction(this.dataset.dId, \'execute-manual\')">✅ Fatto a mano</button> '
+          + '<button class="btn btn-ghost btn-sm" data-d-id="' + d.id + '" '
+          + 'onclick="destructionAction(this.dataset.dId, \'enqueue-verify\')">🤖 Verifica agent</button> '
+          + '<button class="btn btn-ghost btn-sm" data-d-id="' + d.id + '" '
+          + 'onclick="destructionAction(this.dataset.dId, \'cancel\')">Annulla</button>';
+      }
+      return '<tr>'
+        + '<td>' + assetLabel + '</td>'
+        + '<td>' + badge + '</td>'
+        + '<td>' + reason + '</td>'
+        + '<td style="font-size:12px;">' + escapeHtml(d.requested_by || '—') + '</td>'
+        + '<td style="font-size:12px;">' + escapeHtml(d.approved_by || '—') + '</td>'
+        + '<td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">' + actions + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento distruzioni.</td></tr>';
+    toast('Errore caricamento distruzioni: ' + e.message, 'error');
+  }
+}
+
+function requestDestruction(assetId, assetName) {
+  document.getElementById('rd-asset-id').value = assetId;
+  document.getElementById('rd-reason').value = '';
+  document.getElementById('rd-title').textContent =
+    'Richiedi distruzione: ' + (assetName || ('Asset #' + assetId));
+  openModal('modal-request-destruction');
+}
+
+async function submitDestruction() {
+  const assetId = document.getElementById('rd-asset-id').value;
+  const reason = document.getElementById('rd-reason').value.trim();
+  if (!assetId) return;
+  if (!reason) { alert('Il motivo è obbligatorio'); return; }
+  const fd = new FormData();
+  fd.append('asset_id', assetId);
+  fd.append('reason', reason);
+  try {
+    await api('POST', '/storage/api/destructions', fd);
+    closeModal('modal-request-destruction');
+    toast('Distruzione richiesta — serve approvazione', 'success');
+    loadAssetMap();
+    loadDestructions();
+  } catch (e) {
+    toast('Errore: ' + e.message, 'error');
+  }
+}
+
+async function destructionAction(id, action) {
+  const confirms = {
+    'reject': 'Rifiutare questa richiesta di distruzione?',
+    'execute-manual': 'Confermi che la distruzione è stata eseguita a mano? L\'operazione è irreversibile.',
+    'cancel': 'Annullare questa richiesta di distruzione?'
+  };
+  if (confirms[action] && !confirm(confirms[action])) return;
+  let path, fd = null;
+  if (action === 'cancel') {
+    path = '/storage/api/destructions/' + id + '/transition';
+    fd = new FormData();
+    fd.append('status', 'cancelled');
+  } else {
+    path = '/storage/api/destructions/' + id + '/' + action;
+  }
+  try {
+    await api('POST', path, fd);
+    const msg = {
+      'approve': 'Distruzione approvata',
+      'reject': 'Richiesta rifiutata',
+      'execute-manual': 'Distruzione eseguita',
+      'enqueue-verify': 'Verifica agent accodata',
+      'cancel': 'Richiesta annullata'
+    }[action] || 'Aggiornato';
+    toast(msg, 'success');
+    loadDestructions();
+    loadAssetMap();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
   loadProposals();
@@ -1449,6 +1862,9 @@ document.addEventListener('DOMContentLoaded', function() {
   loadTickets();
   loadTransferTools();
   loadTransfers();
+  loadStorageReport();
+  loadAssetMap();
+  loadDestructions();
 });
 </script>
 
