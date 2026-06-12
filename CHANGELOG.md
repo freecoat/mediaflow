@@ -1,5 +1,9 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.218 — SAL: tab Temporale a calendario (12 giu 2026)
+
+Il tab Temporale del SAL diventa un **calendario progetti × periodi** (chiarimento Matteo sulla .217): righe = progetti, colonne = mesi o trimestri dell'anno, **cella = % di avanzamento CUMULATIVA a fine periodo** (ore lavorate cumulate — anni precedenti inclusi — / ore quotate totali del progetto). Heat-color indaco proporzionale alla %, rosso oltre il 100%; tooltip con le ore cumulate; riga TOTALE. Endpoint nuovo `GET /finance/api/sal/matrix` (`matrix_metrics` nel service, batch); il vecchio `/timeline` aggregato resta per compatibilità. +5 test (795 totali), smoke browser verde.
+
 ## v3.5.0-alpha.172.217 — SAL: Stato Avanzamento Lavori (12 giu 2026)
 
 Nuova vista finanza read-only `/finance/sal` — **Stato Avanzamento Lavori**: a che punto sono i progetti, ore quotate vs pianificate vs lavorate, chi sfora il budget ore. Aggrega l'esistente (Job/JobCostLine/Booking/Invoice), nessun modello nuovo. Subagent-driven (4 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-12-sal-stato-avanzamento*`.

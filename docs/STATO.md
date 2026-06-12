@@ -8,7 +8,7 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.217** — 12 giugno 2026 — SAL: Stato Avanzamento Lavori
+**v3.5.0-alpha.172.218** — 12 giugno 2026 — SAL con tab Temporale a calendario (% cumulativa per progetto)
 
 ### α.172.217 ✅ (SAL — Stato Avanzamento Lavori, vista finanza — 12 giu, subagent-driven, sessione remota)
 - **Pagina `/finance/sal`** read-only (gate view_finance): % avanzamento = ore lavorate/quotate. Service `sal_metrics.py` (ore quotate solo voci-tempo giorni→ore, pianificate/lavorate da booking, breakdown reparto, allarme per-job 🔴>quotate/🟠≥90%).
