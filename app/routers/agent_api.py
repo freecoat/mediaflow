@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import app.services.asset_preview as asset_preview
+import app.services.transfer_orders as transfer_orders
 from app.database import get_db
 from app.models.models import (
     AgentNode, AgentJob, AgentJobType, StorageVolume, AssetProposedState, Asset,
@@ -97,6 +98,8 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
         fail_job(db, job, error or "errore agent non specificato")
         if job.type == AgentJobType.preview:
             asset_preview.apply_preview_failure(db, job, error or "")
+        if job.type == AgentJobType.transfer:
+            transfer_orders.apply_transfer_failure(db, job, error or "")
         return None
     complete_job(db, job, result or {})
     if status != "done" or not result:
@@ -129,6 +132,8 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
             created.append(asset)
         db.flush()
         return created[0] if created else None
+    if job.type == AgentJobType.transfer:
+        return transfer_orders.apply_transfer_result(db, job, result)
     return None
 
 

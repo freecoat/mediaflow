@@ -14,9 +14,10 @@ from agent.client import ClaqoClient
 from agent.browse import list_dir
 from agent.preview import generate_preview, upload_preview
 from agent.probe import build_probe_result, xxhash_file
+from agent.transfer import run_transfer
 from agent.watch import WatchState, scan_volume
 
-CAPABILITIES = ["probe", "checksum", "scan", "browse", "preview"]
+CAPABILITIES = ["probe", "checksum", "scan", "browse", "preview", "transfer"]
 
 
 def volume_stats(volumes: list[dict]) -> list[dict]:
@@ -35,6 +36,15 @@ def volume_stats(volumes: list[dict]) -> list[dict]:
 def handle_job(job: dict, volumes_by_id: dict, watch_states: dict,
                *, client=None) -> tuple[str, dict | None, str | None]:
     jtype, payload = job["type"], job.get("payload") or {}
+
+    # Il ramo transfer gestisce i propri volume_id file-per-file:
+    # non ha un volume_id top-level nel payload, quindi deve precedere il guard vol.
+    if jtype == "transfer":
+        try:
+            return "done", run_transfer(payload, volumes_by_id), None
+        except Exception as e:
+            return "failed", None, f"{type(e).__name__}: {e}"
+
     vol = volumes_by_id.get(int(payload.get("volume_id") or 0))
     if vol is None:
         return "failed", None, f"volume_id {payload.get('volume_id')} sconosciuto all'agent"
