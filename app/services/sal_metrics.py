@@ -249,11 +249,14 @@ def timeline_metrics(db, *, year: int, granularity: str = "month") -> dict:
     invoiced_by_month = {m: 0.0 for m in range(1, 13)}
 
     # Booking del tenant nell'anno (start_datetime), non-cancelled.
+    # Filtro anno in SQL: evita di scansionare tutti gli anni del tenant.
+    from sqlalchemy import extract
     bookings = (
         db.query(Booking)
         .filter(
             Booking.tenant_id == tid,
             Booking.status != BookingStatus.cancelled,
+            extract("year", Booking.start_datetime) == year,
         )
         .all()
     )
@@ -276,6 +279,7 @@ def timeline_metrics(db, *, year: int, granularity: str = "month") -> dict:
             Invoice.tenant_id == tid,
             Invoice.status != InvoiceStatus.draft,
             Invoice.status != InvoiceStatus.cancelled,
+            extract("year", Invoice.issue_date) == year,
         )
         .all()
     )
