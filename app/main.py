@@ -141,6 +141,8 @@ def _auto_migrate_columns():
             ("lockdown_at", "DATETIME NULL"),
             ("lockdown_by", "INTEGER NULL"),
             ("lockdown_reason", "VARCHAR(255) NULL"),
+            # v3.5.0-alpha.172.212 (F6 Task 3) — TPN transfer whitelist
+            ("transfer_destination_whitelist", "TEXT NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in lockdown_alter:

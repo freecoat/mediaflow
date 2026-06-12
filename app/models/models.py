@@ -683,6 +683,11 @@ class Tenant(Base):
     lockdown_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     lockdown_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # user.id
     lockdown_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # v3.5.0-alpha.172.212 (F6 Task 3) — TPN gate transfer whitelist.
+    # Lista di stringhe (sottostringa case-insensitive). Se master=LOCKDOWN e
+    # questa lista non è None/vuota, il transfer è consentito solo se
+    # destination contiene almeno una voce. Vuota/None = blocco totale.
+    transfer_destination_whitelist: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # Stato
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)

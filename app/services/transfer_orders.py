@@ -18,10 +18,12 @@ from app.models.models import (
     Asset,
     AssetMovement,
     AssetMovementType,
+    Tenant,
     TransferOrder,
 )
 from app.services.agent_queue import enqueue_job
 from app.services.clock import now_utc
+from app.services.egress_guard import assert_transfer_allowed
 from app.services.notifications import notify_permission
 from app.services.transfer_adapters import ADAPTERS
 
@@ -96,6 +98,15 @@ def create_order(
             raise ValueError(
                 "destination aspera non valida: atteso formato user@host:/path."
             )
+
+    # v3.5.0-alpha.172.212 (F6 Task 3) — TPN transfer whitelist gate.
+    # Carica il tenant e verifica che la destination sia consentita.
+    # Solleva EgressLocked (→ 403 via handler globale) se bloccato in lockdown.
+    # NOTA: se il tenant non è trovato nel DB (es. test senza seed) non blocca
+    # — il gate fail-closed agisce solo quando il tenant è risolvibile e in LOCKDOWN.
+    _gate_tenant = db.get(Tenant, tenant_id)
+    if _gate_tenant is not None:
+        assert_transfer_allowed(_gate_tenant, destination)
 
     # Risoluzione asset tenant-scoped
     assets: list[Asset] = []

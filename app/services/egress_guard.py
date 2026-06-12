@@ -105,6 +105,42 @@ def assert_enrichment_allowed(tenant) -> None:
         raise EgressLocked("enrichment", getattr(tenant, "id", None))
 
 
+# ── transfer whitelist (F6 Task 3 — TPN gate) ───────────────────────
+
+def transfer_allowed(tenant, destination: str) -> bool:
+    """Verifica se un transfer verso `destination` è permesso per `tenant`.
+
+    Logica:
+    - master=OPEN → True sempre (nessuna restrizione).
+    - master=LOCKDOWN:
+        - whitelist None o vuota → False (blocco totale).
+        - almeno una voce della whitelist è contenuta (case-insensitive) nella
+          destination → True.
+        - nessuna voce corrisponde → False.
+
+    Fail-closed: tenant None → False.
+    """
+    if tenant is None:
+        return False
+
+    master = getattr(tenant, "lockdown_master", OPEN) or OPEN
+    if master != LOCKDOWN:
+        return True
+
+    whitelist = getattr(tenant, "transfer_destination_whitelist", None)
+    if not whitelist:
+        return False
+
+    dest_lower = (destination or "").lower()
+    return any(entry.lower() in dest_lower for entry in whitelist if entry)
+
+
+def assert_transfer_allowed(tenant, destination: str) -> None:
+    """Solleva EgressLocked(vector="transfer") se il transfer non è permesso."""
+    if not transfer_allowed(tenant, destination):
+        raise EgressLocked("transfer", getattr(tenant, "id", None))
+
+
 # ── tenant resolution (CURRENT_TENANT, single-tenant copilot) ───────
 
 def _load_current_tenant(db):

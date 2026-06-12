@@ -983,6 +983,21 @@ AWS_S3_DEFAULT_BUCKET=Claqo-prod</pre>
                  style="width:100%;max-width:520px;">
         </div>
 
+        <!-- v3.5.0-alpha.172.212 (F6 Task 3) — Whitelist destinazioni transfer in lockdown -->
+        <div style="margin-top:16px;">
+          <label class="text-sm text-muted" style="display:block;margin-bottom:4px;">
+            Destinazioni transfer consentite in lockdown (una per riga)
+          </label>
+          <textarea id="ld-transfer-whitelist" class="input" rows="4"
+                    placeholder="es.&#10;aspera.netflix.com&#10;backlot.warnerbros.com&#10;deliveries.mybrand.com"
+                    style="width:100%;max-width:520px;resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+          <div class="text-sm text-muted" style="margin-top:4px;">
+            In LOCKDOWN i transfer sono consentiti solo verso destinazioni che contengono
+            una di queste voci (confronto parziale, case-insensitive).
+            Lasciare vuoto = tutti i transfer bloccati in lockdown.
+          </div>
+        </div>
+
         <div class="flex gap-2 mt-3" style="align-items:center;">
           <button class="btn btn-primary btn-sm" onclick="lockdownSave()"><i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;"></i> Salva</button>
           <span id="ld-meta" class="text-sm text-muted"></span>
@@ -2384,6 +2399,9 @@ async function lockdownLoad(){
     _ldEl('ld-web_search').checked = !!r.web_search_enabled;
     _ldEl('ld-enrichment').checked = !!r.enrichment_enabled;
     _ldEl('ld-reason').value = r.lockdown_reason || '';
+    // v3.5.0-alpha.172.212 — whitelist transfer
+    var wl = r.transfer_destination_whitelist;
+    _ldEl('ld-transfer-whitelist').value = (Array.isArray(wl) && wl.length) ? wl.join('\n') : '';
     _ldRenderSelftest(r.effective, {reason:r.lockdown_reason, by:r.lockdown_by, at:r.lockdown_at});
     _ldRenderMaster(r.master); // ri-applica disabled stato sub
     _ldEl('ld-meta').textContent = r.lockdown_at
@@ -2404,6 +2422,8 @@ async function lockdownSave(){
   fd.append('web_search_enabled', _ldEl('ld-web_search').checked ? 'true' : 'false');
   fd.append('enrichment_enabled', _ldEl('ld-enrichment').checked ? 'true' : 'false');
   fd.append('reason', _ldEl('ld-reason').value || '');
+  // v3.5.0-alpha.172.212 — whitelist transfer (textarea, righe separate)
+  fd.append('transfer_destination_whitelist', _ldEl('ld-transfer-whitelist').value || '');
   try {
     const r = await api('POST', '/settings/api/lockdown', fd);
     _ldRenderSelftest(r.effective, {reason:_ldEl('ld-reason').value});

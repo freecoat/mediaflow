@@ -311,6 +311,8 @@ async def lockdown_get(
         "lockdown_at": str(tenant.lockdown_at) if tenant.lockdown_at else None,
         "lockdown_by": by_name,
         "lockdown_reason": tenant.lockdown_reason,
+        # v3.5.0-alpha.172.212 (F6 Task 3) — whitelist destinazioni transfer
+        "transfer_destination_whitelist": tenant.transfer_destination_whitelist or [],
         "effective": st,                       # {master, vectors, locked}
         "can_manage": rbac.has_permission(u, "manage_cloud_lockdown"),
     }
@@ -323,6 +325,10 @@ async def lockdown_set(
     web_search_enabled: str = Form("true"),
     enrichment_enabled: str = Form("true"),
     reason: Optional[str] = Form(None),
+    # v3.5.0-alpha.172.212 (F6 Task 3) — whitelist destinazioni transfer in lockdown.
+    # Textarea: una destinazione per riga; righe vuote scartate → lista JSON.
+    # Vuoto/assente → None (blocco totale in lockdown).
+    transfer_destination_whitelist: Optional[str] = Form(None),
     access_token: Optional[str] = Cookie(None),
     db: Session = Depends(get_db),
 ):
@@ -346,6 +352,16 @@ async def lockdown_set(
     if master_norm not in (egress_guard.OPEN, egress_guard.LOCKDOWN):
         raise HTTPException(400, "master deve essere OPEN o LOCKDOWN")
 
+    # Parse whitelist: righe non vuote → lista; textarea vuota → None
+    parsed_whitelist = None
+    if transfer_destination_whitelist:
+        entries = [
+            line.strip()
+            for line in transfer_destination_whitelist.splitlines()
+            if line.strip()
+        ]
+        parsed_whitelist = entries if entries else None
+
     prev = egress_guard.selftest(tenant)
     tenant.lockdown_master = master_norm
     tenant.cloud_ai_enabled = _parse_bool_form(cloud_ai_enabled)
@@ -354,14 +370,21 @@ async def lockdown_set(
     tenant.lockdown_at = now_utc()
     tenant.lockdown_by = u.id if u else None
     tenant.lockdown_reason = (reason or "").strip()[:255] or None
+    tenant.transfer_destination_whitelist = parsed_whitelist
     db.commit()
 
     new = egress_guard.selftest(tenant)
     logging.getLogger("mediaflow.lockdown").warning(
-        "Content Lockdown changed by user=%s tenant=%s: %s -> %s (reason=%r)",
+        "Content Lockdown changed by user=%s tenant=%s: %s -> %s (reason=%r, whitelist=%r)",
         (u.id if u else None), tenant.id, prev, new, tenant.lockdown_reason,
+        parsed_whitelist,
     )
-    return {"ok": True, "effective": new, "master": master_norm}
+    return {
+        "ok": True,
+        "effective": new,
+        "master": master_norm,
+        "transfer_destination_whitelist": parsed_whitelist or [],
+    }
 
 
 # ── Working hours policy (E3 v3.4.17) ──────────────────────────────
