@@ -113,6 +113,8 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         # v3.5.0-alpha.172.195 — Content Lockdown (TPN). Solo admin: attiva/
         # disattiva l'egress cloud (AI cloud, ricerca web, enrichment).
         "manage_cloud_lockdown":   ["Gestione Content Lockdown (egress cloud, admin)"],
+        # v3.5.0-alpha.172.216 — F6 Distruzione asset (TPN doppia conferma).
+        "approve_destruction":     ["Approvazione distruzione asset (TPN)"],
     },
 }
 

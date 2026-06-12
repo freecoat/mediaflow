@@ -3234,6 +3234,7 @@ class AssetMovementType(str, enum.Enum):
     transfer = "transfer"       # spostamento interno (stanza → cassaforte)
     return_to_client = "return_to_client"   # restituzione (era prestito)
     return_from_client = "return_from_client"  # cliente restituisce nostro
+    destroyed = "destroyed"     # F6 distruzione documentata (TPN)
 
 
 class AssetOwnerType(str, enum.Enum):
@@ -3321,6 +3322,36 @@ class TransferOrder(Base):
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     requested_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     closed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
+class DestructionRequest(Base):
+    """F6 (spec 2026-06-12) — Richiesta di distruzione documentata (TPN).
+    Doppia conferma: richiedente + approvatore diverso con permesso approve_destruction.
+    FSM: requested → approved → done | rejected | cancelled (terminali immutabili).
+    Il record Asset NON muore mai: content_state=deleted, storia permanente.
+    """
+    __tablename__ = "destruction_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    # Asset digitale da distruggere (richiesto)
+    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), index=True)
+    # Motivazione obbligatoria (TPN audit)
+    reason: Mapped[str] = mapped_column(Text)
+    # FSM status: requested → approved → done | rejected | cancelled
+    status: Mapped[str] = mapped_column(String(15), default="requested",
+                                        server_default="requested", index=True)
+    # Utenti coinvolti nel flusso
+    requested_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    closed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # Metodo esecuzione: "manual" | "agent_verify"
+    executed_method: Mapped[Optional[str]] = mapped_column(String(15), nullable=True)
+    # FK agentjob (solo esecuzione agent-driven)
+    agent_job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agent_jobs.id"), nullable=True, index=True)
+    # Timestamp
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
