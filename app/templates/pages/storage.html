@@ -1254,9 +1254,18 @@ async function loadTransferTools() {
   }
 }
 
+function _transferSafeHref(url) {
+  // escapeHtml non blocca gli schemi: javascript: passerebbe intatto in href
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'https:' || u.protocol === 'http:') return escapeHtml(url);
+  } catch (e) { /* URL malformata */ }
+  return '#';
+}
+
 function _transferLinkCell(t) {
   if (!t.link_url) return '<span class="text-muted">—</span>';
-  let html = '<a href="' + escapeHtml(t.link_url) + '" target="_blank" rel="noopener" '
+  let html = '<a href="' + _transferSafeHref(t.link_url) + '" target="_blank" rel="noopener" '
     + 'style="color:var(--indigo2);font-size:12px;word-break:break-all;">🔗 link</a>';
   if (t.link_expires_at) {
     const exp = new Date(t.link_expires_at);

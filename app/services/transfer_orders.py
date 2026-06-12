@@ -336,7 +336,8 @@ def apply_transfer_failure(db: Session, job: AgentJob, error: str) -> TransferOr
 def _resolve_order(db: Session, job: AgentJob) -> TransferOrder:
     """Risolve il TransferOrder dall'agent_job_id. Solleva ValueError se non trovato."""
     row = db.execute(
-        select(TransferOrder).where(TransferOrder.agent_job_id == job.id)
+        select(TransferOrder).where(TransferOrder.agent_job_id == job.id,
+                                    TransferOrder.tenant_id == job.tenant_id)
     ).scalar_one_or_none()
     if row is None:
         raise ValueError(f"Nessun TransferOrder trovato per agent_job_id={job.id}.")
