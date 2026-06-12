@@ -2960,3 +2960,183 @@ async def download_invoice_pdf(invoice_id: int, db: Session = Depends(get_db)):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── SAL — Stato Avanzamento Lavori (v3.5.0-alpha.172.217) ──────────────
+# Vista read-only ore quotate/pianificate/lavorate + temporale. Gate
+# view_finance come le altre pagine/API finance. Riusa app.services.sal_metrics.
+
+RequireViewFinance = Depends(requires_permission("view_finance"))
+
+
+@router.get("/sal", response_class=HTMLResponse, dependencies=[RequireViewFinance])
+async def sal_page(request: Request, db: Session = Depends(get_db)):
+    """Pagina SAL (tab Per progetto / Temporale). Read-only."""
+    return _tpl().TemplateResponse("pages/sal.html", {"request": request})
+
+
+@router.get("/api/sal/projects", dependencies=[RequireViewFinance])
+async def sal_projects(
+    status: Optional[str] = None,
+    client_id: Optional[int] = None,
+    q: Optional[str] = None,
+    alarm_only: Optional[bool] = False,
+    db: Session = Depends(get_db),
+):
+    """Lista righe progetto col monte ore q/p/l, % avanzamento, allarme.
+
+    Tenant-scoped, progetti cestinati esclusi (deleted_at IS NULL). Batch
+    pre-fetch (no N+1): client + jobs + cost_lines + price_item + quote +
+    bookings → assignments → resource. Filtri SQL (status/client_id/q);
+    alarm_only filtrato in Python (deriva da project_metrics).
+    """
+    from sqlalchemy import or_
+    from app.models import Project, Job, Booking, BookingAssignment
+    from app.services import sal_metrics
+
+    query = (
+        db.query(Project)
+        .options(
+            joinedload(Project.client),
+            joinedload(Project.jobs).joinedload(Job.cost_lines).joinedload(JobCostLine.price_item),
+            joinedload(Project.jobs).joinedload(Job.quote),
+            joinedload(Project.jobs)
+            .joinedload(Job.bookings)
+            .joinedload(Booking.assignments)
+            .joinedload(BookingAssignment.resource),
+        )
+        .filter(
+            Project.tenant_id == current_tenant_id(),
+            Project.deleted_at.is_(None),
+        )
+    )
+    if client_id:
+        query = query.filter(Project.client_id == client_id)
+    if status:
+        query = query.filter(Project.status == status)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(or_(Project.code.ilike(like), Project.title.ilike(like)))
+
+    rows = []
+    for prj in query.order_by(Project.created_at.desc()).all():
+        m = sal_metrics.project_metrics(db, prj)
+        if alarm_only and m["alarm"] == "none":
+            continue
+        # Quotazioni distinte dei job del progetto.
+        seen: set = set()
+        quotes = []
+        for job in (prj.jobs or []):
+            qt = getattr(job, "quote", None)
+            if qt is not None and qt.id not in seen:
+                seen.add(qt.id)
+                quotes.append({"number": qt.number, "title": qt.title})
+        rows.append({
+            "id": prj.id,
+            "code": prj.code,
+            "title": prj.title,
+            "client": prj.client.name if prj.client else None,
+            "quotes": quotes,
+            "quoted": m["quoted"],
+            "planned": m["planned"],
+            "worked": m["worked"],
+            "pct": m["pct"],
+            "alarm": m["alarm"],
+            "job_count": m["job_count"],
+        })
+    return rows
+
+
+@router.get("/api/sal/projects/{project_id}/detail", dependencies=[RequireViewFinance])
+async def sal_project_detail(
+    project_id: int,
+    db: Session = Depends(get_db),
+):
+    """Drill-down progetto: breakdown reparto + lista job. 404 cross-tenant."""
+    from app.models import Project, Job, Booking, BookingAssignment, Department
+    from app.services import sal_metrics
+
+    prj = (
+        db.query(Project)
+        .options(
+            joinedload(Project.jobs).joinedload(Job.cost_lines).joinedload(JobCostLine.price_item),
+            joinedload(Project.jobs).joinedload(Job.quote),
+            joinedload(Project.jobs)
+            .joinedload(Job.bookings)
+            .joinedload(Booking.assignments)
+            .joinedload(BookingAssignment.resource),
+        )
+        .filter(
+            Project.id == project_id,
+            Project.tenant_id == current_tenant_id(),
+            Project.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if prj is None:
+        raise HTTPException(404, "Progetto non trovato")
+
+    # Aggrega breakdown reparto su tutti i job del progetto.
+    dept_acc: dict = {}
+    jobs_out = []
+    for job in (prj.jobs or []):
+        daily = sal_metrics._daily_hours_for_job(db, job)
+        bd = sal_metrics.by_department(job, daily_hours=daily)
+        for dep_id, vals in bd.items():
+            acc = dept_acc.setdefault(
+                dep_id, {"quoted": 0.0, "planned": 0.0, "worked": 0.0}
+            )
+            acc["quoted"] += vals["quoted"]
+            acc["planned"] += vals["planned"]
+            acc["worked"] += vals["worked"]
+        jm = sal_metrics.job_metrics(job, daily_hours=daily)
+        qt = getattr(job, "quote", None)
+        jobs_out.append({
+            "id": job.id,
+            "code": job.code,
+            "title": job.title,
+            "quote_number": qt.number if qt is not None else None,
+            "quoted": jm["quoted"],
+            "planned": jm["planned"],
+            "worked": jm["worked"],
+            "pct": jm["pct"],
+            "alarm": jm["alarm"],
+        })
+
+    # Nomi reparto in batch (0 → "Altro").
+    dep_ids = [d for d in dept_acc.keys() if d]
+    name_map: dict = {}
+    if dep_ids:
+        for d in (
+            db.query(Department)
+            .filter(
+                Department.id.in_(dep_ids),
+                Department.tenant_id == current_tenant_id(),
+            )
+            .all()
+        ):
+            name_map[d.id] = d.name
+    departments = []
+    for dep_id, vals in dept_acc.items():
+        departments.append({
+            "department_id": dep_id,
+            "name": name_map.get(dep_id, "Altro") if dep_id else "Altro",
+            "quoted": vals["quoted"],
+            "planned": vals["planned"],
+            "worked": vals["worked"],
+        })
+
+    return {"departments": departments, "jobs": jobs_out}
+
+
+@router.get("/api/sal/timeline", dependencies=[RequireViewFinance])
+async def sal_timeline(
+    year: Optional[int] = None,
+    granularity: str = "month",
+    db: Session = Depends(get_db),
+):
+    """Vista temporale mese/trimestre: pianificate/lavorate/fatturato/%."""
+    from app.services import sal_metrics
+    if year is None:
+        year = date.today().year
+    return sal_metrics.timeline_metrics(db, year=year, granularity=granularity)

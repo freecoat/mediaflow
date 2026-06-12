@@ -216,3 +216,111 @@ def project_metrics(db, project) -> dict:
         "alarm": alarm,
         "job_count": job_count,
     }
+
+
+# ── Vista temporale (tab 2) ──────────────────────────────────────────
+
+
+def timeline_metrics(db, *, year: int, granularity: str = "month") -> dict:
+    """Aggregato temporale tenant-scoped per la tab Temporale del SAL.
+
+    - **pianificate/lavorate**: Σ `_booking_billable_hours` sui Booking del
+      tenant (non-cancelled = pianificate; non-cancelled + done = lavorate),
+      attribuiti al mese/trimestre del loro `start_datetime`.
+    - **fatturato**: Σ `Invoice.subtotal` (no draft/cancelled, doc_type=="TD04"
+      → segno -1) del mese di `issue_date`, mappato al periodo.
+    - **pct** = lavorate / pianificate (0 se pianificate 0).
+
+    granularity="month" → 12 periodi (label "2026-01"…"2026-12");
+    "quarter" → 4 periodi (label "Q1"…"Q4", aggrega 3 mesi). Ritorna
+    {"year", "granularity", "periods": [...], "total": {...}}.
+    """
+    from app.models import (
+        Booking, BookingStatus, BookingExecutionStatus, Invoice, InvoiceStatus,
+    )
+    from app.context import current_tenant_id
+
+    tid = current_tenant_id()
+    gran = "quarter" if str(granularity).lower().startswith("q") else "month"
+
+    # Accumulatori per mese 1..12.
+    planned_by_month = {m: 0.0 for m in range(1, 13)}
+    worked_by_month = {m: 0.0 for m in range(1, 13)}
+    invoiced_by_month = {m: 0.0 for m in range(1, 13)}
+
+    # Booking del tenant nell'anno (start_datetime), non-cancelled.
+    bookings = (
+        db.query(Booking)
+        .filter(
+            Booking.tenant_id == tid,
+            Booking.status != BookingStatus.cancelled,
+        )
+        .all()
+    )
+    for b in bookings:
+        sd = getattr(b, "start_datetime", None)
+        if sd is None or sd.year != year:
+            continue
+        h = _booking_billable_hours(b)
+        if h <= 0:
+            continue
+        planned_by_month[sd.month] += h
+        if b.execution_status == BookingExecutionStatus.done:
+            worked_by_month[sd.month] += h
+
+    # Fatturato: Σ Invoice.subtotal (no draft/cancelled, TD04 = -1) per mese di
+    # issue_date. Tenant-scope via Invoice.tenant_id denormalizzato.
+    invoices = (
+        db.query(Invoice)
+        .filter(
+            Invoice.tenant_id == tid,
+            Invoice.status != InvoiceStatus.draft,
+            Invoice.status != InvoiceStatus.cancelled,
+        )
+        .all()
+    )
+    for inv in invoices:
+        idate = getattr(inv, "issue_date", None)
+        if idate is None or idate.year != year:
+            continue
+        sign = -1.0 if (getattr(inv, "doc_type", None) == "TD04") else 1.0
+        invoiced_by_month[idate.month] += sign * float(inv.subtotal or 0.0)
+
+    def _period_row(label, months):
+        planned = sum(planned_by_month[m] for m in months)
+        worked = sum(worked_by_month[m] for m in months)
+        invoiced = sum(invoiced_by_month[m] for m in months)
+        pct = (worked / planned) if planned > 0 else 0.0
+        return {
+            "label": label,
+            "planned": planned,
+            "worked": worked,
+            "invoiced": invoiced,
+            "pct": pct,
+        }
+
+    periods = []
+    if gran == "quarter":
+        for q in range(4):
+            months = [q * 3 + 1, q * 3 + 2, q * 3 + 3]
+            periods.append(_period_row(f"Q{q + 1}", months))
+    else:
+        for m in range(1, 13):
+            periods.append(_period_row(f"{year:04d}-{m:02d}", [m]))
+
+    tot_planned = sum(planned_by_month.values())
+    tot_worked = sum(worked_by_month.values())
+    tot_invoiced = sum(invoiced_by_month.values())
+    total = {
+        "planned": tot_planned,
+        "worked": tot_worked,
+        "invoiced": tot_invoiced,
+        "pct": (tot_worked / tot_planned) if tot_planned > 0 else 0.0,
+    }
+
+    return {
+        "year": year,
+        "granularity": gran,
+        "periods": periods,
+        "total": total,
+    }
