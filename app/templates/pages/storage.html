@@ -907,7 +907,7 @@ function _populateVolumeSelect() {
   _storageVolumes.filter(function(v) { return v.is_active; }).forEach(function(v) {
     const opt = document.createElement('option');
     opt.value = String(v.id);
-    opt.textContent = v.name + ' (' + escapeHtml(v.mount_path || '') + ')';
+    opt.textContent = v.name + ' (' + (v.mount_path || '') + ')';
     sel.appendChild(opt);
   });
   if (current) sel.value = current;
