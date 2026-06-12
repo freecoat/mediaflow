@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.216 — F6: Distruzione + Dashboard + Report (12 giu 2026) — 🏁 ROADMAP MAM COMPLETA (F1→F6)
+
+Sesta e ultima fase dell'asset registry metadata-only: **distruzione documentata con doppia conferma**, **dashboard "dove vive ogni asset"**, **report storage**, e il **gate TPN sui transfer** rimandato da F5. Chiude la roadmap MAM (F1 fondamenta → F2 watch/match → F3 preview QC → F4 LTO → F5 transfer → F6). Subagent-driven (6 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-12-f6-destruction-dashboard*`.
+
+- **Distruzione doppia-conferma** (`destruction.py` + modello `DestructionRequest`): FSM `requested→approved→done|rejected|cancelled`. Richiesta → notifica al ruolo storage; **approvazione richiede un utente DIVERSO dal richiedente** (permesso RBAC nuovo `approve_destruction`, gate sul solo endpoint /approve). Esecuzione: manuale o **verify via agent** (job `delete_verify` — l'agent controlla solo che il file NON esista più, **non cancella mai**). Finalizzazione: `AssetMovement` `destroyed` + `content_state` → `deleted` (nessuna copia) o `archived_only` (copie residue su tape). Il record Asset NON muore mai: storia permanente (TPN). `_finalize` idempotente; cancel solo richiedente/admin.
+- **Dashboard "dove vive ogni asset"** (`GET /storage/api/asset-map`): per ogni asset confermato — volume, tape(s), preview, n. transfer, deliverable, stato distruzione. Tutto batch (no N+1). Filtri stato/volume/ricerca, cap 500.
+- **Report storage** (`GET /storage/api/storage-report`): aggregati per volume (size/spazio), tape (file/byte), stati contenuto, orfane, preview, pendenti (proposte/ticket/transfer/distruzioni).
+- **UI** `/storage` 7° tab **🗺 Mappa**: card riepilogo + tabella mappa (badge stato, `deleted` barrato) con "🗑 Richiedi distruzione" + sezione "Distruzioni in corso" (approva/rifiuta/fatto a mano/verifica agent/annulla).
+- **Gate TPN transfer** (da F5): `Tenant.transfer_destination_whitelist` + `egress_guard.assert_transfer_allowed`. In lockdown i transfer passano solo verso destinazioni in whitelist (**match host anchored**: `netflix.com` non matcha `evil-netflix.com.attacker.com`; destination manual = match esatto). Pannello /settings → Sicurezza con textarea whitelist. OPEN = tutto consentito (retrocompat).
+- **+88 test (757 totali)**. E2E `tools/_e2e_f6.py` 51/51 (doppio utente per la doppia conferma + agent verify file presente/assente + asset-map + lockdown transfer). Browser smoke da fare (Matteo).
+- Hardening da review: approve vieta user None, cancel solo richiedente/admin, _finalize idempotente, whitelist anchored host-match (no substring bypass).
+
 ## v3.5.0-alpha.172.215 — F5: TransferOrder (12 giu 2026)
 
 Quinta fase asset registry: **ordini di transfer digitale** dalla facility con adapter estensibile. Tool reali di facility (Aspera, Media Shuttle, S3, Netflix Backlot) coperti da subito: `manual` per i flussi assistiti, `aspera` driver agent-driven (ascp). Subagent-driven (5 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-12-f5-transfer-order*`.

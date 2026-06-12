@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.215** — 12 giugno 2026 — F5: TransferOrder
+**v3.5.0-alpha.172.216** — 12 giugno 2026 — F6: Distruzione + Dashboard + Report 🏁 ROADMAP MAM COMPLETA
+
+### α.172.216 ✅ (F6 distruzione+dashboard+report — 12 giu, subagent-driven, sessione remota) — CHIUDE F1→F6
+- **Distruzione doppia-conferma**: `DestructionRequest` FSM, permesso `approve_destruction` (approvatore≠richiedente), agent `delete_verify` (verify-only, mai cancella), finalize → movimento destroyed + content_state deleted/archived_only (record Asset permanente).
+- **Dashboard 🗺 Mappa** (`/storage` 7° tab): asset-map "dove vive ogni asset" (volume/tape/preview/transfer/deliverable/distruzione, batch) + storage-report aggregati + UI distruzioni.
+- **Gate TPN transfer** (da F5): whitelist per-tenant, match host anchored (no substring bypass), pannello Sicurezza.
+- **757 test (+88)**, E2E `tools/_e2e_f6.py` 51/51 (doppio utente), suite verde.
+
+**Prossimo / PENDENTE**: Matteo **smoke browser** completo dei tab `/storage` (Mappa + distruzioni + lockdown transfer) + flusso reale con agent in facility. **Roadmap MAM F1→F6 COMPLETA.** Backlog MAM consolidato: delete attivo agent (oggi verify-only), driver transfer reali (Shuttle API/S3/Backlot), link manuale membership orfana→asset, retention/purge preview, report PDF/schedulati, email destinatario transfer, verifica periodica tape.
 
 ### α.172.215 ✅ (F5 TransferOrder — 12 giu, subagent-driven, sessione remota)
 - **Ordini transfer digitale**: adapter registry (manual + aspera agent-driven via ascp, credenziali solo env agent), multi-asset, FSM, link+scadenza, verification.
