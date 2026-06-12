@@ -34,6 +34,10 @@
             style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
       🎫 Ticket
     </button>
+    <button class="tab-btn" id="tab-transfers" onclick="switchStorageTab('transfers')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      🚚 Transfer
+    </button>
   </div>
 </div>
 
@@ -169,6 +173,48 @@
         </thead>
         <tbody id="ticketsBody">
           <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pane: Transfer ──────────────────────────────────────── -->
+  <div id="pane-transfers" style="display:none;">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <label class="text-sm" style="display:flex;align-items:center;gap:6px;">Stato:
+        <select class="form-select" id="tr-filter-status" onchange="loadTransfers()" style="max-width:160px;">
+          <option value="">Tutti</option>
+          <option value="requested">Richiesto</option>
+          <option value="in_progress">In corso</option>
+          <option value="done">Fatto</option>
+          <option value="failed">Fallito</option>
+          <option value="cancelled">Annullato</option>
+        </select>
+      </label>
+      <label class="text-sm" style="display:flex;align-items:center;gap:6px;">Tool:
+        <select class="form-select" id="tr-filter-tool" onchange="loadTransfers()" style="max-width:160px;">
+          <option value="">Tutti</option>
+        </select>
+      </label>
+      <span style="flex:1;"></span>
+      <button class="btn btn-primary btn-sm" onclick="openNewTransferModal()">+ Transfer</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>Asset</th>
+            <th>Destinazione</th>
+            <th>Stato</th>
+            <th>Link</th>
+            <th>Richiesto da</th>
+            <th>Creato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="transfersBody">
+          <tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -395,13 +441,102 @@
   </div>
 </div>
 
+<!-- ── Modal: Nuovo transfer ───────────────────────────────────── -->
+<div class="modal-overlay" id="modal-new-transfer">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo ordine di transfer</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-transfer')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Tool *</label>
+        <select class="form-select" id="ntr-tool" onchange="onTransferToolChange()"></select>
+        <div class="form-hint" id="ntr-tool-hint"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Asset (ID, CSV) *</label>
+        <input class="form-input" id="ntr-asset-ids" placeholder="es. 42, 43">
+        <div class="form-hint">ID asset dal registry, separati da virgola.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Destinazione *</label>
+        <input class="form-input" id="ntr-destination" placeholder="es. share partner / portale">
+        <div class="form-hint" id="ntr-dest-hint">Descrizione libera della destinazione.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email destinatario</label>
+        <input class="form-input" id="ntr-recipient" type="email" placeholder="es. delivery@cliente.it">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-input" id="ntr-note" rows="2" placeholder="Note per chi esegue il transfer…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-transfer')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitNewTransfer()">Crea ordine</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Chiusura transfer ────────────────────────────────── -->
+<div class="modal-overlay" id="modal-close-transfer">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="ctr-title">Chiudi ordine di transfer</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-close-transfer')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ctr-id">
+      <div class="form-group">
+        <label class="form-label">Esito *</label>
+        <div style="display:flex;gap:18px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+            <input type="radio" name="ctr-ok" value="true" checked>
+            <span style="color:var(--green);">✓ Riuscito</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+            <input type="radio" name="ctr-ok" value="false">
+            <span style="color:var(--rose);">✗ Fallito</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Metodo verifica *</label>
+        <select class="form-select" id="ctr-method">
+          <option value="manual">Verifica manuale</option>
+          <option value="checksum">Checksum</option>
+          <option value="size">Dimensione file</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Link condivisione</label>
+        <input class="form-input" id="ctr-link" placeholder="es. https://share.example.com/dl/abc">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scadenza link</label>
+        <input class="form-input" id="ctr-expires" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Dettagli</label>
+        <textarea class="form-input" id="ctr-details" rows="2" placeholder="Esito verifica, note…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-close-transfer')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitCloseTransfer()">Chiudi ordine</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────
 let _storageVolumes = [];
 let _currentTab = 'proposals';
 
 // ── Tab switching ─────────────────────────────────────────────────
-const _STORAGE_TABS = ['proposals', 'volumes', 'agents', 'jobs', 'tickets'];
+const _STORAGE_TABS = ['proposals', 'volumes', 'agents', 'jobs', 'tickets', 'transfers'];
 
 function switchStorageTab(tab) {
   _currentTab = tab;
@@ -1070,6 +1205,232 @@ async function submitNewTicket() {
   }
 }
 
+// ── Transfer (F5) ──────────────────────────────────────────────────
+
+const TRANSFER_STATUS_LABEL = {
+  requested: 'Richiesto', in_progress: 'In corso',
+  done: 'Fatto', failed: 'Fallito', cancelled: 'Annullato'
+};
+const TRANSFER_STATUS_COLOR = {
+  requested: '#fbbf24', in_progress: '#6272f5',
+  done: '#22c55e', failed: '#ef4444', cancelled: '#9ca3af'
+};
+const TRANSFER_STATUS_BG = {
+  requested: 'rgba(251,191,36,.16)', in_progress: 'rgba(98,114,245,.16)',
+  done: 'rgba(34,197,94,.16)', failed: 'rgba(239,68,68,.16)',
+  cancelled: 'rgba(156,163,175,.16)'
+};
+const TRANSFER_MODE_HINT = {
+  manual: 'esegui tu il transfer e chiudi l\'ordine con l\'esito',
+  agent: 'lo esegue l\'agent in facility'
+};
+
+let _transferTools = [];
+
+async function loadTransferTools() {
+  try {
+    _transferTools = await api('GET', '/storage/api/transfer-tools') || [];
+  } catch (e) {
+    _transferTools = [];
+  }
+  // Popola select filtro tool
+  const fsel = document.getElementById('tr-filter-tool');
+  if (fsel) {
+    const current = fsel.value;
+    fsel.innerHTML = '<option value="">Tutti</option>'
+      + _transferTools.map(function(t) {
+          return '<option value="' + escapeHtml(t.key) + '">' + escapeHtml(t.label) + '</option>';
+        }).join('');
+    if (current) fsel.value = current;
+  }
+  // Popola select modal nuovo
+  const msel = document.getElementById('ntr-tool');
+  if (msel) {
+    msel.innerHTML = _transferTools.map(function(t) {
+      return '<option value="' + escapeHtml(t.key) + '" data-mode="' + escapeHtml(t.mode) + '">'
+        + escapeHtml(t.label) + '</option>';
+    }).join('');
+    onTransferToolChange();
+  }
+}
+
+function _transferLinkCell(t) {
+  if (!t.link_url) return '<span class="text-muted">—</span>';
+  let html = '<a href="' + escapeHtml(t.link_url) + '" target="_blank" rel="noopener" '
+    + 'style="color:var(--indigo2);font-size:12px;word-break:break-all;">🔗 link</a>';
+  if (t.link_expires_at) {
+    const exp = new Date(t.link_expires_at);
+    const now = new Date();
+    if (exp < now) {
+      html += ' <span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;'
+        + 'background:rgba(239,68,68,.16);color:#ef4444;">SCADUTO</span>';
+    } else {
+      const days = Math.ceil((exp - now) / 86400000);
+      if (days < 7) {
+        html += ' <span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;'
+          + 'background:rgba(251,191,36,.16);color:#fbbf24;">⏰ ' + days + 'g</span>';
+      }
+    }
+  }
+  return html;
+}
+
+async function loadTransfers() {
+  const tbody = document.getElementById('transfersBody');
+  const params = new URLSearchParams();
+  const fStatus = document.getElementById('tr-filter-status').value;
+  const fTool = document.getElementById('tr-filter-tool').value;
+  if (fStatus) params.set('status', fStatus);
+  if (fTool) params.set('tool', fTool);
+  try {
+    const qs = params.toString();
+    const data = await api('GET', '/storage/api/transfers' + (qs ? '?' + qs : ''));
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Nessun ordine di transfer.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(t) {
+      const toolBadge = '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;'
+        + 'background:var(--bg-2);">' + escapeHtml(t.tool) + '</span>';
+      const assets = t.assets || [];
+      let assetLabel = '<span class="text-muted">—</span>';
+      if (assets.length) {
+        const first = assets[0].filename || ('Asset #' + assets[0].id);
+        assetLabel = '<strong>' + escapeHtml(first) + '</strong>'
+          + (assets.length > 1 ? ' <span class="text-muted" style="font-size:11px;">+' + (assets.length - 1) + '</span>' : '');
+      }
+      const destFull = t.destination || '—';
+      const destShort = destFull.length > 38 ? destFull.substring(0, 38) + '…' : destFull;
+      const destLabel = '<span title="' + escapeHtml(destFull) + '" style="font-size:12px;">' + escapeHtml(destShort) + '</span>';
+      const sc = TRANSFER_STATUS_COLOR[t.status] || '#9ca3af';
+      const sbg = TRANSFER_STATUS_BG[t.status] || 'rgba(156,163,175,.16)';
+      const badge = '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;'
+        + 'background:' + sbg + ';color:' + sc + ';">'
+        + escapeHtml(TRANSFER_STATUS_LABEL[t.status] || t.status) + '</span>';
+      const created = t.created_at ? new Date(t.created_at).toLocaleString('it-IT') : '—';
+      const note = t.note ? '<div class="text-muted" style="font-size:11px;max-width:240px;">' + escapeHtml(t.note) + '</div>' : '';
+      let actions = '';
+      if (t.status === 'requested' || t.status === 'in_progress') {
+        actions = '<button class="btn btn-ghost btn-sm" style="color:var(--green);" data-transfer-id="' + t.id + '" '
+          + 'onclick="openCloseTransferModal(this.dataset.transferId)">✔ Chiudi</button> '
+          + '<button class="btn btn-ghost btn-sm" style="color:var(--rose);" data-transfer-id="' + t.id + '" '
+          + 'onclick="cancelTransfer(this.dataset.transferId)">✕ Annulla</button>';
+        if (t.tool === 'aspera' && t.status === 'requested') {
+          actions += ' <span class="text-muted" style="font-size:11px;">in coda agent</span>';
+        }
+      }
+      return '<tr>'
+        + '<td style="white-space:nowrap;">' + toolBadge + '</td>'
+        + '<td>' + assetLabel + note + '</td>'
+        + '<td style="max-width:220px;">' + destLabel + '</td>'
+        + '<td>' + badge + '</td>'
+        + '<td style="white-space:nowrap;">' + _transferLinkCell(t) + '</td>'
+        + '<td style="font-size:12px;">' + escapeHtml(t.requested_by || '—') + '</td>'
+        + '<td class="text-muted" style="font-size:12px;">' + escapeHtml(created) + '</td>'
+        + '<td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">' + actions + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento transfer.</td></tr>';
+    toast('Errore caricamento transfer: ' + e.message, 'error');
+  }
+}
+
+function onTransferToolChange() {
+  const sel = document.getElementById('ntr-tool');
+  if (!sel || !sel.selectedOptions.length) return;
+  const opt = sel.selectedOptions[0];
+  const mode = opt.dataset.mode || 'manual';
+  document.getElementById('ntr-tool-hint').textContent =
+    TRANSFER_MODE_HINT[mode] || '';
+  document.getElementById('ntr-dest-hint').textContent =
+    sel.value === 'aspera'
+      ? 'Formato ascp: user@host:/path'
+      : 'Descrizione libera della destinazione.';
+}
+
+function openNewTransferModal() {
+  document.getElementById('ntr-asset-ids').value = '';
+  document.getElementById('ntr-destination').value = '';
+  document.getElementById('ntr-recipient').value = '';
+  document.getElementById('ntr-note').value = '';
+  if (!_transferTools.length) loadTransferTools();
+  else onTransferToolChange();
+  openModal('modal-new-transfer');
+}
+
+async function submitNewTransfer() {
+  const tool = document.getElementById('ntr-tool').value;
+  const assetIds = document.getElementById('ntr-asset-ids').value.trim();
+  const destination = document.getElementById('ntr-destination').value.trim();
+  if (!tool) { alert('Seleziona un tool'); return; }
+  if (!assetIds) { alert('Indica almeno 1 ID asset'); return; }
+  if (!destination) { alert('Destinazione obbligatoria'); return; }
+  const fd = new FormData();
+  fd.append('tool', tool);
+  fd.append('asset_ids', assetIds);
+  fd.append('destination', destination);
+  const recipient = document.getElementById('ntr-recipient').value.trim();
+  const note = document.getElementById('ntr-note').value.trim();
+  if (recipient) fd.append('recipient_email', recipient);
+  if (note) fd.append('note', note);
+  try {
+    await api('POST', '/storage/api/transfers', fd);
+    closeModal('modal-new-transfer');
+    toast('Ordine di transfer creato', 'success');
+    loadTransfers();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function openCloseTransferModal(id) {
+  document.getElementById('ctr-id').value = id;
+  document.getElementById('ctr-title').textContent = 'Chiudi ordine di transfer #' + id;
+  document.querySelector('input[name="ctr-ok"][value="true"]').checked = true;
+  document.getElementById('ctr-method').value = 'manual';
+  document.getElementById('ctr-link').value = '';
+  document.getElementById('ctr-expires').value = '';
+  document.getElementById('ctr-details').value = '';
+  openModal('modal-close-transfer');
+}
+
+async function submitCloseTransfer() {
+  const id = document.getElementById('ctr-id').value;
+  if (!id) return;
+  const ok = document.querySelector('input[name="ctr-ok"]:checked').value;
+  const fd = new FormData();
+  fd.append('ok', ok);
+  fd.append('method', document.getElementById('ctr-method').value);
+  const link = document.getElementById('ctr-link').value.trim();
+  const expires = document.getElementById('ctr-expires').value;
+  const details = document.getElementById('ctr-details').value.trim();
+  if (link) fd.append('link_url', link);
+  if (expires) fd.append('link_expires_at', expires);
+  if (details) fd.append('details', details);
+  try {
+    const r = await api('POST', '/storage/api/transfers/' + id + '/close', fd);
+    closeModal('modal-close-transfer');
+    toast('Ordine chiuso: ' + (r.status === 'done' ? 'riuscito' : 'fallito'), 'success');
+    loadTransfers();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function cancelTransfer(id) {
+  if (!confirm('Annullare questo ordine di transfer?')) return;
+  const fd = new FormData();
+  fd.append('status', 'cancelled');
+  try {
+    await api('POST', '/storage/api/transfers/' + id + '/transition', fd);
+    toast('Ordine annullato', 'success');
+    loadTransfers();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
   loadProposals();
@@ -1077,6 +1438,8 @@ document.addEventListener('DOMContentLoaded', function() {
   loadAgents();
   loadJobs();
   loadTickets();
+  loadTransferTools();
+  loadTransfers();
 });
 </script>
 

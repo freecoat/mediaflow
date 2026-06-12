@@ -1,8 +1,10 @@
 """F1 (spec 2026-06-10) — Admin storage facility: volumi, agent, coda, proposte.
 F4 (spec 2026-06-11) — Ticket archivio/restore LTO.
+F5 (spec 2026-06-12) — Ordini di transfer digitale (TransferOrder).
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -14,7 +16,7 @@ from app.database import get_db
 from app.models.models import (
     AgentJob, AgentJobType, AgentNode,
     ArchiveTicket, Asset, AssetProposedState, JobDeliverable, PhysicalAsset,
-    StorageVolume, User,
+    StorageVolume, TransferOrder, User,
 )
 from app.services.agent_installer import build_installer_zip
 from app.services.agent_queue import enqueue_job, generate_agent_token, enqueue_scan_if_absent
@@ -557,3 +559,231 @@ def transition_ticket(
 
     db.commit()
     return {"ok": True, "status": ticket.status}
+
+
+# ── F5 — Ordini di transfer digitale ─────────────────────────────────
+
+
+def _build_transfer_lookups(
+    orders: list[TransferOrder],
+    db: Session,
+) -> tuple[dict, dict]:
+    """Batch-fetch asset e utenti collegati agli ordini (no N+1).
+
+    Ritorna: (asset_map {id: Asset}, user_map {id: full_name}).
+    """
+    asset_ids: set[int] = set()
+    user_ids: set[int] = set()
+    for o in orders:
+        for aid in (o.asset_ids or []):
+            asset_ids.add(aid)
+        if o.requested_by_user_id:
+            user_ids.add(o.requested_by_user_id)
+
+    asset_map: dict[int, Asset] = (
+        {a.id: a for a in db.execute(select(Asset).where(
+            Asset.id.in_(asset_ids), Asset.tenant_id == CURRENT_TENANT)).scalars().all()}
+        if asset_ids else {}
+    )
+    user_map: dict[int, str] = (
+        {u.id: u.full_name for u in db.execute(
+            select(User).where(User.id.in_(user_ids))).scalars().all()}
+        if user_ids else {}
+    )
+    return asset_map, user_map
+
+
+def _serialize_transfer(o: TransferOrder, asset_map: dict, user_map: dict) -> dict:
+    """Serializza un TransferOrder usando lookup dict pre-caricati."""
+    assets = []
+    for aid in (o.asset_ids or []):
+        a = asset_map.get(aid)
+        assets.append({
+            "id": aid,
+            "filename": (a.original_name or a.filename) if a else None,
+        })
+    return {
+        "id": o.id,
+        "tool": o.tool,
+        "status": o.status,
+        "destination": o.destination,
+        "recipient_email": o.recipient_email,
+        "note": o.note,
+        "assets": assets,
+        "link_url": o.link_url,
+        "link_expires_at": o.link_expires_at.isoformat() + "Z" if o.link_expires_at else None,
+        "verification": o.verification,
+        "requested_by": user_map.get(o.requested_by_user_id) if o.requested_by_user_id else None,
+        "created_at": o.created_at.isoformat() + "Z" if o.created_at else None,
+        "closed_at": o.closed_at.isoformat() + "Z" if o.closed_at else None,
+    }
+
+
+@router.get("/api/transfer-tools", dependencies=[RequireStorage])
+def list_transfer_tools():
+    """F5 — Driver di transfer disponibili dal registry ADAPTERS."""
+    from app.services.transfer_adapters import ADAPTERS
+
+    return [
+        {"key": a.key, "label": a.label, "mode": a.mode}
+        for a in ADAPTERS.values()
+    ]
+
+
+@router.get("/api/transfers", dependencies=[RequireStorage])
+def list_transfers(
+    tool: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """F5 — Lista ordini di transfer. Filtri: tool, status. Max 200, desc id."""
+    q = (
+        select(TransferOrder)
+        .where(TransferOrder.tenant_id == CURRENT_TENANT)
+        .order_by(TransferOrder.id.desc())
+        .limit(200)
+    )
+    if tool:
+        q = q.where(TransferOrder.tool == tool)
+    if status:
+        q = q.where(TransferOrder.status == status)
+    orders = db.execute(q).scalars().all()
+    if not orders:
+        return []
+    asset_map, user_map = _build_transfer_lookups(orders, db)
+    return [_serialize_transfer(o, asset_map, user_map) for o in orders]
+
+
+@router.post("/api/transfers", dependencies=[RequireStorage])
+def create_transfer(
+    request: Request,
+    tool: str = Form(...),
+    asset_ids: str = Form(...),
+    destination: str = Form(...),
+    recipient_email: Optional[str] = Form(None),
+    note: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """F5 — Crea un ordine di transfer.
+
+    Form fields:
+    - tool: chiave driver dal registry ('manual', 'aspera')
+    - asset_ids: CSV di ID asset, es. "1,2" (parse tollerante)
+    - destination: destinazione (formato ascp per aspera)
+    - recipient_email / note: opzionali
+
+    Ritorna: {"ok": True, "id": <order_id>}.
+    """
+    from app.services.transfer_orders import create_order
+
+    # Parse CSV tollerante: split, strip, int, scarta vuoti
+    ids: list[int] = []
+    for part in asset_ids.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            ids.append(int(part))
+        except ValueError:
+            raise HTTPException(400, f"asset_ids non valido: {part!r} non è un intero")
+    if not ids:
+        raise HTTPException(400, "asset_ids vuoto: indicare almeno 1 ID asset (CSV).")
+
+    user = current_user_optional(request)
+    try:
+        order = create_order(
+            db,
+            tool=tool,
+            asset_ids=ids,
+            destination=destination,
+            recipient_email=(recipient_email or "").strip() or None,
+            note=(note or "").strip() or None,
+            user_id=getattr(user, "id", None),
+            tenant_id=CURRENT_TENANT,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "id": order.id}
+
+
+@router.post("/api/transfers/{order_id}/close", dependencies=[RequireStorage])
+def close_transfer(
+    order_id: int,
+    request: Request,
+    ok: bool = Form(...),
+    method: str = Form(...),
+    details: Optional[str] = Form(None),
+    link_url: Optional[str] = Form(None),
+    link_expires_at: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """F5 — Chiude un ordine con esito (done/failed) + link opzionale.
+
+    Form fields:
+    - ok: esito (true=done, false=failed)
+    - method: metodo verifica ('manual', 'checksum', 'size')
+    - details / link_url: opzionali
+    - link_expires_at: scadenza link "YYYY-MM-DD" → datetime a fine giornata
+
+    Ritorna: {"ok": True, "status": <nuovo_stato>}.
+    """
+    from app.services.transfer_orders import close_order
+
+    order = db.get(TransferOrder, order_id)
+    if order is None or order.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404, "Ordine non trovato")
+
+    expires_dt = None
+    if link_expires_at and link_expires_at.strip():
+        try:
+            d = datetime.strptime(link_expires_at.strip(), "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(400, "link_expires_at non valida (atteso YYYY-MM-DD)")
+        expires_dt = d.replace(hour=23, minute=59, second=59)
+
+    user = current_user_optional(request)
+    try:
+        order = close_order(
+            db,
+            order,
+            ok=ok,
+            method=method,
+            details=(details or "").strip() or None,
+            link_url=(link_url or "").strip() or None,
+            link_expires_at=expires_dt,
+            user_id=getattr(user, "id", None),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "status": order.status}
+
+
+@router.post("/api/transfers/{order_id}/transition", dependencies=[RequireStorage])
+def transition_transfer(
+    order_id: int,
+    request: Request,
+    status: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """F5 — Avanza lo stato di un ordine (es. cancelled / in_progress).
+
+    Ritorna: {"ok": True, "status": <nuovo_stato>}.
+    """
+    from app.services.transfer_orders import transition as svc_transition
+
+    order = db.get(TransferOrder, order_id)
+    if order is None or order.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404, "Ordine non trovato")
+
+    user = current_user_optional(request)
+    try:
+        order = svc_transition(db, order, status, user_id=getattr(user, "id", None))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "status": order.status}
