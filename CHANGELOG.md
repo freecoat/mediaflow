@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.217 — SAL: Stato Avanzamento Lavori (12 giu 2026)
+
+Nuova vista finanza read-only `/finance/sal` — **Stato Avanzamento Lavori**: a che punto sono i progetti, ore quotate vs pianificate vs lavorate, chi sfora il budget ore. Aggrega l'esistente (Job/JobCostLine/Booking/Invoice), nessun modello nuovo. Subagent-driven (4 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-12-sal-stato-avanzamento*`.
+
+- **Service** (`sal_metrics.py`): **% avanzamento = ore lavorate / ore quotate**. Ore quotate = solo voci a tempo (ore as-is, giorni × ore-giorno della policy; voci a corpo pc/TB/forfait escluse). Pianificate = Σ booking non-cancelled, lavorate = solo `execution_status=done` (riusa `_booking_billable_hours`, no double-count). Breakdown per reparto. **Allarme** per-job: 🔴 se lavorate o pianificate > quotate, 🟠 ≥90%.
+- **Tab Per progetto**: riga = progetto (aggrega i job) con cliente, quotazioni, monte ore q/p/l, % avanzamento, badge allarme. Filtri stato/cliente/ricerca/solo-allarme. **Drill-down** a riga espandibile: breakdown per reparto (DI/VFX/Audio/Commercial) + lista job con metriche per-job.
+- **Tab Temporale**: anno + mese/trimestre → pianificate, lavorate, € fatturato, % per periodo + totale. Filtro anno in SQL (no full-scan).
+- **Endpoint** `/finance/api/sal/{projects,projects/{id}/detail,timeline}` — gate `view_finance`, read-only, tenant-scoped, batch (no N+1).
+- **+44 test (790 totali)**. E2E `tools/_e2e_sal.py` 41/41 (progetto 2 job, voci tempo+corpo, booking done/non/sforo, fattura → %, monte ore, allarme, breakdown reparto, timeline mese/trimestre). Browser smoke verde (tab progetto con dati reali, drill-down reparti, timeline, 0 errori console).
+
 ## v3.5.0-alpha.172.216 — F6: Distruzione + Dashboard + Report (12 giu 2026) — 🏁 ROADMAP MAM COMPLETA (F1→F6)
 
 Sesta e ultima fase dell'asset registry metadata-only: **distruzione documentata con doppia conferma**, **dashboard "dove vive ogni asset"**, **report storage**, e il **gate TPN sui transfer** rimandato da F5. Chiude la roadmap MAM (F1 fondamenta → F2 watch/match → F3 preview QC → F4 LTO → F5 transfer → F6). Subagent-driven (6 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-12-f6-destruction-dashboard*`.

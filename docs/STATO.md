@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.216** — 12 giugno 2026 — F6: Distruzione + Dashboard + Report 🏁 ROADMAP MAM COMPLETA
+**v3.5.0-alpha.172.217** — 12 giugno 2026 — SAL: Stato Avanzamento Lavori
+
+### α.172.217 ✅ (SAL — Stato Avanzamento Lavori, vista finanza — 12 giu, subagent-driven, sessione remota)
+- **Pagina `/finance/sal`** read-only (gate view_finance): % avanzamento = ore lavorate/quotate. Service `sal_metrics.py` (ore quotate solo voci-tempo giorni→ore, pianificate/lavorate da booking, breakdown reparto, allarme per-job 🔴>quotate/🟠≥90%).
+- **Tab Per progetto**: riga=progetto, cliente, quotazioni, monte ore q/p/l, %, allarme, filtri, drill-down reparti+job. **Tab Temporale**: anno + mese/trim → pianificate/lavorate/fatturato/%.
+- 3 endpoint batch no-N+1; nessun modello nuovo. **790 test (+44)**, E2E `tools/_e2e_sal.py` 41/41, smoke browser verde (Gomorra 1420h, reparti DI 940+Audio 480).
+
+**Prossimo / PENDENTE**: Matteo smoke `/finance/sal` (tab progetto + drill-down + temporale) con dati reali. Idee future SAL: export PDF/Excel, forecast, % fatturato anche nel tab progetto. Roadmap MAM F1→F6 resta completa (smoke storage pendente).
 
 ### α.172.216 ✅ (F6 distruzione+dashboard+report — 12 giu, subagent-driven, sessione remota) — CHIUDE F1→F6
 - **Distruzione doppia-conferma**: `DestructionRequest` FSM, permesso `approve_destruction` (approvatore≠richiedente), agent `delete_verify` (verify-only, mai cancella), finalize → movimento destroyed + content_state deleted/archived_only (record Asset permanente).
