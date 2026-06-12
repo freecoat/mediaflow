@@ -107,6 +107,24 @@ def assert_enrichment_allowed(tenant) -> None:
 
 # ── transfer whitelist (F6 Task 3 — TPN gate) ───────────────────────
 
+def _extract_host(destination: str) -> Optional[str]:
+    """Estrae l'host dalla forma `user@host:/path` (Aspera/scp).
+
+    Ritorna l'host normalizzato (lower, senza trailing dot) o None se la
+    destination non ha forma host parsabile (es. descrizione libera di un
+    transfer manual). Niente substring match: l'host va isolato e confrontato
+    in modo anchored, altrimenti `netflix.com` matcherebbe
+    `evil-netflix.com.attacker.com`.
+    """
+    if not destination or "@" not in destination:
+        return None
+    after_at = destination.rsplit("@", 1)[1]
+    # host finisce al primo ':' (porta/path scp) o '/'
+    host = after_at.split(":", 1)[0].split("/", 1)[0]
+    host = host.strip().rstrip(".").lower()
+    return host or None
+
+
 def transfer_allowed(tenant, destination: str) -> bool:
     """Verifica se un transfer verso `destination` è permesso per `tenant`.
 
@@ -114,9 +132,12 @@ def transfer_allowed(tenant, destination: str) -> bool:
     - master=OPEN → True sempre (nessuna restrizione).
     - master=LOCKDOWN:
         - whitelist None o vuota → False (blocco totale).
-        - almeno una voce della whitelist è contenuta (case-insensitive) nella
-          destination → True.
-        - nessuna voce corrisponde → False.
+        - destination forma `user@host:/path` → host confrontato in modo
+          ANCHORED con la whitelist: host == voce, oppure host.endswith('.'+voce)
+          (la voce è un dominio o un host esatto). Niente substring match.
+        - destination libera (no host, es. transfer manual) → match ESATTO
+          (case-insensitive) con una voce whitelist.
+        - nessuna corrispondenza → False.
 
     Fail-closed: tenant None → False.
     """
@@ -131,8 +152,20 @@ def transfer_allowed(tenant, destination: str) -> bool:
     if not whitelist:
         return False
 
-    dest_lower = (destination or "").lower()
-    return any(entry.lower() in dest_lower for entry in whitelist if entry)
+    host = _extract_host(destination)
+    dest_exact = (destination or "").strip().lower()
+    for entry in whitelist:
+        if not entry:
+            continue
+        e = entry.strip().lower().rstrip(".")
+        if not e:
+            continue
+        if host is not None:
+            if host == e or host.endswith("." + e):
+                return True
+        elif dest_exact == e:
+            return True
+    return False
 
 
 def assert_transfer_allowed(tenant, destination: str) -> None:

@@ -83,20 +83,41 @@ def test_transfer_allowed_open_empty_destination():
 
 # ── 2. LOCKDOWN + match → True ───────────────────────────────────────────────
 
-def test_transfer_allowed_lockdown_match_substring():
-    t = _tenant_ns(LOCKDOWN, whitelist=["aspera.netflix.com", "backlot"])
-    # destination contiene "aspera.netflix.com"
+def test_transfer_allowed_lockdown_match_host_exact():
+    t = _tenant_ns(LOCKDOWN, whitelist=["aspera.netflix.com", "warnerbros.com"])
     assert transfer_allowed(t, "user@aspera.netflix.com:/in") is True
 
 
-def test_transfer_allowed_lockdown_match_second_entry():
-    t = _tenant_ns(LOCKDOWN, whitelist=["aspera.netflix.com", "backlot"])
+def test_transfer_allowed_lockdown_match_subdomain_suffix():
+    """Voce dominio → match anchored su sottodominio (host.endswith('.'+voce))."""
+    t = _tenant_ns(LOCKDOWN, whitelist=["warnerbros.com"])
     assert transfer_allowed(t, "user@backlot.warnerbros.com:/delivery") is True
 
 
 def test_transfer_allowed_lockdown_match_case_insensitive():
     t = _tenant_ns(LOCKDOWN, whitelist=["ASPERA.NETFLIX.COM"])
     assert transfer_allowed(t, "user@Aspera.Netflix.Com:/in") is True
+
+
+# ── 2b. Bypass substring NON deve passare (anchored host match) ──────────────
+
+def test_transfer_allowed_lockdown_no_substring_prefix_bypass():
+    """`netflix.com` NON deve matchare `evil-netflix.com.attacker.com`."""
+    t = _tenant_ns(LOCKDOWN, whitelist=["netflix.com"])
+    assert transfer_allowed(t, "user@evil-netflix.com.attacker.com:/x") is False
+
+
+def test_transfer_allowed_lockdown_no_suffix_domain_bypass():
+    """`netflix.com` NON deve matchare `netflix.com.evil.com`."""
+    t = _tenant_ns(LOCKDOWN, whitelist=["netflix.com"])
+    assert transfer_allowed(t, "user@netflix.com.evil.com:/x") is False
+
+
+def test_transfer_allowed_lockdown_manual_exact_match():
+    """Destination libera (no host) → match ESATTO, non substring."""
+    t = _tenant_ns(LOCKDOWN, whitelist=["Backlot S3 share"])
+    assert transfer_allowed(t, "Backlot S3 share") is True
+    assert transfer_allowed(t, "prefix Backlot S3 share suffix") is False
 
 
 # ── 3. LOCKDOWN + no match → False ───────────────────────────────────────────
