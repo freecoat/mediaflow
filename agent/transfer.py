@@ -64,7 +64,10 @@ def run_transfer(payload: dict, volumes_by_id: dict) -> dict:
             "Installare IBM Aspera Connect o Aspera CLI e riprovare."
         )
 
-    destination = payload.get("destination") or ""
+    destination = (payload.get("destination") or "").strip()
+    if not destination or destination.startswith("-"):
+        # finirebbe in argv di ascp come flag (argument injection)
+        raise ValueError(f"destination non valida: {destination!r}")
     files_spec: list[dict] = payload.get("files") or []
     extra_args_raw: list = payload.get("extra_args") or []
 

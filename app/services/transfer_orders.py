@@ -84,6 +84,18 @@ def create_order(
     # Validazione destination
     if not destination or not destination.strip():
         raise ValueError("destination non può essere vuota.")
+    destination = destination.strip()
+    # Argument injection: la destination finisce in argv di ascp — una stringa
+    # che inizia con "-" verrebbe parsata come flag dal tool.
+    if destination.startswith("-"):
+        raise ValueError("destination non valida: non può iniziare con '-'.")
+    if ADAPTERS[tool].mode == "agent" and tool == "aspera":
+        # Shape ascp: user@host:/path (almeno @ e : dopo la @)
+        at = destination.find("@")
+        if at <= 0 or ":" not in destination[at:]:
+            raise ValueError(
+                "destination aspera non valida: atteso formato user@host:/path."
+            )
 
     # Risoluzione asset tenant-scoped
     assets: list[Asset] = []

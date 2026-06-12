@@ -475,3 +475,21 @@ def test_apply_failure_already_closed_raises(notif):
 
     with pytest.raises(ValueError, match="già chiuso|terminale|failed"):
         apply_transfer_failure(db, job, "errore 2")
+
+
+# ── Argument injection (review 12 giu) ───────────────────────────────────────
+
+def test_create_destination_argument_injection_rifiutata(db):
+    """Destination che inizia con '-' finirebbe in argv ascp come flag."""
+    a = _asset(db)
+    with pytest.raises(ValueError, match="iniziare con"):
+        create_order(db, tool="manual", asset_ids=[a.id],
+                     destination="-l9999G evil")
+
+
+def test_create_aspera_destination_shape(db):
+    """Aspera richiede formato user@host:/path."""
+    a = _asset(db, volume_id=1, rel_path="OUT/master.mxf")
+    with pytest.raises(ValueError, match="user@host"):
+        create_order(db, tool="aspera", asset_ids=[a.id],
+                     destination="solo-un-nome-share")
