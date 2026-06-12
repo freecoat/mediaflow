@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.214 — F4: LTO YoYotta (12 giu 2026)
+
+Quarta fase asset registry: il **catalogo per-file dei tape LTO** entra nel sistema — l'ingest MHL ora registra ogni file sul supporto come `AssetMembership` collegata al registry, e il workflow archivio/restore diventa un **ticket assistito** (YoYotta resta manuale). Subagent-driven (7 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-11-f4-lto-yoyotta*`.
+
+- **Backfill membership** (`app/services/lto_catalog.py`): per ogni entry del catalogo → match Asset per **checksum xxhash** (case-insensitive, tenant-scoped), fallback **nome+size solo se univoco**; senza match → membership **orfana** (`asset_id` NULL — rilassato con table-rebuild SQLite idempotente al boot). Dedup su re-ingest per checksum e per path reale (case-insensitive); niente dedup-per-nome (file omonimi in cartelle diverse non collassano). Stats `{matched, orphan, skipped}`.
+- **Formati**: MHL YoYotta (parser esistente) ora cablato → `/ingest/yoyotta-mhl` ritorna anche le stats membership; **CSV catalog generico** (`parse_catalog_csv`: header auto-detect name/size/hash/path, delimitatore sniffato, mapping manuale opzionale) via `POST /physical-assets/api/{id}/catalog-csv` (cap 10 MB).
+- **ArchiveTicket**: modello nuovo (kind archive|restore, FSM requested→in_progress→done|cancelled) + service con guardie: restore→done = `Asset.content_state=online` + notifica al richiedente; archive→done **richiede membership LTO attiva** (altrimenti errore "ingest prima il catalogo") → `content_state=archived_only`. Restore suggerisce il tape dalla membership più recente. Notifiche al ruolo storage alla creazione.
+- **Endpoint**: `/storage/api/tickets` (list filtri kind/status + create + transition, serializer batch — no N+1) + `GET /physical-assets/api/{id}/memberships`.
+- **UI**: `/storage` 5° tab **🎫 Ticket** (badge stato, transizioni per riga, modal nuovo); scheda supporto fisico → sezione **"📼 File sul supporto"** (membership + orfane, ♻️ richiedi restore per riga, upload catalogo CSV); pagina **QR scan** tape → lookup read-only contenuto + ticket aperti.
+- **+46 test (624 totali)**. E2E `tools/_e2e_f4.py` 38/38 (MHL sintetico → membership → ticket restore/archive end-to-end con notifiche). Browser smoke verde (tab Ticket, modal, sezione tape, 0 errori console).
+- Hardening da review: tenant scoping su lookup membership/movimenti/serializer, archive-done vietato su ticket deliverable-only, dedup path solo su path reale.
+
 ## v3.5.0-alpha.172.213 — F3: Preview QC (11 giu 2026)
 
 Terza fase asset registry: **proxy di preview** generato dall'agent in facility e riprodotto nel **modal QC** — guardi il contenuto e logghi gli errori per timecode nello stesso posto. Subagent-driven (8 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-11-f3-preview-qc*`.

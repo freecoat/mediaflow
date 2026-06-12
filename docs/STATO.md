@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.213** — 11 giugno 2026 — F3: Preview QC
+**v3.5.0-alpha.172.214** — 12 giugno 2026 — F4: LTO YoYotta
+
+### α.172.214 ✅ (F4 LTO YoYotta — 12 giu, subagent-driven, sessione remota)
+- **Catalogo per-file tape**: ingest MHL → `AssetMembership` per ogni file (match checksum xxhash / nome+size univoco; orfane con asset_id NULL — table-rebuild SQLite). CSV catalog generico con auto-detect header. Dedup re-ingest.
+- **ArchiveTicket**: FSM requested→in_progress→done|cancelled; restore done → content_state=online + notifica richiedente; archive done richiede membership LTO → archived_only. Tape suggerito da membership. Notifiche ruolo storage.
+- **UI**: tab 🎫 Ticket in /storage, sezione "📼 File sul supporto" + restore + CSV in scheda fisici, QR scan = lookup contenuto+ticket.
+- **624 test (+46)**, E2E `tools/_e2e_f4.py` 38/38, smoke browser verde.
+
+**Prossimo / PENDENTE**: Matteo smoke (tab Ticket + ingest MHL reale YoYotta quando ne hai uno + scheda tape). Poi **F5 TransferOrder** (adapter Aspera CLI + Media Shuttle API) o **F6 distruzione+dashboard**. Backlog F4: link manuale membership orfana→asset, CSV formati proprietari, verifica periodica tape.
 
 ### α.172.213 ✅ (F3 preview QC — 11 giu, subagent-driven, sessione remota)
 - **Proxy preview nel modal QC**: agent genera 1080p H.264 con TC burn-in + watermark (ffmpeg in facility), upload streaming al server (o S3 presigned), player nel modal QC condiviso con bottone **📍 TC** che compila il timecode del form errori dal tempo del player.
