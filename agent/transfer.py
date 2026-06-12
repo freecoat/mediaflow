@@ -119,8 +119,16 @@ def run_transfer(payload: dict, volumes_by_id: dict) -> dict:
             f"ascp rc={proc.returncode}: {(proc.stderr or '')[-800:]}"
         )
 
+    bytes_total = 0
+    for f in files_abs:
+        try:
+            bytes_total += os.path.getsize(f)
+        except OSError:
+            pass  # file sparito post-transfer: la size manca, l'esito resta ok
+
     return {
         "ok": True,
         "files": len(files_abs),
+        "bytes_total": bytes_total,
         "log_tail": log_tail,
     }

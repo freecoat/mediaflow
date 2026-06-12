@@ -99,7 +99,12 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
         if job.type == AgentJobType.preview:
             asset_preview.apply_preview_failure(db, job, error or "")
         if job.type == AgentJobType.transfer:
-            transfer_orders.apply_transfer_failure(db, job, error or "")
+            try:
+                transfer_orders.apply_transfer_failure(db, job, error or "")
+            except ValueError as e:
+                # job orfano (nessun ordine linkato) o ordine già chiuso:
+                # non bloccare il fail_job con un 500 → il job resterebbe claimed
+                print(f"[transfer] esito failed non applicabile: {e}")
         return None
     complete_job(db, job, result or {})
     if status != "done" or not result:
@@ -133,7 +138,12 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
         db.flush()
         return created[0] if created else None
     if job.type == AgentJobType.transfer:
-        return transfer_orders.apply_transfer_result(db, job, result)
+        try:
+            transfer_orders.apply_transfer_result(db, job, result)
+        except ValueError as e:
+            print(f"[transfer] esito done non applicabile: {e}")
+        # NON ritornare l'ordine: post_result espone il return come asset_id
+        return None
     return None
 
 
