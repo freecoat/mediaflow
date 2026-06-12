@@ -378,15 +378,20 @@ def _build_ticket_lookups(
             user_ids.add(t.assigned_to_user_id)
 
     asset_map: dict[int, Asset] = (
-        {a.id: a for a in db.execute(select(Asset).where(Asset.id.in_(asset_ids))).scalars().all()}
+        {a.id: a for a in db.execute(select(Asset).where(
+            Asset.id.in_(asset_ids), Asset.tenant_id == CURRENT_TENANT)).scalars().all()}
         if asset_ids else {}
     )
     deliverable_map: dict[int, JobDeliverable] = (
-        {d.id: d for d in db.execute(select(JobDeliverable).where(JobDeliverable.id.in_(deliv_ids))).scalars().all()}
+        {d.id: d for d in db.execute(select(JobDeliverable).where(
+            JobDeliverable.id.in_(deliv_ids),
+            JobDeliverable.tenant_id == CURRENT_TENANT)).scalars().all()}
         if deliv_ids else {}
     )
     physical_asset_map: dict[int, PhysicalAsset] = (
-        {pa.id: pa for pa in db.execute(select(PhysicalAsset).where(PhysicalAsset.id.in_(pa_ids))).scalars().all()}
+        {pa.id: pa for pa in db.execute(select(PhysicalAsset).where(
+            PhysicalAsset.id.in_(pa_ids),
+            PhysicalAsset.tenant_id == CURRENT_TENANT)).scalars().all()}
         if pa_ids else {}
     )
     user_map: dict[int, str] = (

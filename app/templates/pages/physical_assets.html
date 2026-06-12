@@ -972,7 +972,7 @@ async function submitVerify() {
 
 // v3.5.0-alpha.72.1 — Batch import + numerazione
 function openBatchImportModal() {
-  document.getElementById('bt-kind').value = 'LTO';
+  document.getElementById('bt-kind').value = 'lto';
   document.getElementById('bt-count').value = '10';
   ['bt-manuf','bt-cap','bt-loc','bt-cost','bt-desc'].forEach(id => document.getElementById(id).value = '');
   btPreview();

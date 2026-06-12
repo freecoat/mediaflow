@@ -2164,7 +2164,8 @@ async def scan_asset(token: str, request: Request, db: Session = Depends(get_db)
         )
     last_mov = (
         db.query(AssetMovement)
-        .filter(AssetMovement.physical_asset_id == a.id)
+        .filter(AssetMovement.physical_asset_id == a.id,
+                AssetMovement.tenant_id == current_tenant_id())
         .order_by(AssetMovement.movement_date.desc())
         .first()
     )
