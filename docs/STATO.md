@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.214** — 12 giugno 2026 — F4: LTO YoYotta
+**v3.5.0-alpha.172.215** — 12 giugno 2026 — F5: TransferOrder
+
+### α.172.215 ✅ (F5 TransferOrder — 12 giu, subagent-driven, sessione remota)
+- **Ordini transfer digitale**: adapter registry (manual + aspera agent-driven via ascp, credenziali solo env agent), multi-asset, FSM, link+scadenza, verification.
+- Done → AssetMovement outgest per asset; failed → notifica. Tab 🚚 Transfer in /storage (badge scadenza link, modal nuovo/chiusura).
+- **669 test (+45)**, E2E `tools/_e2e_f5.py` 52/52 (aspera mockata), smoke browser verde.
+- Driver futuri sull'interfaccia: Media Shuttle API / S3 / Backlot (quando Matteo porta credenziali). TPN gate transfer → F6.
+
+**Prossimo / PENDENTE**: Matteo smoke tab Transfer (+ ascp reale in facility con `ASPERA_SSH_KEY_PATH` settata sull'agent). Poi **F6: distruzione doppia-conferma + dashboard "dove vive ogni asset" + report storage** (chiude la roadmap MAM). Backlog F5: driver Shuttle/S3/Backlot, email destinatario, whitelist TPN, retry.
 
 ### α.172.214 ✅ (F4 LTO YoYotta — 12 giu, subagent-driven, sessione remota)
 - **Catalogo per-file tape**: ingest MHL → `AssetMembership` per ogni file (match checksum xxhash / nome+size univoco; orfane con asset_id NULL — table-rebuild SQLite). CSV catalog generico con auto-detect header. Dedup re-ingest.

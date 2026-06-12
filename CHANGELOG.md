@@ -1,5 +1,19 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.215 — F5: TransferOrder (12 giu 2026)
+
+Quinta fase asset registry: **ordini di transfer digitale** dalla facility con adapter estensibile. Tool reali di facility (Aspera, Media Shuttle, S3, Netflix Backlot) coperti da subito: `manual` per i flussi assistiti, `aspera` driver agent-driven (ascp). Subagent-driven (5 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-12-f5-transfer-order*`.
+
+- **Modello `TransferOrder`**: tool, destination, recipient_email, asset_ids JSON multi-asset, FSM `requested→in_progress→done|failed|cancelled`, link_url + scadenza, verification JSON, agent_job_id.
+- **Adapter registry** (`transfer_adapters.py`): interfaccia TransferAdapter (mode manual|agent) — driver `manual` (l'operatore esegue col tool che vuole e chiude con esito+link) e `aspera` (job all'agent). Driver futuri (Shuttle API, S3, Backlot) si registrano qui.
+- **Agent** (`agent/transfer.py`): `ascp` con **credenziali SOLO da env agent-side** (`ASPERA_SSH_KEY_PATH`, `ASPERA_EXTRA_ARGS` — mai nel payload/DB), guard binario assente, traversal-guard per file, multi-volume per ordine, timeout 12h, result `{ok, files, bytes_total, log_tail}`.
+- **Service** (`transfer_orders.py`): create (validazioni + enqueue per driver agent), close comune (done → **AssetMovement outgest per ogni asset** con destinazione/destinatario/tool/link; failed → **notifica**, mai silenzioso), FSM guard, esiti job tolleranti a ordini orfani.
+- **Endpoint** `/storage/api/transfers` (+`/transfer-tools`, `/close`, `/transition`) RequireStorage, serializer batch.
+- **UI**: `/storage` 6° tab **🚚 Transfer** — lista con badge stato e **badge scadenza link** (⏰ <7gg / SCADUTO), modal nuovo ordine (tool dal registry con hint per mode, hint formato ascp), modal chiusura manuale (esito/metodo/link/scadenza).
+- **+45 test (669 totali)**. E2E `tools/_e2e_f5.py` 52/52 (manual end-to-end + aspera mockata ok/failure + notifica). Browser smoke verde.
+- Hardening da review: allowlist schema href sul link (no `javascript:`), tenant scoping `_resolve_order`, `bytes_total` nel result, ordini orfani non bloccano il job loop.
+- Nota TPN: gate lockdown sui transfer rimandato a F6 (decisione 12 giu).
+
 ## v3.5.0-alpha.172.214 — F4: LTO YoYotta (12 giu 2026)
 
 Quarta fase asset registry: il **catalogo per-file dei tape LTO** entra nel sistema — l'ingest MHL ora registra ogni file sul supporto come `AssetMembership` collegata al registry, e il workflow archivio/restore diventa un **ticket assistito** (YoYotta resta manuale). Subagent-driven (7 task TDD). Spec/piano `docs/superpowers/{specs,plans}/2026-06-11-f4-lto-yoyotta*`.
