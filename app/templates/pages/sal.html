@@ -2,12 +2,470 @@
 {% set active_page = "sal" %}
 
 {% block title %}SAL — Avanzamento — Claqo{% endblock %}
-{% block topbar_title %}📊 SAL — Avanzamento{% endblock %}
+{% block topbar_title %}SAL — Stato Avanzamento Lavori{% endblock %}
 
 {% block content %}
-{# UI completa (tab Per progetto / Temporale) implementata in Task 3.
-   Questo placeholder garantisce il render della pagina /finance/sal. #}
-<div class="card" style="padding:16px;">
-  <p>SAL — Stato Avanzamento Lavori.</p>
+
+<!-- ── Tab bar (Per progetto / Temporale) ──────────────────────── -->
+<div class="card" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;padding:0;">
+  <div style="display:flex;gap:0;">
+    <button class="tab-btn active" id="tab-projects" onclick="switchSalTab('projects')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid var(--indigo2);color:var(--text);cursor:pointer;font-size:13px;font-weight:600;">
+      📊 Per progetto
+    </button>
+    <button class="tab-btn" id="tab-timeline" onclick="switchSalTab('timeline')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      📅 Temporale
+    </button>
+  </div>
 </div>
+
+<div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+
+  <!-- ── Pane: Per progetto ────────────────────────────────────── -->
+  <div id="pane-projects">
+    <!-- Barra filtri -->
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:14px;">
+      <div class="form-group" style="flex:2; min-width:220px;">
+        <label class="form-label" style="font-size:11px;">Ricerca</label>
+        <input class="form-input" id="sal-search" placeholder="codice, titolo, cliente…" oninput="onSalFilterChange()">
+      </div>
+      <div class="form-group" style="min-width:150px;">
+        <label class="form-label" style="font-size:11px;">Stato progetto</label>
+        <select class="form-select" id="sal-f-status" onchange="onSalFilterChange()">
+          <option value="">— tutti —</option>
+        </select>
+      </div>
+      <div class="form-group" style="min-width:160px;">
+        <label class="form-label" style="font-size:11px;">Cliente</label>
+        <select class="form-select" id="sal-f-client" onchange="onSalFilterChange()">
+          <option value="">— tutti —</option>
+        </select>
+      </div>
+      <label class="form-group" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;padding-bottom:8px;">
+        <input type="checkbox" id="sal-f-alarm" onchange="onSalFilterChange()">
+        Solo in allarme
+      </label>
+      <button class="btn btn-ghost btn-sm" onclick="resetSalFilters()">Reset</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:140px;">Cliente</th>
+            <th style="min-width:240px;">Progetto</th>
+            <th style="min-width:160px;">Quotazioni</th>
+            <th style="min-width:220px;">Monte ore</th>
+            <th style="min-width:180px;">% Avanzamento</th>
+            <th style="width:90px;text-align:center;">Allarme</th>
+            <th style="width:60px;text-align:right;">Job</th>
+          </tr>
+        </thead>
+        <tbody id="sal-projects-tbody">
+          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pane: Temporale ───────────────────────────────────────── -->
+  <div id="pane-timeline" style="display:none;">
+    <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:14px;">
+      <div class="form-group" style="min-width:120px;">
+        <label class="form-label" style="font-size:11px;">Anno</label>
+        <select class="form-select" id="sal-tl-year" onchange="loadSalTimeline()"></select>
+      </div>
+      <div class="form-group" style="padding-bottom:8px;">
+        <label class="form-label" style="font-size:11px;">Granularità</label>
+        <div style="display:flex;gap:14px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+            <input type="radio" name="sal-tl-gran" value="month" checked onchange="loadSalTimeline()"> Mese
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+            <input type="radio" name="sal-tl-gran" value="quarter" onchange="loadSalTimeline()"> Trimestre
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="min-width:120px;">Periodo</th>
+            <th style="text-align:right;">Pianificate</th>
+            <th style="text-align:right;">Lavorate</th>
+            <th style="text-align:right;">Fatturato</th>
+            <th style="min-width:180px;">% Avanzamento</th>
+          </tr>
+        </thead>
+        <tbody id="sal-timeline-tbody">
+          <tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── SAL — Stato Avanzamento Lavori (v3.5.0-alpha.172.217) ──────────
+// Pagina read-only. Tab Per progetto (monte ore + allarme + drill-down
+// reparto/job) + tab Temporale (mese/trimestre). Helper globali:
+// api(), toast(), escapeHtml(). Niente mutator.
+
+let _salProjects = [];            // ultima lista grezza dal server
+let _salDetailCache = {};         // cache drill-down per project_id
+let _salTimelineLoaded = false;   // lazy-load del tab temporale
+let _salSearchTimer = null;       // debounce ricerca
+
+// Stati progetto (valori reali ProjectStatus enum) + etichette IT.
+const SAL_STATUSES = [
+  ['prospect', 'Prospect'],
+  ['quoting', 'In quotazione'],
+  ['active', 'Attivo'],
+  ['completed', 'Completato'],
+  ['archived', 'Archiviato'],
+];
+
+// ── Formattazione ───────────────────────────────────────────────
+function _salFmtHours(h) {
+  return (Number(h) || 0).toLocaleString('it-IT', {
+    minimumFractionDigits: 1, maximumFractionDigits: 1,
+  }) + ' h';
+}
+function _salFmtEur(v) {
+  return '€ ' + (Number(v) || 0).toLocaleString('it-IT', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+}
+function _salFmtPct(p) {
+  return Math.round(Number(p) || 0) + '%';
+}
+
+// Palette barra %: verde sotto 90, ambra 90-100, rosso oltre 100.
+function _salBarColor(pct) {
+  const p = Number(pct) || 0;
+  if (p > 100) return 'var(--rose, #ef4444)';
+  if (p >= 90) return 'var(--amber, #f59e0b)';
+  return 'var(--green, #22c55e)';
+}
+
+// Barra orizzontale + numero. Ritorna HTML (numeri già sanificati).
+function _salBar(pct) {
+  const p = Number(pct) || 0;
+  const w = Math.max(0, Math.min(100, p));
+  const col = _salBarColor(p);
+  return `<div style="display:flex;align-items:center;gap:8px;">
+    <div style="flex:1;height:8px;border-radius:4px;background:var(--bg2,#1e2030);overflow:hidden;min-width:80px;">
+      <div style="height:100%;width:${w}%;background:${col};"></div>
+    </div>
+    <span style="font-size:12px;font-weight:600;color:${col};min-width:38px;text-align:right;">${_salFmtPct(p)}</span>
+  </div>`;
+}
+
+// Badge allarme: 🔴 red / 🟠 amber / — none.
+function _salAlarmBadge(alarm) {
+  if (alarm === 'red') {
+    return `<span title="Ore lavorate o pianificate oltre il quotato" style="font-size:16px;">🔴</span>`;
+  }
+  if (alarm === 'amber') {
+    return `<span title="≥90% del monte ore quotato" style="font-size:16px;">🟠</span>`;
+  }
+  return `<span class="text-muted">—</span>`;
+}
+
+// Cella monte ore: Quotate / Pianif / Lavorate.
+function _salMonteOre(quoted, planned, worked) {
+  return `<div style="font-size:12px;line-height:1.5;">
+    <span class="text-muted">Quotate</span> ${_salFmtHours(quoted)} ·
+    <span class="text-muted">Pianif</span> ${_salFmtHours(planned)} ·
+    <span class="text-muted">Lavorate</span> ${_salFmtHours(worked)}
+  </div>`;
+}
+
+// ── Tab switch ──────────────────────────────────────────────────
+function switchSalTab(tab) {
+  ['projects', 'timeline'].forEach(function(t) {
+    const pane = document.getElementById('pane-' + t);
+    const btn  = document.getElementById('tab-' + t);
+    if (!pane || !btn) return;
+    const isActive = (t === tab);
+    pane.style.display = isActive ? '' : 'none';
+    btn.classList.toggle('active', isActive);
+    btn.style.borderBottomColor = isActive ? 'var(--indigo2)' : 'transparent';
+    btn.style.color = isActive ? 'var(--text)' : 'var(--text3)';
+    btn.style.fontWeight = isActive ? '600' : '500';
+  });
+  if (tab === 'timeline' && !_salTimelineLoaded) {
+    _salTimelineLoaded = true;
+    loadSalTimeline();
+  }
+}
+
+// ── Tab Progetto ────────────────────────────────────────────────
+function onSalFilterChange() {
+  // Debounce per non spammare il server sull'input ricerca.
+  if (_salSearchTimer) clearTimeout(_salSearchTimer);
+  _salSearchTimer = setTimeout(loadSalProjects, 300);
+}
+
+function resetSalFilters() {
+  document.getElementById('sal-search').value = '';
+  document.getElementById('sal-f-status').value = '';
+  document.getElementById('sal-f-client').value = '';
+  document.getElementById('sal-f-alarm').checked = false;
+  loadSalProjects();
+}
+
+async function loadSalProjects() {
+  const tbody = document.getElementById('sal-projects-tbody');
+  const q = (document.getElementById('sal-search').value || '').trim();
+  const status = document.getElementById('sal-f-status').value;
+  const clientId = document.getElementById('sal-f-client').value;
+  const alarmOnly = document.getElementById('sal-f-alarm').checked;
+
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (status) params.set('status', status);
+  if (clientId) params.set('client_id', clientId);
+  if (alarmOnly) params.set('alarm_only', 'true');
+
+  try {
+    _salProjects = await api('GET', '/finance/api/sal/projects?' + params.toString());
+  } catch (e) {
+    tbody.innerHTML =
+      `<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento')}</td></tr>`;
+    return;
+  }
+  // Invalida la cache drill-down su refresh lista.
+  _salDetailCache = {};
+  renderSalProjects();
+}
+
+function renderSalProjects() {
+  const tbody = document.getElementById('sal-projects-tbody');
+  if (!_salProjects.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessun progetto corrisponde ai filtri</td></tr>';
+    return;
+  }
+  tbody.innerHTML = _salProjects.map(function(r) {
+    const quotes = (r.quotes || []).map(function(qt) {
+      const lbl = qt.number + (qt.title ? ' · ' + qt.title : '');
+      return `<span class="badge" title="${escapeHtml(lbl)}" style="font-size:10px;margin:1px 2px;">${escapeHtml(qt.number || '—')}</span>`;
+    }).join('');
+    return `<tr class="sal-prj-row" data-project-id="${r.id}" style="cursor:pointer;" onclick="toggleSalDetail(${r.id})">
+      <td class="text-sm">${escapeHtml(r.client || '—')}</td>
+      <td>
+        <div style="font-weight:500;">${escapeHtml(r.title || '—')}</div>
+        <div class="mono" style="font-size:11px;color:var(--text3);margin-top:2px;">${escapeHtml(r.code || '')}</div>
+      </td>
+      <td>${quotes || '<span class="text-muted">—</span>'}</td>
+      <td>${_salMonteOre(r.quoted, r.planned, r.worked)}</td>
+      <td>${_salBar(r.pct)}</td>
+      <td style="text-align:center;">${_salAlarmBadge(r.alarm)}</td>
+      <td style="text-align:right;" class="mono">${r.job_count}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Espande/chiude il drill-down sotto la riga progetto (fetch on-demand + cache).
+async function toggleSalDetail(projectId) {
+  const row = document.querySelector('.sal-prj-row[data-project-id="' + projectId + '"]');
+  if (!row) return;
+  const existing = document.getElementById('sal-detail-' + projectId);
+  if (existing) {
+    existing.remove();   // re-click → chiude
+    return;
+  }
+  // Riga placeholder durante il fetch.
+  const detailRow = document.createElement('tr');
+  detailRow.id = 'sal-detail-' + projectId;
+  const cell = document.createElement('td');
+  cell.colSpan = 7;
+  cell.style.cssText = 'background:var(--bg2,#1e2030);padding:14px;';
+  cell.innerHTML = '<div class="text-muted text-sm">Caricamento dettaglio…</div>';
+  detailRow.appendChild(cell);
+  row.parentNode.insertBefore(detailRow, row.nextSibling);
+
+  let detail = _salDetailCache[projectId];
+  if (!detail) {
+    try {
+      detail = await api('GET', '/finance/api/sal/projects/' + projectId + '/detail');
+      _salDetailCache[projectId] = detail;
+    } catch (e) {
+      cell.innerHTML = `<div style="color:#ef4444;">Errore: ${escapeHtml(e.message || 'dettaglio')}</div>`;
+      return;
+    }
+  }
+  cell.innerHTML = _salRenderDetail(detail);
+}
+
+function _salMiniPct(quoted, worked) {
+  const q = Number(quoted) || 0;
+  return q > 0 ? Math.round((Number(worked) || 0) / q * 100) : 0;
+}
+
+function _salRenderDetail(detail) {
+  const depts = detail.departments || [];
+  const jobs = detail.jobs || [];
+
+  const deptRows = depts.length
+    ? depts.map(function(d) {
+        const p = _salMiniPct(d.quoted, d.worked);
+        return `<tr>
+          <td>${escapeHtml(d.name || 'Altro')}</td>
+          <td style="text-align:right;" class="mono">${_salFmtHours(d.quoted)}</td>
+          <td style="text-align:right;" class="mono">${_salFmtHours(d.planned)}</td>
+          <td style="text-align:right;" class="mono">${_salFmtHours(d.worked)}</td>
+          <td style="min-width:120px;">${_salBar(p)}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:12px;">Nessun reparto</td></tr>';
+
+  const jobRows = jobs.length
+    ? jobs.map(function(j) {
+        return `<tr>
+          <td class="mono" style="font-size:12px;">${escapeHtml(j.code || '')}</td>
+          <td>${escapeHtml(j.title || '—')}</td>
+          <td>${j.quote_number ? escapeHtml(j.quote_number) : '<span class="text-muted">—</span>'}</td>
+          <td style="text-align:right;" class="mono">${_salFmtHours(j.quoted)}</td>
+          <td style="text-align:right;" class="mono">${_salFmtHours(j.planned)}</td>
+          <td style="text-align:right;" class="mono">${_salFmtHours(j.worked)}</td>
+          <td style="min-width:120px;">${_salBar(j.pct)}</td>
+          <td style="text-align:center;">${_salAlarmBadge(j.alarm)}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:12px;">Nessun job</td></tr>';
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div>
+        <div style="font-weight:600;font-size:12px;margin-bottom:6px;color:var(--text2);">Reparti</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Reparto</th>
+              <th style="text-align:right;">Quotate</th>
+              <th style="text-align:right;">Pianif.</th>
+              <th style="text-align:right;">Lavorate</th>
+              <th>%</th>
+            </tr></thead>
+            <tbody>${deptRows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:12px;margin-bottom:6px;color:var(--text2);">Job</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Codice</th>
+              <th>Titolo</th>
+              <th>Quote</th>
+              <th style="text-align:right;">Quotate</th>
+              <th style="text-align:right;">Pianif.</th>
+              <th style="text-align:right;">Lavorate</th>
+              <th>%</th>
+              <th style="text-align:center;">Allarme</th>
+            </tr></thead>
+            <tbody>${jobRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+}
+
+// Popola il select stato progetto coi valori statici di ProjectStatus.
+function _salPopulateStatusFilter() {
+  const statusSel = document.getElementById('sal-f-status');
+  statusSel.innerHTML = '<option value="">— tutti —</option>' +
+    SAL_STATUSES.map(([v, lbl]) => `<option value="${v}">${escapeHtml(lbl)}</option>`).join('');
+}
+
+// Carica clienti (id+nome) per il filtro select.
+async function _salLoadClients() {
+  const clientSel = document.getElementById('sal-f-client');
+  try {
+    const clients = await api('GET', '/clients/api');
+    const cur = clientSel.value;
+    clientSel.innerHTML = '<option value="">— tutti —</option>' +
+      (clients || [])
+        .slice()
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        .map(c => `<option value="${c.id}">${escapeHtml(c.name || '—')}</option>`)
+        .join('');
+    clientSel.value = cur;
+    clientSel.dataset.loaded = '1';
+  } catch (e) {
+    // Silente: il filtro cliente resta vuoto, la lista funziona comunque.
+  }
+}
+
+// ── Tab Temporale ───────────────────────────────────────────────
+function _salPopulateYears() {
+  const sel = document.getElementById('sal-tl-year');
+  const now = new Date().getFullYear();
+  let html = '';
+  for (let y = now; y >= now - 4; y--) {
+    html += `<option value="${y}"${y === now ? ' selected' : ''}>${y}</option>`;
+  }
+  sel.innerHTML = html;
+}
+
+async function loadSalTimeline() {
+  const tbody = document.getElementById('sal-timeline-tbody');
+  const year = document.getElementById('sal-tl-year').value;
+  const granEl = document.querySelector('input[name="sal-tl-gran"]:checked');
+  const gran = granEl ? granEl.value : 'month';
+
+  tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>';
+
+  let data;
+  try {
+    data = await api('GET', `/finance/api/sal/timeline?year=${year}&granularity=${gran}`);
+  } catch (e) {
+    tbody.innerHTML =
+      `<tr><td colspan="5" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'timeline')}</td></tr>`;
+    return;
+  }
+
+  const periods = data.periods || [];
+  if (!periods.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:24px;">Nessun dato per il periodo</td></tr>';
+    return;
+  }
+  let html = periods.map(function(p) {
+    return `<tr>
+      <td>${escapeHtml(p.label || '')}</td>
+      <td style="text-align:right;" class="mono">${_salFmtHours(p.planned)}</td>
+      <td style="text-align:right;" class="mono">${_salFmtHours(p.worked)}</td>
+      <td style="text-align:right;" class="mono">${_salFmtEur(p.invoiced)}</td>
+      <td>${_salBar(p.pct)}</td>
+    </tr>`;
+  }).join('');
+
+  const tot = data.total || {};
+  html += `<tr style="font-weight:700;border-top:2px solid var(--border);">
+    <td>TOTALE</td>
+    <td style="text-align:right;" class="mono">${_salFmtHours(tot.planned)}</td>
+    <td style="text-align:right;" class="mono">${_salFmtHours(tot.worked)}</td>
+    <td style="text-align:right;" class="mono">${_salFmtEur(tot.invoiced)}</td>
+    <td>${_salBar(tot.pct)}</td>
+  </tr>`;
+  tbody.innerHTML = html;
+}
+
+// ── Init ────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async function() {
+  _salPopulateStatusFilter();
+  _salPopulateYears();
+  await _salLoadClients();
+  await loadSalProjects();
+});
+</script>
 {% endblock %}
