@@ -1,6 +1,7 @@
 """F1 (spec 2026-06-10) — Admin storage facility: volumi, agent, coda, proposte.
 F4 (spec 2026-06-11) — Ticket archivio/restore LTO.
 F5 (spec 2026-06-12) — Ordini di transfer digitale (TransferOrder).
+F6 (spec 2026-06-12) — Distruzioni doppia-conferma + asset-map + storage-report.
 """
 from __future__ import annotations
 
@@ -15,14 +16,17 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.models import (
     AgentJob, AgentJobType, AgentNode,
-    ArchiveTicket, Asset, AssetProposedState, JobDeliverable, PhysicalAsset,
-    StorageVolume, TransferOrder, User,
+    ArchiveTicket, Asset, AssetContentState, AssetMembership,
+    AssetProposedState, DestructionRequest, JobDeliverable, PhysicalAsset,
+    PhysicalAssetKind, StorageVolume, TransferOrder, User,
 )
 from app.services.agent_installer import build_installer_zip
 from app.services.agent_queue import enqueue_job, generate_agent_token, enqueue_scan_if_absent
 from app.services.asset_registry import confirm_proposal, discard_proposal
 from app.services.deliverable_match import rank_candidates, link_deliverable_on_confirm
-from app.services.rbac import current_user_optional, requires_permission
+from app.services.rbac import (
+    current_user_optional, has_permission, requires_permission,
+)
 
 CURRENT_TENANT = 1
 
@@ -787,3 +791,448 @@ def transition_transfer(
 
     db.commit()
     return {"ok": True, "status": order.status}
+
+
+# ── F6 — Distruzioni doppia-conferma ─────────────────────────────────
+
+
+def _fetch_destruction(rid: int, db: Session) -> DestructionRequest:
+    """Carica una DestructionRequest con tenant check (404 se assente)."""
+    req = db.get(DestructionRequest, rid)
+    if req is None or req.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404, "Richiesta di distruzione non trovata")
+    return req
+
+
+def _serialize_destructions(reqs: list[DestructionRequest], db: Session) -> list[dict]:
+    """Serializza le richieste con lookup batch asset/utenti (no N+1)."""
+    asset_ids = {r.asset_id for r in reqs}
+    user_ids: set[int] = set()
+    for r in reqs:
+        for uid in (r.requested_by_user_id, r.approved_by_user_id,
+                    r.closed_by_user_id):
+            if uid:
+                user_ids.add(uid)
+
+    asset_map: dict[int, Asset] = (
+        {a.id: a for a in db.execute(select(Asset).where(
+            Asset.id.in_(asset_ids), Asset.tenant_id == CURRENT_TENANT)).scalars().all()}
+        if asset_ids else {}
+    )
+    user_map: dict[int, str] = (
+        {u.id: u.full_name for u in db.execute(
+            select(User).where(User.id.in_(user_ids))).scalars().all()}
+        if user_ids else {}
+    )
+
+    out = []
+    for r in reqs:
+        a = asset_map.get(r.asset_id)
+        out.append({
+            "id": r.id,
+            "status": r.status,
+            "reason": r.reason,
+            "executed_method": r.executed_method,
+            "agent_job_id": r.agent_job_id,
+            "asset": ({"id": a.id, "filename": a.original_name or a.filename}
+                      if a else {"id": r.asset_id, "filename": None}),
+            "requested_by": user_map.get(r.requested_by_user_id)
+                            if r.requested_by_user_id else None,
+            "approved_by": user_map.get(r.approved_by_user_id)
+                           if r.approved_by_user_id else None,
+            "closed_by": user_map.get(r.closed_by_user_id)
+                         if r.closed_by_user_id else None,
+            "created_at": r.created_at.isoformat() + "Z" if r.created_at else None,
+            "closed_at": r.closed_at.isoformat() + "Z" if r.closed_at else None,
+        })
+    return out
+
+
+@router.post("/api/destructions", dependencies=[RequireStorage])
+def create_destruction(
+    request: Request,
+    asset_id: int = Form(...),
+    reason: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """F6 — Richiesta di distruzione documentata (TPN).
+
+    Form fields:
+    - asset_id: id Asset digitale (tenant check)
+    - reason: motivazione obbligatoria (audit)
+
+    Ritorna: {"ok": True, "id": <request_id>}.
+    """
+    from app.services.destruction import request_destruction
+
+    asset = db.get(Asset, asset_id)
+    if asset is None or asset.tenant_id != CURRENT_TENANT:
+        raise HTTPException(404, f"Asset #{asset_id} non trovato")
+
+    user = current_user_optional(request)
+    try:
+        req = request_destruction(
+            db, asset=asset, reason=reason,
+            user_id=getattr(user, "id", None), tenant_id=CURRENT_TENANT,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "id": req.id}
+
+
+@router.get("/api/destructions", dependencies=[RequireStorage])
+def list_destructions(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """F6 — Lista richieste di distruzione. Filtro: status. Max 200, desc id."""
+    q = (
+        select(DestructionRequest)
+        .where(DestructionRequest.tenant_id == CURRENT_TENANT)
+        .order_by(DestructionRequest.id.desc())
+        .limit(200)
+    )
+    if status:
+        q = q.where(DestructionRequest.status == status)
+    reqs = db.execute(q).scalars().all()
+    if not reqs:
+        return []
+    return _serialize_destructions(reqs, db)
+
+
+@router.post("/api/destructions/{rid}/approve")
+def approve_destruction(
+    rid: int,
+    user: User = Depends(requires_permission("approve_destruction")),
+    db: Session = Depends(get_db),
+):
+    """F6 — Approva (doppia conferma). UNICO endpoint con gate RBAC
+    `approve_destruction`; l'invariante approvatore≠richiedente sta nel service."""
+    from app.services.destruction import approve as svc_approve
+
+    req = _fetch_destruction(rid, db)
+    try:
+        req = svc_approve(db, req, user_id=user.id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "status": req.status}
+
+
+@router.post("/api/destructions/{rid}/reject", dependencies=[RequireStorage])
+def reject_destruction(
+    rid: int,
+    request: Request,
+    reason: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """F6 — Rifiuta la richiesta (solo da requested). Notifica il richiedente."""
+    from app.services.destruction import reject as svc_reject
+
+    req = _fetch_destruction(rid, db)
+    user = current_user_optional(request)
+    try:
+        req = svc_reject(db, req, user_id=getattr(user, "id", None),
+                         reason=(reason or "").strip() or None)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "status": req.status}
+
+
+@router.post("/api/destructions/{rid}/execute-manual", dependencies=[RequireStorage])
+def execute_destruction_manual(
+    rid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """F6 — Chiude come eseguita a mano (solo da approved): movimento
+    destroyed + content_state deleted/archived_only."""
+    from app.services.destruction import execute_manual as svc_execute
+
+    req = _fetch_destruction(rid, db)
+    user = current_user_optional(request)
+    try:
+        req = svc_execute(db, req, user_id=getattr(user, "id", None))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "status": req.status}
+
+
+@router.post("/api/destructions/{rid}/enqueue-verify", dependencies=[RequireStorage])
+def enqueue_destruction_verify(
+    rid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """F6 — Accoda il job agent delete_verify (solo da approved, asset
+    registrato su volume). L'agent verifica soltanto, non cancella mai."""
+    from app.services.destruction import enqueue_verify as svc_enqueue
+
+    req = _fetch_destruction(rid, db)
+    user = current_user_optional(request)
+    try:
+        job = svc_enqueue(db, req, user_id=getattr(user, "id", None))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "job_id": job.id}
+
+
+@router.post("/api/destructions/{rid}/transition", dependencies=[RequireStorage])
+def transition_destruction(
+    rid: int,
+    request: Request,
+    status: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """F6 — Transizione generica (solo 'cancelled'): richiedente originale
+    o admin (is_admin = chi ha il permesso approve_destruction)."""
+    from app.services.destruction import transition as svc_transition
+
+    req = _fetch_destruction(rid, db)
+    user = current_user_optional(request)
+    try:
+        req = svc_transition(
+            db, req, status,
+            user_id=getattr(user, "id", None),
+            is_admin=has_permission(user, "approve_destruction"),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    db.commit()
+    return {"ok": True, "status": req.status}
+
+
+# ── F6 — Asset map + storage report ──────────────────────────────────
+
+_ASSET_MAP_LIMIT = 500
+
+# Stati FSM "aperti" per i conteggi pending del report
+_TICKETS_OPEN = ("requested", "in_progress")
+_TRANSFERS_OPEN = ("requested", "in_progress")
+_DESTRUCTIONS_OPEN = ("requested", "approved")
+
+
+@router.get("/api/asset-map", dependencies=[RequireStorage])
+def asset_map(
+    content_state: Optional[str] = None,
+    volume_id: Optional[int] = None,
+    q: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """F6 — Mappa "dove vive ogni asset" (solo registry confermato).
+
+    Filtri: content_state (online|archived_only|deleted), volume_id, q
+    (substring su filename). Limit 500 + flag truncated.
+    Ritorna: {"items": [...], "truncated": bool}. Tutto batch, no N+1.
+    """
+    query = (
+        select(Asset)
+        .where(
+            Asset.tenant_id == CURRENT_TENANT,
+            Asset.proposed_state == AssetProposedState.confirmed,
+        )
+        .order_by(Asset.id.desc())
+    )
+    if content_state:
+        try:
+            query = query.where(
+                Asset.content_state == AssetContentState(content_state))
+        except ValueError:
+            raise HTTPException(400, f"content_state non valido: {content_state!r}")
+    if volume_id:
+        query = query.where(Asset.storage_volume_id == volume_id)
+    if q and q.strip():
+        query = query.where(Asset.filename.ilike(f"%{q.strip()}%"))
+
+    rows = db.execute(query.limit(_ASSET_MAP_LIMIT + 1)).scalars().all()
+    truncated = len(rows) > _ASSET_MAP_LIMIT
+    rows = rows[:_ASSET_MAP_LIMIT]
+    if not rows:
+        return {"items": [], "truncated": False}
+
+    asset_ids = [a.id for a in rows]
+
+    # Volumi (batch)
+    vol_ids = {a.storage_volume_id for a in rows if a.storage_volume_id}
+    vol_map: dict[int, StorageVolume] = (
+        {v.id: v for v in db.execute(select(StorageVolume).where(
+            StorageVolume.id.in_(vol_ids),
+            StorageVolume.tenant_id == CURRENT_TENANT)).scalars().all()}
+        if vol_ids else {}
+    )
+
+    # Tape membership ATTIVE su LTO (batch join)
+    tapes_by_asset: dict[int, list[dict]] = {}
+    for m, pa in db.execute(
+        select(AssetMembership, PhysicalAsset)
+        .join(PhysicalAsset, PhysicalAsset.id == AssetMembership.physical_asset_id)
+        .where(
+            AssetMembership.asset_id.in_(asset_ids),
+            AssetMembership.tenant_id == CURRENT_TENANT,
+            AssetMembership.removed_at.is_(None),
+            PhysicalAsset.tenant_id == CURRENT_TENANT,
+            PhysicalAsset.kind == PhysicalAssetKind.lto,
+        )
+        .order_by(AssetMembership.added_at.desc())
+    ).all():
+        entry = {"id": pa.id, "label": pa.label}
+        bucket = tapes_by_asset.setdefault(m.asset_id, [])
+        if entry not in bucket:  # dedup: più membership sullo stesso tape
+            bucket.append(entry)
+
+    # Deliverable reverse link (batch)
+    deliv_by_asset: dict[int, dict] = {
+        d.digital_asset_id: {"id": d.id, "name": d.name}
+        for d in db.execute(select(JobDeliverable).where(
+            JobDeliverable.digital_asset_id.in_(asset_ids),
+            JobDeliverable.tenant_id == CURRENT_TENANT)).scalars().all()
+    }
+
+    # Distruzioni attive (batch)
+    destruction_pending: set[int] = {
+        r.asset_id for r in db.execute(select(DestructionRequest).where(
+            DestructionRequest.asset_id.in_(asset_ids),
+            DestructionRequest.tenant_id == CURRENT_TENANT,
+            DestructionRequest.status.in_(_DESTRUCTIONS_OPEN))).scalars().all()
+    }
+
+    # Transfer count: ordini done del tenant caricati UNA volta,
+    # conteggio in Python sugli asset_ids JSON
+    transfer_count: dict[int, int] = {}
+    done_orders = db.execute(select(TransferOrder).where(
+        TransferOrder.tenant_id == CURRENT_TENANT,
+        TransferOrder.status == "done")).scalars().all()
+    wanted = set(asset_ids)
+    for o in done_orders:
+        for aid in (o.asset_ids or []):
+            if aid in wanted:
+                transfer_count[aid] = transfer_count.get(aid, 0) + 1
+
+    items = []
+    for a in rows:
+        vol = vol_map.get(a.storage_volume_id) if a.storage_volume_id else None
+        items.append({
+            "id": a.id,
+            "filename": a.filename,
+            "content_state": a.content_state.value,
+            "volume": {"id": vol.id, "name": vol.name} if vol else None,
+            "tapes": tapes_by_asset.get(a.id, []),
+            "preview_status": a.preview_status,
+            "transfer_count": transfer_count.get(a.id, 0),
+            "deliverable": deliv_by_asset.get(a.id),
+            "destruction_pending": a.id in destruction_pending,
+        })
+    return {"items": items, "truncated": truncated}
+
+
+@router.get("/api/storage-report", dependencies=[RequireStorage])
+def storage_report(db: Session = Depends(get_db)):
+    """F6 — Report aggregato storage: volumi, tape, stati contenuto,
+    membership orfane, preview locali, code pendenti."""
+    import os
+
+    # Registry confermato del tenant, caricato una volta
+    assets = db.execute(select(Asset).where(
+        Asset.tenant_id == CURRENT_TENANT,
+        Asset.proposed_state == AssetProposedState.confirmed,
+    )).scalars().all()
+
+    # Volumi: conteggi su asset con contenuto ancora presente (no deleted)
+    by_volume: dict[int, dict] = {}
+    content_states: dict[str, int] = {}
+    for a in assets:
+        content_states[a.content_state.value] = (
+            content_states.get(a.content_state.value, 0) + 1)
+        if a.storage_volume_id and a.content_state != AssetContentState.deleted:
+            agg = by_volume.setdefault(
+                a.storage_volume_id, {"asset_count": 0, "bytes_total": 0})
+            agg["asset_count"] += 1
+            agg["bytes_total"] += a.file_size or 0
+
+    volumes = []
+    for v in db.execute(select(StorageVolume).where(
+            StorageVolume.tenant_id == CURRENT_TENANT)
+            .order_by(StorageVolume.name)).scalars().all():
+        agg = by_volume.get(v.id, {"asset_count": 0, "bytes_total": 0})
+        volumes.append({
+            "id": v.id,
+            "name": v.name,
+            "asset_count": agg["asset_count"],
+            "bytes_total": agg["bytes_total"],
+            "free_gb": v.free_gb,
+            "total_gb": v.total_gb,
+        })
+
+    # Tape LTO: membership attive aggregate per tape
+    tape_rows = db.execute(
+        select(PhysicalAsset, AssetMembership)
+        .join(AssetMembership,
+              AssetMembership.physical_asset_id == PhysicalAsset.id,
+              isouter=True)
+        .where(
+            PhysicalAsset.tenant_id == CURRENT_TENANT,
+            PhysicalAsset.kind == PhysicalAssetKind.lto,
+        )
+    ).all()
+    by_tape: dict[int, dict] = {}
+    for pa, m in tape_rows:
+        agg = by_tape.setdefault(pa.id, {
+            "id": pa.id, "label": pa.label, "file_count": 0, "bytes_total": 0})
+        if m is not None and m.removed_at is None:
+            agg["file_count"] += 1
+            agg["bytes_total"] += m.file_size or 0
+    tapes = sorted(by_tape.values(), key=lambda t: t["label"] or "")
+
+    # Membership orfane (asset_id NULL, ancora attive)
+    orphan_memberships = len(db.execute(select(AssetMembership.id).where(
+        AssetMembership.tenant_id == CURRENT_TENANT,
+        AssetMembership.asset_id.is_(None),
+        AssetMembership.removed_at.is_(None))).all())
+
+    # Preview locali ready: somma size dai file su disco (tollerante)
+    preview_count = 0
+    preview_bytes = 0
+    for a in assets:
+        if a.preview_status != "ready" or a.preview_storage != "local":
+            continue
+        preview_count += 1
+        if a.preview_path:
+            try:
+                preview_bytes += os.path.getsize(a.preview_path)
+            except OSError:
+                pass  # file mancante/inaccessibile: conta 0 byte
+
+    # Code pendenti
+    pending = {
+        "proposals": len(db.execute(select(Asset.id).where(
+            Asset.tenant_id == CURRENT_TENANT,
+            Asset.proposed_state == AssetProposedState.pending_review)).all()),
+        "tickets_open": len(db.execute(select(ArchiveTicket.id).where(
+            ArchiveTicket.tenant_id == CURRENT_TENANT,
+            ArchiveTicket.status.in_(_TICKETS_OPEN))).all()),
+        "transfers_open": len(db.execute(select(TransferOrder.id).where(
+            TransferOrder.tenant_id == CURRENT_TENANT,
+            TransferOrder.status.in_(_TRANSFERS_OPEN))).all()),
+        "destructions_open": len(db.execute(select(DestructionRequest.id).where(
+            DestructionRequest.tenant_id == CURRENT_TENANT,
+            DestructionRequest.status.in_(_DESTRUCTIONS_OPEN))).all()),
+    }
+
+    return {
+        "volumes": volumes,
+        "tapes": tapes,
+        "content_states": content_states,
+        "orphan_memberships": orphan_memberships,
+        "previews": {"count": preview_count, "bytes_total": preview_bytes},
+        "pending": pending,
+    }
