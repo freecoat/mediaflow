@@ -3292,6 +3292,40 @@ class ArchiveTicket(Base):
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
+class TransferOrder(Base):
+    """F5 (spec 2026-06-12) — Ordine di transfer digitale dalla facility.
+    FSM: requested → in_progress → done | failed | cancelled (terminali immutabili).
+    Tool manual: operatore esegue e chiude con esito + link.
+    Tool aspera: agente esegue ascp e riporta l'esito via AgentJob.
+    """
+    __tablename__ = "transfer_orders"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    # Tool: "manual" | "aspera" — driver futuri shuttle/s3/backlot si aggiungono qui
+    tool: Mapped[str] = mapped_column(String(20), index=True)
+    # Destinazione: es. "user@host:/path" (aspera) o descrizione share (manual)
+    destination: Mapped[str] = mapped_column(String(500))
+    recipient_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Lista ID Asset inclusi nell'ordine (≥ 1)
+    asset_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # FSM status
+    status: Mapped[str] = mapped_column(String(15), default="requested",
+                                        server_default="requested", index=True)
+    # Link condivisione generato al completamento
+    link_url: Mapped[Optional[str]] = mapped_column(String(800), nullable=True)
+    link_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # Verifica esito: {method: checksum|size|manual|tool_rc, ok: bool, details: str}
+    verification: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # FK agentjob (solo tool agent-driven, es. aspera)
+    agent_job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agent_jobs.id"), nullable=True, index=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    requested_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    closed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class IngestBatch(Base):
     """v3.5.0-alpha.73 — Raggruppa N AssetMovement nello stesso DDT (bolla).
     Use case: cliente consegna 1 disco con 5 file digitali → 1 IngestBatch
