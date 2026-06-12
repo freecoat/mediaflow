@@ -1,0 +1,218 @@
+"""SAL — Stato Avanzamento Lavori: metriche ore quotate/pianificate/lavorate.
+
+Single source of truth per la vista SAL (`/finance/sal`). Read-only, aggrega
+Job / JobCostLine / Booking esistenti. Nessun modello/migrazione.
+
+Definizioni (decisioni Matteo, design 2026-06-12):
+- **ore quotate(job)**: Σ su JobCostLine a unit-tempo. Unit-ora
+  (hr/hour/h/ore/ora) → `quantity_quoted` as-is; unit-giorno
+  (day/days/gg/giorno/giorni) → `quantity_quoted × daily_hours`. Voci a corpo
+  (pc/TB/forfait…) ESCLUSE (0).
+- **ore pianificate(job)**: Σ `_booking_billable_hours(b)` (override umana,
+  no double-count sala+persona) sui Booking NON cancellati del job.
+- **ore lavorate(job)**: idem ma solo `execution_status == done`.
+- **per reparto**: quotato attribuito a `PriceItem.department_id` della JCL,
+  pianificato/lavorato alla `Resource.department_id` della prima risorsa con
+  reparto fra gli assignment del booking. Senza reparto → chiave 0 ("Altro").
+- **allarme job**: lavorate>quotate o pianificate>quotate → "red";
+  quotate>0 e max(lav,pian) ≥ 0.9×quotate → "amber"; altrimenti "none".
+
+Le funzioni pure prendono `daily_hours` come parametro (default 8.0). La
+risoluzione della WorkingHoursPolicy avviene in `project_metrics` via
+`_daily_hours_for_job(db, job)`.
+"""
+from typing import Optional
+
+from app.services.cost_line_sync import _booking_billable_hours
+
+# Unit temporali per il monte ore quotate (lower/strip).
+_HOUR_UNITS = {"hr", "hour", "h", "ore", "ora"}
+_DAY_UNITS = {"day", "days", "gg", "giorno", "giorni"}
+_TIME_UNITS = _HOUR_UNITS | _DAY_UNITS
+
+DEFAULT_DAILY_HOURS = 8.0
+
+
+def _norm_unit(unit: Optional[str]) -> str:
+    return (unit or "").strip().lower()
+
+
+def _jcl_quoted_hours(jcl, daily_hours: float) -> float:
+    """Ore quotate di una singola JobCostLine. 0 se unit non temporale."""
+    u = _norm_unit(getattr(jcl, "unit", None))
+    qty = getattr(jcl, "quantity_quoted", 0.0) or 0.0
+    if u in _HOUR_UNITS:
+        return float(qty)
+    if u in _DAY_UNITS:
+        return float(qty) * float(daily_hours)
+    return 0.0
+
+
+def quoted_hours(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> float:
+    """Σ ore quotate sulle JobCostLine a unit-tempo del job."""
+    total = 0.0
+    for jcl in (getattr(job, "cost_lines", None) or []):
+        total += _jcl_quoted_hours(jcl, daily_hours)
+    return total
+
+
+def _non_cancelled_bookings(job):
+    """Booking del job con status != cancelled. Usa la relationship `bookings`."""
+    from app.models import BookingStatus
+    out = []
+    for b in (getattr(job, "bookings", None) or []):
+        if b.status != BookingStatus.cancelled:
+            out.append(b)
+    return out
+
+
+def planned_hours(job) -> float:
+    """Σ ore fatturabili sui Booking non-cancelled del job."""
+    return sum(_booking_billable_hours(b) for b in _non_cancelled_bookings(job))
+
+
+def worked_hours(job) -> float:
+    """Σ ore fatturabili sui Booking non-cancelled e execution_status==done."""
+    from app.models import BookingExecutionStatus
+    return sum(
+        _booking_billable_hours(b)
+        for b in _non_cancelled_bookings(job)
+        if b.execution_status == BookingExecutionStatus.done
+    )
+
+
+def _booking_department_id(b) -> int:
+    """Reparto del booking = department_id della prima risorsa (con reparto)
+    fra gli assignment. Fallback 0 ("Altro")."""
+    for a in (getattr(b, "assignments", None) or []):
+        res = getattr(a, "resource", None)
+        if res is not None and getattr(res, "department_id", None):
+            return res.department_id
+    return 0
+
+
+def by_department(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> dict:
+    """dict department_id(int, 0=Altro) → {quoted, planned, worked}.
+
+    Quotato attribuito al reparto del PriceItem della JCL; pianificato/lavorato
+    al reparto della risorsa primaria del booking.
+    """
+    from app.models import BookingExecutionStatus
+
+    out: dict = {}
+
+    def _bucket(dep_id: int) -> dict:
+        return out.setdefault(dep_id, {"quoted": 0.0, "planned": 0.0, "worked": 0.0})
+
+    # Quotato per reparto (da PriceItem.department_id della JCL)
+    for jcl in (getattr(job, "cost_lines", None) or []):
+        h = _jcl_quoted_hours(jcl, daily_hours)
+        if h <= 0:
+            continue
+        pi = getattr(jcl, "price_item", None)
+        dep_id = getattr(pi, "department_id", None) if pi is not None else None
+        _bucket(dep_id or 0)["quoted"] += h
+
+    # Pianificato / lavorato per reparto (da Resource.department_id del booking)
+    for b in _non_cancelled_bookings(job):
+        h = _booking_billable_hours(b)
+        if h <= 0:
+            continue
+        dep_id = _booking_department_id(b)
+        bucket = _bucket(dep_id)
+        bucket["planned"] += h
+        if b.execution_status == BookingExecutionStatus.done:
+            bucket["worked"] += h
+
+    return out
+
+
+def job_alarm(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> str:
+    """"red" se lav/pian > quotate; "amber" se quotate>0 e max ≥ 0.9×quotate;
+    altrimenti "none". quotate=0 → "none"."""
+    quoted = quoted_hours(job, daily_hours=daily_hours)
+    planned = planned_hours(job)
+    worked = worked_hours(job)
+    return _alarm_from(quoted, planned, worked)
+
+
+def _alarm_from(quoted: float, planned: float, worked: float) -> str:
+    if quoted <= 0:
+        return "none"
+    if worked > quoted or planned > quoted:
+        return "red"
+    if max(worked, planned) >= 0.9 * quoted:
+        return "amber"
+    return "none"
+
+
+def job_metrics(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> dict:
+    """{quoted, planned, worked, pct, alarm} per il job. pct = worked/quoted (0 se 0)."""
+    quoted = quoted_hours(job, daily_hours=daily_hours)
+    planned = planned_hours(job)
+    worked = worked_hours(job)
+    pct = (worked / quoted) if quoted > 0 else 0.0
+    return {
+        "quoted": quoted,
+        "planned": planned,
+        "worked": worked,
+        "pct": pct,
+        "alarm": _alarm_from(quoted, planned, worked),
+    }
+
+
+def _daily_hours_for_job(db, job) -> float:
+    """Risolve daily_hours per il job: WorkingHoursPolicy del job se esiste,
+    altrimenti WorkingHoursPolicy.is_default del tenant, altrimenti 8.0.
+
+    Nota: Job non ha (ad oggi) una relationship `working_hours_policy`; il
+    getattr difensivo permette di agganciarla in futuro senza toccare questo
+    codice.
+    """
+    pol = getattr(job, "working_hours_policy", None)
+    if pol is not None and getattr(pol, "daily_hours_threshold", None):
+        return float(pol.daily_hours_threshold)
+    from app.models import WorkingHoursPolicy
+    q = db.query(WorkingHoursPolicy).filter(
+        WorkingHoursPolicy.is_default == True  # noqa: E712
+    )
+    tid = getattr(job, "tenant_id", None)
+    if tid is not None:
+        q = q.filter(WorkingHoursPolicy.tenant_id == tid)
+    default_pol = q.first()
+    if default_pol is not None and getattr(default_pol, "daily_hours_threshold", None):
+        return float(default_pol.daily_hours_threshold)
+    return DEFAULT_DAILY_HOURS
+
+
+def project_metrics(db, project) -> dict:
+    """Aggrega i job del progetto (già tenant-scoped dal chiamante).
+
+    Ritorna {quoted, planned, worked, pct, alarm, job_count}. daily_hours
+    risolto per ciascun job via `_daily_hours_for_job`. alarm = peggiore fra i
+    job (red > amber > none).
+    """
+    quoted = planned = worked = 0.0
+    job_count = 0
+    has_red = has_amber = False
+    for job in (getattr(project, "jobs", None) or []):
+        job_count += 1
+        daily = _daily_hours_for_job(db, job)
+        m = job_metrics(job, daily_hours=daily)
+        quoted += m["quoted"]
+        planned += m["planned"]
+        worked += m["worked"]
+        if m["alarm"] == "red":
+            has_red = True
+        elif m["alarm"] == "amber":
+            has_amber = True
+    pct = (worked / quoted) if quoted > 0 else 0.0
+    alarm = "red" if has_red else ("amber" if has_amber else "none")
+    return {
+        "quoted": quoted,
+        "planned": planned,
+        "worked": worked,
+        "pct": pct,
+        "alarm": alarm,
+        "job_count": job_count,
+    }
