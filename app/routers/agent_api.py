@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import app.services.asset_preview as asset_preview
+import app.services.destruction as destruction
 import app.services.transfer_orders as transfer_orders
 from app.database import get_db
 from app.models.models import (
@@ -105,6 +106,12 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
                 # job orfano (nessun ordine linkato) o ordine già chiuso:
                 # non bloccare il fail_job con un 500 → il job resterebbe claimed
                 print(f"[transfer] esito failed non applicabile: {e}")
+        if job.type == AgentJobType.delete_verify:
+            try:
+                # La richiesta resta approved: notifica il richiedente
+                destruction.apply_verify_failure(db, job, error or "")
+            except ValueError as e:
+                print(f"[destruction] esito failed non applicabile: {e}")
         return None
     complete_job(db, job, result or {})
     if status != "done" or not result:
@@ -143,6 +150,13 @@ def process_job_result(db: Session, job: AgentJob, *, status: str,
         except ValueError as e:
             print(f"[transfer] esito done non applicabile: {e}")
         # NON ritornare l'ordine: post_result espone il return come asset_id
+        return None
+    if job.type == AgentJobType.delete_verify:
+        try:
+            destruction.apply_verify_result(db, job, result)
+        except ValueError as e:
+            print(f"[destruction] esito done non applicabile: {e}")
+        # NON ritornare la richiesta: post_result espone il return come asset_id
         return None
     return None
 

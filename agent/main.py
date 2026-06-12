@@ -17,7 +17,8 @@ from agent.probe import build_probe_result, xxhash_file
 from agent.transfer import run_transfer
 from agent.watch import WatchState, scan_volume
 
-CAPABILITIES = ["probe", "checksum", "scan", "browse", "preview", "transfer"]
+CAPABILITIES = ["probe", "checksum", "scan", "browse", "preview", "transfer",
+                "delete_verify"]
 
 
 def volume_stats(volumes: list[dict]) -> list[dict]:
@@ -70,6 +71,18 @@ def handle_job(job: dict, volumes_by_id: dict, watch_states: dict,
             st = watch_states.setdefault(int(payload.get("volume_id") or 0), WatchState())
             items = scan_volume(vol["mount_path"], vol.get("watch_dirs") or [], st)
             return "done", {"volume_id": int(payload.get("volume_id") or 0), "items": items}, None
+        if jtype == "delete_verify":
+            # F6: verify-only — l'agent NON cancella mai, controlla solo che
+            # il file non esista più sul volume (distruzione documentata TPN).
+            import os
+            rel = (payload.get("rel_path") or "").strip().strip("/\\")
+            base = os.path.realpath(vol["mount_path"])
+            full = os.path.realpath(os.path.join(base, rel)) if rel else base
+            # Guard traversal (stesso pattern di agent/browse.py e transfer.py)
+            if full != base and not full.startswith(base + os.sep):
+                raise ValueError(f"percorso fuori dal volume: {payload.get('rel_path')!r}")
+            return "done", {"exists": os.path.isfile(full),
+                            "request_id": payload.get("request_id")}, None
         return "failed", None, f"tipo job non supportato da agent v{__version__}: {jtype}"
     except Exception as e:
         return "failed", None, f"{type(e).__name__}: {e}"
