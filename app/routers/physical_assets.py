@@ -2168,6 +2168,55 @@ async def scan_asset(token: str, request: Request, db: Session = Depends(get_db)
         .order_by(AssetMovement.movement_date.desc())
         .first()
     )
+
+    # F4 — contenuto del supporto (membership attive) per lookup QR
+    membership_rows = (
+        db.query(AssetMembership)
+        .filter(
+            AssetMembership.physical_asset_id == a.id,
+            AssetMembership.tenant_id == current_tenant_id(),
+            AssetMembership.removed_at.is_(None),
+        )
+        .order_by(AssetMembership.added_at.desc())
+        .all()
+    )
+    linked_ids = [m.asset_id for m in membership_rows if m.asset_id is not None]
+    linked_map: dict[int, Asset] = {}
+    if linked_ids:
+        linked_map = {
+            la.id: la
+            for la in db.query(Asset).filter(Asset.id.in_(linked_ids)).all()
+        }
+    memberships = []
+    for m in membership_rows:
+        linked = linked_map.get(m.asset_id) if m.asset_id else None
+        if m.file_size:
+            if m.file_size > 1e9:
+                size_h = f"{m.file_size / 1e9:.1f} GB"
+            else:
+                size_h = f"{m.file_size / 1e6:.1f} MB"
+        else:
+            size_h = None
+        memberships.append({
+            "filename": linked.original_name if linked else None,
+            "path_on_media": m.path_on_media,
+            "size_h": size_h,
+            "added_at": m.added_at.strftime("%d/%m/%Y") if m.added_at else None,
+        })
+
+    # F4 — ticket aperti (requested/in_progress) su questo supporto
+    from app.models import ArchiveTicket
+    open_tickets = (
+        db.query(ArchiveTicket)
+        .filter(
+            ArchiveTicket.physical_asset_id == a.id,
+            ArchiveTicket.tenant_id == current_tenant_id(),
+            ArchiveTicket.status.in_(["requested", "in_progress"]),
+        )
+        .order_by(ArchiveTicket.id.desc())
+        .all()
+    )
+
     return _tpl().TemplateResponse(
         "pages/physical_asset_scan.html",
         {
@@ -2176,5 +2225,7 @@ async def scan_asset(token: str, request: Request, db: Session = Depends(get_db)
                 db.query(Client).filter(Client.id == a.owner_client_id).first()
                 if a.owner_client_id else None
             ),
+            "memberships": memberships,
+            "open_tickets": open_tickets,
         },
     )

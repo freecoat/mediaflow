@@ -67,6 +67,40 @@
     {% if asset.condition %}<div class="row"><span class="lbl">Condizione</span><span class="val">{{ asset.condition }}</span></div>{% endif %}
   </div>
 
+  {% if memberships %}
+  <div class="scan-card">
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px;">📼 Contenuto ({{ memberships|length }} file)</div>
+    {% for m in memberships %}
+    <div style="padding:6px 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+      <div style="font-size:13px;font-weight:500;word-break:break-all;{% if not m.filename %}color:var(--text3);{% endif %}">
+        {{ m.filename or '(non collegato)' }}
+      </div>
+      {% if m.path_on_media %}
+      <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);word-break:break-all;">{{ m.path_on_media }}</div>
+      {% endif %}
+      <div style="font-size:11px;color:var(--text3);">
+        {{ m.size_h or '—' }}{% if m.added_at %} · {{ m.added_at }}{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if open_tickets %}
+  <div class="scan-card">
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px;">🎫 Ticket aperti</div>
+    {% for t in open_tickets %}
+    <div class="row">
+      <span class="lbl">{% if t.kind == 'archive' %}📦 archive{% else %}♻️ restore{% endif %}</span>
+      <span class="val">
+        {% if t.status == 'requested' %}Richiesto{% elif t.status == 'in_progress' %}In lavorazione{% else %}{{ t.status }}{% endif %}
+        {% if t.created_at %} · {{ t.created_at.strftime('%d/%m/%Y') }}{% endif %}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if last_movement %}
   <div class="scan-card">
     <div style="font-weight:600;font-size:13px;margin-bottom:8px;">Ultimo movimento</div>

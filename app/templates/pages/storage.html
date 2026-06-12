@@ -30,6 +30,10 @@
             style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
       📋 Job
     </button>
+    <button class="tab-btn" id="tab-tickets" onclick="switchStorageTab('tickets')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      🎫 Ticket
+    </button>
   </div>
 </div>
 
@@ -123,6 +127,48 @@
         </thead>
         <tbody id="jobsBody">
           <tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Pane: Ticket ────────────────────────────────────────── -->
+  <div id="pane-tickets" style="display:none;">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <label class="text-sm" style="display:flex;align-items:center;gap:6px;">Stato:
+        <select class="form-select" id="tk-filter-status" onchange="loadTickets()" style="max-width:160px;">
+          <option value="">Tutti</option>
+          <option value="requested">Richiesto</option>
+          <option value="in_progress">In lavorazione</option>
+          <option value="done">Fatto</option>
+          <option value="cancelled">Annullato</option>
+        </select>
+      </label>
+      <label class="text-sm" style="display:flex;align-items:center;gap:6px;">Tipo:
+        <select class="form-select" id="tk-filter-kind" onchange="loadTickets()" style="max-width:140px;">
+          <option value="">Tutti</option>
+          <option value="archive">📦 Archive</option>
+          <option value="restore">♻️ Restore</option>
+        </select>
+      </label>
+      <span style="flex:1;"></span>
+      <button class="btn btn-primary btn-sm" onclick="openNewTicketModal()">+ Ticket</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Target</th>
+            <th>Tape</th>
+            <th>Stato</th>
+            <th>Richiesto da</th>
+            <th>Creato</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ticketsBody">
+          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -312,13 +358,50 @@
   </div>
 </div>
 
+<!-- ── Modal: Nuovo ticket ─────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-new-ticket">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Nuovo ticket archivio/restore</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('modal-new-ticket')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Tipo *</label>
+        <select class="form-select" id="nt-kind">
+          <option value="archive">📦 Archive (porta su LTO)</option>
+          <option value="restore">♻️ Restore (recupera da LTO)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Asset</label>
+        <input class="form-input" id="nt-asset-id" type="number" min="1" placeholder="es. 42">
+        <div class="form-hint">ID asset dal registry.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Deliverable</label>
+        <input class="form-input" id="nt-deliverable-id" type="number" min="1" placeholder="es. 17">
+        <div class="form-hint">In alternativa all'asset.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <textarea class="form-input" id="nt-note" rows="2" placeholder="Note per chi lavora il ticket…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-ticket')">Annulla</button>
+      <button class="btn btn-primary" onclick="submitNewTicket()">Crea ticket</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────
 let _storageVolumes = [];
 let _currentTab = 'proposals';
 
 // ── Tab switching ─────────────────────────────────────────────────
-const _STORAGE_TABS = ['proposals', 'volumes', 'agents', 'jobs'];
+const _STORAGE_TABS = ['proposals', 'volumes', 'agents', 'jobs', 'tickets'];
 
 function switchStorageTab(tab) {
   _currentTab = tab;
@@ -877,12 +960,123 @@ function onTopbarNew() {
   else if (_currentTab === 'proposals') openRegisterPathModal();
 }
 
+// ── Ticket archivio/restore (F4) ──────────────────────────────────
+
+const TICKET_STATUS_LABEL = {
+  requested: 'Richiesto', in_progress: 'In lavorazione',
+  done: 'Fatto', cancelled: 'Annullato'
+};
+const TICKET_STATUS_COLOR = {
+  requested: '#fbbf24', in_progress: '#6272f5',
+  done: '#22c55e', cancelled: '#9ca3af'
+};
+const TICKET_STATUS_BG = {
+  requested: 'rgba(251,191,36,.16)', in_progress: 'rgba(98,114,245,.16)',
+  done: 'rgba(34,197,94,.16)', cancelled: 'rgba(156,163,175,.16)'
+};
+
+async function loadTickets() {
+  const tbody = document.getElementById('ticketsBody');
+  const params = new URLSearchParams();
+  const fStatus = document.getElementById('tk-filter-status').value;
+  const fKind = document.getElementById('tk-filter-kind').value;
+  if (fStatus) params.set('status', fStatus);
+  if (fKind) params.set('kind', fKind);
+  try {
+    const qs = params.toString();
+    const data = await api('GET', '/storage/api/tickets' + (qs ? '?' + qs : ''));
+    if (!data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessun ticket.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(function(t) {
+      const kindLabel = t.kind === 'archive' ? '📦 archive' : '♻️ restore';
+      let target = '—';
+      if (t.asset) target = '<strong>' + escapeHtml(t.asset.filename || ('Asset #' + t.asset.id)) + '</strong>';
+      else if (t.deliverable) target = escapeHtml(t.deliverable.name || ('Deliverable #' + t.deliverable.id));
+      const tape = t.tape ? escapeHtml(t.tape.name || ('Tape #' + t.tape.id)) : '—';
+      const sc = TICKET_STATUS_COLOR[t.status] || '#9ca3af';
+      const sbg = TICKET_STATUS_BG[t.status] || 'rgba(156,163,175,.16)';
+      const badge = '<span style="display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;'
+        + 'background:' + sbg + ';color:' + sc + ';">'
+        + escapeHtml(TICKET_STATUS_LABEL[t.status] || t.status) + '</span>';
+      const created = t.created_at ? new Date(t.created_at).toLocaleString('it-IT') : '—';
+      const note = t.note ? '<div class="text-muted" style="font-size:11px;max-width:240px;">' + escapeHtml(t.note) + '</div>' : '';
+      let actions = '';
+      if (t.status === 'requested') {
+        actions = '<button class="btn btn-ghost btn-sm" data-ticket-id="' + t.id + '" '
+          + 'onclick="transitionTicket(this.dataset.ticketId, \'in_progress\')">▶ In carico</button> ';
+      }
+      if (t.status === 'requested' || t.status === 'in_progress') {
+        actions += '<button class="btn btn-ghost btn-sm" style="color:var(--green);" data-ticket-id="' + t.id + '" '
+          + 'onclick="transitionTicket(this.dataset.ticketId, \'done\')">✔ Fatto</button> '
+          + '<button class="btn btn-ghost btn-sm" style="color:var(--rose);" data-ticket-id="' + t.id + '" '
+          + 'onclick="transitionTicket(this.dataset.ticketId, \'cancelled\')">✕</button>';
+      }
+      return '<tr>'
+        + '<td style="white-space:nowrap;">' + kindLabel + '</td>'
+        + '<td>' + target + note + '</td>'
+        + '<td style="font-size:12px;">' + tape + '</td>'
+        + '<td>' + badge + '</td>'
+        + '<td style="font-size:12px;">' + escapeHtml(t.requested_by || '—') + '</td>'
+        + '<td class="text-muted" style="font-size:12px;">' + escapeHtml(created) + '</td>'
+        + '<td class="text-right" style="white-space:nowrap;" onclick="event.stopPropagation()">' + actions + '</td>'
+        + '</tr>';
+    }).join('');
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Errore caricamento ticket.</td></tr>';
+    toast('Errore caricamento ticket: ' + e.message, 'error');
+  }
+}
+
+async function transitionTicket(id, status) {
+  if (status === 'done' && !confirm('Segnare il ticket come fatto?')) return;
+  if (status === 'cancelled' && !confirm('Annullare questo ticket?')) return;
+  const fd = new FormData();
+  fd.append('status', status);
+  try {
+    await api('POST', '/storage/api/tickets/' + id + '/transition', fd);
+    toast('Ticket aggiornato', 'success');
+    loadTickets();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function openNewTicketModal() {
+  document.getElementById('nt-kind').value = 'archive';
+  document.getElementById('nt-asset-id').value = '';
+  document.getElementById('nt-deliverable-id').value = '';
+  document.getElementById('nt-note').value = '';
+  openModal('modal-new-ticket');
+}
+
+async function submitNewTicket() {
+  const fd = new FormData();
+  fd.append('kind', document.getElementById('nt-kind').value);
+  const assetId = document.getElementById('nt-asset-id').value.trim();
+  const delivId = document.getElementById('nt-deliverable-id').value.trim();
+  const note = document.getElementById('nt-note').value.trim();
+  if (assetId) fd.append('asset_id', assetId);
+  if (delivId) fd.append('deliverable_id', delivId);
+  if (note) fd.append('note', note);
+  try {
+    await api('POST', '/storage/api/tickets', fd);
+    closeModal('modal-new-ticket');
+    toast('Ticket creato', 'success');
+    loadTickets();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
   loadProposals();
   loadVolumes();
   loadAgents();
   loadJobs();
+  loadTickets();
 });
 </script>
 
