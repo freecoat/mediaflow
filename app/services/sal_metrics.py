@@ -404,11 +404,15 @@ def timeline_metrics(db, *, year: int, granularity: str = "month") -> dict:
 
 def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
     """Calendario SAL: righe = progetti, colonne = mesi/trimestri dell'anno,
-    cella = % CUMULATIVA a fine periodo (ore lavorate cumulate, anni precedenti
-    inclusi, / ore quotate totali del progetto).
+    cella = % CUMULATIVA a fine periodo (ore cumulate, anni precedenti inclusi,
+    / ore quotate totali del progetto).
+
+    Base della cella (`basis`): periodi interamente passati → ore **lavorate**
+    (done); mese corrente e futuri → ore **pianificate** (tutti i booking
+    non-cancelled). Permette di vedere consuntivo nel passato e previsione avanti.
 
     Include i progetti del tenant non cestinati con ore quotate > 0 oppure con
-    lavorato cumulato > 0 a fine anno. Riga "total" = Σ sui progetti inclusi.
+    cumulato > 0 a fine anno. Riga "total" = Σ sui progetti inclusi.
     """
     from datetime import datetime as _dt
     from sqlalchemy.orm import joinedload
@@ -433,6 +437,15 @@ def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
         cutoffs = [(_dt(year, m + 1, 1) if m < 12 else _dt(year + 1, 1, 1))
                    for m in range(1, 13)]
 
+    from datetime import date as _date
+    today = _date.today()
+    cur_first = _dt(today.year, today.month, 1)
+
+    def _basis_for(cutoff):
+        # periodo interamente passato (cutoff ≤ primo giorno del mese corrente)
+        # → lavorato; altrimenti (mese corrente + futuri) → pianificato.
+        return "worked" if cutoff <= cur_first else "planned"
+
     projects = (
         db.query(Project)
         .options(
@@ -452,27 +465,32 @@ def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
     total_cum = [0.0] * len(cutoffs)
     for prj in projects:
         quoted = 0.0
-        # (booking_start, ore) dei soli done non-cancelled, tutti gli anni
+        # (booking_start, ore) — done per i periodi passati, tutti i non-cancelled
+        # per i periodi correnti/futuri (pianificato). Tutti gli anni.
         done_events: list[tuple] = []
+        planned_events: list[tuple] = []
         for job in (prj.jobs or []):
             dh = _daily_hours_for_job(db, job)
             quoted += quoted_hours(job, daily_hours=dh)
             for b in _non_cancelled_bookings(job):
-                if b.execution_status != BookingExecutionStatus.done:
-                    continue
                 sd = getattr(b, "start_datetime", None)
                 if sd is None:
                     continue
                 h = _booking_billable_hours(b)
-                if h > 0:
+                if h <= 0:
+                    continue
+                planned_events.append((sd, h))
+                if b.execution_status == BookingExecutionStatus.done:
                     done_events.append((sd, h))
 
         cum_cells = []
         for i, cutoff in enumerate(cutoffs):
-            cum = sum(h for sd, h in done_events if sd < cutoff)
+            basis = _basis_for(cutoff)
+            events = done_events if basis == "worked" else planned_events
+            cum = sum(h for sd, h in events if sd < cutoff)
             pct = (cum / quoted) if quoted > 0 else 0.0
             cum_cells.append({"label": labels[i], "worked_cum": round(cum, 2),
-                              "pct": pct})
+                              "pct": pct, "basis": basis})
 
         final_cum = cum_cells[-1]["worked_cum"] if cum_cells else 0.0
         if quoted <= 0 and final_cum <= 0:
@@ -492,7 +510,8 @@ def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
 
     total_cells = [
         {"label": labels[i], "worked_cum": round(total_cum[i], 2),
-         "pct": (total_cum[i] / total_quoted) if total_quoted > 0 else 0.0}
+         "pct": (total_cum[i] / total_quoted) if total_quoted > 0 else 0.0,
+         "basis": _basis_for(cutoffs[i])}
         for i in range(len(cutoffs))
     ]
 

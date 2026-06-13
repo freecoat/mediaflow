@@ -437,20 +437,23 @@ def test_matrix_quarter(db):
 
 
 def test_matrix_excludes_empty_and_counts_only_done(db):
+    # Anno interamente passato (2024) → tutte le celle basis="worked", quindi
+    # contano solo i booking done non-cancelled (non-done e cancelled esclusi).
     from app.models import BookingStatus, BookingExecutionStatus, Project
     cli, prj = _hierarchy(db)
     job = _job(db, prj, cli)
     _jcl(db, job, unit="hr", qty=8)
-    # non-done e cancelled non contano nel cumulativo
-    _booking(db, job, start=datetime(2026, 1, 5, 9), end=datetime(2026, 1, 5, 17))
-    _booking(db, job, start=datetime(2026, 2, 5, 9), end=datetime(2026, 2, 5, 17),
+    # non-done e cancelled non contano nel cumulativo lavorato (celle passate)
+    _booking(db, job, start=datetime(2024, 1, 5, 9), end=datetime(2024, 1, 5, 17))
+    _booking(db, job, start=datetime(2024, 2, 5, 9), end=datetime(2024, 2, 5, 17),
              status=BookingStatus.cancelled,
              execution=BookingExecutionStatus.done)
     # progetto senza quotato né lavorato → escluso dalla matrice
     prj2 = Project(tenant_id=1, code="P-VUOTO", title="Vuoto", client_id=cli.id)
     db.add(prj2); db.commit(); db.refresh(prj)
-    m = sal_metrics.matrix_metrics(db, year=2026, granularity="month")
+    m = sal_metrics.matrix_metrics(db, year=2024, granularity="month")
     row = next(p for p in m["projects"] if p["id"] == prj.id)
+    assert all(c["basis"] == "worked" for c in row["cells"])
     assert all(c["pct"] == 0.0 for c in row["cells"])
     assert prj2.id not in {p["id"] for p in m["projects"]}
 
@@ -543,3 +546,27 @@ def test_worked_planned_hours_in_year(db):
 def test_blended_rate():
     assert sal_metrics.blended_rate(1000.0, 50.0) == 20.0
     assert sal_metrics.blended_rate(1000.0, 0.0) == 0.0
+
+
+# ── Gruppo matrix past/future (v3.5.0) ───────────────────────────
+
+def test_matrix_basis_past_worked_future_planned(db):
+    from datetime import date
+    from app.models import BookingExecutionStatus
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    _jcl(db, job, unit="hr", qty=100)
+    yr = date.today().year
+    _booking(db, job, start=datetime(yr, 1, 6, 9), end=datetime(yr, 1, 6, 19),
+             execution=BookingExecutionStatus.done)
+    _booking(db, job, start=datetime(yr, 12, 8, 9), end=datetime(yr, 12, 8, 19),
+             execution=BookingExecutionStatus.planned)
+    db.refresh(prj)
+    m = sal_metrics.matrix_metrics(db, year=yr, granularity="month")
+    row = m["projects"][0]
+    jan = row["cells"][0]
+    dec = row["cells"][11]
+    assert jan["basis"] == "worked"
+    assert dec["basis"] == "planned"
+    assert dec["worked_cum"] == 20.0
+    assert m["total"]["cells"][0]["basis"] == "worked"
