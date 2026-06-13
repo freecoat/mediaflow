@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.218** — 12 giugno 2026 — SAL con tab Temporale a calendario (% cumulativa per progetto)
+**v3.5.0-alpha.172.219** — 13 giugno 2026 — Batch SAL (toggle ore/budget, colonne anno, filtri, matrix passato/futuro) + fix editor deliverables
+
+### α.172.219 ✅ (batch SAL + fix deliverables — 13 giu, subagent-driven, sessione remota)
+- **Fix deliverables (planning)**: Bug1+2 codec ProRes → **container auto-QuickTime** (`preferred_container_for_codec` puro + `preferred_container_id` da spec-schema, non sovrascrive scelta utente; migrazione backfill `migrate_prores_container.py`). Bug3 select preset audio a riga piena (no troncamento).
+- **SAL `/finance/sal`**: toggle **Ore/Budget(€)** (monte + % + colonne anno commutano); colonne **Anno prec.** (lavorate N-1) / **Anno succ.** (pianificate N+1, €=ore×blended_rate); **riga rossa** su sforamento; filtri **Reparto/Tipo lavorazione/Progetto** (ordine P2; reparto ri-scala metriche); tab Temporale celle **passato=lavorato (indaco) / futuro=pianificato (teal tratteggiato) / >100% rosso** + flag `basis` + **legenda box**. Fix collaterale progress-bar (pct 0-1 vs 0-100).
+- Service `sal_metrics.py` esteso (euro, *_hours_in_year, matrix basis, euro/reparto); endpoint `/api/sal/projects` filtri+campi euro/anno. 24 chiavi i18n `sal.*` in 5 lingue. **2 policy CLAUDE.md pinnate (P1 i18n-sempre, P2 ordine menu)**.
+- **+22 test (812 totali)**. Smoke browser verde: toggle, filtri popolati, colonne anno, legenda, temporale, EN su tutti i nuovi elementi, 0 errori console.
+
+**Prossimo / PENDENTE**: Matteo smoke `/finance/sal` (toggle ore/budget, filtri reparto/categoria/progetto, tab Temporale colori passato/futuro) + editor deliverables (codec ProRes → container QuickTime auto, preset audio). Idee future SAL: export PDF/Excel, forecast, % fatturato nel tab progetto. i18n header esistenti `% Avanzamento`/`Allarme` ancora IT (no data-i18n, fuori scope); celle dinamiche monte non re-render a caldo su lang-switch (limite app pre-esistente).
 
 ### α.172.217 ✅ (SAL — Stato Avanzamento Lavori, vista finanza — 12 giu, subagent-driven, sessione remota)
 - **Pagina `/finance/sal`** read-only (gate view_finance): % avanzamento = ore lavorate/quotate. Service `sal_metrics.py` (ore quotate solo voci-tempo giorni→ore, pianificate/lavorate da booking, breakdown reparto, allarme per-job 🔴>quotate/🟠≥90%).

@@ -1,5 +1,23 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.219 — Batch SAL + fix deliverables (13 giu 2026)
+
+Bundle subagent-driven (16 task TDD, spec/piano `docs/superpowers/{specs,plans}/2026-06-13-sal-batch-deliverables*`). Due policy trasversali pinnate in CLAUDE.md: **P1 i18n-sempre** (ogni stringa nuova in 5 lingue, stesso commit) + **P2 ordine menu deterministico**.
+
+**Fix editor deliverables (planning)**
+- **Bug 1+2 — container ProRes**: scegliendo un codec ProRes nell'editor tech-spec il **Container si compila automaticamente a QuickTime** (e così all'apertura di un item ProRes con container vuoto). Funzione pura `preferred_container_for_codec` (ProRes→QuickTime, estendibile), esposta come `preferred_container_id` da `/delivery-items/api/spec-schema`; l'editor non sovrascrive una scelta deliberata. Migrazione idempotente `scripts/migrate_prores_container.py` per il backfill dei dati esistenti.
+- **Bug 3 — preset audio**: il `<select>` "Preset config audio" va a riga piena (`flex:1 1 100%`), il nome preset lungo non è più troncato.
+
+**SAL `/finance/sal` — 7 feature**
+- **Toggle Ore / Budget (€)**: la vista commuta tra monte ore (Quotate/Pianif/Lavorate) e monte euro (Quotato/Maturato), % avanzamento ore o pct €, colonne anno in ore o €-stima. Stato in localStorage.
+- **Colonne Anno prec. / Anno succ.**: ore lavorate nell'anno N-1 e pianificate nell'anno N+1 (in € = ore × tariffa media `blended_rate` in modalità budget).
+- **Riga rossa** sui progetti in sforamento (allarme red).
+- **Filtri Reparto / Tipo lavorazione / Progetto** (ordine deterministico P2: reparti per sort_order, progetti alfabetici). Il filtro reparto ri-scala le metriche di riga al solo reparto.
+- **Tab Temporale**: celle **passato = lavorato** (indaco) / **futuro = pianificato** (teal tratteggiato) / **>100% = rosso**, flag `basis` per cella; **legenda box** con swatch colorati.
+- Service `sal_metrics.py`: `quoted_amount`/`accrued_amount`/`pct_eur`, `blended_rate`, `worked_hours_in_year`/`planned_hours_in_year`, `matrix_metrics` con basis past/future, euro per reparto. Endpoint `/finance/api/sal/projects` con i 3 filtri + campi euro/anno.
+- Fix collaterale: la progress-bar ore riceveva `pct` 0-1 invece di 0-100 (mostrava 1% per 85%) — corretto su entrambi i rami.
+- i18n: 24 chiavi `sal.*` in 5 lingue. **+22 test (812 totali)**, smoke browser verde (toggle, filtri, colonne anno, legenda, EN su tutti i nuovi elementi, 0 errori console).
+
 ## v3.5.0-alpha.172.218 — SAL: tab Temporale a calendario (12 giu 2026)
 
 Il tab Temporale del SAL diventa un **calendario progetti × periodi** (chiarimento Matteo sulla .217): righe = progetti, colonne = mesi o trimestri dell'anno, **cella = % di avanzamento CUMULATIVA a fine periodo** (ore lavorate cumulate — anni precedenti inclusi — / ore quotate totali del progetto). Heat-color indaco proporzionale alla %, rosso oltre il 100%; tooltip con le ore cumulate; riga TOTALE. Endpoint nuovo `GET /finance/api/sal/matrix` (`matrix_metrics` nel service, batch); il vecchio `/timeline` aggregato resta per compatibilità. +5 test (795 totali), smoke browser verde.
