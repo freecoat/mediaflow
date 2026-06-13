@@ -2574,8 +2574,9 @@ function dsmRenderStructured(v, tax, deliverableData) {
   // Bind hide/show + findings live ai cambi del combo discriminante.
   ['dsm-s-container','dsm-s-vcodec','dsm-s-package'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('change', dsmApplySpecSchema);
+    if (el) el.addEventListener('change', () => { _dsmLastChanged = id; dsmApplySpecSchema(); });
   });
+  _dsmLastChanged = null;
   dsmApplySpecSchema();
 
   // α.172.202 — Sezione Audio: preset + tracce per-deliverable
@@ -2583,6 +2584,10 @@ function dsmRenderStructured(v, tax, deliverableData) {
     _dsmRenderAudioSection(host, deliverableData, tax);
   }
 }
+
+// Traccia l'ultimo combo cambiato (container/vcodec/package) per decidere se
+// auto-compilare il container al cambio codec. null all'apertura modal.
+let _dsmLastChanged = null;
 
 // α.172.183 (SC-T4) — interroga /delivery-items/api/spec-schema e applica
 // hide/show ai gruppi di campi + renderizza i findings di coerenza (live).
@@ -2634,6 +2639,23 @@ async function dsmApplySpecSchema() {
     });
     if (current && !allowed.has(Number(current))) vc.value = '';
   }
+  // v3.5.0 — auto-compila il container quando si sceglie un codec ProRes
+  // (Bug 1) o quando il container è vuoto su un item ProRes (Bug 2).
+  // Scatta solo se è cambiato il codec OPPURE il container è vuoto: non
+  // sovrascrive una scelta deliberata di container fatta dall'utente.
+  const pref = data.preferred_container_id;
+  if (pref && cont) {
+    const codecChanged = (_dsmLastChanged === 'dsm-s-vcodec');
+    const contEmpty = !cont.value;
+    if ((contEmpty || codecChanged) && String(cont.value) !== String(pref)) {
+      cont.value = String(pref);
+      // Rilancia lo schema per il nuovo container (filtro opzioni codec).
+      // Marca _dsmLastChanged='dsm-s-container' così questo ramo non si ripete.
+      _dsmLastChanged = 'dsm-s-container';
+      dsmApplySpecSchema();
+      return;
+    }
+  }
 }
 
 // α.172.202 — Render sezione audio nella modal tech-specs.
@@ -2660,7 +2682,9 @@ async function _dsmRenderAudioSection(host, deliverableData, tax) {
   const presetSel = document.createElement('select');
   presetSel.id = 'dsm-audio-preset';
   presetSel.className = 'form-select';
-  presetSel.style.cssText = 'height:30px;font-size:12px;flex:1;min-width:200px;';
+  // flex-basis:100% + min-width:0 → il select va a riga piena sotto la label,
+  // così il nome preset lungo non viene clippato dal box stretto.
+  presetSel.style.cssText = 'height:30px;font-size:12px;flex:1 1 100%;min-width:0;width:100%;';
   const o0 = document.createElement('option');
   o0.value = ''; o0.textContent = '— nessun preset —';
   presetSel.appendChild(o0);
