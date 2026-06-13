@@ -293,6 +293,58 @@ def test_projects_filter_alarm_only(client_admin):
     assert r.json()[0]["alarm"] == "red"
 
 
+# ── GET /finance/api/sal/projects — euro/year fields + filtri dept/cat/proj ───
+
+def test_sal_projects_returns_eur_and_year_fields(client_admin):
+    r = client_admin.get("/finance/api/sal/projects")
+    assert r.status_code == 200, r.text
+    rows = r.json()
+    assert len(rows) >= 1
+    row = rows[0]
+    for k in ("quoted_eur", "accrued_eur", "pct_eur",
+              "prev_year", "next_year", "prev_year_eur", "next_year_eur"):
+        assert k in row, f"manca chiave {k}"
+
+
+def test_sal_projects_filter_by_department(client_admin):
+    session = client_admin.session
+    # JCL del progetto sono nei reparti DI + Audio. Filtra per un dep_id
+    # che il progetto NON ha.
+    other_dep_id = max(session._dep_di_id, session._dep_audio_id) + 1000
+    r = client_admin.get(
+        f"/finance/api/sal/projects?department_id={other_dep_id}")
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
+def test_sal_projects_filter_by_category(client_admin):
+    session = client_admin.session
+    from app.models import PriceCategory
+    cat = session.query(PriceCategory).filter(PriceCategory.tenant_id == 1).first()
+    # Categoria inesistente → nessun progetto.
+    other_cat_id = cat.id + 1000
+    r = client_admin.get(
+        f"/finance/api/sal/projects?category_id={other_cat_id}")
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
+def test_sal_projects_filter_by_project_id(client_admin):
+    session = client_admin.session
+    from app.models import Project, Client
+    # Secondo progetto stesso tenant per garantire ≥2 progetti tenant 1.
+    proj2 = Project(tenant_id=1, code="PSAL2", title="Progetto SAL 2",
+                    client_id=session._cli_id)
+    session.add(proj2)
+    session.commit()
+
+    r = client_admin.get(
+        f"/finance/api/sal/projects?project_id={session._proj_id}")
+    assert r.status_code == 200, r.text
+    ids = [row["id"] for row in r.json()]
+    assert ids == [session._proj_id]
+
+
 # ── GET /finance/api/sal/projects/{id}/detail ─────────────────────────────────
 
 def test_detail_breakdown_and_jobs(client_admin):

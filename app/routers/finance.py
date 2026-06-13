@@ -2981,14 +2981,23 @@ async def sal_projects(
     client_id: Optional[int] = None,
     q: Optional[str] = None,
     alarm_only: Optional[bool] = False,
+    department_id: Optional[int] = None,
+    category_id: Optional[int] = None,
+    project_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """Lista righe progetto col monte ore q/p/l, % avanzamento, allarme.
 
     Tenant-scoped, progetti cestinati esclusi (deleted_at IS NULL). Batch
     pre-fetch (no N+1): client + jobs + cost_lines + price_item + quote +
-    bookings → assignments → resource. Filtri SQL (status/client_id/q);
-    alarm_only filtrato in Python (deriva da project_metrics).
+    bookings → assignments → resource. Filtri SQL (status/client_id/q/
+    project_id); department_id/category_id/alarm_only filtrati in Python
+    (derivano da project_metrics / by_department).
+
+    Ogni riga riporta anche euro (quoted_eur/accrued_eur/pct_eur) e ore
+    anno precedente lavorate / anno prossimo pianificate (con stima euro
+    via blended_rate). Con `department_id` le metriche ore/euro sono
+    ristrette al reparto selezionato.
     """
     from sqlalchemy import or_
     from app.models import Project, Job, Booking, BookingAssignment
@@ -3017,12 +3026,62 @@ async def sal_projects(
     if q:
         like = f"%{q.strip()}%"
         query = query.filter(or_(Project.code.ilike(like), Project.title.ilike(like)))
+    if project_id:
+        query = query.filter(Project.id == project_id)
+
+    cur_year = date.today().year
+    prev_year = cur_year - 1
+    next_year = cur_year + 1
+
+    def _project_has_department(prj, dep_id):
+        for job in (prj.jobs or []):
+            for jcl in (job.cost_lines or []):
+                pi = getattr(jcl, "price_item", None)
+                if pi is not None and getattr(pi, "department_id", None) == dep_id:
+                    return True
+            for b in sal_metrics._non_cancelled_bookings(job):
+                if sal_metrics._booking_department_id(b) == dep_id:
+                    return True
+        return False
+
+    def _project_has_category(prj, cat_id):
+        for job in (prj.jobs or []):
+            for jcl in (job.cost_lines or []):
+                pi = getattr(jcl, "price_item", None)
+                if pi is not None and getattr(pi, "category_id", None) == cat_id:
+                    return True
+        return False
 
     rows = []
     for prj in query.order_by(Project.created_at.desc()).all():
+        if category_id and not _project_has_category(prj, category_id):
+            continue
+        if department_id and not _project_has_department(prj, department_id):
+            continue
+
         m = sal_metrics.project_metrics(db, prj)
+
+        if department_id:
+            dq = dp = dw = 0.0
+            dqe = dae = 0.0
+            for job in (prj.jobs or []):
+                daily = sal_metrics._daily_hours_for_job(db, job)
+                bd = sal_metrics.by_department(job, daily_hours=daily)
+                v = bd.get(department_id)
+                if v:
+                    dq += v["quoted"]; dp += v["planned"]; dw += v["worked"]
+                    dqe += v["quoted_eur"]; dae += v["accrued_eur"]
+            m = {
+                **m,
+                "quoted": dq, "planned": dp, "worked": dw,
+                "pct": (dw / dq) if dq > 0 else 0.0,
+                "quoted_eur": dqe, "accrued_eur": dae,
+                "pct_eur": (dae / dqe) if dqe > 0 else 0.0,
+            }
+
         if alarm_only and m["alarm"] == "none":
             continue
+
         # Quotazioni distinte dei job del progetto.
         seen: set = set()
         quotes = []
@@ -3031,6 +3090,13 @@ async def sal_projects(
             if qt is not None and qt.id not in seen:
                 seen.add(qt.id)
                 quotes.append({"number": qt.number, "title": qt.title})
+
+        py_h = ny_h = 0.0
+        for job in (prj.jobs or []):
+            py_h += sal_metrics.worked_hours_in_year(job, prev_year)
+            ny_h += sal_metrics.planned_hours_in_year(job, next_year)
+        rate = sal_metrics.blended_rate(m["quoted_eur"], m["quoted"])
+
         rows.append({
             "id": prj.id,
             "code": prj.code,
@@ -3043,6 +3109,15 @@ async def sal_projects(
             "pct": m["pct"],
             "alarm": m["alarm"],
             "job_count": m["job_count"],
+            "quoted_eur": m["quoted_eur"],
+            "accrued_eur": m["accrued_eur"],
+            "pct_eur": m["pct_eur"],
+            "prev_year": py_h,
+            "next_year": ny_h,
+            "prev_year_eur": py_h * rate,
+            "next_year_eur": ny_h * rate,
+            "prev_year_label": prev_year,
+            "next_year_label": next_year,
         })
     return rows
 
