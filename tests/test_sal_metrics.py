@@ -521,3 +521,25 @@ def test_project_metrics_includes_eur(db):
     assert m["quoted_eur"] == 800.0
     assert m["accrued_eur"] == 200.0
     assert m["pct_eur"] == 0.25
+
+
+# ── Gruppo per-anno (v3.5.0) ─────────────────────────────────────
+
+def test_worked_planned_hours_in_year(db):
+    from app.models import BookingExecutionStatus
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    _booking(db, job, start=datetime(2025, 3, 3, 9), end=datetime(2025, 3, 3, 17),
+             execution=BookingExecutionStatus.done)
+    _booking(db, job, start=datetime(2027, 3, 3, 9), end=datetime(2027, 3, 3, 17),
+             execution=BookingExecutionStatus.planned)
+    db.refresh(job)
+    assert sal_metrics.worked_hours_in_year(job, 2025) == 8.0
+    assert sal_metrics.worked_hours_in_year(job, 2027) == 0.0
+    assert sal_metrics.planned_hours_in_year(job, 2027) == 8.0
+    assert sal_metrics.planned_hours_in_year(job, 2025) == 8.0
+
+
+def test_blended_rate():
+    assert sal_metrics.blended_rate(1000.0, 50.0) == 20.0
+    assert sal_metrics.blended_rate(1000.0, 0.0) == 0.0

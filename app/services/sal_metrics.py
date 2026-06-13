@@ -102,6 +102,31 @@ def worked_hours(job) -> float:
     )
 
 
+def _booking_year(b):
+    sd = getattr(b, "start_datetime", None)
+    return sd.year if sd is not None else None
+
+
+def worked_hours_in_year(job, year: int) -> float:
+    """Σ ore lavorate (done) dei booking non-cancelled con start_datetime in year."""
+    from app.models import BookingExecutionStatus
+    return sum(
+        _booking_billable_hours(b)
+        for b in _non_cancelled_bookings(job)
+        if b.execution_status == BookingExecutionStatus.done
+        and _booking_year(b) == year
+    )
+
+
+def planned_hours_in_year(job, year: int) -> float:
+    """Σ ore pianificate (tutti i booking non-cancelled) con start_datetime in year."""
+    return sum(
+        _booking_billable_hours(b)
+        for b in _non_cancelled_bookings(job)
+        if _booking_year(b) == year
+    )
+
+
 def _booking_department_id(b) -> int:
     """Reparto del booking = department_id della prima risorsa (con reparto)
     fra gli assignment. Fallback 0 ("Altro")."""
