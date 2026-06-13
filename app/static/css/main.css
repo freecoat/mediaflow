@@ -1636,3 +1636,11 @@ input[type="time"]:not([data-no-time-picker="true"])::-webkit-calendar-picker-in
   border-color: var(--indigo);
   font-weight: 600;
 }
+
+/* SAL — riga progetto in sforamento (ore o budget oltre il quotato). */
+.sal-prj-row.sal-row-overrun > td {
+  background: rgba(239, 68, 68, 0.10);
+}
+.sal-prj-row.sal-row-overrun:hover > td {
+  background: rgba(239, 68, 68, 0.16);
+}

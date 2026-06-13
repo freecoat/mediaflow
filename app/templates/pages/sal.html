@@ -67,6 +67,13 @@
       <button class="btn btn-ghost btn-sm" onclick="resetSalFilters()">Reset</button>
     </div>
 
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <div class="btn-group" role="group" style="display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+        <button type="button" id="sal-unit-hours" class="btn btn-sm" onclick="setSalUnit('hours')" data-i18n="sal.unit.hours">Ore</button>
+        <button type="button" id="sal-unit-budget" class="btn btn-sm btn-ghost" onclick="setSalUnit('budget')" data-i18n="sal.unit.budget">Budget (€)</button>
+      </div>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -74,14 +81,16 @@
             <th style="min-width:140px;">Cliente</th>
             <th style="min-width:240px;">Progetto</th>
             <th style="min-width:160px;">Quotazioni</th>
-            <th style="min-width:220px;">Monte ore</th>
+            <th style="min-width:220px;" id="sal-th-monte"><span data-i18n="sal.unit.hours">Monte ore</span></th>
             <th style="min-width:180px;">% Avanzamento</th>
+            <th style="width:90px;text-align:right;" id="sal-th-prevyear" data-i18n="sal.col.prev_year">Anno prec.</th>
+            <th style="width:90px;text-align:right;" id="sal-th-nextyear" data-i18n="sal.col.next_year">Anno succ.</th>
             <th style="width:90px;text-align:center;">Allarme</th>
             <th style="width:60px;text-align:right;">Job</th>
           </tr>
         </thead>
         <tbody id="sal-projects-tbody">
-          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
+          <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
         </tbody>
       </table>
     </div>
@@ -130,6 +139,22 @@ let _salProjects = [];            // ultima lista grezza dal server
 let _salDetailCache = {};         // cache drill-down per project_id
 let _salTimelineLoaded = false;   // lazy-load del tab temporale
 let _salSearchTimer = null;       // debounce ricerca
+let _salUnit = (localStorage.getItem('sal_unit') === 'budget') ? 'budget' : 'hours';
+
+// Toggle unità monte: 'hours' (ore) ↔ 'budget' (€). Persistito in localStorage.
+function setSalUnit(u) {
+  _salUnit = (u === 'budget') ? 'budget' : 'hours';
+  localStorage.setItem('sal_unit', _salUnit);
+  const hb = document.getElementById('sal-unit-hours');
+  const bb = document.getElementById('sal-unit-budget');
+  if (hb && bb) {
+    hb.className = 'btn btn-sm' + (_salUnit === 'hours' ? '' : ' btn-ghost');
+    bb.className = 'btn btn-sm' + (_salUnit === 'budget' ? '' : ' btn-ghost');
+  }
+  const th = document.getElementById('sal-th-monte');
+  if (th) th.innerHTML = `<span>${_salUnit === 'budget' ? mfT('sal.unit.budget') : mfT('sal.unit.hours')}</span>`;
+  renderSalProjects();
+}
 
 // Stati progetto (valori reali ProjectStatus enum) + etichette IT.
 const SAL_STATUSES = [
@@ -256,7 +281,7 @@ async function loadSalProjects() {
     _salProjects = await api('GET', '/finance/api/sal/projects?' + params.toString());
   } catch (e) {
     tbody.innerHTML =
-      `<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento')}</td></tr>`;
+      `<tr><td colspan="9" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento')}</td></tr>`;
     return;
   }
   // Invalida la cache drill-down su refresh lista.
@@ -267,27 +292,48 @@ async function loadSalProjects() {
 function renderSalProjects() {
   const tbody = document.getElementById('sal-projects-tbody');
   if (!_salProjects.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessun progetto corrisponde ai filtri</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">Nessun progetto corrisponde ai filtri</td></tr>';
     return;
   }
+  const budget = (_salUnit === 'budget');
   tbody.innerHTML = _salProjects.map(function(r) {
     const quotes = (r.quotes || []).map(function(qt) {
       const lbl = qt.number + (qt.title ? ' · ' + qt.title : '');
       return `<span class="badge" title="${escapeHtml(lbl)}" style="font-size:10px;margin:1px 2px;">${escapeHtml(qt.number || '—')}</span>`;
     }).join('');
-    return `<tr class="sal-prj-row" data-project-id="${r.id}" style="cursor:pointer;" onclick="toggleSalDetail(${r.id})">
+    const monte = budget
+      ? _salMonteEur(r.quoted_eur, r.accrued_eur)
+      : _salMonteOre(r.quoted, r.planned, r.worked);
+    // pct e pct_eur arrivano dal server come rapporto 0-1 → *100 per la barra.
+    const pct = budget ? ((Number(r.pct_eur) || 0) * 100) : ((Number(r.pct) || 0) * 100);
+    const prev = budget ? _salFmtEur(r.prev_year_eur) : _salFmtHours(r.prev_year);
+    const next = budget ? _salFmtEur(r.next_year_eur) : _salFmtHours(r.next_year);
+    const prevHint = mfT(budget ? 'sal.col.eur_estimate.hint' : 'sal.col.prev_year.hint');
+    const nextHint = mfT(budget ? 'sal.col.eur_estimate.hint' : 'sal.col.next_year.hint');
+    const overrunCls = (r.alarm === 'red') ? ' sal-row-overrun' : '';
+    return `<tr class="sal-prj-row${overrunCls}" data-project-id="${r.id}" style="cursor:pointer;" onclick="toggleSalDetail(${r.id})">
       <td class="text-sm">${escapeHtml(r.client || '—')}</td>
       <td>
         <div style="font-weight:500;">${escapeHtml(r.title || '—')}</div>
         <div class="mono" style="font-size:11px;color:var(--text3);margin-top:2px;">${escapeHtml(r.code || '')}</div>
       </td>
       <td>${quotes || '<span class="text-muted">—</span>'}</td>
-      <td>${_salMonteOre(r.quoted, r.planned, r.worked)}</td>
-      <td>${_salBar(r.pct)}</td>
+      <td>${monte}</td>
+      <td>${_salBar(pct)}</td>
+      <td style="text-align:right;" class="mono" title="${escapeHtml(prevHint)}">${prev}</td>
+      <td style="text-align:right;" class="mono" title="${escapeHtml(nextHint)}">${next}</td>
       <td style="text-align:center;">${_salAlarmBadge(r.alarm)}</td>
       <td style="text-align:right;" class="mono">${r.job_count}</td>
     </tr>`;
   }).join('');
+}
+
+// Cella monte in euro: Quotato / Maturato.
+function _salMonteEur(quotedEur, accruedEur) {
+  return `<div style="font-size:12px;line-height:1.5;">
+    <span class="text-muted">${mfT('sal.eur.quoted')}</span> ${_salFmtEur(quotedEur)} ·
+    <span class="text-muted">${mfT('sal.eur.accrued')}</span> ${_salFmtEur(accruedEur)}
+  </div>`;
 }
 
 // Espande/chiude il drill-down sotto la riga progetto (fetch on-demand + cache).
@@ -303,7 +349,7 @@ async function toggleSalDetail(projectId) {
   const detailRow = document.createElement('tr');
   detailRow.id = 'sal-detail-' + projectId;
   const cell = document.createElement('td');
-  cell.colSpan = 7;
+  cell.colSpan = 9;
   cell.style.cssText = 'background:var(--bg2,#1e2030);padding:14px;';
   cell.innerHTML = '<div class="text-muted text-sm">Caricamento dettaglio…</div>';
   detailRow.appendChild(cell);
@@ -562,6 +608,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   await _salLoadCategories();
   await _salLoadProjects();
   await loadSalProjects();
+  setSalUnit(_salUnit);   // imposta stato iniziale toggle + intestazione monte
 });
 </script>
 {% endblock %}
