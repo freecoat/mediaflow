@@ -114,8 +114,23 @@
           </label>
         </div>
       </div>
-      <div class="form-hint" style="padding-bottom:10px;">
-        Cella = avanzamento <strong>cumulativo</strong> a fine periodo (ore lavorate cumulate / ore quotate).
+      <div id="sal-matrix-legend" style="flex-basis:100%;margin-top:4px;">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2,#1e2030);font-size:11px;">
+          <strong style="text-transform:uppercase;letter-spacing:0.04em;color:var(--text2);" data-i18n="sal.legend.title">Legenda</strong>
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <span style="width:14px;height:14px;border-radius:3px;background:rgba(98,114,245,0.65);display:inline-block;"></span>
+            <span data-i18n="sal.legend.worked">Lavorato (cumulato)</span>
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <span style="width:14px;height:14px;border-radius:3px;background:rgba(46,196,182,0.45);border:1px dashed rgba(46,196,182,0.9);display:inline-block;"></span>
+            <span data-i18n="sal.legend.planned">Pianificato (cumulato)</span>
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:6px;">
+            <span style="width:14px;height:14px;border-radius:3px;background:rgba(239,68,68,0.5);display:inline-block;"></span>
+            <span data-i18n="sal.legend.overrun">Sforamento (&gt;100%)</span>
+          </span>
+          <span class="text-muted" style="flex-basis:100%;" data-i18n="sal.legend.formula">La cella mostra l'avanzamento cumulativo a fine periodo: ore cumulate ÷ ore quotate.</span>
+        </div>
       </div>
     </div>
 
@@ -526,19 +541,29 @@ function _salPopulateYears() {
 }
 
 function _salMatrixCell(c) {
-  // Cella calendario: % cumulativa con heat-color (indaco → pieno; rosso se >100%).
+  // Cella calendario: % cumulativa con heat-color. basis 'worked' = indaco;
+  // basis 'planned' = teal tratteggiato (previsione); >100% = rosso.
   const pct = c.pct || 0;
   if (pct <= 0 && (c.worked_cum || 0) <= 0) {
     return '<td style="text-align:center;color:var(--text3);font-size:11px;">—</td>';
   }
   const pctInt = Math.round(pct * 100);
   const over = pct > 1.0;
+  const planned = (c.basis === 'planned');
   const alpha = Math.min(0.85, Math.max(0.08, pct * 0.7));
-  const bg = over ? 'rgba(239,68,68,' + Math.min(0.5, alpha) + ')'
-                  : 'rgba(98,114,245,' + alpha + ')';
+  let bg, extra = '';
+  if (over) {
+    bg = 'rgba(239,68,68,' + Math.min(0.5, alpha) + ')';
+  } else if (planned) {
+    bg = 'rgba(46,196,182,' + Math.min(0.55, alpha) + ')';
+    extra = 'border:1px dashed rgba(46,196,182,0.7);';
+  } else {
+    bg = 'rgba(98,114,245,' + alpha + ')';
+  }
   const fg = (pct >= 0.55 || over) ? '#fff' : 'var(--text)';
-  const title = _salFmtHours(c.worked_cum) + ' cumulate';
-  return '<td style="text-align:center;background:' + bg + ';color:' + fg + ';' +
+  const basisLbl = planned ? mfT('sal.legend.planned') : mfT('sal.legend.worked');
+  const title = _salFmtHours(c.worked_cum) + ' · ' + basisLbl;
+  return '<td style="text-align:center;background:' + bg + ';color:' + fg + ';' + extra +
     'font-size:11px;font-weight:600;min-width:52px;" title="' + escapeHtml(title) + '">' +
     pctInt + '%</td>';
 }
