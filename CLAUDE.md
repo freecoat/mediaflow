@@ -143,6 +143,8 @@ Tutti confermano la struttura a 8 blocchi `DeliveryTemplate` (video/audio/text/h
 - **Migrazioni manuali**: niente Alembic per ora. `scripts/migrate_phase1bis.py` è il pattern: ALTER TABLE idempotenti via SQL grezzo + populate dati. Quando si aggiungono modelli/colonne, scrivere uno script di migrazione separato.
 - **Python compatibility**: 3.11+ con priorità a 3.14. Niente `python-jose`, niente `passlib`, niente `WeasyPrint`. Usare `PyJWT`, `bcrypt` diretto, `ReportLab`.
 - **Frontend**: niente framework. Vanilla JS in `static/js/global.js` con helper `api()`, `openModal()`, `closeModal()`, `toast()`. Stile dark con CSS variabili in `static/css/main.css` (palette indaco `#6272f5`).
+- **Ordine menu/colonne deterministico**: ogni `<select>`/dropdown e ogni colonna ordinabile ha un ordine esplicito. Liste anagrafiche (clienti, progetti, fornitori) = alfabetico case-insensitive (`localeCompare`); categorie/reparti/stati = `sort_order` poi nome. Mai affidarsi all'ordine di inserimento DB per i menu.
+- **i18n da subito**: ogni stringa UI nuova va tradotta in tutte le 5 lingue (`it/en/fr/de/es`) in `app/static/js/i18n.js` + `data-i18n` nel template, nello stesso commit. Niente debito i18n.
 
 ## Come testare la Fase 1-bis
 
