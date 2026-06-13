@@ -415,7 +415,7 @@ async def spec_schema(
     """Read-only: dato un combo (container/package/codec), ritorna i gruppi di
     campi pertinenti + i findings di coerenza. Usato dall'editor specs per
     hide/disable + warning live (riusa delivery_item_validation, single source)."""
-    from app.services.delivery_item_validation import field_relevance, validate_delivery_item, valid_video_codec_ids
+    from app.services.delivery_item_validation import field_relevance, validate_delivery_item, valid_video_codec_ids, preferred_container_for_codec
     cont = db.get(Container, container_id) if container_id else None
     vc = db.get(VideoCodec, video_codec_id) if video_codec_id else None
     groups = field_relevance(
@@ -437,7 +437,25 @@ async def spec_schema(
         _codecs = db.query(VideoCodec).filter(VideoCodec.is_active == True).all()  # noqa: E712
         valid_ids = valid_video_codec_ids(
             media_kind=cont.media_kind, container_name=cont.name, codecs=_codecs)
-    return {"groups": groups, "findings": findings, "valid_video_codec_ids": valid_ids}
+    # v3.5.0 — container preferito per il codec selezionato (ProRes→QuickTime).
+    # None = nessuna preferenza. L'editor lo usa per auto-compilare il container
+    # vuoto o al cambio codec.
+    preferred_container_id = None
+    if vc is not None and getattr(vc, "family", None):
+        _conts = (
+            db.query(Container)
+            .filter(Container.is_active == True)  # noqa: E712
+            .order_by(Container.sort_order, Container.name)
+            .all()
+        )
+        preferred_container_id = preferred_container_for_codec(
+            codec_family=vc.family, containers=_conts)
+    return {
+        "groups": groups,
+        "findings": findings,
+        "valid_video_codec_ids": valid_ids,
+        "preferred_container_id": preferred_container_id,
+    }
 
 
 @router.delete("/delivery-items/api/{iid}", dependencies=[RequireEdit])
