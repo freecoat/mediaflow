@@ -468,3 +468,56 @@ def test_matrix_total_row(db):
     assert m["total"]["quoted"] == 20.0
     assert m["total"]["cells"][0]["pct"] == pytest.approx(0.5)
     assert m["total"]["cells"][0]["worked_cum"] == pytest.approx(10.0)
+
+
+# ── Gruppo euro (v3.5.0) ─────────────────────────────────────────
+
+def test_quoted_accrued_amount(db):
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    j1 = _jcl(db, job, unit="hr", qty=10)
+    j1.total_quoted = 1000.0
+    j1.total_accrued = 400.0
+    j2 = _jcl(db, job, unit="day", qty=2)
+    j2.total_quoted = 500.0
+    j2.total_accrued = 500.0
+    db.flush()
+    assert sal_metrics.quoted_amount(job) == 1500.0
+    assert sal_metrics.accrued_amount(job) == 900.0
+
+
+def test_job_metrics_includes_eur(db):
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    j1 = _jcl(db, job, unit="hr", qty=10)
+    j1.total_quoted = 1000.0
+    j1.total_accrued = 250.0
+    db.flush()
+    m = sal_metrics.job_metrics(job)
+    assert m["quoted_eur"] == 1000.0
+    assert m["accrued_eur"] == 250.0
+    assert m["pct_eur"] == 0.25
+
+
+def test_job_metrics_pct_eur_zero_quoted(db):
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    j1 = _jcl(db, job, unit="hr", qty=0)
+    j1.total_quoted = 0.0
+    j1.total_accrued = 100.0
+    db.flush()
+    assert sal_metrics.job_metrics(job)["pct_eur"] == 0.0
+
+
+def test_project_metrics_includes_eur(db):
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    j1 = _jcl(db, job, unit="hr", qty=10)
+    j1.total_quoted = 800.0
+    j1.total_accrued = 200.0
+    db.flush()
+    db.refresh(prj)
+    m = sal_metrics.project_metrics(db, prj)
+    assert m["quoted_eur"] == 800.0
+    assert m["accrued_eur"] == 200.0
+    assert m["pct_eur"] == 0.25

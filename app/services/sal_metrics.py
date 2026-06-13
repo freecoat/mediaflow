@@ -56,6 +56,27 @@ def quoted_hours(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> float:
     return total
 
 
+def quoted_amount(job) -> float:
+    """Σ JobCostLine.total_quoted (euro quotati) del job."""
+    return sum(
+        float(getattr(j, "total_quoted", 0.0) or 0.0)
+        for j in (getattr(job, "cost_lines", None) or [])
+    )
+
+
+def accrued_amount(job) -> float:
+    """Σ JobCostLine.total_accrued (euro maturati) del job."""
+    return sum(
+        float(getattr(j, "total_accrued", 0.0) or 0.0)
+        for j in (getattr(job, "cost_lines", None) or [])
+    )
+
+
+def blended_rate(quoted_eur: float, quoted_hours: float) -> float:
+    """€/ora medio del progetto/job (per stimare €-anno dalle ore). 0 se 0 ore."""
+    return (quoted_eur / quoted_hours) if quoted_hours and quoted_hours > 0 else 0.0
+
+
 def _non_cancelled_bookings(job):
     """Booking del job con status != cancelled. Usa la relationship `bookings`."""
     from app.models import BookingStatus
@@ -102,7 +123,10 @@ def by_department(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> dict:
     out: dict = {}
 
     def _bucket(dep_id: int) -> dict:
-        return out.setdefault(dep_id, {"quoted": 0.0, "planned": 0.0, "worked": 0.0})
+        return out.setdefault(dep_id, {
+            "quoted": 0.0, "planned": 0.0, "worked": 0.0,
+            "quoted_eur": 0.0, "accrued_eur": 0.0,
+        })
 
     # Quotato per reparto (da PriceItem.department_id della JCL)
     for jcl in (getattr(job, "cost_lines", None) or []):
@@ -112,6 +136,15 @@ def by_department(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> dict:
         pi = getattr(jcl, "price_item", None)
         dep_id = getattr(pi, "department_id", None) if pi is not None else None
         _bucket(dep_id or 0)["quoted"] += h
+
+    # Euro per reparto: total_quoted/total_accrued della JCL attribuiti al
+    # reparto del suo PriceItem (anche per voci non a tempo).
+    for jcl in (getattr(job, "cost_lines", None) or []):
+        pi = getattr(jcl, "price_item", None)
+        dep_id = getattr(pi, "department_id", None) if pi is not None else None
+        b = _bucket(dep_id or 0)
+        b["quoted_eur"] += float(getattr(jcl, "total_quoted", 0.0) or 0.0)
+        b["accrued_eur"] += float(getattr(jcl, "total_accrued", 0.0) or 0.0)
 
     # Pianificato / lavorato per reparto (da Resource.department_id del booking)
     for b in _non_cancelled_bookings(job):
@@ -147,17 +180,25 @@ def _alarm_from(quoted: float, planned: float, worked: float) -> str:
 
 
 def job_metrics(job, *, daily_hours: float = DEFAULT_DAILY_HOURS) -> dict:
-    """{quoted, planned, worked, pct, alarm} per il job. pct = worked/quoted (0 se 0)."""
+    """{quoted, planned, worked, pct, alarm, quoted_eur, accrued_eur, pct_eur}.
+
+    pct = worked/quoted ore (0 se 0); pct_eur = accrued/quoted euro (0 se 0).
+    """
     quoted = quoted_hours(job, daily_hours=daily_hours)
     planned = planned_hours(job)
     worked = worked_hours(job)
     pct = (worked / quoted) if quoted > 0 else 0.0
+    q_eur = quoted_amount(job)
+    a_eur = accrued_amount(job)
     return {
         "quoted": quoted,
         "planned": planned,
         "worked": worked,
         "pct": pct,
         "alarm": _alarm_from(quoted, planned, worked),
+        "quoted_eur": q_eur,
+        "accrued_eur": a_eur,
+        "pct_eur": (a_eur / q_eur) if q_eur > 0 else 0.0,
     }
 
 
@@ -193,6 +234,7 @@ def project_metrics(db, project) -> dict:
     job (red > amber > none).
     """
     quoted = planned = worked = 0.0
+    quoted_eur = accrued_eur = 0.0
     job_count = 0
     has_red = has_amber = False
     for job in (getattr(project, "jobs", None) or []):
@@ -202,6 +244,8 @@ def project_metrics(db, project) -> dict:
         quoted += m["quoted"]
         planned += m["planned"]
         worked += m["worked"]
+        quoted_eur += m["quoted_eur"]
+        accrued_eur += m["accrued_eur"]
         if m["alarm"] == "red":
             has_red = True
         elif m["alarm"] == "amber":
@@ -215,6 +259,9 @@ def project_metrics(db, project) -> dict:
         "pct": pct,
         "alarm": alarm,
         "job_count": job_count,
+        "quoted_eur": quoted_eur,
+        "accrued_eur": accrued_eur,
+        "pct_eur": (accrued_eur / quoted_eur) if quoted_eur > 0 else 0.0,
     }
 
 
