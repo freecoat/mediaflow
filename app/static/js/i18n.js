@@ -600,6 +600,30 @@ window.MF_I18N = {
 
   // Portal project (lato cliente)
   'portal_project.specifications':      {it: 'Specifiche',                en: 'Specifications',       fr: 'Spécifications',      de: 'Spezifikationen',       es: 'Especificaciones'},
+
+  // ── SAL batch (v3.5.0) ──────────────────────────────────────────
+  'sal.unit.hours':        {it: 'Ore',        en: 'Hours',      fr: 'Heures',     de: 'Stunden',    es: 'Horas'},
+  'sal.unit.budget':       {it: 'Budget (€)', en: 'Budget (€)', fr: 'Budget (€)', de: 'Budget (€)', es: 'Presupuesto (€)'},
+  'sal.filter.department': {it: 'Reparto',    en: 'Department', fr: 'Département', de: 'Abteilung',  es: 'Departamento'},
+  'sal.filter.category':   {it: 'Tipo lavorazione', en: 'Work type', fr: 'Type de travail', de: 'Arbeitstyp', es: 'Tipo de trabajo'},
+  'sal.filter.project':    {it: 'Progetto',   en: 'Project',    fr: 'Projet',     de: 'Projekt',    es: 'Proyecto'},
+  'sal.filter.category.hint': {it: 'Filtra i progetti con lavorazioni di questo tipo (non ri-scala le ore).', en: 'Filters projects having this work type (does not rescale hours).', fr: 'Filtre les projets ayant ce type de travail (ne redimensionne pas les heures).', de: 'Filtert Projekte mit diesem Arbeitstyp (skaliert Stunden nicht).', es: 'Filtra proyectos con este tipo de trabajo (no reescala las horas).'},
+  'sal.opt.all':           {it: '— tutti —',  en: '— all —',    fr: '— tous —',   de: '— alle —',   es: '— todos —'},
+  'sal.col.prev_year':     {it: 'Anno prec.', en: 'Prev. year', fr: 'Année préc.', de: 'Vorjahr',   es: 'Año ant.'},
+  'sal.col.next_year':     {it: 'Anno succ.', en: 'Next year',  fr: 'Année suiv.', de: 'Folgejahr', es: 'Año sig.'},
+  'sal.col.prev_year.hint':{it: 'Ore lavorate nell\'anno precedente.', en: 'Hours worked in the previous year.', fr: 'Heures travaillées l\'année précédente.', de: 'Im Vorjahr geleistete Stunden.', es: 'Horas trabajadas el año anterior.'},
+  'sal.col.next_year.hint':{it: 'Ore pianificate nell\'anno successivo.', en: 'Hours planned in the next year.', fr: 'Heures planifiées l\'année suivante.', de: 'Im Folgejahr geplante Stunden.', es: 'Horas planificadas el año siguiente.'},
+  'sal.col.eur_estimate.hint': {it: 'Stima € = ore × tariffa media (quotato/ore quotate).', en: 'Estimate € = hours × blended rate (quoted/quoted hours).', fr: 'Estimation € = heures × tarif moyen (devis/heures devisées).', de: 'Schätzung € = Stunden × Mischsatz (Angebot/angebotene Stunden).', es: 'Estimación € = horas × tarifa media (cotizado/horas cotizadas).'},
+  'sal.monte.quoted':      {it: 'Quotate',    en: 'Quoted',     fr: 'Devisé',     de: 'Angeboten',  es: 'Cotizado'},
+  'sal.monte.planned':     {it: 'Pianif',     en: 'Planned',    fr: 'Planifié',   de: 'Geplant',    es: 'Planif.'},
+  'sal.monte.worked':      {it: 'Lavorate',   en: 'Worked',     fr: 'Travaillé',  de: 'Geleistet',  es: 'Trabajado'},
+  'sal.eur.quoted':        {it: 'Quotato',    en: 'Quoted',     fr: 'Devisé',     de: 'Angeboten',  es: 'Cotizado'},
+  'sal.eur.accrued':       {it: 'Maturato',   en: 'Accrued',    fr: 'Acquis',     de: 'Aufgelaufen', es: 'Devengado'},
+  'sal.legend.title':      {it: 'Legenda',    en: 'Legend',     fr: 'Légende',    de: 'Legende',    es: 'Leyenda'},
+  'sal.legend.worked':     {it: 'Lavorato (cumulato)', en: 'Worked (cumulative)', fr: 'Travaillé (cumulé)', de: 'Geleistet (kumuliert)', es: 'Trabajado (acumulado)'},
+  'sal.legend.planned':    {it: 'Pianificato (cumulato)', en: 'Planned (cumulative)', fr: 'Planifié (cumulé)', de: 'Geplant (kumuliert)', es: 'Planificado (acumulado)'},
+  'sal.legend.overrun':    {it: 'Sforamento (>100%)', en: 'Overrun (>100%)', fr: 'Dépassement (>100%)', de: 'Überschreitung (>100%)', es: 'Exceso (>100%)'},
+  'sal.legend.formula':    {it: 'La cella mostra l\'avanzamento cumulativo a fine periodo: ore cumulate ÷ ore quotate.', en: 'The cell shows cumulative progress at end of period: cumulative hours ÷ quoted hours.', fr: 'La cellule montre l\'avancement cumulé en fin de période : heures cumulées ÷ heures devisées.', de: 'Die Zelle zeigt den kumulierten Fortschritt am Periodenende: kumulierte Stunden ÷ angebotene Stunden.', es: 'La celda muestra el avance acumulado al final del período: horas acumuladas ÷ horas cotizadas.'},
 };
 
 /**
