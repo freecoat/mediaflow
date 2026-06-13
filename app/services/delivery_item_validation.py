@@ -238,3 +238,35 @@ def valid_video_codec_ids(*, media_kind, container_name, codecs) -> list:
             continue
         out.append(cid)
     return out
+
+
+def preferred_container_for_codec(*, codec_family, containers) -> Optional[int]:
+    """Id del container preferito per la famiglia codec. PURA: nessun DB.
+
+    `containers` = iterabile di oggetti con `.id`/`.name`/`.extension` o dict con
+    chiavi 'id'/'name'/'extension'. Il chiamante risolve e ordina i container.
+
+    - family contiene 'prores' → id del primo container QuickTime/.mov nell'ordine
+      ricevuto; None se nessun QuickTime disponibile.
+    - altre family / family vuota/None → None (nessuna preferenza forzata).
+
+    Deriva dalla regola R3 (ProRes tipicamente in QuickTime/.mov). Estendibile in
+    futuro con altre coppie codec→container.
+    """
+    fam = (codec_family or "").strip().lower()
+    if "prores" not in fam:
+        return None
+    for c in containers:
+        if isinstance(c, dict):
+            cid = c.get("id")
+            name = (c.get("name") or "")
+            ext = (c.get("extension") or "")
+        else:
+            cid = getattr(c, "id", None)
+            name = getattr(c, "name", "") or ""
+            ext = getattr(c, "extension", "") or ""
+        nm = name.strip().lower()
+        ex = ext.strip().lower()
+        if "quicktime" in nm or "mov" in nm or ex in (".mov", "mov"):
+            return cid
+    return None
