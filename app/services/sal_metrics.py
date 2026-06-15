@@ -463,6 +463,8 @@ def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
     rows = []
     total_quoted = 0.0
     total_cum = [0.0] * len(cutoffs)
+    total_prev = 0.0
+    total_next = 0.0
     for prj in projects:
         quoted = 0.0
         # (booking_start, ore) — done per i periodi passati, tutti i non-cancelled
@@ -496,6 +498,12 @@ def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
         if quoted <= 0 and final_cum <= 0:
             continue  # progetto senza quotato né lavorato: fuori dal calendario
 
+        # Colonne ai lati del calendario: Anno prec = ore lavorate (done) in N-1,
+        # Anno succ = ore pianificate (non-cancelled) in N+1. Riuso degli eventi
+        # già raccolti, nessun loop aggiuntivo sui job.
+        prev_hours = round(sum(h for sd, h in done_events if sd.year == year - 1), 2)
+        next_hours = round(sum(h for sd, h in planned_events if sd.year == year + 1), 2)
+
         rows.append({
             "id": prj.id,
             "code": prj.code,
@@ -503,8 +511,12 @@ def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
             "client": prj.client.name if prj.client else None,
             "quoted": round(quoted, 2),
             "cells": cum_cells,
+            "prev_year_hours": prev_hours,
+            "next_year_hours": next_hours,
         })
         total_quoted += quoted
+        total_prev += prev_hours
+        total_next += next_hours
         for i, c in enumerate(cum_cells):
             total_cum[i] += c["worked_cum"]
 
@@ -518,7 +530,14 @@ def matrix_metrics(db, *, year: int, granularity: str = "month") -> dict:
     return {
         "year": year,
         "granularity": gran,
+        "prev_year": year - 1,
+        "next_year": year + 1,
         "labels": labels,
         "projects": rows,
-        "total": {"quoted": round(total_quoted, 2), "cells": total_cells},
+        "total": {
+            "quoted": round(total_quoted, 2),
+            "cells": total_cells,
+            "prev_year_hours": round(total_prev, 2),
+            "next_year_hours": round(total_next, 2),
+        },
     }

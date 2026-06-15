@@ -570,3 +570,30 @@ def test_matrix_basis_past_worked_future_planned(db):
     assert dec["basis"] == "planned"
     assert dec["worked_cum"] == 20.0
     assert m["total"]["cells"][0]["basis"] == "worked"
+
+
+def test_matrix_prev_next_year_hours(db):
+    # Colonne ai lati del calendario: Anno prec = ore lavorate (done) in N-1,
+    # Anno succ = ore pianificate (non-cancelled) in N+1.
+    from app.models import BookingExecutionStatus
+    cli, prj = _hierarchy(db)
+    job = _job(db, prj, cli)
+    _jcl(db, job, unit="hr", qty=100)
+    yr = 2026
+    # N-1: 8h done (conta) + 8h planned-not-done (NON conta come lavorato)
+    _booking(db, job, start=datetime(2025, 3, 3, 9), end=datetime(2025, 3, 3, 17),
+             execution=BookingExecutionStatus.done)
+    _booking(db, job, start=datetime(2025, 4, 4, 9), end=datetime(2025, 4, 4, 17),
+             execution=BookingExecutionStatus.planned)
+    # N+1: 8h planned (conta come pianificato)
+    _booking(db, job, start=datetime(2027, 5, 5, 9), end=datetime(2027, 5, 5, 17),
+             execution=BookingExecutionStatus.planned)
+    db.refresh(prj)
+    m = sal_metrics.matrix_metrics(db, year=yr, granularity="month")
+    assert m["prev_year"] == 2025
+    assert m["next_year"] == 2027
+    row = m["projects"][0]
+    assert row["prev_year_hours"] == 8.0
+    assert row["next_year_hours"] == 8.0
+    assert m["total"]["prev_year_hours"] == 8.0
+    assert m["total"]["next_year_hours"] == 8.0

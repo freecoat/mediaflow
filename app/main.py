@@ -2330,7 +2330,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.219", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.220", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

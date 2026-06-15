@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.220 — SAL: anno prec./succ. spostate nel calendario (15 giu 2026)
+
+Correzione di un malinteso della .219: le colonne **Anno prec. / Anno succ.** servivano nel tab **Temporale** (calendario), non nel tab Per progetto.
+- Tab **Temporale**: due colonne ai lati del calendario incorniciano i mesi → **Anno prec.** (ore lavorate in N-1, prima dei mesi) + 01..12 + **Anno succ.** (ore pianificate in N+1, dopo i mesi), con separatori visivi. Intestazione = numero anno (es. 2025/2027) + tooltip tradotto. Riga TOTALE inclusa. `matrix_metrics` ora ritorna `prev_year`/`next_year` (label) + `prev_year_hours`/`next_year_hours` per progetto e totale (riuso degli eventi già raccolti, nessun loop extra).
+- Tab **Per progetto**: rimosse le due colonne anno (tornano a 7 colonne); i campi euro/anno restano nell'endpoint `/api/sal/projects` (immutato).
+- +1 test (813 totali). Smoke browser verde (calendario con colonne 2025 | mesi | 2027, 0 errori console).
+
 ## v3.5.0-alpha.172.219 — Batch SAL + fix deliverables (13 giu 2026)
 
 Bundle subagent-driven (16 task TDD, spec/piano `docs/superpowers/{specs,plans}/2026-06-13-sal-batch-deliverables*`). Due policy trasversali pinnate in CLAUDE.md: **P1 i18n-sempre** (ogni stringa nuova in 5 lingue, stesso commit) + **P2 ordine menu deterministico**.

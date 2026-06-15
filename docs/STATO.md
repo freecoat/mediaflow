@@ -8,7 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.219** — 13 giugno 2026 — Batch SAL (toggle ore/budget, colonne anno, filtri, matrix passato/futuro) + fix editor deliverables
+**v3.5.0-alpha.172.220** — 15 giugno 2026 — SAL: colonne Anno prec./succ. spostate nel calendario (tab Temporale)
+
+### α.172.220 ✅ (SAL anno prec./succ. nel calendario — 15 giu, sessione remota)
+- Fix malinteso .219: le colonne **Anno prec./Anno succ.** vanno nel tab **Temporale** (calendario), non in Per progetto. Ora incorniciano i mesi: **Anno prec.** (ore lavorate N-1) | 01..12 | **Anno succ.** (ore pianificate N+1), con separatori + intestazione anno + tooltip. Riga TOTALE inclusa. `matrix_metrics` ritorna prev_year/next_year + prev_year_hours/next_year_hours (progetto+totale). Tab Per progetto torna a 7 colonne (endpoint invariato).
+- +1 test (813). Smoke browser verde, 0 errori console.
+
+**IN DISCUSSIONE con Matteo (15 giu)**: togliere del tutto il tab **Per progetto** e portare le info del suo drill-down (breakdown reparto + lista job per-progetto) dentro il tab **Temporale**. Da progettare prima di implementare.
 
 ### α.172.219 ✅ (batch SAL + fix deliverables — 13 giu, subagent-driven, sessione remota)
 - **Fix deliverables (planning)**: Bug1+2 codec ProRes → **container auto-QuickTime** (`preferred_container_for_codec` puro + `preferred_container_id` da spec-schema, non sovrascrive scelta utente; migrazione backfill `migrate_prores_container.py`). Bug3 select preset audio a riga piena (no troncamento).
