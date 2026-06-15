@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.220** — 15 giugno 2026 — SAL: colonne Anno prec./succ. spostate nel calendario (tab Temporale)
+**v3.5.0-alpha.172.221** — 15 giugno 2026 — SAL: vista unica = calendario espandibile (rimosso tab Per progetto)
+
+### α.172.221 ✅ (SAL vista unica — 15 giu, sessione remota)
+- Rimosso tab **Per progetto** (poco utile per Matteo). Le sue info confluite nel **Temporale**, ora unica vista SAL: **righe calendario espandibili** (click → drill-down Reparti+Job via `/detail`) + colonne sintetiche **Monte / % / Allarme** + **filtri** + **toggle Ore/Budget** sopra il calendario. Modalità Budget: Monte/% e anni in € (ore×tariffa media); celle mensili sempre % cumulativa.
+- **Zero backend**: la UI unisce in JS `/sal/projects` (filtri+summary+ri-scala reparto) e `/sal/matrix` (celle+anni) per id. Toggle ri-renderizza senza rifetch. Smoke verde (mese+trimestre, espansione, toggle, 0 errori console).
+- Nota: con filtro reparto il Monte è ri-scalato al reparto ma le celle mensili restano sul progetto intero (scoping celle per reparto = eventuale estensione futura).
+
+**Prossimo / PENDENTE**: Matteo smoke `/finance/sal` (vista unica: filtri, espansione righe reparti/job, toggle ore/budget, mese/trimestre). Idee future: scoping celle calendario per reparto quando il filtro reparto è attivo; export PDF/Excel; forecast.
 
 ### α.172.220 ✅ (SAL anno prec./succ. nel calendario — 15 giu, sessione remota)
 - Fix malinteso .219: le colonne **Anno prec./Anno succ.** vanno nel tab **Temporale** (calendario), non in Per progetto. Ora incorniciano i mesi: **Anno prec.** (ore lavorate N-1) | 01..12 | **Anno succ.** (ore pianificate N+1), con separatori + intestazione anno + tooltip. Riga TOTALE inclusa. `matrix_metrics` ritorna prev_year/next_year + prev_year_hours/next_year_hours (progetto+totale). Tab Per progetto torna a 7 colonne (endpoint invariato).

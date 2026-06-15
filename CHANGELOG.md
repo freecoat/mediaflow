@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.221 — SAL: vista unica = calendario espandibile (15 giu 2026)
+
+Su richiesta di Matteo: il tab **Per progetto** non era utile → **rimosso**. Le sue informazioni (filtri, monte ore/budget, % avanzamento, allarme, drill-down reparti+job) sono confluite nel tab **Temporale**, che diventa l'**unica vista SAL**.
+- **Riga calendario espandibile**: click su un progetto → si apre sotto il drill-down **Reparti** (quotate/pianif/lavorate/%) + **Job** (codice/titolo/quote/.../%/allarme), riusando l'endpoint `/detail` esistente.
+- **Colonne sintetiche per riga** (oltre a calendario + anni laterali): **Monte** (Quotate·Pianif·Lavorate oppure Quotato·Maturato in €), **% Avanzamento** (barra), **Allarme** (🔴/🟠).
+- **Filtri** (ricerca, stato, cliente, reparto, tipo lavorazione, progetto, solo-allarme) + **toggle Ore/Budget(€)** spostati sopra il calendario. In modalità Budget: Monte/% e colonne anno in € (stima = ore × tariffa media); le celle mensili restano % cumulativa.
+- **Zero modifiche backend**: la UI unisce in JS `/finance/api/sal/projects` (filtri + summary + ri-scala reparto) e `/finance/api/sal/matrix` (celle + anni) per id progetto. Il toggle ri-renderizza senza rifetch.
+- Smoke browser verde (calendario mese+trimestre, espansione reparti/job, toggle Ore↔Budget, 0 errori console). Nota: con filtro reparto il Monte è ri-scalato al reparto, le celle mensili restano sul progetto intero.
+
 ## v3.5.0-alpha.172.220 — SAL: anno prec./succ. spostate nel calendario (15 giu 2026)
 
 Correzione di un malinteso della .219: le colonne **Anno prec. / Anno succ.** servivano nel tab **Temporale** (calendario), non nel tab Per progetto.

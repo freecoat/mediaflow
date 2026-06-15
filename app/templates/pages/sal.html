@@ -6,135 +6,99 @@
 
 {% block content %}
 
-<!-- ── Tab bar (Per progetto / Temporale) ──────────────────────── -->
-<div class="card" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;padding:0;">
-  <div style="display:flex;gap:0;">
-    <button class="tab-btn active" id="tab-projects" onclick="switchSalTab('projects')"
-            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid var(--indigo2);color:var(--text);cursor:pointer;font-size:13px;font-weight:600;">
-      📊 Per progetto
-    </button>
-    <button class="tab-btn" id="tab-timeline" onclick="switchSalTab('timeline')"
-            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
-      📅 Temporale
-    </button>
-  </div>
-</div>
+<!-- ── SAL — vista unica: calendario progetti × periodi (espandibile) ── -->
+<div class="card">
 
-<div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
-
-  <!-- ── Pane: Per progetto ────────────────────────────────────── -->
-  <div id="pane-projects">
-    <!-- Barra filtri -->
-    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:14px;">
-      <div class="form-group" style="flex:2; min-width:220px;">
-        <label class="form-label" style="font-size:11px;">Ricerca</label>
-        <input class="form-input" id="sal-search" placeholder="codice, titolo, cliente…" oninput="onSalFilterChange()">
-      </div>
-      <div class="form-group" style="min-width:150px;">
-        <label class="form-label" style="font-size:11px;">Stato progetto</label>
-        <select class="form-select" id="sal-f-status" onchange="onSalFilterChange()">
-          <option value="">— tutti —</option>
-        </select>
-      </div>
-      <div class="form-group" style="min-width:160px;">
-        <label class="form-label" style="font-size:11px;">Cliente</label>
-        <select class="form-select" id="sal-f-client" onchange="onSalFilterChange()">
-          <option value="">— tutti —</option>
-        </select>
-      </div>
-      <div class="form-group" style="min-width:150px;">
-        <label class="form-label" style="font-size:11px;" data-i18n="sal.filter.department">Reparto</label>
-        <select class="form-select" id="sal-f-dept" onchange="onSalFilterChange()">
-          <option value="" data-i18n="sal.opt.all">— tutti —</option>
-        </select>
-      </div>
-      <div class="form-group" style="min-width:170px;">
-        <label class="form-label" style="font-size:11px;" data-i18n="sal.filter.category">Tipo lavorazione</label>
-        <select class="form-select" id="sal-f-category" onchange="onSalFilterChange()">
-          <option value="" data-i18n="sal.opt.all">— tutti —</option>
-        </select>
-      </div>
-      <div class="form-group" style="min-width:180px;">
-        <label class="form-label" style="font-size:11px;" data-i18n="sal.filter.project">Progetto</label>
-        <select class="form-select" id="sal-f-project" onchange="onSalFilterChange()">
-          <option value="" data-i18n="sal.opt.all">— tutti —</option>
-        </select>
-      </div>
-      <label class="form-group" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;padding-bottom:8px;">
-        <input type="checkbox" id="sal-f-alarm" onchange="onSalFilterChange()">
-        Solo in allarme
-      </label>
-      <button class="btn btn-ghost btn-sm" onclick="resetSalFilters()">Reset</button>
+  <!-- Barra filtri -->
+  <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:12px;">
+    <div class="form-group" style="flex:2; min-width:200px;">
+      <label class="form-label" style="font-size:11px;">Ricerca</label>
+      <input class="form-input" id="sal-search" placeholder="codice, titolo, cliente…" oninput="onSalFilterChange()">
     </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;">Stato progetto</label>
+      <select class="form-select" id="sal-f-status" onchange="onSalFilterChange()">
+        <option value="">— tutti —</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:150px;">
+      <label class="form-label" style="font-size:11px;">Cliente</label>
+      <select class="form-select" id="sal-f-client" onchange="onSalFilterChange()">
+        <option value="">— tutti —</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:140px;">
+      <label class="form-label" style="font-size:11px;" data-i18n="sal.filter.department">Reparto</label>
+      <select class="form-select" id="sal-f-dept" onchange="onSalFilterChange()">
+        <option value="" data-i18n="sal.opt.all">— tutti —</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:160px;">
+      <label class="form-label" style="font-size:11px;" data-i18n="sal.filter.category">Tipo lavorazione</label>
+      <select class="form-select" id="sal-f-category" onchange="onSalFilterChange()">
+        <option value="" data-i18n="sal.opt.all">— tutti —</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:160px;">
+      <label class="form-label" style="font-size:11px;" data-i18n="sal.filter.project">Progetto</label>
+      <select class="form-select" id="sal-f-project" onchange="onSalFilterChange()">
+        <option value="" data-i18n="sal.opt.all">— tutti —</option>
+      </select>
+    </div>
+    <label class="form-group" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;padding-bottom:8px;">
+      <input type="checkbox" id="sal-f-alarm" onchange="onSalFilterChange()">
+      Solo in allarme
+    </label>
+    <button class="btn btn-ghost btn-sm" onclick="resetSalFilters()">Reset</button>
+  </div>
 
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+  <!-- Anno + granularità + unità -->
+  <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:12px;">
+    <div class="form-group" style="min-width:110px;">
+      <label class="form-label" style="font-size:11px;">Anno</label>
+      <select class="form-select" id="sal-tl-year" onchange="loadSalMatrix()"></select>
+    </div>
+    <div class="form-group" style="padding-bottom:8px;">
+      <label class="form-label" style="font-size:11px;">Granularità</label>
+      <div style="display:flex;gap:14px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          <input type="radio" name="sal-tl-gran" value="month" checked onchange="loadSalMatrix()"> Mese
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          <input type="radio" name="sal-tl-gran" value="quarter" onchange="loadSalMatrix()"> Trimestre
+        </label>
+      </div>
+    </div>
+    <div class="form-group" style="padding-bottom:8px;">
+      <label class="form-label" style="font-size:11px;">&nbsp;</label>
       <div class="btn-group" role="group" style="display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;">
         <button type="button" id="sal-unit-hours" class="btn btn-sm" onclick="setSalUnit('hours')" data-i18n="sal.unit.hours">Ore</button>
         <button type="button" id="sal-unit-budget" class="btn btn-sm btn-ghost" onclick="setSalUnit('budget')" data-i18n="sal.unit.budget">Budget (€)</button>
       </div>
     </div>
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="min-width:140px;">Cliente</th>
-            <th style="min-width:240px;">Progetto</th>
-            <th style="min-width:160px;">Quotazioni</th>
-            <th style="min-width:220px;" id="sal-th-monte"><span data-i18n="sal.unit.hours">Monte ore</span></th>
-            <th style="min-width:180px;">% Avanzamento</th>
-            <th style="width:90px;text-align:center;">Allarme</th>
-            <th style="width:60px;text-align:right;">Job</th>
-          </tr>
-        </thead>
-        <tbody id="sal-projects-tbody">
-          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento…</td></tr>
-        </tbody>
-      </table>
+    <div id="sal-matrix-legend" style="flex-basis:100%;margin-top:4px;">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2,#1e2030);font-size:11px;">
+        <strong style="text-transform:uppercase;letter-spacing:0.04em;color:var(--text2);" data-i18n="sal.legend.title">Legenda</strong>
+        <span style="display:inline-flex;align-items:center;gap:6px;">
+          <span style="width:14px;height:14px;border-radius:3px;background:rgba(98,114,245,0.65);display:inline-block;"></span>
+          <span data-i18n="sal.legend.worked">Lavorato (cumulato)</span>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:6px;">
+          <span style="width:14px;height:14px;border-radius:3px;background:rgba(46,196,182,0.45);border:1px dashed rgba(46,196,182,0.9);display:inline-block;"></span>
+          <span data-i18n="sal.legend.planned">Pianificato (cumulato)</span>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:6px;">
+          <span style="width:14px;height:14px;border-radius:3px;background:rgba(239,68,68,0.5);display:inline-block;"></span>
+          <span data-i18n="sal.legend.overrun">Sforamento (&gt;100%)</span>
+        </span>
+        <span class="text-muted" style="flex-basis:100%;" data-i18n="sal.legend.formula">La cella mostra l'avanzamento cumulativo a fine periodo: ore cumulate ÷ ore quotate.</span>
+        <span class="text-muted" style="flex-basis:100%;">Clicca una riga per il dettaglio reparti + job del progetto.</span>
+      </div>
     </div>
   </div>
 
-  <!-- ── Pane: Temporale (calendario progetti × periodi) ────────── -->
-  <div id="pane-timeline" style="display:none;">
-    <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-bottom:14px;">
-      <div class="form-group" style="min-width:120px;">
-        <label class="form-label" style="font-size:11px;">Anno</label>
-        <select class="form-select" id="sal-tl-year" onchange="loadSalMatrix()"></select>
-      </div>
-      <div class="form-group" style="padding-bottom:8px;">
-        <label class="form-label" style="font-size:11px;">Granularità</label>
-        <div style="display:flex;gap:14px;">
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
-            <input type="radio" name="sal-tl-gran" value="month" checked onchange="loadSalMatrix()"> Mese
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
-            <input type="radio" name="sal-tl-gran" value="quarter" onchange="loadSalMatrix()"> Trimestre
-          </label>
-        </div>
-      </div>
-      <div id="sal-matrix-legend" style="flex-basis:100%;margin-top:4px;">
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2,#1e2030);font-size:11px;">
-          <strong style="text-transform:uppercase;letter-spacing:0.04em;color:var(--text2);" data-i18n="sal.legend.title">Legenda</strong>
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:14px;height:14px;border-radius:3px;background:rgba(98,114,245,0.65);display:inline-block;"></span>
-            <span data-i18n="sal.legend.worked">Lavorato (cumulato)</span>
-          </span>
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:14px;height:14px;border-radius:3px;background:rgba(46,196,182,0.45);border:1px dashed rgba(46,196,182,0.9);display:inline-block;"></span>
-            <span data-i18n="sal.legend.planned">Pianificato (cumulato)</span>
-          </span>
-          <span style="display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:14px;height:14px;border-radius:3px;background:rgba(239,68,68,0.5);display:inline-block;"></span>
-            <span data-i18n="sal.legend.overrun">Sforamento (&gt;100%)</span>
-          </span>
-          <span class="text-muted" style="flex-basis:100%;" data-i18n="sal.legend.formula">La cella mostra l'avanzamento cumulativo a fine periodo: ore cumulate ÷ ore quotate.</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="table-wrap" id="sal-matrix-wrap" style="overflow-x:auto;">
-      <div class="text-muted" style="text-align:center;padding:24px;">Caricamento…</div>
-    </div>
+  <div class="table-wrap" id="sal-matrix-wrap" style="overflow-x:auto;">
+    <div class="text-muted" style="text-align:center;padding:24px;">Caricamento…</div>
   </div>
 
 </div>
@@ -148,13 +112,14 @@
 // reparto/job) + tab Temporale (mese/trimestre). Helper globali:
 // api(), toast(), escapeHtml(). Niente mutator.
 
-let _salProjects = [];            // ultima lista grezza dal server
 let _salDetailCache = {};         // cache drill-down per project_id
-let _salTimelineLoaded = false;   // lazy-load del tab temporale
 let _salSearchTimer = null;       // debounce ricerca
+let _salMatrixData = null;        // ultimo dataset unito {labels, prevYr, nextYr, rows, ...}
+let _salMatrixCols = 7;           // n. colonne tabella (per colSpan drill-down)
 let _salUnit = (localStorage.getItem('sal_unit') === 'budget') ? 'budget' : 'hours';
 
 // Toggle unità monte: 'hours' (ore) ↔ 'budget' (€). Persistito in localStorage.
+// Ri-renderizza il calendario senza rifetch (i dati sono già in _salMatrixData).
 function setSalUnit(u) {
   _salUnit = (u === 'budget') ? 'budget' : 'hours';
   localStorage.setItem('sal_unit', _salUnit);
@@ -164,9 +129,7 @@ function setSalUnit(u) {
     hb.className = 'btn btn-sm' + (_salUnit === 'hours' ? '' : ' btn-ghost');
     bb.className = 'btn btn-sm' + (_salUnit === 'budget' ? '' : ' btn-ghost');
   }
-  const th = document.getElementById('sal-th-monte');
-  if (th) th.innerHTML = `<span>${_salUnit === 'budget' ? mfT('sal.unit.budget') : mfT('sal.unit.hours')}</span>`;
-  renderSalProjects();
+  if (_salMatrixData) renderSalMatrix();
 }
 
 // Stati progetto (valori reali ProjectStatus enum) + etichette IT.
@@ -234,30 +197,11 @@ function _salMonteOre(quoted, planned, worked) {
   </div>`;
 }
 
-// ── Tab switch ──────────────────────────────────────────────────
-function switchSalTab(tab) {
-  ['projects', 'timeline'].forEach(function(t) {
-    const pane = document.getElementById('pane-' + t);
-    const btn  = document.getElementById('tab-' + t);
-    if (!pane || !btn) return;
-    const isActive = (t === tab);
-    pane.style.display = isActive ? '' : 'none';
-    btn.classList.toggle('active', isActive);
-    btn.style.borderBottomColor = isActive ? 'var(--indigo2)' : 'transparent';
-    btn.style.color = isActive ? 'var(--text)' : 'var(--text3)';
-    btn.style.fontWeight = isActive ? '600' : '500';
-  });
-  if (tab === 'timeline' && !_salTimelineLoaded) {
-    _salTimelineLoaded = true;
-    loadSalMatrix();
-  }
-}
-
-// ── Tab Progetto ────────────────────────────────────────────────
+// ── Filtri (riusano /projects: applica filtri + ri-scala per reparto) ──
 function onSalFilterChange() {
   // Debounce per non spammare il server sull'input ricerca.
   if (_salSearchTimer) clearTimeout(_salSearchTimer);
-  _salSearchTimer = setTimeout(loadSalProjects, 300);
+  _salSearchTimer = setTimeout(loadSalMatrix, 300);
 }
 
 function resetSalFilters() {
@@ -268,71 +212,7 @@ function resetSalFilters() {
   document.getElementById('sal-f-dept').value = '';
   document.getElementById('sal-f-category').value = '';
   document.getElementById('sal-f-project').value = '';
-  loadSalProjects();
-}
-
-async function loadSalProjects() {
-  const tbody = document.getElementById('sal-projects-tbody');
-  const q = (document.getElementById('sal-search').value || '').trim();
-  const status = document.getElementById('sal-f-status').value;
-  const clientId = document.getElementById('sal-f-client').value;
-  const alarmOnly = document.getElementById('sal-f-alarm').checked;
-  const deptId = document.getElementById('sal-f-dept').value;
-  const categoryId = document.getElementById('sal-f-category').value;
-  const projectId = document.getElementById('sal-f-project').value;
-
-  const params = new URLSearchParams();
-  if (q) params.set('q', q);
-  if (status) params.set('status', status);
-  if (clientId) params.set('client_id', clientId);
-  if (alarmOnly) params.set('alarm_only', 'true');
-  if (deptId) params.set('department_id', deptId);
-  if (categoryId) params.set('category_id', categoryId);
-  if (projectId) params.set('project_id', projectId);
-
-  try {
-    _salProjects = await api('GET', '/finance/api/sal/projects?' + params.toString());
-  } catch (e) {
-    tbody.innerHTML =
-      `<tr><td colspan="7" style="text-align:center;color:#ef4444;padding:24px;">Errore: ${escapeHtml(e.message || 'caricamento')}</td></tr>`;
-    return;
-  }
-  // Invalida la cache drill-down su refresh lista.
-  _salDetailCache = {};
-  renderSalProjects();
-}
-
-function renderSalProjects() {
-  const tbody = document.getElementById('sal-projects-tbody');
-  if (!_salProjects.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Nessun progetto corrisponde ai filtri</td></tr>';
-    return;
-  }
-  const budget = (_salUnit === 'budget');
-  tbody.innerHTML = _salProjects.map(function(r) {
-    const quotes = (r.quotes || []).map(function(qt) {
-      const lbl = qt.number + (qt.title ? ' · ' + qt.title : '');
-      return `<span class="badge" title="${escapeHtml(lbl)}" style="font-size:10px;margin:1px 2px;">${escapeHtml(qt.number || '—')}</span>`;
-    }).join('');
-    const monte = budget
-      ? _salMonteEur(r.quoted_eur, r.accrued_eur)
-      : _salMonteOre(r.quoted, r.planned, r.worked);
-    // pct e pct_eur arrivano dal server come rapporto 0-1 → *100 per la barra.
-    const pct = budget ? ((Number(r.pct_eur) || 0) * 100) : ((Number(r.pct) || 0) * 100);
-    const overrunCls = (r.alarm === 'red') ? ' sal-row-overrun' : '';
-    return `<tr class="sal-prj-row${overrunCls}" data-project-id="${r.id}" style="cursor:pointer;" onclick="toggleSalDetail(${r.id})">
-      <td class="text-sm">${escapeHtml(r.client || '—')}</td>
-      <td>
-        <div style="font-weight:500;">${escapeHtml(r.title || '—')}</div>
-        <div class="mono" style="font-size:11px;color:var(--text3);margin-top:2px;">${escapeHtml(r.code || '')}</div>
-      </td>
-      <td>${quotes || '<span class="text-muted">—</span>'}</td>
-      <td>${monte}</td>
-      <td>${_salBar(pct)}</td>
-      <td style="text-align:center;">${_salAlarmBadge(r.alarm)}</td>
-      <td style="text-align:right;" class="mono">${r.job_count}</td>
-    </tr>`;
-  }).join('');
+  loadSalMatrix();
 }
 
 // Cella monte in euro: Quotato / Maturato.
@@ -356,7 +236,7 @@ async function toggleSalDetail(projectId) {
   const detailRow = document.createElement('tr');
   detailRow.id = 'sal-detail-' + projectId;
   const cell = document.createElement('td');
-  cell.colSpan = 7;
+  cell.colSpan = _salMatrixCols || 7;
   cell.style.cssText = 'background:var(--bg2,#1e2030);padding:14px;';
   cell.innerHTML = '<div class="text-muted text-sm">Caricamento dettaglio…</div>';
   detailRow.appendChild(cell);
@@ -560,74 +440,154 @@ function _salMatrixCell(c) {
     pctInt + '%</td>';
 }
 
+// Carica il calendario: unisce /projects (filtri + monte/%/allarme/eur) e
+// /matrix (celle mensili + anni laterali). Join per id, poi renderSalMatrix.
 async function loadSalMatrix() {
   const wrap = document.getElementById('sal-matrix-wrap');
   const year = document.getElementById('sal-tl-year').value;
   const granEl = document.querySelector('input[name="sal-tl-gran"]:checked');
   const gran = granEl ? granEl.value : 'month';
 
+  const q = (document.getElementById('sal-search').value || '').trim();
+  const status = document.getElementById('sal-f-status').value;
+  const clientId = document.getElementById('sal-f-client').value;
+  const alarmOnly = document.getElementById('sal-f-alarm').checked;
+  const deptId = document.getElementById('sal-f-dept').value;
+  const categoryId = document.getElementById('sal-f-category').value;
+  const projectId = document.getElementById('sal-f-project').value;
+  const fp = new URLSearchParams();
+  if (q) fp.set('q', q);
+  if (status) fp.set('status', status);
+  if (clientId) fp.set('client_id', clientId);
+  if (alarmOnly) fp.set('alarm_only', 'true');
+  if (deptId) fp.set('department_id', deptId);
+  if (categoryId) fp.set('category_id', categoryId);
+  if (projectId) fp.set('project_id', projectId);
+
   wrap.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px;">Caricamento…</div>';
 
-  let data;
+  let projects, matrix;
   try {
-    data = await api('GET', `/finance/api/sal/matrix?year=${year}&granularity=${gran}`);
+    [projects, matrix] = await Promise.all([
+      api('GET', '/finance/api/sal/projects?' + fp.toString()),
+      api('GET', `/finance/api/sal/matrix?year=${year}&granularity=${gran}`),
+    ]);
   } catch (e) {
     wrap.innerHTML = '<div style="text-align:center;color:#ef4444;padding:24px;">Errore: '
       + escapeHtml(e.message || 'calendario') + '</div>';
     return;
   }
 
-  const labels = data.labels || [];
-  const projects = data.projects || [];
-  if (!projects.length) {
-    wrap.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px;">Nessun progetto con ore quotate o lavorate.</div>';
+  const mById = {};
+  (matrix.projects || []).forEach(p => { mById[p.id] = p; });
+
+  const rows = (projects || []).map(function(p) {
+    const m = mById[p.id] || {};
+    return {
+      id: p.id, code: p.code, title: p.title, client: p.client,
+      quoted: p.quoted, planned: p.planned, worked: p.worked,
+      pct: p.pct, alarm: p.alarm,
+      quoted_eur: p.quoted_eur, accrued_eur: p.accrued_eur, pct_eur: p.pct_eur,
+      cells: m.cells || null,
+      prev_hours: m.prev_year_hours || 0,
+      next_hours: m.next_year_hours || 0,
+    };
+  });
+
+  _salMatrixData = {
+    labels: matrix.labels || [],
+    prevYr: matrix.prev_year,
+    nextYr: matrix.next_year,
+    rows: rows,
+    totalCells: (matrix.total && matrix.total.cells) || [],
+    totalPrev: (matrix.total && matrix.total.prev_year_hours) || 0,
+    totalNext: (matrix.total && matrix.total.next_year_hours) || 0,
+  };
+  _salDetailCache = {};   // invalida drill-down su refresh
+  renderSalMatrix();
+}
+
+// Render del calendario unito. budget=true → monte/% e colonne anno in €
+// (stima = ore × tariffa media); le celle mensili restano in % cumulativa.
+function renderSalMatrix() {
+  const wrap = document.getElementById('sal-matrix-wrap');
+  if (!_salMatrixData) return;
+  const d = _salMatrixData;
+  const labels = d.labels;
+  const budget = (_salUnit === 'budget');
+  _salMatrixCols = 5 + 2 + labels.length;
+
+  if (!d.rows.length) {
+    wrap.innerHTML = '<div class="text-muted" style="text-align:center;padding:24px;">Nessun progetto corrisponde ai filtri.</div>';
     return;
   }
 
-  // intestazione mese corta ("01".."12") se mensile, "Q1".."Q4" se trimestre
   const headCells = labels.map(function(l) {
-    const short = gran === 'month' ? l.slice(-2) : l;
+    const s = String(l);
+    const short = (s.length > 4) ? s.slice(-2) : s;
     return '<th style="text-align:center;font-size:11px;min-width:52px;">' + escapeHtml(short) + '</th>';
   }).join('');
 
-  // Colonne ai lati: Anno prec. (ore lavorate N-1) prima dei mesi, Anno succ.
-  // (ore pianificate N+1) dopo. Intestazione = numero anno + tooltip tradotto.
-  const prevYr = data.prev_year != null ? String(data.prev_year) : mfT('sal.col.prev_year');
-  const nextYr = data.next_year != null ? String(data.next_year) : mfT('sal.col.next_year');
-  const prevTh = '<th style="text-align:right;min-width:64px;border-right:2px solid var(--border);" '
-    + 'title="' + escapeHtml(mfT('sal.col.prev_year.hint')) + '">' + escapeHtml(prevYr) + '</th>';
-  const nextTh = '<th style="text-align:right;min-width:64px;border-left:2px solid var(--border);" '
-    + 'title="' + escapeHtml(mfT('sal.col.next_year.hint')) + '">' + escapeHtml(nextYr) + '</th>';
+  const prevLbl = d.prevYr != null ? String(d.prevYr) : mfT('sal.col.prev_year');
+  const nextLbl = d.nextYr != null ? String(d.nextYr) : mfT('sal.col.next_year');
+  const prevTh = '<th style="text-align:right;min-width:64px;border-right:2px solid var(--border);" title="'
+    + escapeHtml(mfT('sal.col.prev_year.hint')) + '">' + escapeHtml(prevLbl) + '</th>';
+  const nextTh = '<th style="text-align:right;min-width:64px;border-left:2px solid var(--border);" title="'
+    + escapeHtml(mfT('sal.col.next_year.hint')) + '">' + escapeHtml(nextLbl) + '</th>';
+  const monteLbl = budget ? mfT('sal.unit.budget') : mfT('sal.unit.hours');
 
   let html = '<table><thead><tr>'
-    + '<th style="min-width:140px;">Cliente</th>'
-    + '<th style="min-width:200px;">Progetto</th>'
-    + '<th style="text-align:right;">Quotate</th>'
-    + prevTh + headCells + nextTh + '</tr></thead><tbody>';
+    + '<th style="min-width:130px;">Cliente</th>'
+    + '<th style="min-width:190px;">Progetto</th>'
+    + '<th style="min-width:200px;">' + escapeHtml(monteLbl) + '</th>'
+    + '<th style="min-width:150px;">% Avanzamento</th>'
+    + '<th style="width:80px;text-align:center;">Allarme</th>'
+    + prevTh + headCells + nextTh
+    + '</tr></thead><tbody>';
 
-  const _sideCell = (h, side) => '<td style="text-align:right;border-'
-    + (side === 'prev' ? 'right' : 'left') + ':2px solid var(--border);" class="mono">'
-    + _salFmtHours(h) + '</td>';
+  const emptyCells = () => labels.map(function() {
+    return '<td style="text-align:center;color:var(--text3);font-size:11px;">—</td>';
+  }).join('');
 
-  projects.forEach(function(p) {
-    html += '<tr>'
-      + '<td style="font-size:12px;">' + escapeHtml(p.client || '—') + '</td>'
-      + '<td><strong>' + escapeHtml(p.title || '') + '</strong> '
-      + '<span class="text-muted" style="font-size:11px;">' + escapeHtml(p.code || '') + '</span></td>'
-      + '<td style="text-align:right;" class="mono">' + _salFmtHours(p.quoted) + '</td>'
-      + _sideCell(p.prev_year_hours, 'prev')
-      + (p.cells || []).map(_salMatrixCell).join('')
-      + _sideCell(p.next_year_hours, 'next')
+  d.rows.forEach(function(r) {
+    const monte = budget ? _salMonteEur(r.quoted_eur, r.accrued_eur)
+                         : _salMonteOre(r.quoted, r.planned, r.worked);
+    const pct = budget ? ((Number(r.pct_eur) || 0) * 100) : ((Number(r.pct) || 0) * 100);
+    const blend = (Number(r.quoted) > 0) ? (Number(r.quoted_eur) || 0) / Number(r.quoted) : 0;
+    const prevVal = budget ? _salFmtEur(r.prev_hours * blend) : _salFmtHours(r.prev_hours);
+    const nextVal = budget ? _salFmtEur(r.next_hours * blend) : _salFmtHours(r.next_hours);
+    const cellsHtml = r.cells ? r.cells.map(_salMatrixCell).join('') : emptyCells();
+    const overrunCls = (r.alarm === 'red') ? ' sal-row-overrun' : '';
+    html += '<tr class="sal-prj-row' + overrunCls + '" data-project-id="' + r.id + '" style="cursor:pointer;" onclick="toggleSalDetail(' + r.id + ')">'
+      + '<td class="text-sm">' + escapeHtml(r.client || '—') + '</td>'
+      + '<td><div style="font-weight:500;">' + escapeHtml(r.title || '—') + '</div>'
+      + '<div class="mono" style="font-size:11px;color:var(--text3);">' + escapeHtml(r.code || '') + '</div></td>'
+      + '<td>' + monte + '</td>'
+      + '<td>' + _salBar(pct) + '</td>'
+      + '<td style="text-align:center;">' + _salAlarmBadge(r.alarm) + '</td>'
+      + '<td style="text-align:right;border-right:2px solid var(--border);" class="mono">' + prevVal + '</td>'
+      + cellsHtml
+      + '<td style="text-align:right;border-left:2px solid var(--border);" class="mono">' + nextVal + '</td>'
       + '</tr>';
   });
 
-  const tot = data.total || {};
+  // Riga TOTALE: monte/% sommati dai progetti filtrati; celle/anni dal /matrix.
+  let tQ=0,tP=0,tW=0,tQE=0,tAE=0;
+  d.rows.forEach(function(r){ tQ+=Number(r.quoted)||0; tP+=Number(r.planned)||0; tW+=Number(r.worked)||0; tQE+=Number(r.quoted_eur)||0; tAE+=Number(r.accrued_eur)||0; });
+  const tMonte = budget ? _salMonteEur(tQE, tAE) : _salMonteOre(tQ, tP, tW);
+  const tPct = budget ? (tQE>0 ? tAE/tQE*100 : 0) : (tQ>0 ? tW/tQ*100 : 0);
+  const tBlend = tQ>0 ? tQE/tQ : 0;
+  const tPrevVal = budget ? _salFmtEur(d.totalPrev*tBlend) : _salFmtHours(d.totalPrev);
+  const tNextVal = budget ? _salFmtEur(d.totalNext*tBlend) : _salFmtHours(d.totalNext);
+  const tCells = (d.totalCells && d.totalCells.length) ? d.totalCells.map(_salMatrixCell).join('') : emptyCells();
   html += '<tr style="font-weight:700;border-top:2px solid var(--border);">'
     + '<td colspan="2">TOTALE</td>'
-    + '<td style="text-align:right;" class="mono">' + _salFmtHours(tot.quoted) + '</td>'
-    + _sideCell(tot.prev_year_hours, 'prev')
-    + (tot.cells || []).map(_salMatrixCell).join('')
-    + _sideCell(tot.next_year_hours, 'next')
+    + '<td>' + tMonte + '</td>'
+    + '<td>' + _salBar(tPct) + '</td>'
+    + '<td style="text-align:center;">—</td>'
+    + '<td style="text-align:right;border-right:2px solid var(--border);" class="mono">' + tPrevVal + '</td>'
+    + tCells
+    + '<td style="text-align:right;border-left:2px solid var(--border);" class="mono">' + tNextVal + '</td>'
     + '</tr></tbody></table>';
 
   wrap.innerHTML = html;
@@ -641,8 +601,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   await _salLoadDepartments();
   await _salLoadCategories();
   await _salLoadProjects();
-  await loadSalProjects();
-  setSalUnit(_salUnit);   // imposta stato iniziale toggle + intestazione monte
+  setSalUnit(_salUnit);   // stato iniziale bottoni (nessun dato ancora → no render)
+  await loadSalMatrix();
 });
 </script>
 {% endblock %}
