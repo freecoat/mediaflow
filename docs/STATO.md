@@ -8,7 +8,10 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.223** — 16 giugno 2026 — Time picker quadrante analogico + fix contrasto temi
+**v3.5.0-alpha.172.224** — 16 giugno 2026 — Cost Report: stato consegne read-only
+
+### α.172.224 ✅ (Cost Report stato consegne read-only — 16 giu, sessione remota)
+- Richiesta Matteo: sezione 📦 Consegne del Cost Report non modifica più lo stato deliverable. Rimossa colonna **Azioni** (header+cella, 11→10 col) + 5 funzioni JS morte (openConfirm/setDeliverableStatus/qcReject/uploadQC/closeDeliverable). Badge Stato resta read-only. Workflow stato resta SOLO in Pianificazione. Backend invariato (endpoint condivisi). Smoke: 10 col, 0 bottoni azione, 0 errori JS.
 
 ### α.172.223 ✅ (Time picker fix contrasto temi chiari — 16 giu, sessione remota)
 - Patch .222: numero attivo quadrante era `#fff` fisso → invisibile su temi accento-chiaro (mono/cyan/teal/green). Ora `var(--bg2)` → contrasto ok su tutti i ~16 temi. Picker 100% theme-aware (zero colori hardcoded). Verificato browser teal+mono.

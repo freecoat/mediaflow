@@ -225,7 +225,6 @@
             <th class="text-right" title="Maturato − Costo">Margine</th>
             <th>Stato</th>
             <th>Fatt.</th>
-            <th data-no-sort="true"></th>
           </tr>
         </thead>
         <tbody id="deliverables-table"></tbody>
@@ -1925,7 +1924,7 @@ function renderDeliverables() {
   if (!dlvs.length) {
     tbody.replaceChildren();
     tbody.insertAdjacentHTML('beforeend',
-      `<tr><td colspan="11" class="text-muted" style="text-align:center;padding:18px;">Nessuna consegna corrisponde ai filtri (${allDlvs.length} totali)</td></tr>`
+      `<tr><td colspan="10" class="text-muted" style="text-align:center;padding:18px;">Nessuna consegna corrisponde ai filtri (${allDlvs.length} totali)</td></tr>`
     );
     return;
   }
@@ -1957,24 +1956,10 @@ function renderDeliverables() {
     const marginColor = (d.total_cost_accrued || 0) > 0
       ? (margin >= 0 ? 'var(--green)' : 'var(--rose)')
       : 'var(--text3)';
-    // v3.5.0-alpha.172.89 (Bundle I) — Bottoni azione per-stato (workflow lineare)
-    let actionBtns = '';
-    if (d.status === 'planned') {
-      actionBtns = `<button class="btn btn-ghost btn-sm" title="Avvia (in lavorazione)" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'in_progress')">▶</button>`;
-    } else if (d.status === 'in_progress') {
-      actionBtns = `<button class="btn btn-ghost btn-sm" title="Manda a QC" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'qc','in_progress')">🔍</button>`;
-    } else if (d.status === 'qc' && (d.qc_substatus === 'in_progress' || !d.qc_substatus)) {
-      actionBtns = `<button class="btn btn-ghost btn-sm" title="Upload QC report PDF" onclick="event.stopPropagation();uploadQCReport(${d.id})">📎</button>`
-        + `<button class="btn btn-ghost btn-sm" title="QC Pass" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'qc','passed')">✓</button>`
-        + `<button class="btn btn-ghost btn-sm" title="QC Reject (cascade)" style="color:#ef4444;" onclick="event.stopPropagation();qcRejectDeliverable(${d.id})">✗</button>`;
-    } else if (d.status === 'qc' && d.qc_substatus === 'passed') {
-      actionBtns = (d.quantity_delivered < d.quantity_planned)
-        ? `<button class="btn btn-ghost btn-sm" title="Conferma consegna" onclick="event.stopPropagation();openConfirmDeliverable(${d.id})">📤</button>`
-        : `<button class="btn btn-ghost btn-sm" title="Trasla a Delivered" onclick="event.stopPropagation();setDeliverableStatus(${d.id},'delivered')">📤</button>`;
-    } else if (d.status === 'delivered') {
-      actionBtns = `<button class="btn btn-ghost btn-sm" title="Chiudi (irreversibile)" style="color:#c084fc;" onclick="event.stopPropagation();closeDeliverable(${d.id})">🔒</button>`;
-    }
-    const confirmBtn = actionBtns;
+    // v3.5.0-alpha.172.224 — Le transizioni di stato consegna NON sono più
+    // editabili dal Cost Report (read-only). Il workflow stato deliverable
+    // (avvia/QC/pass/reject/delivered/chiudi) vive solo in Pianificazione.
+    // Qui il badge Stato resta come sola visualizzazione.
     const assetBadge = (d.digital_asset_id || d.physical_asset_id)
       ? `<span class="text-xs" style="margin-left:6px;color:#a78bfa;" title="Asset linkato">[asset]</span>`
       : '';
@@ -1994,176 +1979,18 @@ function renderDeliverables() {
       <td class="mono text-right" style="color:${marginColor};">${(d.total_cost_accrued||0)>0?fmtCurrency(margin):'—'}</td>
       <td>${statBadge}</td>
       <td>${renderBillingBadge(d.billing_status, d.billing_batch_id)}</td>
-      <td>${confirmBtn}</td>
     </tr>`;
   }).join('');
   tbody.replaceChildren();
   tbody.insertAdjacentHTML('beforeend', html);
 }
 
-// Modal "Conferma consegna" stub MVP. Sprint 4 T4 (kanban) sostituirà con
-// modal completo che include linking asset + override notes.
-function openConfirmDeliverable(deliverableId) {
-  const dlv = (currentReport && currentReport.deliverables || []).find(d => d.id === deliverableId);
-  if (!dlv) return;
-  const remaining = (dlv.quantity_planned || 0) - (dlv.quantity_delivered || 0);
-  const ans = prompt(
-    `Conferma consegna "${dlv.name}"\n\n`
-    + `Pianificate: ${dlv.quantity_planned}\n`
-    + `Consegnate: ${dlv.quantity_delivered}\n`
-    + `Rimanenti: ${remaining}\n\n`
-    + `Quantità da confermare (max ${remaining}):`,
-    String(remaining)
-  );
-  if (!ans) return;
-  const qty = parseFloat(ans);
-  if (isNaN(qty) || qty <= 0) { toast('Quantità non valida', 'warning'); return; }
-  const fd = new FormData();
-  fd.append('quantity', qty);
-  fd.append('source', 'manual');
-  fetch(`/jobs/api/deliverables/${deliverableId}/confirm-delivery`, {
-    method: 'POST', body: fd, credentials: 'same-origin',
-  }).then(async r => {
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || 'Errore conferma');
-    }
-    toast('✓ Consegna confermata', 'success');
-    if (typeof loadReport === 'function') loadReport(currentReport.job.id);
-    else location.reload();
-  }).catch(e => toast(e.message, 'error'));
-}
-
-// v3.5.0-alpha.172.89 (Bundle I) — Transizioni stato deliverable.
-// setDeliverableStatus(id, status, qc_substatus?) → PUT update_deliverable.
-async function setDeliverableStatus(deliverableId, status, qcSubstatus) {
-  try {
-    const fd = new FormData();
-    fd.append('status', status);
-    if (qcSubstatus) fd.append('qc_substatus', qcSubstatus);
-    const r = await fetch(`/jobs/api/deliverables/${deliverableId}`, {
-      method: 'PUT', body: fd, credentials: 'same-origin',
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || 'Errore aggiornamento stato');
-    }
-    toast(`✓ Stato → ${status}${qcSubstatus ? '·' + qcSubstatus : ''}`, 'success', 1500);
-    if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
-  } catch (e) {
-    toast(e.message || 'Errore', 'error');
-  }
-}
-
-// QC reject con conferma + cascade (asset rejected + placeholder + notifica).
-async function qcRejectDeliverable(deliverableId) {
-  const reason = prompt(
-    'Motivo del reject QC (opzionale, finisce nella notifica e nelle note placeholder):',
-    ''
-  );
-  if (reason === null) return;  // utente ha annullato il prompt
-  const ok = confirm(
-    'Confermi il QC REJECT?\n\n'
-    + 'Effetti automatici:\n'
-    + '• Deliverable torna a stato "planned"\n'
-    + '• Asset principali linkati marcati "rejected"\n'
-    + '• Spawn nuovo placeholder per re-upload\n'
-    + '• Notifica in-app a chi ha permesso view_finance\n\n'
-    + 'Procedere?'
-  );
-  if (!ok) return;
-  try {
-    const fd = new FormData();
-    fd.append('status', 'qc');
-    fd.append('qc_substatus', 'rejected');
-    if (reason) fd.append('qc_reject_reason', reason);
-    const r = await fetch(`/jobs/api/deliverables/${deliverableId}`, {
-      method: 'PUT', body: fd, credentials: 'same-origin',
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || 'Errore QC reject');
-    }
-    const data = await r.json();
-    const c = data.qc_cascade || {};
-    toast(
-      `✗ QC reject applicato — ${c.assets_rejected || 0} asset rejected · `
-      + `${c.placeholders_spawned || 0} placeholder · ${c.notified || 0} notifiche`,
-      'success', 3500
-    );
-    if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
-  } catch (e) {
-    toast(e.message || 'Errore', 'error');
-  }
-}
-
-// Upload QC report PDF (file picker → POST /qc-report).
-async function uploadQCReport(deliverableId) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'application/pdf,image/*';
-  input.onchange = async () => {
-    const file = input.files && input.files[0];
-    if (!file) return;
-    if (file.size > 50 * 1024 * 1024) {
-      toast('File troppo grande (max 50 MB)', 'error'); return;
-    }
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const r = await fetch(`/jobs/api/deliverables/${deliverableId}/qc-report`, {
-        method: 'POST', body: fd, credentials: 'same-origin',
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.detail || 'Errore upload');
-      }
-      const data = await r.json();
-      toast(`📎 QC report caricato (asset #${data.qc_asset_id})`, 'success', 2500);
-      // Trigger AI summary inline (capability propose_qc_report_summary).
-      // Non blocca l'utente: parte in background, mostra suggerimento qc_substatus se pronto.
-      try {
-        const fd2 = new FormData();
-        fd2.append('asset_id', data.qc_asset_id);
-        fetch(`/ai/api/deliverables/${deliverableId}/qc-report-summary`, {
-          method: 'POST', body: fd2, credentials: 'same-origin',
-        }).then(async r => {
-          if (!r.ok) return;
-          const summary = await r.json();
-          const lbl = summary.passed ? '✓ PASS' : '✗ REJECT';
-          toast(`🤖 QC AI: ${lbl} — suggerito qc_substatus='${summary.suggested_qc_substatus}'`, 'info', 4500);
-        }).catch(() => {});
-      } catch (_) { /* AI summary opzionale, non bloccante */ }
-      if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
-    } catch (e) {
-      toast(e.message || 'Errore upload', 'error');
-    }
-  };
-  input.click();
-}
-
-// Chiusura formale deliverable (delivered → closed, irreversibile).
-async function closeDeliverable(deliverableId) {
-  const ok = confirm(
-    'Chiudere formalmente il deliverable?\n\n'
-    + 'Stato → "closed" IRREVERSIBILE.\n'
-    + 'Lo stato non potra\' piu\' essere modificato (storno richiede atto formale).'
-  );
-  if (!ok) return;
-  try {
-    const r = await fetch(`/jobs/api/deliverables/${deliverableId}/close`, {
-      method: 'POST', credentials: 'same-origin',
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      throw new Error(err.detail || 'Errore chiusura');
-    }
-    toast('🔒 Deliverable chiuso', 'success', 2000);
-    if (typeof reloadCurrentReport === 'function') reloadCurrentReport();
-  } catch (e) {
-    toast(e.message || 'Errore', 'error');
-  }
-}
+// v3.5.0-alpha.172.224 — Workflow stato consegne RIMOSSO dal Cost Report.
+// Le funzioni di transizione (openConfirmDeliverable / setDeliverableStatus /
+// qcRejectDeliverable / uploadQCReport / closeDeliverable) vivevano qui per
+// la colonna Azioni della sezione Consegne; su richiesta di Matteo la modifica
+// dello stato deliverable resta SOLO in Pianificazione. Qui la sezione Consegne
+// è read-only (badge Stato visualizzato, nessun mutator). Funzioni rimosse.
 
 // v3.5.0-alpha.62 — Rimanda al commerciale
 function openReferToSales(jclId) {

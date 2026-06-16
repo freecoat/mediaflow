@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.224 — Cost Report: stato consegne read-only (16 giu 2026)
+
+Su richiesta di Matteo: la sezione **📦 Consegne** del Cost Report non permette più di **modificare lo stato dei deliverable**. Le transizioni (avvia ▶ / QC 🔍 / pass ✓ / reject ✗ / consegna 📤 / chiudi 🔒 / upload QC 📎) restano **solo in Pianificazione**.
+- Rimossa la colonna **Azioni** dalla tabella Consegne (header + cella) → da 11 a 10 colonne. Il badge **Stato** resta come sola visualizzazione (read-only).
+- Rimosse le 5 funzioni JS ora morte (`openConfirmDeliverable`, `setDeliverableStatus`, `qcRejectDeliverable`, `uploadQCReport`, `closeDeliverable`) usate solo da quei bottoni. `reloadCurrentReport` mantenuta (usata da altre feature).
+- **Backend invariato**: gli endpoint `/jobs/api/deliverables/*` (PUT/close/confirm-delivery/qc-report) restano — sono condivisi e usati da Pianificazione. Tolta solo la via d'accesso dal Cost Report.
+- Smoke browser: tabella Consegne 10 colonne, 2 righe rese, 0 bottoni azione, 0 errori console JS.
+
 ## v3.5.0-alpha.172.223 — Time picker: fix contrasto numero attivo su temi chiari (16 giu 2026)
 
 Patch della .222: il numero attivo sul quadrante era `fill:#fff` hardcoded → su temi con **accento chiaro** (mono, cyan, teal, green) il bianco era invisibile/basso contrasto sul tip-accento. Ora `fill: var(--bg2)` (superficie del popup) → contrasto garantito su **tutti i ~16 temi**, sia accento chiaro che scuro. Niente colori hardcoded nel picker (tutto via `var()`). Verificato browser su `theme-teal` (numero scuro su teal) e `theme-mono` (numero scuro su grigio chiaro).
