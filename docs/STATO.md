@@ -8,7 +8,10 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.222** — 16 giugno 2026 — Time picker: quadrante analogico ibrido (globale)
+**v3.5.0-alpha.172.223** — 16 giugno 2026 — Time picker quadrante analogico + fix contrasto temi
+
+### α.172.223 ✅ (Time picker fix contrasto temi chiari — 16 giu, sessione remota)
+- Patch .222: numero attivo quadrante era `#fff` fisso → invisibile su temi accento-chiaro (mono/cyan/teal/green). Ora `var(--bg2)` → contrasto ok su tutti i ~16 temi. Picker 100% theme-aware (zero colori hardcoded). Verificato browser teal+mono.
 
 ### α.172.222 ✅ (Time picker quadrante analogico — 16 giu, sessione remota)
 - Menu selezione orario (griglia HH:MM) → **orologio analogico** stile sala montaggio. Un solo punto (`_mfTpRender` in `global.js`) → propaga **ovunque** automatico: planning, orari lavoro, tutti i modal, mobile, sub-time dei datetime-local. **Zero modifiche template**.

@@ -1654,7 +1654,10 @@ input[type="time"]:not([data-no-time-picker="true"])::-webkit-calendar-picker-in
   dominant-baseline: central;
 }
 .mf-tp-dial .tp-num.inner { font-size: 11px; opacity: .62; }
-.mf-tp-dial .tp-num.act { fill: #fff; font-weight: 700; opacity: 1; }
+/* Numero attivo su tip-accento: usa var(--bg2) (superficie popup) come fill →
+   contrasto garantito su ogni tema, sia accento chiaro (teal/cyan/mono/green)
+   che scuro (indigo/sienna). Niente #fff hardcoded. */
+.mf-tp-dial .tp-num.act { fill: var(--bg2); font-weight: 700; opacity: 1; }
 .mf-tp-dial .tp-hand { stroke: var(--indigo); stroke-width: 2; }
 .mf-tp-dial .tp-tip  { fill: var(--indigo); opacity: .9; }
 .mf-tp-dial .tp-hub  { fill: var(--indigo); }

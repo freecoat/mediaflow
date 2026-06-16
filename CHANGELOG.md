@@ -1,5 +1,9 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.223 — Time picker: fix contrasto numero attivo su temi chiari (16 giu 2026)
+
+Patch della .222: il numero attivo sul quadrante era `fill:#fff` hardcoded → su temi con **accento chiaro** (mono, cyan, teal, green) il bianco era invisibile/basso contrasto sul tip-accento. Ora `fill: var(--bg2)` (superficie del popup) → contrasto garantito su **tutti i ~16 temi**, sia accento chiaro che scuro. Niente colori hardcoded nel picker (tutto via `var()`). Verificato browser su `theme-teal` (numero scuro su teal) e `theme-mono` (numero scuro su grigio chiaro).
+
 ## v3.5.0-alpha.172.222 — Time picker: quadrante analogico ibrido (16 giu 2026)
 
 Su richiesta di Matteo: il menu di selezione orario (griglia HH:MM) sostituito da un **orologio analogico** stile "sala montaggio". Un solo punto centrale (`_mfTpRender` in `global.js`) → si propaga **ovunque** in automatico: planning, orari lavorativi, tutti i modal, mobile, e i sub-time dei `datetime-local`. Zero modifiche ai template.
