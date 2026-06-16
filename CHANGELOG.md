@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.222 — Time picker: quadrante analogico ibrido (16 giu 2026)
+
+Su richiesta di Matteo: il menu di selezione orario (griglia HH:MM) sostituito da un **orologio analogico** stile "sala montaggio". Un solo punto centrale (`_mfTpRender` in `global.js`) → si propaga **ovunque** in automatico: planning, orari lavorativi, tutti i modal, mobile, e i sub-time dei `datetime-local`. Zero modifiche ai template.
+- **Quadrante 24h cliccabile** (SVG, stile MUI): ring esterno ore 1–12, ring interno 13–23 + 00, lancetta indigo. Click sull'ora → **auto-avanza ai minuti**; in modalità minuti click → snap allo step (`data-time-step`, default 5).
+- **Readout digitale monospace** (`DM Mono`, feel timecode) con i due campi **HH:MM digitabili** direttamente — la digitazione resta il modo più veloce per data-entry intensivo.
+- **Colonna preset rapidi** (turni standard + serali/notturni) + pulsante **Adesso** (ora corrente snap allo step).
+- **Tre modi coesistono**: click quadrante · click preset · digitazione. Tab **Ore / Minuti** per cambiare anello.
+- **Theme-aware**: ogni colore via `var()` (indigo/green/ivory/… tutti i temi). i18n in 5 lingue (`tp.hour/minute/quick/now`).
+- Smoke browser verde: quadrante 24 numeri (ore) / 12 (minuti), click 3-o'clock→ora 3, bottom→30min, inner-top→00, preset/Adesso/digitazione, **0 errori console JS**.
+
 ## v3.5.0-alpha.172.221 — SAL: vista unica = calendario espandibile (15 giu 2026)
 
 Su richiesta di Matteo: il tab **Per progetto** non era utile → **rimosso**. Le sue informazioni (filtri, monte ore/budget, % avanzamento, allarme, drill-down reparti+job) sono confluite nel tab **Temporale**, che diventa l'**unica vista SAL**.

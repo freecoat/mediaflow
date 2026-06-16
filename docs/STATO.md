@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.221** — 15 giugno 2026 — SAL: vista unica = calendario espandibile (rimosso tab Per progetto)
+**v3.5.0-alpha.172.222** — 16 giugno 2026 — Time picker: quadrante analogico ibrido (globale)
+
+### α.172.222 ✅ (Time picker quadrante analogico — 16 giu, sessione remota)
+- Menu selezione orario (griglia HH:MM) → **orologio analogico** stile sala montaggio. Un solo punto (`_mfTpRender` in `global.js`) → propaga **ovunque** automatico: planning, orari lavoro, tutti i modal, mobile, sub-time dei datetime-local. **Zero modifiche template**.
+- **Quadrante 24h SVG** (ring esterno 1–12 + interno 13–23/00, lancetta indigo): click ora → auto-avanza ai minuti; minuti snap allo step (`data-time-step`, default 5). **Readout digitale monospace HH:MM digitabile** (feel timecode). **Colonna preset** + pulsante **Adesso**. Tab Ore/Minuti.
+- Tre modi coesistono (click quadrante · preset · digitazione). Theme-aware via `var()`. i18n 5 lingue (`tp.*`).
+- Smoke browser verde: 24/12 numeri, click 3-o'clock→ora3, bottom→30min, inner-top→00, **0 errori console JS**. File: `global.js` (renderer), `main.css` (.mf-tp-*), `i18n.js` (4 chiavi).
+
+**Prossimo / PENDENTE**: Matteo smoke del picker su pagine reali (planning booking, orari lavorativi, mobile). Nota: inner ring 24h un po' fitto — eventuale alleggerimento se Matteo lo trova affollato.
 
 ### α.172.221 ✅ (SAL vista unica — 15 giu, sessione remota)
 - Rimosso tab **Per progetto** (poco utile per Matteo). Le sue info confluite nel **Temporale**, ora unica vista SAL: **righe calendario espandibili** (click → drill-down Reparti+Job via `/detail`) + colonne sintetiche **Monte / % / Allarme** + **filtri** + **toggle Ore/Budget** sopra il calendario. Modalità Budget: Monte/% e anni in € (ore×tariffa media); celle mensili sempre % cumulativa.

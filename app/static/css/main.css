@@ -1573,68 +1573,143 @@ input[type="time"]:not([data-no-time-picker="true"])::-webkit-calendar-picker-in
 }
 
 
-/* ── v3.4.40 — Time picker popup ──────────────────────────────── */
+/* ── Time picker popup — quadrante analogico ibrido (v3.5.0-alpha.172.222) ─
+   Orologio "sala montaggio": readout digitale monospace (feel timecode) +
+   quadrante 24h cliccabile + colonna preset. Tutto theme-aware via var(). */
 .mf-tp-popup {
   position: absolute;
   z-index: 10000;
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 12px 30px rgba(0,0,0,.42);
-  padding: 8px;
-  min-width: 280px; max-width: 360px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.5);
+  padding: 14px;
+  min-width: 312px; max-width: 340px;
   font-family: 'DM Sans', sans-serif;
 }
-.mf-tp-quick {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+
+/* Readout digitale editabile */
+.mf-tp-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.mf-tp-hh, .mf-tp-mm {
+  width: 56px;
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 6px 0;
+  background: var(--bg3);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  -moz-appearance: textfield;
+}
+.mf-tp-hh:focus, .mf-tp-mm:focus,
+.mf-tp-hh.tp-mode, .mf-tp-mm.tp-mode {
+  outline: none;
+  border-color: var(--indigo);
+  color: var(--indigo2);
+  box-shadow: 0 0 0 2px var(--indigo-bg);
+}
+.mf-tp-colon {
+  font-family: 'DM Mono', monospace;
+  font-size: 27px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.mf-tp-now {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mf-tp-now:hover { border-color: var(--indigo); color: var(--indigo2); }
+
+/* Corpo: quadrante + preset affiancati */
+.mf-tp-body { display: flex; gap: 10px; align-items: stretch; }
+.mf-tp-dialwrap { flex: 0 0 auto; }
+.mf-tp-dial {
+  display: block;
+  width: 184px; height: 184px;
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+}
+.mf-tp-dial .tp-face { fill: var(--bg3); stroke: var(--border); stroke-width: 1; }
+.mf-tp-dial .tp-num {
+  fill: var(--text-muted);
+  font-family: 'DM Mono', monospace;
+  font-size: 14px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.mf-tp-dial .tp-num.inner { font-size: 11px; opacity: .62; }
+.mf-tp-dial .tp-num.act { fill: #fff; font-weight: 700; opacity: 1; }
+.mf-tp-dial .tp-hand { stroke: var(--indigo); stroke-width: 2; }
+.mf-tp-dial .tp-tip  { fill: var(--indigo); opacity: .9; }
+.mf-tp-dial .tp-hub  { fill: var(--indigo); }
+
+/* Preset rapidi (colonna scrollabile) */
+.mf-tp-presets {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 184px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.mf-tp-presets-h {
+  font-size: 10px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 2px 0 3px;
 }
 .mf-tp-q {
   background: var(--bg3);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 5px;
   padding: 6px 8px;
   font-size: 12px;
   font-family: 'DM Mono', monospace;
   cursor: pointer;
+  text-align: center;
 }
 .mf-tp-q:hover, .mf-tp-q.active {
   background: var(--indigo-bg);
   color: var(--indigo2);
   border-color: var(--indigo);
 }
-.mf-tp-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 2px;
-  max-height: 240px;
-  overflow-y: auto;
-}
-.mf-tp-cell {
-  background: transparent;
+
+/* Tab Ore / Minuti */
+.mf-tp-tabs { display: flex; gap: 6px; margin-top: 12px; }
+.mf-tp-tab {
+  flex: 1;
+  padding: 7px 0;
+  background: var(--bg3);
   color: var(--text-muted);
-  border: 1px solid transparent;
-  border-radius: 3px;
-  padding: 5px 4px;
-  font-size: 11.5px;
-  font-family: 'DM Mono', monospace;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
 }
-.mf-tp-cell:hover {
-  background: var(--bg3);
-  color: var(--text);
-  border-color: var(--border);
-}
-.mf-tp-cell.active {
+.mf-tp-tab.active {
   background: var(--indigo-bg);
   color: var(--indigo2);
   border-color: var(--indigo);
-  font-weight: 600;
 }
 
 /* SAL — riga progetto in sforamento (ore o budget oltre il quotato). */

@@ -1463,15 +1463,19 @@ document.addEventListener('DOMContentLoaded', () => mfEnableSortableTables());
 })();
 
 
-// ── v3.4.40 — Time picker popup ───────────────────────────────
+// ── Time picker popup — quadrante analogico ibrido ────────────
+// v3.5.0-alpha.172.222: rifatto da griglia → orologio analogico stile
+// "sala montaggio" (readout digitale monospace = feel timecode) + colonna
+// preset rapidi + campi HH/MM digitabili. Si attacca a ogni
+// <input type="time"> non `data-no-time-picker` e ai sub-time dei
+// datetime-local (mfWrapDateTimeLocal). Tre modi d'inserimento coesistono:
+//   1. click sul quadrante (ora → auto-avanza ai minuti, stile MUI 24h)
+//   2. click su un preset
+//   3. digitazione diretta nei due campi HH:MM
+// Step minuti via `data-time-step` (default 5 per il click sul quadrante).
+// Il native resta sotto: digitazione manuale sempre possibile.
 //
-// Popup HH:MM grid che si attacca a ogni <input type="time"> non
-// `data-no-time-picker`. Step 15min default (override `data-time-step`).
-// Quick row con orari frequenti. Coesiste col native (typing manuale OK).
-
-// v3.5.0-alpha.9: quick options estese per coprire turni serali/notturni
-// e granulità mezz'ora sui passaggi giornata standard. La griglia completa
-// resta sotto (HH:MM ogni 15min).
+// Preset rapidi (turni standard + serali/notturni), colonna scrollabile.
 const _MF_TP_QUICK = [
   '07:00','08:00','08:30','09:00','09:30','10:00','10:30',
   '11:00','12:00','12:30','13:00','13:30','14:00','14:30',
@@ -1496,32 +1500,218 @@ function _mfTpEnsureHost() {
   return el;
 }
 
-function _mfTpRender(input) {
-  const host = _mfTpEnsureHost();
-  const step = parseInt(input.dataset.timeStep || '15', 10);
-  const cur = input.value || '';
-  let html = '<div class="mf-tp-quick">';
-  _MF_TP_QUICK.forEach(t => {
-    html += `<button type="button" class="mf-tp-q ${t === cur ? 'active' : ''}" data-t="${t}">${t}</button>`;
-  });
-  html += '</div><div class="mf-tp-grid">';
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += step) {
-      const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-      html += `<button type="button" class="mf-tp-cell ${t === cur ? 'active' : ''}" data-t="${t}">${t}</button>`;
+// Stato del picker attualmente aperto. `mode` = 'hour' | 'minute'.
+const _mfTpState = { input: null, mode: 'hour', h: 9, m: 0, step: 5 };
+
+function _mfTpParse(v) {
+  const m = String(v || '').match(/^(\d{1,2}):(\d{2})/);
+  if (m) {
+    const h = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+    const min = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+    return { h, m: min };
+  }
+  return null;
+}
+function _mfTpFmt(h, m) {
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+// Coordinata su un quadrante: 12/0 in alto, senso orario.
+function _mfTpPolar(cx, cy, r, deg) {
+  const rad = (deg - 90) * Math.PI / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+// Scrive il valore corrente nell'input reale + dispatch input/change
+// (così gli handler oninput dei template continuano a funzionare).
+function _mfTpCommit() {
+  const s = _mfTpState;
+  if (!s.input) return;
+  s.input.value = _mfTpFmt(s.h, s.m);
+  s.input.dispatchEvent(new Event('input', { bubbles: true }));
+  s.input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// Costruisce l'SVG del quadrante per il modo corrente.
+const _MF_TP_VB = 240, _MF_TP_C = 120;
+function _mfTpDialSvg() {
+  const s = _mfTpState;
+  const C = _MF_TP_C, Ro = 96, Ri = 60;
+  let nums = '';
+  if (s.mode === 'hour') {
+    // Ring esterno 1–12, ring interno 13–23 + 00 (stile MUI 24h).
+    for (let p = 1; p <= 12; p++) {
+      const po = _mfTpPolar(C, C, Ro, p * 30);
+      const act = (s.h === p) ? ' act' : '';
+      nums += `<text class="tp-num${act}" x="${po.x.toFixed(1)}" y="${po.y.toFixed(1)}">${p}</text>`;
+      const innerVal = (p === 12) ? 0 : p + 12;
+      const pi = _mfTpPolar(C, C, Ri, p * 30);
+      const acti = (s.h === innerVal) ? ' act' : '';
+      nums += `<text class="tp-num inner${acti}" x="${pi.x.toFixed(1)}" y="${pi.y.toFixed(1)}">${String(innerVal).padStart(2, '0')}</text>`;
+    }
+  } else {
+    for (let p = 0; p < 12; p++) {
+      const val = p * 5;
+      const po = _mfTpPolar(C, C, Ro, p * 30);
+      const act = (Math.round(s.m / 5) * 5 % 60 === val) ? ' act' : '';
+      nums += `<text class="tp-num${act}" x="${po.x.toFixed(1)}" y="${po.y.toFixed(1)}">${String(val).padStart(2, '0')}</text>`;
     }
   }
-  html += '</div>';
-  host.innerHTML = html;
-  host.querySelectorAll('button[data-t]').forEach(b => {
-    b.addEventListener('mousedown', (ev) => {
-      ev.preventDefault();
-      input.value = b.dataset.t;
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      host.style.display = 'none';
+  // Lancetta: per le ore usa il ring giusto (interno per 0 e 13–23).
+  let ang, len;
+  if (s.mode === 'hour') {
+    ang = (s.h % 12) * 30;
+    len = (s.h === 0 || s.h >= 13) ? Ri : Ro;
+  } else {
+    ang = s.m * 6;
+    len = Ro;
+  }
+  const tip = _mfTpPolar(C, C, len, ang);
+  return `<svg viewBox="0 0 ${_MF_TP_VB} ${_MF_TP_VB}" class="mf-tp-dial" role="img">
+    <circle class="tp-face" cx="${C}" cy="${C}" r="112"/>
+    <line class="tp-hand" x1="${C}" y1="${C}" x2="${tip.x.toFixed(1)}" y2="${tip.y.toFixed(1)}"/>
+    <circle class="tp-tip" cx="${tip.x.toFixed(1)}" cy="${tip.y.toFixed(1)}" r="17"/>
+    <circle class="tp-hub" cx="${C}" cy="${C}" r="4"/>
+    ${nums}
+  </svg>`;
+}
+
+// Ridisegna solo il quadrante + stati attivi (header/preset/tab) senza
+// ricostruire il popup → la digitazione nei campi HH/MM non perde il focus.
+function _mfTpDrawDial() {
+  const host = _mfTpHost;
+  if (!host) return;
+  const s = _mfTpState;
+  const wrap = host.querySelector('.mf-tp-dialwrap');
+  if (wrap) {
+    wrap.innerHTML = _mfTpDialSvg();
+    const svg = wrap.querySelector('svg');
+    if (svg) svg.addEventListener('pointerdown', _mfTpDialHit);
+  }
+  // Campi HH/MM: aggiorna solo quello NON in focus (l'altro lo sta digitando).
+  const hh = host.querySelector('.mf-tp-hh'), mm = host.querySelector('.mf-tp-mm');
+  if (hh && document.activeElement !== hh) hh.value = String(s.h).padStart(2, '0');
+  if (mm && document.activeElement !== mm) mm.value = String(s.m).padStart(2, '0');
+  if (hh) hh.classList.toggle('tp-mode', s.mode === 'hour');
+  if (mm) mm.classList.toggle('tp-mode', s.mode === 'minute');
+  host.querySelectorAll('.mf-tp-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === s.mode));
+  const cur = _mfTpFmt(s.h, s.m);
+  host.querySelectorAll('.mf-tp-q').forEach(b => b.classList.toggle('active', b.dataset.t === cur));
+}
+
+// Click/tap sul quadrante → calcola valore da angolo (+ raggio per le ore).
+function _mfTpDialHit(ev) {
+  ev.preventDefault();
+  const s = _mfTpState;
+  const svg = ev.currentTarget;
+  const r = svg.getBoundingClientRect();
+  const scale = _MF_TP_VB / r.width;
+  const x = (ev.clientX - r.left) * scale - _MF_TP_C;
+  const y = (ev.clientY - r.top) * scale - _MF_TP_C;
+  let deg = Math.atan2(x, -y) * 180 / Math.PI;   // 0 in alto, orario
+  if (deg < 0) deg += 360;
+  const dist = Math.hypot(x, y);
+  if (s.mode === 'hour') {
+    let pos = Math.round(deg / 30) % 12;
+    if (pos === 0) pos = 12;
+    const inner = dist < 80;          // ring interno = 13–23/00
+    s.h = inner ? (pos === 12 ? 0 : pos + 12) : pos;
+    _mfTpCommit();
+    s.mode = 'minute';                // auto-avanza ai minuti (stile MUI)
+    _mfTpDrawDial();
+  } else {
+    const step = s.step;
+    let val = Math.round(deg / 6 / step) * step;
+    if (val >= 60) val -= 60;
+    s.m = val;
+    _mfTpCommit();
+    _mfTpDrawDial();
+  }
+}
+
+function _mfTpRender(input) {
+  const host = _mfTpEnsureHost();
+  const s = _mfTpState;
+  s.input = input;
+  s.step = Math.max(1, parseInt(input.dataset.timeStep || '5', 10));
+  const parsed = _mfTpParse(input.value);
+  s.h = parsed ? parsed.h : 9;
+  s.m = parsed ? parsed.m : 0;
+  s.mode = 'hour';
+
+  const lblH = (window.mfT && mfT('tp.hour')) || 'Ore';
+  const lblM = (window.mfT && mfT('tp.minute')) || 'Minuti';
+  const lblQ = (window.mfT && mfT('tp.quick')) || 'Rapidi';
+  const lblNow = (window.mfT && mfT('tp.now')) || 'Adesso';
+
+  let pills = `<div class="mf-tp-presets-h">${lblQ}</div>`;
+  _MF_TP_QUICK.forEach(t => {
+    pills += `<button type="button" class="mf-tp-q" data-t="${t}">${t}</button>`;
+  });
+
+  host.innerHTML = `
+    <div class="mf-tp">
+      <div class="mf-tp-head">
+        <input class="mf-tp-hh" type="text" inputmode="numeric" maxlength="2" aria-label="${lblH}">
+        <span class="mf-tp-colon">:</span>
+        <input class="mf-tp-mm" type="text" inputmode="numeric" maxlength="2" aria-label="${lblM}">
+        <button type="button" class="mf-tp-now">${lblNow}</button>
+      </div>
+      <div class="mf-tp-body">
+        <div class="mf-tp-dialwrap"></div>
+        <div class="mf-tp-presets">${pills}</div>
+      </div>
+      <div class="mf-tp-tabs">
+        <button type="button" class="mf-tp-tab" data-mode="hour">${lblH}</button>
+        <button type="button" class="mf-tp-tab" data-mode="minute">${lblM}</button>
+      </div>
+    </div>`;
+
+  // Header: digitazione diretta nei campi HH/MM.
+  const hh = host.querySelector('.mf-tp-hh');
+  const mm = host.querySelector('.mf-tp-mm');
+  hh.addEventListener('focus', () => { s.mode = 'hour'; _mfTpDrawDial(); });
+  mm.addEventListener('focus', () => { s.mode = 'minute'; _mfTpDrawDial(); });
+  hh.addEventListener('input', () => {
+    const n = parseInt(hh.value.replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n <= 23) { s.h = n; _mfTpCommit(); _mfTpDrawDial(); }
+  });
+  mm.addEventListener('input', () => {
+    const n = parseInt(mm.value.replace(/\D/g, ''), 10);
+    if (!isNaN(n) && n <= 59) { s.m = n; _mfTpCommit(); _mfTpDrawDial(); }
+  });
+
+  // Tab Ore/Minuti.
+  host.querySelectorAll('.mf-tp-tab').forEach(b => {
+    b.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      s.mode = b.dataset.mode;
+      _mfTpDrawDial();
     });
   });
+
+  // Preset rapidi.
+  host.querySelectorAll('.mf-tp-q').forEach(b => {
+    b.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const p = _mfTpParse(b.dataset.t);
+      if (p) { s.h = p.h; s.m = p.m; _mfTpCommit(); _mfTpDrawDial(); }
+    });
+  });
+
+  // "Adesso" → ora corrente (snap allo step minuti).
+  host.querySelector('.mf-tp-now').addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const now = new Date();
+    s.h = now.getHours();
+    s.m = Math.round(now.getMinutes() / s.step) * s.step;
+    if (s.m >= 60) { s.m = 0; s.h = (s.h + 1) % 24; }
+    _mfTpCommit();
+    _mfTpDrawDial();
+  });
+
+  _mfTpDrawDial();
+
+  // Posizionamento (sopra/sotto l'input a seconda dello spazio).
   const r = input.getBoundingClientRect();
   host.style.display = 'block';
   const ph = host.offsetHeight;

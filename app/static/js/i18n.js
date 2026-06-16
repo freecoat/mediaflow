@@ -74,6 +74,12 @@ window.MF_I18N = {
   'topbar.logout':           {it: 'Logout',            en: 'Logout',            fr: 'Déconnexion',      de: 'Abmelden'},
   'topbar.language':         {it: 'Lingua',            en: 'Language',          fr: 'Langue',           de: 'Sprache'},
 
+  // ── Time picker (quadrante analogico) ─────────────
+  'tp.hour':                 {it: 'Ore',               en: 'Hours',             fr: 'Heures',           de: 'Stunden',          es: 'Horas'},
+  'tp.minute':               {it: 'Minuti',            en: 'Minutes',           fr: 'Minutes',          de: 'Minuten',          es: 'Minutos'},
+  'tp.quick':                {it: 'Rapidi',            en: 'Quick',             fr: 'Rapides',          de: 'Schnell',          es: 'Rápidos'},
+  'tp.now':                  {it: 'Adesso',            en: 'Now',               fr: 'Maintenant',       de: 'Jetzt',            es: 'Ahora'},
+
   // ── Auth / login page ─────────────────────────────
   'auth.title':              {it: 'Accedi',            en: 'Sign in',           fr: 'Connexion',        de: 'Anmelden'},
   'auth.email':              {it: 'Email',             en: 'Email',             fr: 'E-mail',           de: 'E-Mail'},
