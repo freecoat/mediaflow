@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.224** — 16 giugno 2026 — Cost Report: stato consegne read-only
+**v3.5.0-alpha.172.225** — 18 giugno 2026 — Time picker: numeri visibili su temi scuri + auto-chiusura
+
+### α.172.225 ✅ (Time picker fix dark + auto-close — 18 giu, sessione remota)
+- **Causa visibilità**: CSS usava `var(--text-muted)` — var **inesistente** (è `--text2`) → senza fallback `fill` SVG cadeva su default **nero** → ore/minuti invisibili sul quadrante scuro. Fix: numeri esterni `var(--text)`, ring interno `var(--text2)`; stessa svista su colon/Adesso/header-preset/tab (→`--text2`).
+- **Auto-chiusura**: dopo selezione completa il popup si chiude → valore subito visibile nel campo. Chiude su click-minuti dial (260ms), preset (140ms), Adesso (140ms). Click-ora NON chiude (auto-avanza minuti); digitazione HH/MM NON chiude.
+- Smoke browser indigo dark: numeri `rgb(232,236,245)`/`rgb(154,163,191)` (prima nero), preset→commit+chiuso, 0 errori console. File: `global.js` (`_mfTpClose` + 3 call-site), `main.css` (.mf-tp-* / .tp-num).
 
 ### α.172.224 ✅ (Cost Report stato consegne read-only — 16 giu, sessione remota)
 - Richiesta Matteo: sezione 📦 Consegne del Cost Report non modifica più lo stato deliverable. Rimossa colonna **Azioni** (header+cella, 11→10 col) + 5 funzioni JS morte (openConfirm/setDeliverableStatus/qcReject/uploadQC/closeDeliverable). Badge Stato resta read-only. Workflow stato resta SOLO in Pianificazione. Backend invariato (endpoint condivisi). Smoke: 10 col, 0 bottoni azione, 0 errori JS.

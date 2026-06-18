@@ -1503,6 +1503,17 @@ function _mfTpEnsureHost() {
 // Stato del picker attualmente aperto. `mode` = 'hour' | 'minute'.
 const _mfTpState = { input: null, mode: 'hour', h: 9, m: 0, step: 5 };
 
+// Chiude il popup. `delay` ms per lasciar vedere la lancetta atterrare
+// dopo un click sul quadrante prima di sparire.
+function _mfTpClose(delay) {
+  if (!_mfTpHost) return;
+  if (delay) {
+    setTimeout(() => { if (_mfTpHost) _mfTpHost.style.display = 'none'; }, delay);
+  } else {
+    _mfTpHost.style.display = 'none';
+  }
+}
+
 function _mfTpParse(v) {
   const m = String(v || '').match(/^(\d{1,2}):(\d{2})/);
   if (m) {
@@ -1625,6 +1636,7 @@ function _mfTpDialHit(ev) {
     s.m = val;
     _mfTpCommit();
     _mfTpDrawDial();
+    _mfTpClose(260);   // ora+minuti impostati → chiudi (vedi lancetta atterrare)
   }
 }
 
@@ -1694,7 +1706,7 @@ function _mfTpRender(input) {
     b.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const p = _mfTpParse(b.dataset.t);
-      if (p) { s.h = p.h; s.m = p.m; _mfTpCommit(); _mfTpDrawDial(); }
+      if (p) { s.h = p.h; s.m = p.m; _mfTpCommit(); _mfTpDrawDial(); _mfTpClose(140); }
     });
   });
 
@@ -1707,6 +1719,7 @@ function _mfTpRender(input) {
     if (s.m >= 60) { s.m = 0; s.h = (s.h + 1) % 24; }
     _mfTpCommit();
     _mfTpDrawDial();
+    _mfTpClose(140);
   });
 
   _mfTpDrawDial();

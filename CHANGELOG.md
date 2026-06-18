@@ -1,5 +1,12 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.225 — Time picker: numeri visibili su temi scuri + auto-chiusura (18 giu 2026)
+
+Due fix al quadrante orario (`global.js` + `main.css`), entrambi propagati ovunque dal punto unico:
+- **Numeri leggibili su temi scuri**: il CSS usava `var(--text-muted)` — variabile **inesistente** (quella vera è `--text2`). Senza fallback il `fill` SVG cadeva sul default = **nero** → ore/minuti invisibili sul quadrante scuro. Corretto: numeri esterni `var(--text)` (massimo contrasto), ring interno 13–23/00 `var(--text2)`. Stessa svista corretta anche su due-punti, "Adesso", header preset e tab Ore/Minuti (tutti `--text2`).
+- **Auto-chiusura a ora impostata**: dopo una selezione **completa** il popup ora si chiude da solo → il valore aggiornato è subito visibile nel campo. Chiude su: click minuti sul quadrante (260ms, per veder atterrare la lancetta), click preset (140ms), "Adesso" (140ms). Il click sull'**ora** non chiude (auto-avanza ai minuti come prima); la **digitazione** HH/MM non chiude.
+- Smoke browser su tema indigo dark: numeri resi `rgb(232,236,245)` / `rgb(154,163,191)` (prima nero), preset → valore committato + popup chiuso. **0 errori console JS**.
+
 ## v3.5.0-alpha.172.224 — Cost Report: stato consegne read-only (16 giu 2026)
 
 Su richiesta di Matteo: la sezione **📦 Consegne** del Cost Report non permette più di **modificare lo stato dei deliverable**. Le transizioni (avvia ▶ / QC 🔍 / pass ✓ / reject ✗ / consegna 📤 / chiudi 🔒 / upload QC 📎) restano **solo in Pianificazione**.
