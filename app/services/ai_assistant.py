@@ -4294,52 +4294,9 @@ def _h_propose_rename_deliverables(db: Session, data: dict) -> dict:
     return {"renamed": renamed, "skipped": skipped, "details": details[:100]}
 
 
-# v3.5.0-alpha.66.17.2 (R6.2) — `_ACTION_HANDLERS` derivato dal registry
-# popolato dai decorator `@ai_capability("name")` sopra ogni `_h_*`.
-# Manteniamo l'attributo come dict (non funzione) per compat back-compat
-# call site `_ACTION_HANDLERS.get(...)`/`_ACTION_HANDLERS[...]`.
-# Idem VALID_ACTION_TYPES nel modulo `ai_legacy_parser`: viene rimpiazzato
-# in fondo (vedi `_sync_legacy_parser_action_types()`).
-_ACTION_HANDLERS = _registry_get_handlers()
-
-
-def _sync_legacy_parser_action_types() -> None:
-    """Aggiorna `ai_legacy_parser.VALID_ACTION_TYPES` con il set derivato
-    dal registry. Eseguito una volta a import-time di questo modulo, dopo
-    che TUTTI i decorator `@ai_capability` sono stati eseguiti.
-
-    Risolve il drift documentato nell'audit: legacy parser aveva 13 type
-    statici hardcoded vs 23 handler reali → 10 capability invisibili al
-    parser markdown (path Ollama/Perplexity).
-    """
-    from app.services import ai_legacy_parser as _legacy
-    actual = _registry_get_action_types()
-    # Update in-place (set object identity preservata: chi ha fatto
-    # `from ai_legacy_parser import VALID_ACTION_TYPES` continua a vederlo).
-    _legacy.VALID_ACTION_TYPES.clear()
-    _legacy.VALID_ACTION_TYPES.update(actual)
-
-
-_sync_legacy_parser_action_types()
-
-
-# ── Review quotazione (legacy, immutato funzionalmente) ──────
-
-REVIEW_SYSTEM_PROMPT = """Sei un senior producer di postproduzione. Analizza una quotazione e dai 3-5 osservazioni concrete sul suo contenuto.
-
-Focus su:
-- Voci sospette mancanti per il tipo di progetto
-- Quantità che sembrano sotto/sovrastimate
-- Mix di prezzi list/average/low poco coerente
-- Rischi di sforamento identificabili
-- Ottimizzazioni possibili sullo sconto pacchetto
-
-Formato output: lista di osservazioni in markdown. Una osservazione per riga, inizia ognuna con un'icona pertinente (! per rischio, * per suggerimento, + per conferma positiva).
-
-Sii schietto e concreto. Meglio 3 osservazioni utili che 10 generiche."""
-
-
 # ── KDM / Cinema Server AI capabilities (v3.5.0-alpha.172.226) ──────────────
+# IMPORTANT: these handlers MUST be defined before _ACTION_HANDLERS snapshot
+# (see fix(kdm): C1 — handlers registered after snapshot were dead in production).
 
 @ai_capability("propose_cinema_server", category="mutation")
 def _h_propose_cinema_server(db: Session, data: dict) -> dict:
@@ -4347,14 +4304,17 @@ def _h_propose_cinema_server(db: Session, data: dict) -> dict:
     data: {facility_name (obbligatorio), city?, manufacturer?, serial?, kind?}
     """
     from app.models import CinemaFacility, CinemaServer
+    from app.models.models import FACILITY_KINDS
     facility_name = (data.get("facility_name") or "").strip()
     if not facility_name:
         raise ValueError("Manca 'facility_name'")
+    raw_kind = (data.get("kind") or "cinema").strip()
+    kind = raw_kind if raw_kind in FACILITY_KINDS else "cinema"
     fac = CinemaFacility(
         tenant_id=CURRENT_TENANT,
         name=facility_name,
         city=(data.get("city") or "").strip() or None,
-        kind=(data.get("kind") or "cinema").strip(),
+        kind=kind,
     )
     db.add(fac)
     db.flush()
@@ -4400,6 +4360,51 @@ def _h_propose_kdm_request(db: Session, data: dict) -> dict:
         "status": r.status,
         "candidates": cands[:5],
     }
+
+
+# v3.5.0-alpha.66.17.2 (R6.2) — `_ACTION_HANDLERS` derivato dal registry
+# popolato dai decorator `@ai_capability("name")` sopra ogni `_h_*`.
+# Manteniamo l'attributo come dict (non funzione) per compat back-compat
+# call site `_ACTION_HANDLERS.get(...)`/`_ACTION_HANDLERS[...]`.
+# Idem VALID_ACTION_TYPES nel modulo `ai_legacy_parser`: viene rimpiazzato
+# in fondo (vedi `_sync_legacy_parser_action_types()`).
+_ACTION_HANDLERS = _registry_get_handlers()
+
+
+def _sync_legacy_parser_action_types() -> None:
+    """Aggiorna `ai_legacy_parser.VALID_ACTION_TYPES` con il set derivato
+    dal registry. Eseguito una volta a import-time di questo modulo, dopo
+    che TUTTI i decorator `@ai_capability` sono stati eseguiti.
+
+    Risolve il drift documentato nell'audit: legacy parser aveva 13 type
+    statici hardcoded vs 23 handler reali → 10 capability invisibili al
+    parser markdown (path Ollama/Perplexity).
+    """
+    from app.services import ai_legacy_parser as _legacy
+    actual = _registry_get_action_types()
+    # Update in-place (set object identity preservata: chi ha fatto
+    # `from ai_legacy_parser import VALID_ACTION_TYPES` continua a vederlo).
+    _legacy.VALID_ACTION_TYPES.clear()
+    _legacy.VALID_ACTION_TYPES.update(actual)
+
+
+_sync_legacy_parser_action_types()
+
+
+# ── Review quotazione (legacy, immutato funzionalmente) ──────
+
+REVIEW_SYSTEM_PROMPT = """Sei un senior producer di postproduzione. Analizza una quotazione e dai 3-5 osservazioni concrete sul suo contenuto.
+
+Focus su:
+- Voci sospette mancanti per il tipo di progetto
+- Quantità che sembrano sotto/sovrastimate
+- Mix di prezzi list/average/low poco coerente
+- Rischi di sforamento identificabili
+- Ottimizzazioni possibili sullo sconto pacchetto
+
+Formato output: lista di osservazioni in markdown. Una osservazione per riga, inizia ognuna con un'icona pertinente (! per rischio, * per suggerimento, + per conferma positiva).
+
+Sii schietto e concreto. Meglio 3 osservazioni utili che 10 generiche."""
 
 
 def review_quote(db: Session, quote_id: int, user_id: Optional[int] = None) -> Optional[str]:

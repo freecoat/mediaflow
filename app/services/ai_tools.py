@@ -1184,7 +1184,7 @@ TOOLS: list[dict] = [
                 "client_id":          {"type": "integer", "description": "PK numerico del cliente richiedente (anagrafica Clienti). Usa il contesto CLIENTI ESISTENTI per trovare l'id — NON inventarlo."},
                 "requested_title":    {"type": "string", "description": "Titolo del film per cui si richiede la chiave (testo libero, usato per il fuzzy-match con i CPL)."},
                 "requested_cpl_uuid": {"type": "string", "description": "UUID del CPL (Composition PlayList) in formato urn:uuid:... — se noto, permette match esatto a confidenza 100."},
-                "target_server_id":   {"type": "integer", "description": "PK numerico del CinemaServer destinatario. Vedi la sezione RICHIESTE KDM APERTE nel contesto per i server registrati."},
+                "target_server_id":   {"type": "integer", "description": "PK numerico (int) del CinemaServer destinatario registrato — NON inventarlo; se non lo conosci, ometti e chiedi all'utente il nome del cinema/server."},
             },
             "required": ["request_type"],
         },
