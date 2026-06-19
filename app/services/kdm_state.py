@@ -43,9 +43,10 @@ def transition(db, req, to_status: str, user_id=None):
         user_id=user_id,
     ))
 
-    # --- Task 20 hook point: materialize deliverable on "generated" ---
-    # if to_status == "generated":
-    #     _materialize_kdm_deliverable(db, req)
+    # Task 20: materializza KDM come JobDeliverable quando la chiave è pronta
+    if to_status == "generated":
+        from app.services.kdm_materialize import materialize_produced_kdm
+        materialize_produced_kdm(db, req)  # ValueError propagato → router → HTTP 400
 
     db.flush()
     return req
