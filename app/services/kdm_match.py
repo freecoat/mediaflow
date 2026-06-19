@@ -31,6 +31,8 @@ def match_request(db, req) -> list[dict]:
             conf, source = 100, "cpl_uuid"
         elif want_title and c.content_title_text:
             r = _ratio(want_title, c.content_title_text)
+            # Piecewise jump at r=0.30 is intentional: fuzzy max=90 stays below
+            # AUTO_LINK_THRESHOLD=95 so no near-miss auto-links; only UUID=100 triggers.
             conf = int(round(60 + r * 30)) if r > 0.30 else int(round(r * 60))
             source = "title_fuzzy"
         if conf > 0:

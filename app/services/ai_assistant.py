@@ -4325,7 +4325,7 @@ def _h_propose_cinema_server(db: Session, data: dict) -> dict:
         serial=(data.get("serial") or "").strip() or None,
     )
     db.add(srv)
-    db.commit()
+    db.flush()
     return {"facility_id": fac.id, "server_id": srv.id}
 
 
@@ -4354,7 +4354,7 @@ def _h_propose_kdm_request(db: Session, data: dict) -> dict:
         r.matched_confidence = cands[0]["confidence"]
         r.match_source = cands[0].get("source", "auto")
         r.status = "matched"
-    db.commit()
+    db.flush()
     return {
         "kdm_request_id": r.id,
         "status": r.status,

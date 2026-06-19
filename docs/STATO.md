@@ -14,7 +14,7 @@
 - **Pagina `/kdm` 3 tab**: Richieste (workflow badge matched→generated→confirmed), Strutture (CinemaFacility+Server CRUD+cert), CPL (import XML SMPTE + manuale + lista).
 - **Form pubblico** `/public/kdm/{token}`: cliente compila senza auth; auto-match UUID CPL (confidence≥95→matched); link riusabili e revocabili; notifica in-app+email a manage_kdm al submit.
 - **Materializazione**: transizione `→generated` crea `JobDeliverable` (status=delivered, delivered_date, price_item KDM 20€/DKDM 300€) nel Job del DCP sorgente. Idempotente.
-- **2 AI capability**: `propose_kdm_request` + `propose_kdm_link`.
+- **2 AI capability**: `propose_kdm_request` + `propose_cinema_server`.
 - **874 test** (0 failure). E2E `tests/test_kdm_e2e.py`: chain link→submit→matched→generated (deliverable materializzato)→delivered→confirmed.
 - **Pendente**: smoke browser Matteo su `feat/kdm-dkdm`.
 

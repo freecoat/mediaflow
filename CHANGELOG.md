@@ -24,7 +24,7 @@ Feature completa per la gestione chiavi KDM e DKDM (21 task TDD + E2E, ramo `fea
 
 **2 AI capability**
 - `propose_kdm_request` — crea richiesta KDM da copilot (title + CPL UUID + date).
-- `propose_kdm_link` — genera link pubblico con prefill titolo e tipo.
+- `propose_cinema_server` — registra cinema + server da copilot (facility_name, city, manufacturer, serial, kind).
 
 **Test**: 874 totali (suite verde). E2E `tests/test_kdm_e2e.py` copre la catena completa link→form→matched→generated (deliverable materializzato) →delivered→confirmed. Pendente: smoke browser Matteo su `feat/kdm-dkdm`.
 

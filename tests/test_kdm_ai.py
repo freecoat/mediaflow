@@ -1,6 +1,53 @@
 # tests/test_kdm_ai.py
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.models.models import Base
+from app.models import Tenant
 from app.services.ai_capability_registry import get_action_types, get_handler
 
+
+# ---------------------------------------------------------------------------
+# In-memory DB fixture (StaticPool pattern — same as test_kdm_router.py)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def db_session(monkeypatch):
+    """In-memory SQLite session for handler tests.
+
+    Handlers use db.flush() (not commit), so all changes land only in this
+    session's transaction; teardown is automatic when the fixture exits.
+    """
+    import app.database as database
+
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+    Base.metadata.create_all(engine)
+    TestSession = sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
+
+    monkeypatch.setattr(database, "engine", engine)
+    monkeypatch.setattr(database, "SessionLocal", TestSession)
+
+    session = TestSession()
+    # Seed tenant=1 required by KDM models (tenant_id FK)
+    session.add(Tenant(id=1, name="Test Tenant", slug="test", is_active=True))
+    session.flush()
+
+    yield session
+
+    session.rollback()
+    session.close()
+
+
+# ---------------------------------------------------------------------------
+# Registry smoke tests (no DB required)
+# ---------------------------------------------------------------------------
 
 def test_kdm_capabilities_registered():
     import app.services.ai_assistant  # noqa: F401  (forces registration)
@@ -28,92 +75,66 @@ def test_kdm_handlers_in_action_handlers_snapshot():
     )
 
 
-def test_propose_cinema_server_creates_facility_and_server():
+# ---------------------------------------------------------------------------
+# Handler integration tests (use in-memory DB — no leaks to dev DB)
+# ---------------------------------------------------------------------------
+
+def test_propose_cinema_server_creates_facility_and_server(db_session):
     import app.services.ai_assistant  # noqa: F401
-    from app.services.ai_capability_registry import get_handler
     from app.models import CinemaFacility, CinemaServer
-    from app.database import SessionLocal, create_tables
-    create_tables()
-    db = SessionLocal()
-    fac_id = None
-    srv_id = None
-    try:
-        handler = get_handler("propose_cinema_server")
-        result = handler(db, {
-            "facility_name": "UCI Test Cinema",
-            "city": "Milano",
-            "manufacturer": "dolby",
-            "serial": "IMS-AI-TEST-001",
-            "kind": "cinema",
-        })
-        assert "facility_id" in result
-        assert "server_id" in result
-        assert isinstance(result["facility_id"], int)
-        assert isinstance(result["server_id"], int)
-        fac_id = result["facility_id"]
-        srv_id = result["server_id"]
-    finally:
-        # Explicit cleanup: handler commits, so rollback is a no-op; delete explicitly.
-        if srv_id is not None:
-            db.query(CinemaServer).filter(CinemaServer.id == srv_id).delete()
-        if fac_id is not None:
-            db.query(CinemaFacility).filter(CinemaFacility.id == fac_id).delete()
-        db.commit()
-        db.close()
+
+    handler = get_handler("propose_cinema_server")
+    result = handler(db_session, {
+        "facility_name": "UCI Test Cinema",
+        "city": "Milano",
+        "manufacturer": "dolby",
+        "serial": "IMS-AI-TEST-001",
+        "kind": "cinema",
+    })
+    assert "facility_id" in result
+    assert "server_id" in result
+    assert isinstance(result["facility_id"], int)
+    assert isinstance(result["server_id"], int)
+
+    # Verify rows exist in this session (handler flushed, not committed)
+    fac = db_session.query(CinemaFacility).filter(CinemaFacility.id == result["facility_id"]).first()
+    srv = db_session.query(CinemaServer).filter(CinemaServer.id == result["server_id"]).first()
+    assert fac is not None
+    assert srv is not None
+    # Cleanup: rollback handled by fixture
 
 
-def test_propose_cinema_server_invalid_kind_falls_back():
+def test_propose_cinema_server_invalid_kind_falls_back(db_session):
     """m2: invalid kind must be silently normalized to 'cinema'."""
     import app.services.ai_assistant  # noqa: F401
-    from app.services.ai_capability_registry import get_handler
-    from app.models import CinemaFacility, CinemaServer
-    from app.database import SessionLocal, create_tables
-    create_tables()
-    db = SessionLocal()
-    fac_id = None
-    srv_id = None
-    try:
-        handler = get_handler("propose_cinema_server")
-        result = handler(db, {
-            "facility_name": "Test Kind Guard Cinema",
-            "kind": "unknown_garbage_value",
-        })
-        fac_id = result["facility_id"]
-        srv_id = result["server_id"]
-        fac = db.query(CinemaFacility).filter(CinemaFacility.id == fac_id).first()
-        assert fac is not None
-        assert fac.kind == "cinema", f"Expected 'cinema', got {fac.kind!r}"
-    finally:
-        if srv_id is not None:
-            db.query(CinemaServer).filter(CinemaServer.id == srv_id).delete()
-        if fac_id is not None:
-            db.query(CinemaFacility).filter(CinemaFacility.id == fac_id).delete()
-        db.commit()
-        db.close()
+    from app.models import CinemaFacility
+
+    handler = get_handler("propose_cinema_server")
+    result = handler(db_session, {
+        "facility_name": "Test Kind Guard Cinema",
+        "kind": "unknown_garbage_value",
+    })
+    fac = db_session.query(CinemaFacility).filter(CinemaFacility.id == result["facility_id"]).first()
+    assert fac is not None
+    assert fac.kind == "cinema", f"Expected 'cinema', got {fac.kind!r}"
 
 
-def test_propose_kdm_request_creates_request():
+def test_propose_kdm_request_creates_request(db_session):
     import app.services.ai_assistant  # noqa: F401
-    from app.services.ai_capability_registry import get_handler
     from app.models import KdmRequest
-    from app.database import SessionLocal, create_tables
-    create_tables()
-    db = SessionLocal()
-    req_id = None
-    try:
-        handler = get_handler("propose_kdm_request")
-        result = handler(db, {
-            "request_type": "kdm",
-            "requested_title": "Test Film AI",
-        })
-        assert "kdm_request_id" in result
-        assert isinstance(result["kdm_request_id"], int)
-        assert result["status"] in ("received", "matched")
-        assert isinstance(result["candidates"], list)
-        req_id = result["kdm_request_id"]
-    finally:
-        # Explicit cleanup: handler commits, so rollback is a no-op; delete explicitly.
-        if req_id is not None:
-            db.query(KdmRequest).filter(KdmRequest.id == req_id).delete()
-            db.commit()
-        db.close()
+
+    handler = get_handler("propose_kdm_request")
+    result = handler(db_session, {
+        "request_type": "kdm",
+        "requested_title": "Test Film AI",
+    })
+    assert "kdm_request_id" in result
+    assert isinstance(result["kdm_request_id"], int)
+    assert result["status"] in ("received", "matched")
+    assert isinstance(result["candidates"], list)
+
+    # Verify row exists in this session (handler flushed, not committed)
+    req = db_session.query(KdmRequest).filter(KdmRequest.id == result["kdm_request_id"]).first()
+    assert req is not None
+    assert req.request_type == "kdm"
+    # Cleanup: rollback handled by fixture
