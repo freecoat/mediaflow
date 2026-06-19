@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.225** — 18 giugno 2026 — Time picker: numeri visibili su temi scuri + auto-chiusura
+**v3.5.0-alpha.172.226** — 19 giugno 2026 — KDM/DKDM: feature completa chiavi cinema digitali
+
+### α.172.226 ✅ (KDM/DKDM — 19 giu, subagent-driven, 21 task TDD, ramo feat/kdm-dkdm)
+- **Pagina `/kdm` 3 tab**: Richieste (workflow badge matched→generated→confirmed), Strutture (CinemaFacility+Server CRUD+cert), CPL (import XML SMPTE + manuale + lista).
+- **Form pubblico** `/public/kdm/{token}`: cliente compila senza auth; auto-match UUID CPL (confidence≥95→matched); link riusabili e revocabili; notifica in-app+email a manage_kdm al submit.
+- **Materializazione**: transizione `→generated` crea `JobDeliverable` (status=delivered, delivered_date, price_item KDM 20€/DKDM 300€) nel Job del DCP sorgente. Idempotente.
+- **2 AI capability**: `propose_kdm_request` + `propose_kdm_link`.
+- **874 test** (0 failure). E2E `tests/test_kdm_e2e.py`: chain link→submit→matched→generated (deliverable materializzato)→delivered→confirmed.
+- **Pendente**: smoke browser Matteo su `feat/kdm-dkdm`.
+
+**Prossimo / IN CORSO**: merge `feat/kdm-dkdm` → `main` dopo smoke Matteo. Backlog KDM: generazione vera file KDM (integrazione Dolby/OpenDCP), upload file KDM come Asset, download sicuro per il cinema.
 
 ### α.172.225 ✅ (Time picker fix dark + auto-close — 18 giu, sessione remota)
 - **Causa visibilità**: CSS usava `var(--text-muted)` — var **inesistente** (è `--text2`) → senza fallback `fill` SVG cadeva su default **nero** → ore/minuti invisibili sul quadrante scuro. Fix: numeri esterni `var(--text)`, ring interno `var(--text2)`; stessa svista su colon/Adesso/header-preset/tab (→`--text2`).
