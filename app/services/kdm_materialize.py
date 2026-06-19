@@ -39,8 +39,10 @@ def materialize_produced_kdm(db, req) -> JobDeliverable:
     if not job_id:
         raise ValueError("Richiesta senza job: aggancia prima un DCP/progetto")
 
-    # Garantisce che le voci listino KDM/DKDM esistano per il tenant
-    ensure_kdm_price_items(db, req.tenant_id)
+    # Garantisce che le voci listino KDM/DKDM esistano per il tenant.
+    # commit=False: siamo dentro l'unità di lavoro della FSM transition;
+    # il commit finale è delegato al chiamante (router do_transition).
+    ensure_kdm_price_items(db, req.tenant_id, commit=False)
 
     # Lookup voce listino per nome (PriceItem non ha campo code)
     name_lookup = KDM_NAME if (req.request_type or "kdm") == "kdm" else DKDM_NAME

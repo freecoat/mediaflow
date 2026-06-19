@@ -71,11 +71,21 @@ def _di_video_dept_id(db: Session, tenant_id: int):
     return dept.id if dept else None
 
 
-def ensure_kdm_price_items(db: Session, tenant_id: int = 1) -> None:
+def ensure_kdm_price_items(db: Session, tenant_id: int = 1, commit: bool = True) -> None:
     """Crea le voci KDM/DKDM nel listino se mancanti per il tenant.
 
     Idempotente: controlla per `name` + `tenant_id` con include_deleted=True
     per evitare duplicati su record soft-deleted (convenzione progetto).
+
+    Args:
+        db: SQLAlchemy Session.
+        tenant_id: Tenant scope (default 1 per compatibilità seed/migrazione).
+        commit: Se True (default) esegue db.commit() al termine — comportamento
+            storico per seed_demo.py e migrate_kdm.py.
+            Passare commit=False quando la chiamata avviene dentro un'unità di
+            lavoro più ampia (es. FSM transition) per evitare commit prematuro.
+            Viene sempre eseguito db.flush() per rendere le righe visibili
+            all'interno della stessa sessione.
     """
     category_id = _get_or_create_category(db, tenant_id)
     dept_id = _di_video_dept_id(db, tenant_id)
@@ -88,6 +98,10 @@ def ensure_kdm_price_items(db: Session, tenant_id: int = 1) -> None:
             .first()
         )
         if exists:
+            # Riattiva la voce se era stata soft-deletata, per renderla
+            # trovabile dal lookup successivo che filtra is_active=True.
+            if not exists.is_active:
+                exists.is_active = True
             continue
         pi = PriceItem(
             tenant_id=tenant_id,
@@ -105,4 +119,6 @@ def ensure_kdm_price_items(db: Session, tenant_id: int = 1) -> None:
         )
         db.add(pi)
 
-    db.commit()
+    db.flush()
+    if commit:
+        db.commit()
