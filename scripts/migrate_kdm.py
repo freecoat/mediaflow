@@ -31,6 +31,17 @@ def migrate():
     for t in ("dcp_cpls", "cinema_facilities", "cinema_servers",
               "kdm_requests", "kdm_request_events", "kdm_request_links"):
         print(f"  {'✓' if t in names else '✗'} {t}")
+
+    # Voci listino KDM (20€) + DKDM (300€) — idempotente
+    from app.database import SessionLocal
+    from app.services.kdm_pricing import ensure_kdm_price_items
+    db = SessionLocal()
+    try:
+        ensure_kdm_price_items(db, tenant_id=1)
+        print("  ✓ voci listino KDM (20€) + DKDM (300€)")
+    finally:
+        db.close()
+
     print("▸ Fatto.")
 
 
