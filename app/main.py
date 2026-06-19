@@ -29,6 +29,7 @@ from app.routers import (
     mobile as mobile_router,  # v3.5.0-alpha.172.158 — PWA companion staff /m
     agent_api,  # v3.5.0-alpha.172.210 (F1) — API facility-side per Claqo Agent
     storage_admin,  # v3.5.0-alpha.172.211 (F1) — Admin storage: volumi/agent/job/proposte
+    kdm as kdm_router,  # v3.5.0-alpha.172.226 — KDM/DKDM request tracking
 )
 
 
@@ -2758,6 +2759,7 @@ app.include_router(jobs.router)
 # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced workflow router
 app.include_router(qc.router)
 app.include_router(delivery_items.router)
+app.include_router(kdm_router.router)  # v3.5.0-alpha.172.226 — KDM/DKDM request tracking
 app.include_router(admin.router)
 app.include_router(notifications_router.router)
 app.include_router(tech_sheets.router)
