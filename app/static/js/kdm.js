@@ -207,19 +207,21 @@ async function kdmLoadLinks() {
   container.innerHTML = _kdmLinks.map(function(l) {
     return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);">' +
       '<span class="text-sm mono" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(l.url) + '</span>' +
-      '<button class="btn btn-ghost btn-sm" onclick="kdmCopyLink(' + escapeHtml(JSON.stringify(l.url)) + ')">Copia</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="kdmCopyLink(' + l.id + ')">Copia</button>' +
       '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmRevokeLink(' + l.id + ')">Revoca</button>' +
     '</div>';
   }).join('');
 }
 
-function kdmCopyLink(url) {
+function kdmCopyLink(id) {
+  var l = (_kdmLinks || []).find(function(x) { return x.id === id; });
+  if (!l) return;
   try {
-    navigator.clipboard.writeText(url).then(function() {
+    navigator.clipboard.writeText(l.url).then(function() {
       toast('Link copiato', 'success');
     });
   } catch (e) {
-    toast('URL: ' + url, 'info');
+    toast('URL: ' + l.url, 'info');
   }
 }
 
@@ -371,9 +373,7 @@ async function kdmLoadCpl() {
       '<td class="text-sm text-muted">' + escapeHtml(c.content_kind || '—') + '</td>' +
       '<td class="text-sm mono">' + escapeHtml(c.duration_frames ? String(c.duration_frames) + 'f' : '—') + '</td>' +
       '<td class="text-sm text-muted">' + escapeHtml(c.source || '—') + '</td>' +
-      '<td class="text-right">' +
-        '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmDeleteCpl(' + c.id + ')" data-i18n="kdm.action.delete">Elimina</button>' +
-      '</td>' +
+      '<td></td>' +
     '</tr>';
   }).join('') +
   '</tbody></table>';
@@ -414,8 +414,3 @@ async function kdmUploadCpl(event) {
   event.target.value = '';
 }
 
-async function kdmDeleteCpl(id) {
-  if (!confirm('Eliminare questa CPL? Le richieste KDM abbinate verranno de-linkate.')) return;
-  // CPL soft-delete non implementato in questo router — placeholder
-  toast('Funzione non disponibile in questa versione', 'warning');
-}

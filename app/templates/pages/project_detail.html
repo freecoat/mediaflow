@@ -10,6 +10,9 @@
   <button class="btn btn-secondary btn-sm" onclick="projectCrossCheck(this)" title="Verifica info progetto vs IMDB/BoxOffice/Variety">🔍 Cross-check</button>
   <button class="btn btn-primary btn-sm" onclick="openNewQuoteModal()">+ Nuova quotazione</button>
   {% endif %}
+  {% if has_permission(request.state.current_user, 'manage_kdm') %}
+  <button class="btn btn-secondary btn-sm" onclick="kdmProjectLink(PROJECT_ID)" title="Genera link pubblico per richiesta KDM cliente">🔑 Genera link KDM</button>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -1997,6 +2000,29 @@ function showProjectCrossCheckModal(data) {
   modal.appendChild(inner);
   document.body.appendChild(modal);
   openModal('modal-crosscheck-proj');
+}
+
+// Genera link KDM per questo progetto (inline, senza dipendere da kdm.js)
+async function kdmProjectLink(pid) {
+  if (!pid) { toast('ID progetto non disponibile', 'error'); return; }
+  try {
+    var fd = new FormData();
+    fd.append('project_id', pid);
+    var res = await api('POST', '/kdm/api/links', fd);
+    var url = res.url || '';
+    if (url) {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast('Link KDM copiato: ' + url, 'success');
+      } catch (ce) {
+        toast('Link KDM generato: ' + url, 'info');
+      }
+    } else {
+      toast('Link KDM generato', 'success');
+    }
+  } catch (e) {
+    toast('Errore generazione link KDM: ' + (e.message || ''), 'error');
+  }
 }
 </script>
 {% endblock %}

@@ -43,7 +43,7 @@
       <button class="btn btn-secondary btn-sm" onclick="kdmGenerateLink()" data-i18n="kdm.btn.gen_link">
         Genera link &amp; copia
       </button>
-      <button class="btn btn-ghost btn-sm" onclick="kdmLoadLinks()" title="Mostra link attivi" data-i18n="kdm.btn.show_links">
+      <button class="btn btn-ghost btn-sm" id="kdm-show-links-btn" title="Mostra link attivi" data-i18n="kdm.btn.show_links">
         &#8635; Link attivi
       </button>
     </div>
@@ -262,7 +262,7 @@
     kdmInit();
     // Mostra lista link solo dopo click esplicito (evita caricamento inutile)
     var linksEl = document.getElementById('kdm-links-list');
-    var showLinksBtn = document.querySelector('[onclick="kdmLoadLinks()"]');
+    var showLinksBtn = document.getElementById('kdm-show-links-btn');
     if (showLinksBtn && linksEl) {
       showLinksBtn.addEventListener('click', function() {
         linksEl.style.display = linksEl.style.display === 'none' ? '' : 'none';
