@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Richiesta KDM/DKDM</title>
+<link rel="stylesheet" href="/static/css/main.css">
+<style>
+  body { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+  label { display: block; margin-bottom: 12px; font-size: .9rem; }
+  label input, label select, label textarea { display: block; width: 100%; margin-top: 4px; }
+  fieldset { border: 1px solid var(--border, #444); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+  legend { padding: 0 6px; font-weight: 600; }
+  button[type=submit] { margin-top: 8px; padding: 10px 24px; background: var(--accent, #6272f5); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+  button[type=submit]:hover { opacity: .88; }
+  .banner-ok { padding: 14px 18px; background: #1f8b4c; color: #fff; border-radius: 8px; margin-bottom: 20px; font-size: 1rem; }
+</style>
+</head><body>
+<h2>🔑 Richiesta chiavi DCP (KDM / DKDM)</h2>
+{% if project_title %}<p>Progetto: <strong>{{ project_title }}</strong></p>{% endif %}
+
+{% if submitted %}
+<div class="banner-ok">
+  ✅ Richiesta inviata. Il team finishing è stato avvisato e riceverai conferma a breve.
+</div>
+{% else %}
+<form method="post" action="/public/kdm/{{ token }}" enctype="multipart/form-data">
+  <label>Tipo chiave
+    <select name="request_type">
+      <option value="kdm" {% if pf.get('request_type')=='kdm' %}selected{% endif %}>KDM (cinema)</option>
+      <option value="dkdm" {% if pf.get('request_type')=='dkdm' %}selected{% endif %}>DKDM (distributore)</option>
+    </select>
+  </label>
+
+  <label>Titolo film
+    <input name="requested_title" value="{{ pf.get('requested_title','') }}" placeholder="es. QUEER_FTR_IT-XX_EN_51_2K_20240901">
+  </label>
+
+  <label>CPL UUID del DCP <small>(opzionale — aiuta il matching automatico)</small>
+    <input name="requested_cpl_uuid" value="{{ pf.get('requested_cpl_uuid','') }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+  </label>
+
+  <label>Sblocco DA (data+ora)
+    <input type="datetime-local" name="valid_from">
+  </label>
+
+  <label>Sblocco A (data+ora)
+    <input type="datetime-local" name="valid_to">
+  </label>
+
+  <label>Certificato server (.pem) <small>(opzionale)</small>
+    <input type="file" name="cert_file" accept=".pem,.crt,.cer">
+  </label>
+
+  <fieldset>
+    <legend>Contatti</legend>
+    <label>Cinema / Lab destinatario — nome
+      <input name="cinema_contact_name">
+    </label>
+    <label>Cinema / Lab destinatario — email
+      <input type="email" name="cinema_contact_email" placeholder="proiettore@cinema.it">
+    </label>
+    <label>Lab email <small>(opzionale)</small>
+      <input type="email" name="lab_contact_email">
+    </label>
+    <label>Produzione — nome referente
+      <input name="production_contact_name">
+    </label>
+    <label>Produzione — email referente
+      <input type="email" name="production_contact_email">
+    </label>
+  </fieldset>
+
+  <label>Note
+    <textarea name="notes" rows="3">{{ pf.get('notes','') }}</textarea>
+  </label>
+
+  <button type="submit">Invia richiesta</button>
+</form>
+{% endif %}
+</body></html>

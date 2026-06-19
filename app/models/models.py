@@ -4567,3 +4567,145 @@ class QCReport(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=now_utc, onupdate=now_utc
     )
+
+
+# ── KDM/DKDM request tracking (v3.5.0-alpha.172.226) ──────────────────
+# Tracking-only: nessuna crypto. Vedi docs/superpowers/specs/2026-06-19-kdm-dkdm-request-design.md
+
+KDM_REQUEST_TYPES = ("kdm", "dkdm")
+KDM_STATUSES = ("received", "matched", "keys_pending", "generated",
+                "delivered", "confirmed", "rejected", "expired")
+CPL_SOURCES = ("parsed_xml", "agent_scan", "manual", "fuzzy")
+SERVER_MANUFACTURERS = ("dolby", "christie", "gdc", "barco", "sony", "qube", "other")
+FACILITY_KINDS = ("cinema", "distributor")
+KDM_DELIVERY_METHODS = ("email", "portal", "aspera", "usb")
+
+
+class DcpCpl(Base):
+    """Metadati CPL di un DCP esistente, legati al delivery item DCP."""
+    __tablename__ = "dcp_cpls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True, index=True)
+    cpl_uuid: Mapped[str] = mapped_column(String(128), index=True)
+    content_title_text: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    edit_rate: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    duration_frames: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    encrypted: Mapped[bool] = mapped_column(Boolean, default=False)
+    key_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="manual")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class CinemaFacility(Base):
+    """Anagrafica cinema / esibitore / distributore (target delle chiavi)."""
+    __tablename__ = "cinema_facilities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    city: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), default="cinema")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    servers: Mapped[List["CinemaServer"]] = relationship(
+        back_populates="facility", cascade="all, delete-orphan")
+
+
+class CinemaServer(Base):
+    """Server di proiezione (1 certificato = 1 server)."""
+    __tablename__ = "cinema_servers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    facility_id: Mapped[int] = mapped_column(ForeignKey("cinema_facilities.id"), index=True)
+    manufacturer: Mapped[str] = mapped_column(String(20), default="other")
+    model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    serial: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    cert_pem: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cert_thumbprint: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    cert_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+    facility: Mapped["CinemaFacility"] = relationship(back_populates="servers")
+
+
+class KdmRequestLink(Base):
+    """Link pubblico (token) per il form richiesta KDM compilato dal cliente.
+    Riusabile (N submission). project_id nullable = link standalone.
+    prefill_json = campi pre-compilati dall'operatore prima di inviare il link."""
+    __tablename__ = "kdm_request_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    prefill_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class KdmRequest(Base):
+    """Richiesta chiave (KDM o DKDM) = delivery item con workflow di stato."""
+    __tablename__ = "kdm_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    request_type: Mapped[str] = mapped_column(String(8), default="kdm")
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    dcp_cpl_id: Mapped[Optional[int]] = mapped_column(ForeignKey("dcp_cpls.id"), nullable=True, index=True)
+    job_deliverable_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_deliverables.id"), nullable=True, index=True)
+    target_facility_id: Mapped[Optional[int]] = mapped_column(ForeignKey("cinema_facilities.id"), nullable=True)
+    target_server_id: Mapped[Optional[int]] = mapped_column(ForeignKey("cinema_servers.id"), nullable=True)
+    requested_title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    requested_cpl_uuid: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    valid_from: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    valid_to: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    delivery_method: Mapped[str] = mapped_column(String(16), default="email")
+    status: Mapped[str] = mapped_column(String(16), default="received", index=True)
+    matched_confidence: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    match_source: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    requested_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    generated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    kdm_file_asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    # Contatti (compilati dal cliente nel form pubblico)
+    cinema_contact_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cinema_contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    lab_contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    production_contact_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    production_contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    client_cert_pem: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Deliverable materializzato a generazione (output), distinto dal DCP di origine
+    job_deliverable_produced_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True)
+    # Origine: link pubblico o creazione interna
+    source_link_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("kdm_request_links.id"), nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deleted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class KdmRequestEvent(Base):
+    """Evento audit (event-sourced leggero) su una richiesta."""
+    __tablename__ = "kdm_request_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kdm_request_id: Mapped[int] = mapped_column(ForeignKey("kdm_requests.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(40))
+    payload_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)

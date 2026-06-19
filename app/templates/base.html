@@ -161,6 +161,11 @@
         <a href="/storage" data-nav-id="storage" class="nav-item {% if active_page == 'storage' %}active{% endif %}">
           <span class="nav-icon"><i data-lucide="database"></i></span> <span data-i18n="nav.storage">Storage</span>
         </a>
+        {% if has_permission(_user, 'manage_kdm') %}
+        <a href="/kdm" data-nav-id="kdm" class="nav-item {% if active_page == 'kdm' %}active{% endif %}">
+          <span class="nav-icon"><i data-lucide="key-round"></i></span> <span data-i18n="nav.kdm">KDM/DKDM</span>
+        </a>
+        {% endif %}
       </div>
 
       {% if request.state.current_user and request.state.current_user.is_platform_admin %}

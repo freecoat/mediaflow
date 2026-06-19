@@ -4294,6 +4294,74 @@ def _h_propose_rename_deliverables(db: Session, data: dict) -> dict:
     return {"renamed": renamed, "skipped": skipped, "details": details[:100]}
 
 
+# ── KDM / Cinema Server AI capabilities (v3.5.0-alpha.172.226) ──────────────
+# IMPORTANT: these handlers MUST be defined before _ACTION_HANDLERS snapshot
+# (see fix(kdm): C1 — handlers registered after snapshot were dead in production).
+
+@ai_capability("propose_cinema_server", category="mutation")
+def _h_propose_cinema_server(db: Session, data: dict) -> dict:
+    """Crea/registra un cinema + server dalla richiesta AI.
+    data: {facility_name (obbligatorio), city?, manufacturer?, serial?, kind?}
+    """
+    from app.models import CinemaFacility, CinemaServer
+    from app.models.models import FACILITY_KINDS
+    facility_name = (data.get("facility_name") or "").strip()
+    if not facility_name:
+        raise ValueError("Manca 'facility_name'")
+    raw_kind = (data.get("kind") or "cinema").strip()
+    kind = raw_kind if raw_kind in FACILITY_KINDS else "cinema"
+    fac = CinemaFacility(
+        tenant_id=CURRENT_TENANT,
+        name=facility_name,
+        city=(data.get("city") or "").strip() or None,
+        kind=kind,
+    )
+    db.add(fac)
+    db.flush()
+    srv = CinemaServer(
+        tenant_id=CURRENT_TENANT,
+        facility_id=fac.id,
+        manufacturer=(data.get("manufacturer") or "other").strip(),
+        serial=(data.get("serial") or "").strip() or None,
+    )
+    db.add(srv)
+    db.flush()
+    return {"facility_id": fac.id, "server_id": srv.id}
+
+
+@ai_capability("propose_kdm_request", category="mutation")
+def _h_propose_kdm_request(db: Session, data: dict) -> dict:
+    """Crea una richiesta KDM/DKDM e lancia l'auto-match CPL.
+    data: {request_type (kdm|dkdm), client_id? (PK int), requested_title?,
+           requested_cpl_uuid?, target_server_id? (PK int)}
+    """
+    from app.models import KdmRequest
+    from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD
+    r = KdmRequest(
+        tenant_id=CURRENT_TENANT,
+        request_type=(data.get("request_type") or "kdm").strip(),
+        client_id=data.get("client_id"),
+        requested_title=(data.get("requested_title") or "").strip() or None,
+        requested_cpl_uuid=(data.get("requested_cpl_uuid") or "").strip() or None,
+        target_server_id=data.get("target_server_id"),
+        status="received",
+    )
+    db.add(r)
+    db.flush()
+    cands = match_request(db, r)
+    if cands and cands[0].get("confidence", 0) >= AUTO_LINK_THRESHOLD:
+        r.dcp_cpl_id = cands[0]["dcp_cpl_id"]
+        r.matched_confidence = cands[0]["confidence"]
+        r.match_source = cands[0].get("source", "auto")
+        r.status = "matched"
+    db.flush()
+    return {
+        "kdm_request_id": r.id,
+        "status": r.status,
+        "candidates": cands[:5],
+    }
+
+
 # v3.5.0-alpha.66.17.2 (R6.2) — `_ACTION_HANDLERS` derivato dal registry
 # popolato dai decorator `@ai_capability("name")` sopra ogni `_h_*`.
 # Manteniamo l'attributo come dict (non funzione) per compat back-compat

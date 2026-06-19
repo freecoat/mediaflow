@@ -1,5 +1,33 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.226 — KDM/DKDM: feature completa (chiavi digitali cinema) (19 giu 2026)
+
+Feature completa per la gestione chiavi KDM e DKDM (21 task TDD + E2E, ramo `feat/kdm-dkdm`).
+
+**Pagina `/kdm` (3 tab)**
+- **Tab Richieste**: lista KDM/DKDM con workflow di stato a badge colorati (received → matched → keys_pending → generated → delivered → confirmed/rejected/expired); transizioni manuali da modal; soft-delete.
+- **Tab Strutture**: CRUD CinemaFacility (sale cinema) + CinemaServer (proiettori); upload certificato X.509 per file di licenza; cross-tenant guard.
+- **Tab CPL**: import CPL SMPTE XML (parser `kdm_cpl_parser.py`, test `tests/fixtures/cpl_smpte.xml`); crea CPL manuale; lista CPL per tenant.
+
+**Form pubblico richiesta (no auth)**
+- `/public/kdm/{token}` — form compilabile dal cliente cinema (titolo, CPL UUID, validità, contatti, allegato certificato). Auto-match CPL via UUID esatto (confidence=100 ≥ soglia 95 → status "matched") o titolo fuzzy. Link pubblici riusabili, revocabili, con prefill operatore.
+
+**Workflow richiesta + materializazione**
+- FSM `kdm_state.py`: transizioni validate; timestamp `generated_at / delivered_at / confirmed_at` automatici; audit event per ogni step.
+- Al passaggio `→ generated`: `materialize_produced_kdm()` crea un `JobDeliverable` (status=delivered, delivered_date=generated_at.date()) nel Job del DCP sorgente, con `price_item_id` della voce listino (KDM 20 €, DKDM 300 €). Idempotente.
+
+**Listino voci KDM**
+- `ensure_kdm_price_items()` garantisce voci "KDM — Chiave cinema digitale" (20 €/pc) e "DKDM — Chiave distribuzione" (300 €/pc) per il tenant; chiamata lazy alla prima materializazione.
+
+**Notifica finishing**
+- `kdm_notify.py`: notifica in-app Claqo a tutti gli utenti con permesso `manage_kdm` + email best-effort al cinema_contact_email; invocata al submit del form pubblico.
+
+**2 AI capability**
+- `propose_kdm_request` — crea richiesta KDM da copilot (title + CPL UUID + date).
+- `propose_cinema_server` — registra cinema + server da copilot (facility_name, city, manufacturer, serial, kind).
+
+**Test**: 874 totali (suite verde). E2E `tests/test_kdm_e2e.py` copre la catena completa link→form→matched→generated (deliverable materializzato) →delivered→confirmed. Pendente: smoke browser Matteo su `feat/kdm-dkdm`.
+
 ## v3.5.0-alpha.172.225 — Time picker: numeri visibili su temi scuri + auto-chiusura (18 giu 2026)
 
 Due fix al quadrante orario (`global.js` + `main.css`), entrambi propagati ovunque dal punto unico:

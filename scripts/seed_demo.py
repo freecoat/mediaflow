@@ -114,6 +114,10 @@ def seed():
     categories_count = stats["categories_created"] + stats["categories_updated"]
     db.flush()
 
+    # ── 4b. VOCI KDM/DKDM (Task 16) ─────────────────────────
+    from app.services.kdm_pricing import ensure_kdm_price_items
+    ensure_kdm_price_items(db, tenant_id=1)
+
     # ── 5. CLIENTI ────────────────────────────────────────────
     rai = Client(tenant_id=1, name="RAI Documentari", contact_name="Marco Ferretti",
                  contact_email="prod@rai.it", vat_number="IT00001000001")

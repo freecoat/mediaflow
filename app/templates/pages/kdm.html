@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% set active_page = "kdm" %}
+{% block title %}KDM/DKDM — Claqo{% endblock %}
+{% block topbar_title %}Richieste KDM/DKDM{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="kdmOpenNewRequest()">
+    + <span data-i18n="kdm.new_request">Nuova richiesta</span>
+  </button>
+{% endblock %}
+
+{% block content %}
+
+<div class="card" style="margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:none;padding:0;">
+  <div style="display:flex;gap:0;">
+    <button class="tab-btn active" id="kdm-tab-btn-requests" data-tab="requests"
+            onclick="kdmSwitchTab('requests')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid var(--indigo2);color:var(--text);cursor:pointer;font-size:13px;font-weight:600;">
+      <span data-i18n="kdm.tab.requests">Richieste</span>
+    </button>
+    <button class="tab-btn" id="kdm-tab-btn-facilities" data-tab="facilities"
+            onclick="kdmSwitchTab('facilities')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      <span data-i18n="kdm.tab.facilities">Cinema/Server</span>
+    </button>
+    <button class="tab-btn" id="kdm-tab-btn-cpl" data-tab="cpl"
+            onclick="kdmSwitchTab('cpl')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      <span data-i18n="kdm.tab.cpl">CPL DCP</span>
+    </button>
+  </div>
+</div>
+
+<div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
+
+  {# ── Tab: Richieste ── #}
+  <div id="kdm-tab-requests" class="kdm-tab">
+    {# Barra genera-link cliente #}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:6px;flex-wrap:wrap;">
+      <i data-lucide="link" style="width:16px;height:16px;flex-shrink:0;"></i>
+      <span class="text-sm" data-i18n="kdm.link_desc">Genera link pubblico per richiesta cliente:</span>
+      <input class="form-input" id="kdm-link-prefill-title" style="flex:1;min-width:200px;max-width:320px;"
+             placeholder="Titolo pre-compilato (opzionale)">
+      <button class="btn btn-secondary btn-sm" onclick="kdmGenerateLink()" data-i18n="kdm.btn.gen_link">
+        Genera link &amp; copia
+      </button>
+      <button class="btn btn-ghost btn-sm" id="kdm-show-links-btn" title="Mostra link attivi" data-i18n="kdm.btn.show_links">
+        &#8635; Link attivi
+      </button>
+    </div>
+
+    {# Pannello link attivi (visibile dopo load) #}
+    <div id="kdm-links-list" style="margin-bottom:14px;display:none;"></div>
+
+    <div class="table-wrap">
+      <table class="table" id="kdm-requests-table">
+        <thead>
+          <tr>
+            <th data-i18n="kdm.col.status">Stato</th>
+            <th data-i18n="kdm.col.type">Tipo</th>
+            <th data-i18n="kdm.col.title">Film/CPL</th>
+            <th data-i18n="kdm.col.window">Finestra</th>
+            <th data-i18n="kdm.col.match">Match</th>
+            <th data-i18n="kdm.col.actions">Azioni</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="kdm-requests-body">
+          <tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;">Caricamento...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ── Tab: Cinema/Server ── #}
+  <div id="kdm-tab-facilities" class="kdm-tab" style="display:none;">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button class="btn btn-secondary btn-sm" onclick="kdmOpenNewFacility()" data-i18n="kdm.btn.add_facility">+ Cinema</button>
+    </div>
+    <div class="text-muted text-sm" style="padding:24px;text-align:center;" data-i18n="kdm.empty.facilities">Nessun cinema/server. Carica...</div>
+  </div>
+
+  {# ── Tab: CPL DCP ── #}
+  <div id="kdm-tab-cpl" class="kdm-tab" style="display:none;">
+    <div class="text-muted text-sm" style="padding:24px;text-align:center;" data-i18n="kdm.empty.cpl">Nessuna CPL. Carica...</div>
+  </div>
+
+</div>
+
+{# ────────────────────── Modal: Nuova richiesta ────────────────────── #}
+<div class="modal-overlay" id="kdm-modal-new-request">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" data-i18n="kdm.modal.new_request">Nuova richiesta KDM/DKDM</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('kdm-modal-new-request')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="kdm-new-req-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.type">Tipo *</label>
+            <select class="form-select" name="request_type" required>
+              <option value="kdm">KDM</option>
+              <option value="dkdm">DKDM</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.delivery">Consegna</label>
+            <select class="form-select" name="delivery_method">
+              <option value="email">Email</option>
+              <option value="usb">USB/FTP</option>
+              <option value="api">API</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.title">Titolo film</label>
+          <input class="form-input" name="requested_title" placeholder="es. QUEER_FTR_2D_IT-XX_IT_IT_51_2K_20241101">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.cpl_uuid">CPL UUID</label>
+          <input class="form-input" name="requested_cpl_uuid" placeholder="urn:uuid:…">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.valid_from">Valido dal</label>
+            <input class="form-input" type="datetime-local" name="valid_from">
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.valid_to">Valido al</label>
+            <input class="form-input" type="datetime-local" name="valid_to">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.cinema">Cinema/Server destinatario</label>
+          <input class="form-input" name="requested_facility_name" placeholder="es. Arcadia Roma">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.notes">Note</label>
+          <textarea class="form-textarea" name="notes" rows="2"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('kdm-modal-new-request')" data-i18n="kdm.btn.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="kdmSaveNewRequest()" data-i18n="kdm.btn.save">Salva</button>
+    </div>
+  </div>
+</div>
+
+{# ────────────────────── Modal: Cambia stato ────────────────────── #}
+<div class="modal-overlay" id="kdm-modal-transition">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <span class="modal-title" data-i18n="kdm.modal.transition">Cambia stato richiesta</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('kdm-modal-transition')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" data-i18n="kdm.field.new_status">Nuovo stato</label>
+        <select class="form-select" id="kdm-transition-status">
+          <option value="">— seleziona —</option>
+          <option value="matched">Abbinata</option>
+          <option value="keys_pending">In attesa chiavi</option>
+          <option value="generated">Generata</option>
+          <option value="delivered">Consegnata</option>
+          <option value="confirmed">Confermata</option>
+          <option value="rejected">Rifiutata</option>
+          <option value="expired">Scaduta</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('kdm-modal-transition')" data-i18n="kdm.btn.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="kdmDoTransition()" data-i18n="kdm.btn.confirm">Conferma</button>
+    </div>
+  </div>
+</div>
+
+{# ────────────────────── Modal: Facility ────────────────────── #}
+<div class="modal-overlay" id="kdm-modal-facility">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <span class="modal-title" data-i18n="kdm.modal.facility">Cinema / Server</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('kdm-modal-facility')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="kdm-fac-id">
+      <div class="form-group">
+        <label class="form-label" data-i18n="kdm.field.fac_name">Nome *</label>
+        <input class="form-input" id="kdm-fac-name" placeholder="es. Arcadia Roma">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.fac_kind">Tipo</label>
+          <select class="form-select" id="kdm-fac-kind">
+            <option value="cinema">Cinema</option>
+            <option value="server">Server</option>
+            <option value="lab">Lab</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.fac_city">Città</label>
+          <input class="form-input" id="kdm-fac-city" placeholder="es. Roma">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('kdm-modal-facility')" data-i18n="kdm.btn.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="kdmSaveFacility()" data-i18n="kdm.btn.save">Salva</button>
+    </div>
+  </div>
+</div>
+
+{# ────────────────────── Modal: CPL manuale ────────────────────── #}
+<div class="modal-overlay" id="kdm-modal-cpl-manual">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-header">
+      <span class="modal-title" data-i18n="kdm.modal.cpl_manual">Aggiungi CPL manualmente</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('kdm-modal-cpl-manual')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="kdm-cpl-manual-form">
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.cpl_uuid">CPL UUID *</label>
+          <input class="form-input" name="cpl_uuid" placeholder="urn:uuid:…" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.cpl_title">Titolo</label>
+          <input class="form-input" name="content_title_text" placeholder="es. QUEER_FTR_2D_IT-XX_IT_IT_51_2K">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.cpl_kind">Content kind</label>
+            <select class="form-select" name="content_kind">
+              <option value="">— auto —</option>
+              <option value="feature">Feature</option>
+              <option value="trailer">Trailer</option>
+              <option value="short">Short</option>
+              <option value="test">Test</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.cpl_duration">Durata (frames)</label>
+            <input class="form-input" name="duration_frames" type="number" placeholder="143928">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('kdm-modal-cpl-manual')" data-i18n="kdm.btn.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="kdmSaveCplManual()" data-i18n="kdm.btn.save">Salva</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/kdm.js?v={{ app_version }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    kdmInit();
+    // Mostra lista link solo dopo click esplicito (evita caricamento inutile)
+    var linksEl = document.getElementById('kdm-links-list');
+    var showLinksBtn = document.getElementById('kdm-show-links-btn');
+    if (showLinksBtn && linksEl) {
+      showLinksBtn.addEventListener('click', function() {
+        linksEl.style.display = linksEl.style.display === 'none' ? '' : 'none';
+        if (linksEl.style.display !== 'none') kdmLoadLinks();
+      });
+    }
+    if (window.applyI18n) applyI18n();
+    if (window.lucide) lucide.createIcons();
+  });
+</script>
+{% endblock %}

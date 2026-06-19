@@ -57,4 +57,9 @@ from app.models.models import (
     NumberingConfig,
     # v3.5.0-alpha.172.98 (Bundle L Stack 2) — QC event-sourced
     QCEvent, QCReport, QCEventType,
+    # v3.5.0-alpha.172.226 — KDM/DKDM request tracking
+    DcpCpl, CinemaFacility, CinemaServer, KdmRequest, KdmRequestEvent,
+    KdmRequestLink,
+    KDM_REQUEST_TYPES, KDM_STATUSES, CPL_SOURCES, SERVER_MANUFACTURERS,
+    FACILITY_KINDS, KDM_DELIVERY_METHODS,
 )

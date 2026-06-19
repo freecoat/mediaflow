@@ -1143,6 +1143,53 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_merge_phantom",
     },
+    # ────────── KDM / Cinema Server (v3.5.0-alpha.172.226) ──────────
+    {
+        "name": "propose_cinema_server",
+        "category": "mutation",
+        "description": (
+            "Crea un'anagrafica cinema (CinemaFacility) e il relativo server di proiezione "
+            "(CinemaServer) in un'unica operazione. Usa quando l'utente registra un nuovo "
+            "cinema o esibito come destinatario di chiavi KDM. "
+            "Richiede solo facility_name; city/manufacturer/serial/kind sono facoltativi."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "facility_name":  {"type": "string", "description": "Nome del cinema o esibito (es. 'UCI Bicocca')."},
+                "city":           {"type": "string", "description": "Città del cinema (es. 'Milano')."},
+                "manufacturer":   {"type": "string", "description": "Produttore del server (es. 'dolby', 'barco', 'christie', 'other')."},
+                "serial":         {"type": "string", "description": "Numero di serie del server (utile per generare KDM firmati)."},
+                "kind":           {"type": "string", "enum": ["cinema", "exhibitor", "lab", "distributor"], "description": "Tipo struttura. Default 'cinema'."},
+            },
+            "required": ["facility_name"],
+        },
+        "handler": "propose_cinema_server",
+    },
+    {
+        "name": "propose_kdm_request",
+        "category": "mutation",
+        "description": (
+            "Registra una richiesta di KDM (Key Delivery Message) o DKDM da parte di un "
+            "cinema o distributore. Il sistema tenta l'auto-match con i CPL DCP indicizzati "
+            "(vedi contesto RICHIESTE KDM APERTE). Se la confidenza è >= 95 il link è "
+            "automatico, altrimenti la richiesta resta in stato 'received' per revisione manuale. "
+            "Usa quando l'utente dice 'cinema X chiede una chiave per il film Y', "
+            "'aggiungi richiesta KDM per UUID <uuid>'."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "request_type":       {"type": "string", "enum": ["kdm", "dkdm"], "description": "Tipo chiave richiesta: 'kdm' (chiave per singolo cinema) o 'dkdm' (chiave distributore per generare KDM). Default 'kdm'."},
+                "client_id":          {"type": "integer", "description": "PK numerico del cliente richiedente (anagrafica Clienti). Usa il contesto CLIENTI ESISTENTI per trovare l'id — NON inventarlo."},
+                "requested_title":    {"type": "string", "description": "Titolo del film per cui si richiede la chiave (testo libero, usato per il fuzzy-match con i CPL)."},
+                "requested_cpl_uuid": {"type": "string", "description": "UUID del CPL (Composition PlayList) in formato urn:uuid:... — se noto, permette match esatto a confidenza 100."},
+                "target_server_id":   {"type": "integer", "description": "PK numerico (int) del CinemaServer destinatario registrato — NON inventarlo; se non lo conosci, ometti e chiedi all'utente il nome del cinema/server."},
+            },
+            "required": ["request_type"],
+        },
+        "handler": "propose_kdm_request",
+    },
 ]
 
 
