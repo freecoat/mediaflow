@@ -13,6 +13,14 @@ def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+def _find_direct_child(elem, name: str):
+    """Cerca solo tra i figli DIRETTI di elem (non ricorsivo)."""
+    for child in list(elem):
+        if _local(child.tag) == name:
+            return child
+    return None
+
+
 def _find_local(elem, name: str):
     for e in elem.iter():
         if _local(e.tag) == name:
@@ -36,12 +44,15 @@ def parse_cpl(xml_bytes: bytes) -> dict:
     if _local(root.tag) != "CompositionPlaylist":
         raise ValueError("Non è un CompositionPlaylist (CPL)")
 
-    id_el = _find_local(root, "Id")
+    # Id e ContentTitleText devono essere figli DIRETTI di CompositionPlaylist.
+    # In CPL multi-reel i Reel/Asset annidati portano anch'essi <Id>:
+    # scansionare l'intero subtree restituirebbe il primo Id del primo asset.
+    id_el = _find_direct_child(root, "Id")
     cpl_uuid = (id_el.text or "").strip() if id_el is not None else ""
     if not cpl_uuid:
         raise ValueError("CPL senza Id")
 
-    title_el = _find_local(root, "ContentTitleText")
+    title_el = _find_direct_child(root, "ContentTitleText")
     content_title = (title_el.text or "").strip() if title_el is not None else None
 
     er_el = _find_local(root, "EditRate")
