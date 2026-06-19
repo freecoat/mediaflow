@@ -4339,6 +4339,69 @@ Formato output: lista di osservazioni in markdown. Una osservazione per riga, in
 Sii schietto e concreto. Meglio 3 osservazioni utili che 10 generiche."""
 
 
+# ── KDM / Cinema Server AI capabilities (v3.5.0-alpha.172.226) ──────────────
+
+@ai_capability("propose_cinema_server", category="mutation")
+def _h_propose_cinema_server(db: Session, data: dict) -> dict:
+    """Crea/registra un cinema + server dalla richiesta AI.
+    data: {facility_name (obbligatorio), city?, manufacturer?, serial?, kind?}
+    """
+    from app.models import CinemaFacility, CinemaServer
+    facility_name = (data.get("facility_name") or "").strip()
+    if not facility_name:
+        raise ValueError("Manca 'facility_name'")
+    fac = CinemaFacility(
+        tenant_id=CURRENT_TENANT,
+        name=facility_name,
+        city=(data.get("city") or "").strip() or None,
+        kind=(data.get("kind") or "cinema").strip(),
+    )
+    db.add(fac)
+    db.flush()
+    srv = CinemaServer(
+        tenant_id=CURRENT_TENANT,
+        facility_id=fac.id,
+        manufacturer=(data.get("manufacturer") or "other").strip(),
+        serial=(data.get("serial") or "").strip() or None,
+    )
+    db.add(srv)
+    db.commit()
+    return {"facility_id": fac.id, "server_id": srv.id}
+
+
+@ai_capability("propose_kdm_request", category="mutation")
+def _h_propose_kdm_request(db: Session, data: dict) -> dict:
+    """Crea una richiesta KDM/DKDM e lancia l'auto-match CPL.
+    data: {request_type (kdm|dkdm), client_id? (PK int), requested_title?,
+           requested_cpl_uuid?, target_server_id? (PK int)}
+    """
+    from app.models import KdmRequest
+    from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD
+    r = KdmRequest(
+        tenant_id=CURRENT_TENANT,
+        request_type=(data.get("request_type") or "kdm").strip(),
+        client_id=data.get("client_id"),
+        requested_title=(data.get("requested_title") or "").strip() or None,
+        requested_cpl_uuid=(data.get("requested_cpl_uuid") or "").strip() or None,
+        target_server_id=data.get("target_server_id"),
+        status="received",
+    )
+    db.add(r)
+    db.flush()
+    cands = match_request(db, r)
+    if cands and cands[0].get("confidence", 0) >= AUTO_LINK_THRESHOLD:
+        r.dcp_cpl_id = cands[0]["dcp_cpl_id"]
+        r.matched_confidence = cands[0]["confidence"]
+        r.match_source = cands[0].get("source", "auto")
+        r.status = "matched"
+    db.commit()
+    return {
+        "kdm_request_id": r.id,
+        "status": r.status,
+        "candidates": cands[:5],
+    }
+
+
 def review_quote(db: Session, quote_id: int, user_id: Optional[int] = None) -> Optional[str]:
     provider = get_provider_for_user(user_id, db)
     if not provider:

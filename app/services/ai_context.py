@@ -383,6 +383,34 @@ def build_context(db: Session,
     if page:
         overview.append(f"Pagina corrente UI: {page}")
 
+    # v3.5.0-alpha.172.226 — KDM overview: richieste aperte + CPL indicizzate.
+    # Wrapped in try/except: non deve mai interrompere il context per provider
+    # legacy (DeepSeek/Ollama/Perplexity) che non hanno KDM attivo.
+    try:
+        from app.models import KdmRequest, DcpCpl
+        open_kdm = (
+            db.query(KdmRequest)
+            .filter(
+                KdmRequest.tenant_id == CURRENT_TENANT,
+                KdmRequest.deleted_at.is_(None),
+                KdmRequest.status.notin_(["confirmed", "rejected", "expired"]),
+            )
+            .count()
+        )
+        cpl_count = (
+            db.query(DcpCpl)
+            .filter(
+                DcpCpl.tenant_id == CURRENT_TENANT,
+                DcpCpl.is_active == True,  # noqa: E712
+            )
+            .count()
+        )
+        overview.append(
+            f"RICHIESTE KDM APERTE: {open_kdm} · CPL DCP indicizzate: {cpl_count}"
+        )
+    except Exception:
+        pass
+
     parts.append("\n".join(overview))
 
     # v3.5.0-alpha.50 — Sezione PIANIFICAZIONE viva (in-depth context).
