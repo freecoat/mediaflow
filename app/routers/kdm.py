@@ -225,3 +225,208 @@ async def soft_delete(rid: int, request: Request, db: Session = Depends(get_db))
     r.deleted_by_user_id = getattr(user, "id", None)
     db.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Task 11 — CinemaFacility + CinemaServer CRUD + cert upload
+# ---------------------------------------------------------------------------
+
+from app.services.kdm_cert import parse_cert  # noqa: E402
+
+
+def _fac_json(f: CinemaFacility) -> dict:
+    return {
+        "id": f.id,
+        "name": f.name,
+        "city": f.city,
+        "country": f.country,
+        "contact_email": f.contact_email,
+        "kind": f.kind,
+    }
+
+
+def _srv_json(s: CinemaServer) -> dict:
+    return {
+        "id": s.id,
+        "facility_id": s.facility_id,
+        "manufacturer": s.manufacturer,
+        "model": s.model,
+        "serial": s.serial,
+        "cert_thumbprint": s.cert_thumbprint,
+        "cert_expires_at": s.cert_expires_at.isoformat() if s.cert_expires_at else None,
+    }
+
+
+@router.get("/api/facilities")
+async def list_facilities(request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    rows = (
+        db.query(CinemaFacility)
+        .filter(
+            CinemaFacility.tenant_id == current_tenant_id(),
+            CinemaFacility.is_active == True,  # noqa: E712
+        )
+        .order_by(CinemaFacility.name)
+        .all()
+    )
+    return [_fac_json(f) for f in rows]
+
+
+@router.post("/api/facilities")
+async def create_facility(
+    request: Request,
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    kind: str = Form("cinema"),
+    city: Optional[str] = Form(None),
+    country: Optional[str] = Form(None),
+    contact_email: Optional[str] = Form(None),
+):
+    _require_kdm(request, db)
+    f = CinemaFacility(
+        tenant_id=current_tenant_id(),
+        name=name,
+        kind=kind,
+        city=city,
+        country=country,
+        contact_email=contact_email,
+    )
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return _fac_json(f)
+
+
+@router.put("/api/facilities/{fid}")
+async def update_facility(
+    fid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    name: Optional[str] = Form(None),
+    kind: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    country: Optional[str] = Form(None),
+    contact_email: Optional[str] = Form(None),
+):
+    _require_kdm(request, db)
+    f = db.get(CinemaFacility, fid)
+    if not f or f.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Facility non trovata")
+    for k, v in (
+        ("name", name),
+        ("kind", kind),
+        ("city", city),
+        ("country", country),
+        ("contact_email", contact_email),
+    ):
+        if v is not None:
+            setattr(f, k, v)
+    db.commit()
+    db.refresh(f)
+    return _fac_json(f)
+
+
+@router.delete("/api/facilities/{fid}")
+async def delete_facility(fid: int, request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    f = db.get(CinemaFacility, fid)
+    if not f or f.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Facility non trovata")
+    f.is_active = False
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/api/servers")
+async def list_servers(
+    request: Request,
+    db: Session = Depends(get_db),
+    facility_id: Optional[int] = None,
+):
+    _require_kdm(request, db)
+    q = db.query(CinemaServer).filter(
+        CinemaServer.tenant_id == current_tenant_id(),
+        CinemaServer.is_active == True,  # noqa: E712
+    )
+    if facility_id:
+        q = q.filter(CinemaServer.facility_id == facility_id)
+    return [_srv_json(s) for s in q.order_by(CinemaServer.serial).all()]
+
+
+@router.post("/api/servers")
+async def create_server(
+    request: Request,
+    db: Session = Depends(get_db),
+    facility_id: int = Form(...),
+    manufacturer: str = Form("other"),
+    model: Optional[str] = Form(None),
+    serial: Optional[str] = Form(None),
+):
+    _require_kdm(request, db)
+    # Cross-tenant facility validation: facility must belong to current tenant
+    fac = db.get(CinemaFacility, facility_id)
+    if not fac or fac.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Facility non trovata")
+    s = CinemaServer(
+        tenant_id=current_tenant_id(),
+        facility_id=facility_id,
+        manufacturer=manufacturer,
+        model=model,
+        serial=serial,
+    )
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return _srv_json(s)
+
+
+@router.put("/api/servers/{sid}")
+async def update_server(
+    sid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    manufacturer: Optional[str] = Form(None),
+    model: Optional[str] = Form(None),
+    serial: Optional[str] = Form(None),
+):
+    _require_kdm(request, db)
+    s = db.get(CinemaServer, sid)
+    if not s or s.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Server non trovato")
+    for k, v in (("manufacturer", manufacturer), ("model", model), ("serial", serial)):
+        if v is not None:
+            setattr(s, k, v)
+    db.commit()
+    db.refresh(s)
+    return _srv_json(s)
+
+
+@router.delete("/api/servers/{sid}")
+async def delete_server(sid: int, request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    s = db.get(CinemaServer, sid)
+    if not s or s.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Server non trovato")
+    s.is_active = False
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/servers/{sid}/cert")
+async def upload_cert(
+    sid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    cert_pem: str = Form(...),
+):
+    _require_kdm(request, db)
+    s = db.get(CinemaServer, sid)
+    if not s or s.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Server non trovato")
+    meta = parse_cert(cert_pem)
+    s.cert_pem = cert_pem
+    s.cert_thumbprint = meta["thumbprint"]
+    s.cert_expires_at = meta["expires_at"]
+    db.commit()
+    db.refresh(s)
+    return _srv_json(s)

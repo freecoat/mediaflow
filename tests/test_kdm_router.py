@@ -162,3 +162,72 @@ def test_soft_delete(client_admin):
     r2 = client_admin.post(f"/kdm/api/requests/{rid}/transition",
                            data={"to_status": "matched"})
     assert r2.status_code == 404, r2.text
+
+
+# ---------------------------------------------------------------------------
+# Task 11 tests — facility + server CRUD + cert upload
+# ---------------------------------------------------------------------------
+
+def test_facility_and_server_crud(client_admin):
+    """CRUD completo CinemaFacility + CinemaServer con validazione cross-tenant."""
+    # Crea facility
+    r = client_admin.post("/kdm/api/facilities",
+                          data={"name": "Arcadia", "kind": "cinema"})
+    assert r.status_code == 200, r.text
+    fid = r.json()["id"]
+
+    # Crea server nella facility
+    r2 = client_admin.post("/kdm/api/servers",
+                           data={"facility_id": fid, "manufacturer": "christie",
+                                 "serial": "S-1"})
+    assert r2.status_code == 200, r2.text
+    sid = r2.json()["id"]
+
+    # Lista facilities: deve contenere la nuova
+    r3 = client_admin.get("/kdm/api/facilities")
+    assert r3.status_code == 200, r3.text
+    assert any(f["id"] == fid for f in r3.json())
+
+    # Lista servers: deve contenere il nuovo
+    r4 = client_admin.get("/kdm/api/servers")
+    assert r4.status_code == 200, r4.text
+    assert any(s["id"] == sid for s in r4.json())
+
+    # Update facility
+    r5 = client_admin.put(f"/kdm/api/facilities/{fid}",
+                          data={"city": "Roma"})
+    assert r5.status_code == 200, r5.text
+    assert r5.json()["city"] == "Roma"
+
+    # Update server
+    r6 = client_admin.put(f"/kdm/api/servers/{sid}",
+                          data={"model": "CP2230"})
+    assert r6.status_code == 200, r6.text
+    assert r6.json()["model"] == "CP2230"
+
+    # Soft delete server
+    r7 = client_admin.delete(f"/kdm/api/servers/{sid}")
+    assert r7.status_code == 200, r7.text
+    assert r7.json()["ok"] is True
+
+    # Server non più in lista
+    r8 = client_admin.get("/kdm/api/servers")
+    assert not any(s["id"] == sid for s in r8.json())
+
+    # Soft delete facility
+    r9 = client_admin.delete(f"/kdm/api/facilities/{fid}")
+    assert r9.status_code == 200, r9.text
+    assert r9.json()["ok"] is True
+
+    # Facility non più in lista
+    r10 = client_admin.get("/kdm/api/facilities")
+    assert not any(f["id"] == fid for f in r10.json())
+
+
+def test_server_cross_tenant_facility_rejected(client_admin):
+    """Creare server con facility_id di altro tenant → 404."""
+    # Facility_id=9999 non esiste nel tenant corrente → deve dare 404
+    r = client_admin.post("/kdm/api/servers",
+                          data={"facility_id": 9999, "manufacturer": "barco",
+                                "serial": "X-1"})
+    assert r.status_code == 404, r.text
