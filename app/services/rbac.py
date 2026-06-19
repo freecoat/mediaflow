@@ -96,6 +96,8 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "view_deliverables":   ["Visualizza consegne"],
         "edit_deliverables":   ["Modifica consegne (specifiche, link asset)"],
         "confirm_deliverables": ["Conferma consegna (quantity_delivered)"],
+        # v3.5.0-alpha.172.226 — Gestione KDM/DKDM per consegne DCP.
+        "manage_kdm":          ["Gestione richieste KDM/DKDM (chiavi DCP)"],
     },
     "Risorse": {
         "view_resources":   ["Visualizza anagrafica risorse"],
@@ -151,6 +153,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_trash", "restore_trash",
         # v3.5.0-alpha.172.3 — Deliverable workflow (Restructure)
         "view_deliverables", "edit_deliverables", "confirm_deliverables",
+        # v3.5.0-alpha.172.226 — KDM/DKDM management
+        "manage_kdm",
     ],
     "producer": [
         "view_clients",
