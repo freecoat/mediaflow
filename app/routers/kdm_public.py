@@ -35,6 +35,15 @@ def _parse_dt(s):
         return None
 
 
+def _project_title(link, db) -> str | None:
+    """Resolve project title from link, if any."""
+    if not link.project_id:
+        return None
+    from app.models import Project
+    p = db.get(Project, link.project_id)
+    return getattr(p, "title", None) if p else None
+
+
 def _notify_finishing(db, req):
     """Notifica in-app (manage_kdm) + email best-effort. Vedi Task 19."""
     from app.services.kdm_notify import notify_new_kdm_request
@@ -44,11 +53,7 @@ def _notify_finishing(db, req):
 @router.get("/{token}", response_class=HTMLResponse)
 async def public_form(token: str, request: Request, db: Session = Depends(get_db)):
     link = _resolve_link(token, db)
-    project_title = None
-    if link.project_id:
-        from app.models import Project
-        p = db.get(Project, link.project_id)
-        project_title = getattr(p, "title", None) if p else None
+    project_title = _project_title(link, db)
     return _tpl().TemplateResponse("pages/kdm_public_form.html", {
         "request": request, "token": token, "pf": link.prefill_json or {},
         "project_title": project_title, "submitted": False})
@@ -70,6 +75,9 @@ async def public_submit(
         notes: Optional[str] = Form(None),
         cert_file: Optional[UploadFile] = File(None)):
     link = _resolve_link(token, db)
+    # I2: normalize request_type to valid enum values
+    if request_type not in ("kdm", "dkdm"):
+        request_type = "kdm"
     cert_pem = None
     if cert_file is not None:
         try:
@@ -112,6 +120,7 @@ async def public_submit(
     db.commit()
     db.refresh(req)
     _notify_finishing(db, req)
+    # I1: resolve project title for success banner (DRY via helper)
     return _tpl().TemplateResponse("pages/kdm_public_form.html", {
         "request": request, "token": token, "pf": {},
-        "project_title": None, "submitted": True})
+        "project_title": _project_title(link, db), "submitted": True})
