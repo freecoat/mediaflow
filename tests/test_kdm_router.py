@@ -286,3 +286,52 @@ def test_cpl_scan_stub(client_admin):
     r = client_admin.post("/kdm/api/cpl/scan")
     assert r.status_code == 501, r.text
     assert r.json()["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# Task 17 tests — public request-link generation (operator side)
+# ---------------------------------------------------------------------------
+
+def test_create_public_link(client_admin):
+    """POST /kdm/api/links: crea link pubblico con prefill → {id, token, url}."""
+    r = client_admin.post("/kdm/api/links", data={
+        "request_type": "kdm", "prefill_title": "QUEER_FTR"})
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["token"] and "/public/kdm/" in b["url"]
+
+
+def test_list_public_links(client_admin):
+    """GET /kdm/api/links: ritorna lista link attivi tenant-scoped."""
+    # Crea un link prima
+    r1 = client_admin.post("/kdm/api/links", data={"prefill_title": "FILM_A"})
+    assert r1.status_code == 200, r1.text
+    link_id = r1.json()["id"]
+
+    r2 = client_admin.get("/kdm/api/links")
+    assert r2.status_code == 200, r2.text
+    ids = [l["id"] for l in r2.json()]
+    assert link_id in ids
+
+
+def test_revoke_public_link(client_admin):
+    """POST /kdm/api/links/{id}/revoke: is_active → False, non appare più in lista."""
+    r1 = client_admin.post("/kdm/api/links", data={"prefill_title": "FILM_B"})
+    assert r1.status_code == 200, r1.text
+    link_id = r1.json()["id"]
+
+    r2 = client_admin.post(f"/kdm/api/links/{link_id}/revoke")
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["ok"] is True
+
+    # Non deve più apparire nella lista
+    r3 = client_admin.get("/kdm/api/links")
+    assert r3.status_code == 200, r3.text
+    ids = [l["id"] for l in r3.json()]
+    assert link_id not in ids
+
+
+def test_revoke_nonexistent_link(client_admin):
+    """POST /kdm/api/links/9999/revoke: link inesistente → 404."""
+    r = client_admin.post("/kdm/api/links/9999/revoke")
+    assert r.status_code == 404, r.text

@@ -1,6 +1,7 @@
 """Router richieste KDM/DKDM (v3.5.0-alpha.172.226). Tracking-only.
 Vedi docs/superpowers/specs/2026-06-19-kdm-dkdm-request-design.md
 """
+import secrets
 from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -10,6 +11,7 @@ from app.database import get_db
 from app.context import current_tenant_id
 from app.models import KdmRequest, DcpCpl, CinemaFacility, CinemaServer
 from app.models import Job, JobDeliverable
+from app.models import KdmRequestLink
 from app.services.rbac import has_permission, current_user_optional
 from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD
 from app.services.kdm_state import transition as _fsm_transition
@@ -524,3 +526,81 @@ async def cpl_scan(request: Request, db: Session = Depends(get_db)):
         status_code=501,
         content={"ok": False, "detail": "Scan agent in fase 2"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 17 — public request-link generation (operator side)
+# ---------------------------------------------------------------------------
+
+def _public_base(request: Request) -> str:
+    """Rispetta proxy/tunnel: usa header host. Mirror del pattern portal.py."""
+    return str(request.base_url).rstrip("/")
+
+
+@router.post("/api/links")
+async def create_link(
+    request: Request,
+    db: Session = Depends(get_db),
+    project_id: Optional[int] = Form(None),
+    request_type: Optional[str] = Form(None),
+    prefill_title: Optional[str] = Form(None),
+    prefill_cpl_uuid: Optional[str] = Form(None),
+    prefill_notes: Optional[str] = Form(None),
+):
+    user = _require_kdm(request, db)
+    prefill = {k: v for k, v in {
+        "request_type": request_type,
+        "requested_title": prefill_title,
+        "requested_cpl_uuid": prefill_cpl_uuid,
+        "notes": prefill_notes,
+    }.items() if v}
+    link = KdmRequestLink(
+        tenant_id=current_tenant_id(),
+        token=secrets.token_hex(32),
+        project_id=project_id,
+        prefill_json=prefill or None,
+        created_by_user_id=getattr(user, "id", None),
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    return {
+        "id": link.id,
+        "token": link.token,
+        "url": f"{_public_base(request)}/public/kdm/{link.token}",
+    }
+
+
+@router.get("/api/links")
+async def list_links(request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    rows = (
+        db.query(KdmRequestLink)
+        .filter(
+            KdmRequestLink.tenant_id == current_tenant_id(),
+            KdmRequestLink.is_active == True,  # noqa: E712
+        )
+        .order_by(KdmRequestLink.created_at.desc())
+        .all()
+    )
+    base = _public_base(request)
+    return [
+        {
+            "id": lnk.id,
+            "token": lnk.token,
+            "project_id": lnk.project_id,
+            "url": f"{base}/public/kdm/{lnk.token}",
+        }
+        for lnk in rows
+    ]
+
+
+@router.post("/api/links/{lid}/revoke")
+async def revoke_link(lid: int, request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    lnk = db.get(KdmRequestLink, lid)
+    if not lnk or lnk.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Link non trovato")
+    lnk.is_active = False
+    db.commit()
+    return {"ok": True}
