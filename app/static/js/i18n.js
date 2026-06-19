@@ -59,6 +59,7 @@ window.MF_I18N = {
   'nav.delivery_templates':  {it: 'Capitolati',        en: 'Delivery Specs',    fr: 'Cahiers techniques', de: 'Lieferspezifikationen'},
   'nav.capitolati_import':   {it: 'Import → Quote',    en: 'Import → Quote',    fr: 'Importer → Devis', de: 'Import → Angebot'},
   'nav.storage':             {it: 'Storage',           en: 'Storage',           fr: 'Stockage',         de: 'Speicher'},
+  'nav.kdm':                 {it: 'KDM/DKDM',          en: 'KDM/DKDM',          fr: 'KDM/DKDM',         de: 'KDM/DKDM',         es: 'KDM/DKDM'},
   'nav.tenants':             {it: 'Tenants',           en: 'Tenants',           fr: 'Locataires',       de: 'Mandanten'},
   'nav.departments':         {it: 'Reparti',           en: 'Departments',       fr: 'Départements',     de: 'Abteilungen'},
   'nav.settings':            {it: 'Impostazioni',      en: 'Settings',          fr: 'Paramètres',       de: 'Einstellungen'},

@@ -335,3 +335,30 @@ def test_revoke_nonexistent_link(client_admin):
     """POST /kdm/api/links/9999/revoke: link inesistente → 404."""
     r = client_admin.post("/kdm/api/links/9999/revoke")
     assert r.status_code == 404, r.text
+
+
+# ---------------------------------------------------------------------------
+# Task 13 tests — /kdm page UI
+# ---------------------------------------------------------------------------
+
+def test_kdm_page_html_authenticated(client_admin):
+    """GET /kdm con client autenticato → 200 e HTML con i 3 tab + script kdm.js."""
+    r = client_admin.get("/kdm")
+    assert r.status_code == 200, r.text
+    html = r.text
+    # 3 tab markers
+    assert 'data-tab="requests"' in html, "tab requests mancante"
+    assert 'data-tab="facilities"' in html, "tab facilities mancante"
+    assert 'data-tab="cpl"' in html, "tab cpl mancante"
+    # script kdm.js caricato
+    assert '/static/js/kdm.js' in html, "script kdm.js mancante"
+
+
+def test_kdm_page_contains_tab_panes(client_admin):
+    """GET /kdm: HTML contiene i pane delle 3 tab con id attesi."""
+    r = client_admin.get("/kdm")
+    assert r.status_code == 200, r.text
+    html = r.text
+    assert 'id="kdm-tab-requests"' in html
+    assert 'id="kdm-tab-facilities"' in html
+    assert 'id="kdm-tab-cpl"' in html
