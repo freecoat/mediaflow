@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompositionPlaylist xmlns="http://www.digicine.com/PROTO-ASDCP-CPL-20040511#">
+  <Id>urn:uuid:7d0e2a3f-2222-4ccc-dddd-000000000002</Id>
+  <ContentTitleText>TRAILER_TLR_F_EN_2K</ContentTitleText>
+  <ReelList>
+    <Reel>
+      <AssetList>
+        <MainPicture>
+          <EditRate>24 1</EditRate>
+          <IntrinsicDuration>720</IntrinsicDuration>
+        </MainPicture>
+      </AssetList>
+    </Reel>
+  </ReelList>
+</CompositionPlaylist>

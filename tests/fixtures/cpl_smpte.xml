@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompositionPlaylist xmlns="http://www.smpte-ra.org/schemas/429-7/2006/CPL">
+  <Id>urn:uuid:6c9f1f2e-1111-4aaa-bbbb-000000000001</Id>
+  <ContentTitleText>QUEER_FTR-1_F_IT-IT_IT_51_2K_TPR_20240901_TPR_IOP_OV</ContentTitleText>
+  <ReelList>
+    <Reel>
+      <AssetList>
+        <MainPicture>
+          <EditRate>24 1</EditRate>
+          <IntrinsicDuration>1440</IntrinsicDuration>
+          <KeyId>urn:uuid:aaaaaaaa-0000-0000-0000-000000000aaa</KeyId>
+        </MainPicture>
+        <MainSound>
+          <IntrinsicDuration>1440</IntrinsicDuration>
+          <KeyId>urn:uuid:bbbbbbbb-0000-0000-0000-000000000bbb</KeyId>
+        </MainSound>
+      </AssetList>
+    </Reel>
+  </ReelList>
+</CompositionPlaylist>
