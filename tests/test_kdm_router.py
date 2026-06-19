@@ -231,3 +231,58 @@ def test_server_cross_tenant_facility_rejected(client_admin):
                           data={"facility_id": 9999, "manufacturer": "barco",
                                 "serial": "X-1"})
     assert r.status_code == 404, r.text
+
+
+# ---------------------------------------------------------------------------
+# Task 12 tests — CPL list/parse/manual/scan endpoints
+# ---------------------------------------------------------------------------
+
+def test_cpl_parse_endpoint(client_admin):
+    """POST /kdm/api/cpl/parse: upload CPL fixture → 200 + cpl_uuid starts 'urn:uuid:'."""
+    from pathlib import Path
+    xml = (Path(__file__).parent / "fixtures" / "cpl_smpte.xml").read_bytes()
+    r = client_admin.post("/kdm/api/cpl/parse",
+                          files={"file": ("cpl.xml", xml, "application/xml")})
+    assert r.status_code == 200, r.text
+    assert r.json()["cpl_uuid"].startswith("urn:uuid:")
+
+
+def test_cpl_parse_bad_xml_returns_400(client_admin):
+    """POST /kdm/api/cpl/parse: XML malformato → 400."""
+    garbage = b"not xml at all <<<>>>"
+    r = client_admin.post("/kdm/api/cpl/parse",
+                          files={"file": ("bad.xml", garbage, "application/xml")})
+    assert r.status_code == 400, r.text
+
+
+def test_cpl_list(client_admin):
+    """GET /kdm/api/cpl: ritorna lista CPL attive tenant-scoped."""
+    session = client_admin.session
+    cpl = DcpCpl(tenant_id=1, cpl_uuid="urn:uuid:list-test-1",
+                 source="manual", content_title_text="LIST_TEST")
+    session.add(cpl)
+    session.commit()
+
+    r = client_admin.get("/kdm/api/cpl")
+    assert r.status_code == 200, r.text
+    ids = [c["cpl_uuid"] for c in r.json()]
+    assert "urn:uuid:list-test-1" in ids
+
+
+def test_cpl_manual(client_admin):
+    """POST /kdm/api/cpl/manual: crea CPL manuale → 200 con source='manual'."""
+    r = client_admin.post("/kdm/api/cpl/manual", data={
+        "cpl_uuid": "urn:uuid:manual-test-1",
+        "content_title_text": "MANUAL_TITLE",
+    })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["cpl_uuid"] == "urn:uuid:manual-test-1"
+    assert body["source"] == "manual"
+
+
+def test_cpl_scan_stub(client_admin):
+    """POST /kdm/api/cpl/scan: stub → 501 con ok=False."""
+    r = client_admin.post("/kdm/api/cpl/scan")
+    assert r.status_code == 501, r.text
+    assert r.json()["ok"] is False

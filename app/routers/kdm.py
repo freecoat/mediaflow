@@ -2,7 +2,7 @@
 Vedi docs/superpowers/specs/2026-06-19-kdm-dkdm-request-design.md
 """
 from datetime import datetime
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -430,3 +430,97 @@ async def upload_cert(
     db.commit()
     db.refresh(s)
     return _srv_json(s)
+
+
+# ---------------------------------------------------------------------------
+# Task 12 — CPL list / parse / manual / scan endpoints
+# ---------------------------------------------------------------------------
+
+def _cpl_json(c: DcpCpl) -> dict:
+    return {
+        "id": c.id,
+        "cpl_uuid": c.cpl_uuid,
+        "content_title_text": c.content_title_text,
+        "source": c.source,
+        "encrypted": c.encrypted,
+        "job_deliverable_id": c.job_deliverable_id,
+    }
+
+
+@router.get("/api/cpl")
+async def list_cpl(request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    rows = (
+        db.query(DcpCpl)
+        .filter(
+            DcpCpl.tenant_id == current_tenant_id(),
+            DcpCpl.is_active == True,  # noqa: E712
+        )
+        .order_by(DcpCpl.content_title_text)
+        .all()
+    )
+    return [_cpl_json(c) for c in rows]
+
+
+@router.post("/api/cpl/parse")
+async def cpl_parse(
+    request: Request,
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+    job_deliverable_id: Optional[int] = Form(None),
+):
+    _require_kdm(request, db)
+    from app.services.cpl_parser import parse_cpl
+    data = await file.read()
+    try:
+        meta = parse_cpl(data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    c = DcpCpl(
+        tenant_id=current_tenant_id(),
+        cpl_uuid=meta["cpl_uuid"],
+        content_title_text=meta["content_title_text"],
+        edit_rate=meta["edit_rate"],
+        duration_frames=meta["duration_frames"],
+        encrypted=meta["encrypted"],
+        key_ids=meta["key_ids"],
+        source="parsed_xml",
+        job_deliverable_id=job_deliverable_id,
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return _cpl_json(c)
+
+
+@router.post("/api/cpl/manual")
+async def cpl_manual(
+    request: Request,
+    db: Session = Depends(get_db),
+    cpl_uuid: str = Form(...),
+    content_title_text: Optional[str] = Form(None),
+    job_deliverable_id: Optional[int] = Form(None),
+):
+    _require_kdm(request, db)
+    c = DcpCpl(
+        tenant_id=current_tenant_id(),
+        cpl_uuid=cpl_uuid,
+        content_title_text=content_title_text,
+        source="manual",
+        job_deliverable_id=job_deliverable_id,
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return _cpl_json(c)
+
+
+@router.post("/api/cpl/scan")
+async def cpl_scan(request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    # v1: lo scan filesystem via agent è progettato ma non implementato.
+    # Riusa l'agent storage esistente in fase 2 (memory: browse storage via agent).
+    return JSONResponse(
+        status_code=501,
+        content={"ok": False, "detail": "Scan agent in fase 2"},
+    )
