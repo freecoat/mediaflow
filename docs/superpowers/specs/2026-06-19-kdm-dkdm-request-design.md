@@ -130,7 +130,9 @@ match_request(req) → [candidati con confidence]
   3. titolo progetto + risoluzione      → 40-70
 ```
 
-- 1 hit ≥ 95 → **auto-link** (set `dcp_cpl_id`, `job_deliverable_id`, `project_id`, status `matched`).
+- 1 hit ≥ soglia → **auto-link** (set `dcp_cpl_id`, `job_deliverable_id`, `project_id`, status `matched`).
+  Soglia auto-link **configurabile** (default 95, settabile per-tenant): valore reale da
+  tarare in beta sul corpus richieste/CPL reali — non giudicabile a priori.
 - N candidati → scelta operatore (endpoint `/link`).
 - 0 candidati → richiesta **orfana** in attesa di CPL (badge ⚠).
 
