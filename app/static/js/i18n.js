@@ -631,6 +631,26 @@ window.MF_I18N = {
   'sal.legend.planned':    {it: 'Pianificato (cumulato)', en: 'Planned (cumulative)', fr: 'Planifié (cumulé)', de: 'Geplant (kumuliert)', es: 'Planificado (acumulado)'},
   'sal.legend.overrun':    {it: 'Sforamento (>100%)', en: 'Overrun (>100%)', fr: 'Dépassement (>100%)', de: 'Überschreitung (>100%)', es: 'Exceso (>100%)'},
   'sal.legend.formula':    {it: 'La cella mostra l\'avanzamento cumulativo a fine periodo: ore cumulate ÷ ore quotate.', en: 'The cell shows cumulative progress at end of period: cumulative hours ÷ quoted hours.', fr: 'La cellule montre l\'avancement cumulé en fin de période : heures cumulées ÷ heures devisées.', de: 'Die Zelle zeigt den kumulierten Fortschritt am Periodenende: kumulierte Stunden ÷ angebotene Stunden.', es: 'La celda muestra el avance acumulado al final del período: horas acumuladas ÷ horas cotizadas.'},
+
+  // ── KDM/DKDM (v3.5.0-alpha.172.x — Task 14) ────────────────────────────
+  'kdm.title':             {it: 'Richieste KDM/DKDM',       en: 'KDM/DKDM Requests',       fr: 'Demandes KDM/DKDM',       de: 'KDM/DKDM-Anfragen',        es: 'Solicitudes KDM/DKDM'},
+  'kdm.new_request':       {it: 'Nuova richiesta',           en: 'New request',              fr: 'Nouvelle demande',        de: 'Neue Anfrage',              es: 'Nueva solicitud'},
+  'kdm.tab.requests':      {it: 'Richieste',                 en: 'Requests',                 fr: 'Demandes',                de: 'Anfragen',                  es: 'Solicitudes'},
+  'kdm.tab.facilities':    {it: 'Cinema/Server',             en: 'Cinemas/Servers',          fr: 'Cinémas/Serveurs',        de: 'Kinos/Server',              es: 'Cines/Servidores'},
+  'kdm.tab.cpl':           {it: 'CPL DCP',                   en: 'DCP CPLs',                 fr: 'CPL DCP',                 de: 'DCP-CPLs',                  es: 'CPL DCP'},
+  'kdm.col.status':        {it: 'Stato',                     en: 'Status',                   fr: 'Statut',                  de: 'Status',                    es: 'Estado'},
+  'kdm.col.type':          {it: 'Tipo',                      en: 'Type',                     fr: 'Type',                    de: 'Typ',                       es: 'Tipo'},
+  'kdm.col.title':         {it: 'Film/CPL',                  en: 'Film/CPL',                 fr: 'Film/CPL',                de: 'Film/CPL',                  es: 'Película/CPL'},
+  'kdm.col.window':        {it: 'Finestra',                  en: 'Window',                   fr: 'Fenêtre',                 de: 'Zeitfenster',               es: 'Ventana'},
+  'kdm.col.match':         {it: 'Match',                     en: 'Match',                    fr: 'Correspondance',          de: 'Treffer',                   es: 'Coincidencia'},
+  'kdm.action.match':      {it: 'Match',                     en: 'Match',                    fr: 'Associer',                de: 'Zuordnen',                  es: 'Asociar'},
+  'kdm.candidates':        {it: 'Candidati',                 en: 'Candidates',               fr: 'Candidats',               de: 'Kandidaten',                es: 'Candidatos'},
+  'kdm.load_error':        {it: 'Errore caricamento',        en: 'Load error',               fr: 'Erreur de chargement',    de: 'Ladefehler',                es: 'Error de carga'},
+  'kdm.empty.facilities':  {it: 'Nessun cinema',             en: 'No cinemas',               fr: 'Aucun cinéma',            de: 'Keine Kinos',               es: 'Sin cines'},
+  'kdm.empty.cpl':         {it: 'Nessuna CPL',               en: 'No CPLs',                  fr: 'Aucune CPL',              de: 'Keine CPLs',                es: 'Sin CPL'},
+  'kdm.gen_link':          {it: 'Genera link cliente',       en: 'Generate client link',     fr: 'Générer lien client',     de: 'Kundenlink erzeugen',       es: 'Generar enlace cliente'},
+  'kdm.link_copied':       {it: 'Link copiato',              en: 'Link copied',              fr: 'Lien copié',              de: 'Link kopiert',              es: 'Enlace copiado'},
+  'kdm.prefill_title':     {it: 'Titolo film (opzionale)',   en: 'Film title (optional)',     fr: 'Titre du film (optionnel)', de: 'Filmtitel (optional)',     es: 'Título película (opcional)'},
 };
 
 /**
