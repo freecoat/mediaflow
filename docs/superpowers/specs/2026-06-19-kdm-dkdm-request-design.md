@@ -225,6 +225,79 @@ manual.py  v1: no-op, operatore carica a mano
 - Portale cliente self-service (richiesta inserita da operatore/AI).
 - Trusted Device List import automatico.
 
+---
+
+## Revisione 2026-06-19b — Form pubblico cliente + ciclo completo
+
+Estensione confermata dopo il primo design. Lo scope tracking-only resta; si aggiunge
+il **canale di ingresso lato cliente** e il **ciclo di vita completo** fino al deliverable.
+
+### Form pubblico via link (cliente compila)
+
+- **Link riusabile per-progetto** + **link standalone** (non legato a progetto).
+  Modello `KdmRequestLink` (token 64-hex, `project_id` nullable, `prefill_json`, `is_active`).
+  Riusa il pattern public-token già nel codice (tech-sheet `/public/.../edit`, portale magic-link).
+- L'**operatore pre-compila** parzialmente i campi (titolo, CPL, note, tipo) → genera il link →
+  lo invia al cliente. Il link è **riusabile** (N submission) finché attivo; revocabile.
+- Il **cliente** apre `/public/kdm/{token}` (no auth) e completa:
+  certificato/i server (upload `.pem`), **data + ora di sblocco** (valid_from/valid_to),
+  titolo film, CPL UUID del DCP, **contatto cinema/laboratorio destinatario** della KDM,
+  **contatto produzione**, note. Submit → crea `KdmRequest` (status `received`,
+  `project_id` dal link se presente) + esegue auto-match CPL.
+- Campi contatto aggiunti a `KdmRequest`: `cinema_contact_name`, `cinema_contact_email`
+  (destinatario chiave), `lab_contact_email`, `production_contact_name`,
+  `production_contact_email`. Cert caricato dal cliente: se non c'è un `CinemaServer`
+  registrato, si crea al volo `CinemaFacility`+`CinemaServer` dai dati contatto + cert
+  (thumbprint/scadenza via `kdm_cert.parse_cert`).
+
+### Notifica finishing (Claqo + email)
+
+- Alla submission: **notifica in-app** agli utenti finishing via
+  `notify_permission(db, "manage_kdm", …)` (`app/services/notifications.py`) **+ email**
+  best-effort via SMTP (`app/services/invoice_email.py` pattern, `.env` SMTP_*).
+  Se SMTP non configurato → solo notifica in-app, nessun errore bloccante.
+
+### KDM prodotta = deliverable nella lista consegne
+
+- Quando il finishing porta la richiesta a `generated` (chiave prodotta col tool esterno e
+  caricata), il sistema **materializza un `JobDeliverable`** nel job collegato:
+  natura/quantità 1, `price_item_id` = voce listino KDM/DKDM, **data di emissione** =
+  `generated_at`, link al `KdmRequest`. La KDM resta così come item nella lista delle
+  **deliveries prodotte** con data di emissione. Richiede che la richiesta sia agganciata a
+  un job (finishing lo fa allo step matched→keys_pending). Se manca il job, lo step
+  `generated` chiede prima l'aggancio (HTTP 400 con messaggio).
+- Campo `KdmRequest.job_deliverable_produced_id` FK→JobDeliverable (output materializzato),
+  distinto da `job_deliverable_id` (il DCP di origine matchato).
+
+### Voci listino
+
+- Aggiungere a listino due voci: **KDM** (20 €) e **DKDM** (300 €), reparto **DI-Video**
+  (finishing/mastering), unit `pc`. In `seed_demo.py` (`LISTINO_ESEMPIO`) **e** via
+  `scripts/migrate_kdm.py` (upsert idempotente per DB esistenti, `code` `KDM`/`DKDM`).
+  La materializzazione del deliverable linka questo `price_item` per tipo richiesta.
+
+### Riepilogo nuove entità/campi (revisione)
+
+```
+KdmRequestLink
+  id, tenant_id, token(64hex, unique), project_id FK nullable,
+  prefill_json (JSON), is_active, created_at, created_by_user_id
+
+KdmRequest  (+ campi)
+  cinema_contact_name, cinema_contact_email, lab_contact_email,
+  production_contact_name, production_contact_email,
+  client_cert_pem (text, nullable),            # cert grezzo se no server registrato
+  job_deliverable_produced_id FK→JobDeliverable (nullable)
+```
+
+### Sicurezza form pubblico
+
+- Token 64-hex (`secrets.token_hex(32)`), no enumerazione. Rate-limit best-effort sulla POST.
+- Upload `.pem` parsato con `kdm_cert.parse_cert` (no exec). CPL UUID solo stringa.
+- **Nessun dato sensibile esposto in GET**: il form pre-compilato mostra solo i campi
+  prefillati dall'operatore, mai elenco progetti/clienti (link standalone non rivela nulla;
+  link per-progetto mostra solo titolo progetto). Submit CSRF-safe (token nell'URL = capability).
+
 ## Riferimenti
 
 - [The Encrypted DCP Delivery Workflow — MASV](https://massive.io/workflow/encrypted-dcp-delivery/)

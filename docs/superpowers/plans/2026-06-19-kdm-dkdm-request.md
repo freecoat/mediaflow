@@ -37,10 +37,16 @@
 - `app/services/kdm_state.py` — FSM transitions
 - `app/services/kdm_cert.py` — extract thumbprint + expiry from PEM
 - `app/services/kdm_adapters/__init__.py`, `base.py`, `manual.py` — pluggable delivery
-- `app/routers/kdm.py` — router (pages + API)
-- `app/templates/pages/kdm.html` — tabbed page
-- `app/static/js/kdm.js` — page JS
-- `scripts/migrate_kdm.py` — standalone migration
+- `app/services/kdm_cert.py` — PEM thumbprint/expiry extractor
+- `app/services/kdm_pricing.py` — KDM/DKDM listino voci (idempotent upsert)
+- `app/services/kdm_notify.py` — finishing notification (in-app + email)
+- `app/services/kdm_materialize.py` — produced KDM → JobDeliverable
+- `app/routers/kdm.py` — admin router (pages + API + public-link generation)
+- `app/routers/kdm_public.py` — public no-auth client form router (`/public/kdm/{token}`)
+- `app/templates/pages/kdm.html` — tabbed admin page
+- `app/templates/pages/kdm_public_form.html` — client-facing form (standalone, no base.html)
+- `app/static/js/kdm.js` — admin page JS
+- `scripts/migrate_kdm.py` — standalone migration (+ listino voci)
 - `tests/test_cpl_parser.py`, `tests/test_kdm_match.py`, `tests/test_kdm_state.py`, `tests/test_kdm_cert.py`, `tests/test_kdm_router.py`, `tests/test_kdm_ai.py`
 - `tests/fixtures/cpl_smpte.xml`, `tests/fixtures/cpl_interop.xml`
 
@@ -205,6 +211,19 @@ class KdmRequest(Base):
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     kdm_file_asset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("assets.id"), nullable=True)
+    # Contatti (compilati dal cliente nel form pubblico)
+    cinema_contact_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cinema_contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    lab_contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    production_contact_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    production_contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    client_cert_pem: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Deliverable materializzato a generazione (output), distinto dal DCP di origine
+    job_deliverable_produced_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_deliverables.id"), nullable=True)
+    # Origine: link pubblico o creazione interna
+    source_link_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("kdm_request_links.id"), nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     deleted_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
@@ -220,6 +239,22 @@ class KdmRequestEvent(Base):
     payload_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class KdmRequestLink(Base):
+    """Link pubblico (token) per il form richiesta KDM compilato dal cliente.
+    Riusabile (N submission). project_id nullable = link standalone.
+    prefill_json = campi pre-compilati dall'operatore prima di inviare il link."""
+    __tablename__ = "kdm_request_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    prefill_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 ```
 
 > NOTE: confirm `JSON` is imported at the top of `models.py`; if absent add it to the `from sqlalchemy import ...` line. The `assets` table name is from the `Asset` model — confirm with `grep -n "__tablename__" app/models/models.py | grep -i asset`; if the digital asset table differs, set `kdm_file_asset_id` FK to match (else make it a plain `Integer` nullable with a code comment).
@@ -228,6 +263,7 @@ class KdmRequestEvent(Base):
 
 ```python
     DcpCpl, CinemaFacility, CinemaServer, KdmRequest, KdmRequestEvent,
+    KdmRequestLink,
     KDM_REQUEST_TYPES, KDM_STATUSES, CPL_SOURCES, SERVER_MANUFACTURERS,
     FACILITY_KINDS, KDM_DELIVERY_METHODS,
 ```
@@ -270,7 +306,7 @@ def test_auto_migrate_kdm_creates_tables():
     main._auto_migrate_kdm_tables()
     names = inspect(engine).get_table_names()
     for t in ("dcp_cpls", "cinema_facilities", "cinema_servers",
-              "kdm_requests", "kdm_request_events"):
+              "kdm_requests", "kdm_request_events", "kdm_request_links"):
         assert t in names
 ```
 
@@ -289,7 +325,7 @@ def _auto_migrate_kdm_tables():
     from sqlalchemy import inspect as _inspect
     insp = _inspect(engine)
     needed = {"dcp_cpls", "cinema_facilities", "cinema_servers",
-              "kdm_requests", "kdm_request_events"}
+              "kdm_requests", "kdm_request_events", "kdm_request_links"}
     if not needed.issubset(set(insp.get_table_names())):
         create_tables()  # Base.metadata.create_all — crea solo le mancanti
 ```
@@ -337,7 +373,7 @@ def migrate():
     create_tables()
     names = inspect(engine).get_table_names()
     for t in ("dcp_cpls", "cinema_facilities", "cinema_servers",
-              "kdm_requests", "kdm_request_events"):
+              "kdm_requests", "kdm_request_events", "kdm_request_links"):
         print(f"  {'✓' if t in names else '✗'} {t}")
     print("▸ Fatto.")
 
@@ -1880,6 +1916,9 @@ Expected: FAIL.
 | kdm.load_error | Errore caricamento | Load error | Erreur de chargement | Ladefehler | Error de carga |
 | kdm.empty.facilities | Nessun cinema | No cinemas | Aucun cinéma | Keine Kinos | Sin cines |
 | kdm.empty.cpl | Nessuna CPL | No CPLs | Aucune CPL | Keine CPLs | Sin CPL |
+| kdm.gen_link | Genera link cliente | Generate client link | Générer lien client | Kundenlink erzeugen | Generar enlace cliente |
+| kdm.link_copied | Link copiato | Link copied | Lien copié | Link kopiert | Enlace copiado |
+| kdm.prefill_title | Titolo film (opzionale) | Film title (optional) | Titre du film (optionnel) | Filmtitel (optional) | Título película (opcional) |
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -2010,7 +2049,724 @@ git commit -m "feat(kdm): AI capabilities propose_kdm_request + propose_cinema_s
 
 ---
 
-## Task 16: E2E + version bump + changelog
+## Task 16: Listino voci KDM + DKDM
+
+**Files:**
+- Modify: `scripts/seed_demo.py` (`LISTINO_ESEMPIO`)
+- Modify: `scripts/migrate_kdm.py` (upsert voci su DB esistenti)
+- Test: `tests/test_kdm_pricelist.py`
+
+**Interfaces:**
+- Produces: PriceItem `code="KDM"` (20.0 €) and `code="DKDM"` (300.0 €), department DI-Video, unit `pc`; helper `ensure_kdm_price_items(db)` in `app/services/kdm_pricing.py` (idempotent upsert, used by both seed and migration).
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_kdm_pricelist.py
+from app.database import SessionLocal, create_tables
+from app.models import PriceItem
+from app.services.kdm_pricing import ensure_kdm_price_items, KDM_CODE, DKDM_CODE
+
+
+def test_ensure_creates_kdm_dkdm_idempotent():
+    create_tables(); db = SessionLocal()
+    try:
+        ensure_kdm_price_items(db)
+        ensure_kdm_price_items(db)  # idempotent: no duplicate
+        kdm = db.query(PriceItem).filter(PriceItem.code == KDM_CODE,
+                                         PriceItem.tenant_id == 1).all()
+        dkdm = db.query(PriceItem).filter(PriceItem.code == DKDM_CODE,
+                                          PriceItem.tenant_id == 1).all()
+        assert len(kdm) == 1 and len(dkdm) == 1
+        assert kdm[0].list_price == 20.0 and dkdm[0].list_price == 300.0
+    finally:
+        db.rollback(); db.close()
+```
+
+> Confirm the PriceItem money field name (`list_price` vs `unit_price` vs `price_list`) with `grep -n "class PriceItem" -A40 app/models/models.py`. Use the real field for both the assert and the implementation. The KEYWORDS_MAP already has "KDM Generation"/"Generation of DKDM" entries (see `migrate_phase1bis.py`) — reuse those keywords.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_kdm_pricelist.py -v`
+Expected: FAIL (`ModuleNotFoundError: app.services.kdm_pricing`).
+
+- [ ] **Step 3: Implement** `app/services/kdm_pricing.py`:
+
+```python
+"""Voci listino KDM/DKDM (idempotent upsert). Usato da seed + migrazione."""
+from app.models import PriceItem, Department
+from app.context import current_tenant_id
+
+KDM_CODE = "KDM"
+DKDM_CODE = "DKDM"
+_SPECS = [
+    (KDM_CODE, "KDM — Key Delivery Message (per server cinema)", 20.0,
+     ["kdm", "key delivery message", "chiave cinema"]),
+    (DKDM_CODE, "DKDM — Distribution KDM (master distributore)", 300.0,
+     ["dkdm", "distribution kdm", "generation of dkdm"]),
+]
+
+
+def _di_video_dept_id(db, tenant_id):
+    d = (db.query(Department)
+         .filter(Department.tenant_id == tenant_id,
+                 Department.code.in_(("DI-VIDEO", "DI-Video", "DI")))
+         .first())
+    return d.id if d else None
+
+
+def ensure_kdm_price_items(db, tenant_id=None):
+    """Crea le voci KDM/DKDM se mancanti per il tenant. Idempotente per `code`."""
+    tid = tenant_id or current_tenant_id()
+    dept_id = _di_video_dept_id(db, tid)
+    for code, desc, price, kws in _SPECS:
+        exists = (db.query(PriceItem)
+                  .filter(PriceItem.tenant_id == tid, PriceItem.code == code)
+                  .execution_options(include_deleted=True)  # soft-delete bypass
+                  .first())
+        if exists:
+            continue
+        pi = PriceItem(tenant_id=tid, code=code, description=desc,
+                       department_id=dept_id, unit="pc", keywords=kws)
+        # Set whichever money field the model uses (confirm in Step 1):
+        for fld in ("list_price", "unit_price", "price_list"):
+            if hasattr(pi, fld):
+                setattr(pi, fld, price); break
+        db.add(pi)
+    db.commit()
+```
+
+> Adjust the `PriceItem(...)` kwargs to the real constructor (confirm required non-null columns: `category_id`? `name`? `unit`?). If `category_id` is NOT NULL, look up/create a "Servizi" category like `propose_price_item` does, or reuse the existing pattern in `seed_demo.py` for building a PriceItem. Keep it minimal but satisfy NOT NULL constraints.
+
+- [ ] **Step 4: Wire into seed + migration**
+
+In `scripts/seed_demo.py`, after departments + price items are seeded, call:
+```python
+    from app.services.kdm_pricing import ensure_kdm_price_items
+    ensure_kdm_price_items(db, tenant_id=1)
+```
+In `scripts/migrate_kdm.py`, inside `migrate()` after `create_tables()`:
+```python
+    from app.database import SessionLocal
+    from app.services.kdm_pricing import ensure_kdm_price_items
+    db = SessionLocal()
+    try:
+        ensure_kdm_price_items(db, tenant_id=1)
+        print("  ✓ voci listino KDM (20€) + DKDM (300€)")
+    finally:
+        db.close()
+```
+
+- [ ] **Step 5: Run test + migration**
+
+Run: `python -m pytest tests/test_kdm_pricelist.py -v`
+Expected: PASS.
+Run: `python scripts/migrate_kdm.py`
+Expected: tables + "✓ voci listino KDM (20€) + DKDM (300€)".
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add app/services/kdm_pricing.py scripts/seed_demo.py scripts/migrate_kdm.py tests/test_kdm_pricelist.py
+git commit -m "feat(kdm): listino voci KDM (20€) + DKDM (300€), idempotent upsert"
+```
+
+---
+
+## Task 17: Public request-link generation (operator side)
+
+**Files:**
+- Modify: `app/routers/kdm.py` (link CRUD)
+- Test: `tests/test_kdm_router.py` (extend)
+
+**Interfaces:**
+- Consumes: `KdmRequestLink`.
+- Produces: `POST /kdm/api/links` (create reusable link, optional `project_id` + `prefill_json`), `GET /kdm/api/links`, `POST /kdm/api/links/{id}/revoke`. Returns `{id, token, url}` where `url = f"{base}/public/kdm/{token}"`.
+
+- [ ] **Step 1: Write the failing test** (append to `tests/test_kdm_router.py`)
+
+```python
+def test_create_public_link(monkeypatch):
+    import app.routers.kdm as kdm_mod
+    monkeypatch.setattr(kdm_mod, "_require_kdm", lambda request, db: None)
+    r = client.post("/kdm/api/links", data={
+        "request_type": "kdm", "prefill_title": "QUEER_FTR"})
+    assert r.status_code == 200
+    b = r.json()
+    assert b["token"] and "/public/kdm/" in b["url"]
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_kdm_router.py::test_create_public_link -v`
+Expected: FAIL (`404`).
+
+- [ ] **Step 3: Implement** (append to `app/routers/kdm.py`; add `import secrets` at top):
+
+```python
+import secrets
+from app.models import KdmRequestLink
+
+
+def _public_base(request: Request) -> str:
+    # Rispetta proxy/tunnel: usa header host. Mirror del pattern portal.py.
+    return str(request.base_url).rstrip("/")
+
+
+@router.post("/api/links")
+async def create_link(request: Request, db: Session = Depends(get_db),
+                      project_id: Optional[int] = Form(None),
+                      request_type: Optional[str] = Form(None),
+                      prefill_title: Optional[str] = Form(None),
+                      prefill_cpl_uuid: Optional[str] = Form(None),
+                      prefill_notes: Optional[str] = Form(None)):
+    user = _require_kdm(request, db)
+    prefill = {k: v for k, v in {
+        "request_type": request_type, "requested_title": prefill_title,
+        "requested_cpl_uuid": prefill_cpl_uuid, "notes": prefill_notes,
+    }.items() if v}
+    link = KdmRequestLink(tenant_id=current_tenant_id(),
+                          token=secrets.token_hex(32), project_id=project_id,
+                          prefill_json=prefill,
+                          created_by_user_id=getattr(user, "id", None))
+    db.add(link); db.commit(); db.refresh(link)
+    return {"id": link.id, "token": link.token,
+            "url": f"{_public_base(request)}/public/kdm/{link.token}"}
+
+
+@router.get("/api/links")
+async def list_links(request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    rows = (db.query(KdmRequestLink)
+            .filter(KdmRequestLink.tenant_id == current_tenant_id(),
+                    KdmRequestLink.is_active == True)  # noqa: E712
+            .order_by(KdmRequestLink.created_at.desc()).all())
+    return [{"id": l.id, "token": l.token, "project_id": l.project_id,
+             "url": f"{_public_base(request)}/public/kdm/{l.token}"} for l in rows]
+
+
+@router.post("/api/links/{lid}/revoke")
+async def revoke_link(lid: int, request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    l = db.get(KdmRequestLink, lid)
+    if not l or l.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Link non trovato")
+    l.is_active = False
+    db.commit()
+    return {"ok": True}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `python -m pytest tests/test_kdm_router.py::test_create_public_link -v`
+Expected: PASS.
+
+- [ ] **Step 5: UI affordances (vanilla JS, copy-link)**
+
+In `app/static/js/kdm.js` add a "Genera link cliente" button handler on the Requests tab that calls `POST /kdm/api/links` (optional prefill prompt) and shows the returned `url` with a copy-to-clipboard toast:
+
+```javascript
+async function kdmGenerateLink(projectId) {
+  const fd = new FormData();
+  if (projectId) fd.append('project_id', projectId);
+  const title = prompt(t('kdm.prefill_title') || 'Titolo film (opzionale)');
+  if (title) fd.append('prefill_title', title);
+  try {
+    const res = await api('/kdm/api/links', {method:'POST', body: fd});
+    await navigator.clipboard.writeText(res.url).catch(()=>{});
+    toast((t('kdm.link_copied') || 'Link copiato') + ': ' + res.url, 'success');
+  } catch (e) { toast('Errore link', 'error'); }
+}
+```
+
+Add a button in `kdm.html` Requests tab header: `<button class="btn btn-sm" onclick="kdmGenerateLink()" data-i18n="kdm.gen_link">Genera link cliente</button>`.
+On the project page (`app/templates/pages/project_detail.html` or equivalent — confirm filename), add an analogous button that calls `kdmGenerateLink({{ project.id }})` so the link is project-scoped. Add i18n keys `kdm.gen_link`, `kdm.link_copied`, `kdm.prefill_title` to all 5 locales in Task 14's table.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add app/routers/kdm.py app/static/js/kdm.js app/templates/pages/kdm.html tests/test_kdm_router.py
+git commit -m "feat(kdm): operator-generated public request links (reusable, prefill, revoke, copy-link UI)"
+```
+
+---
+
+## Task 18: Public client form (no-auth) + submission
+
+**Files:**
+- Create: `app/routers/kdm_public.py` (separate router, no RBAC; mounted at `/public/kdm`)
+- Create: `app/templates/pages/kdm_public_form.html`
+- Modify: `app/main.py` (`include_router`)
+- Test: `tests/test_kdm_public.py`
+
+**Interfaces:**
+- Consumes: `KdmRequestLink`, `KdmRequest`, `match_request`, `parse_cert`, notification (Task 19 imports lazily).
+- Produces: `GET /public/kdm/{token}` (HTML form, no auth), `POST /public/kdm/{token}` (creates KdmRequest from form). Helper `_resolve_link(token, db)`.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_kdm_public.py
+from fastapi.testclient import TestClient
+from app.main import app
+from app.database import SessionLocal
+from app.models import KdmRequestLink, KdmRequest
+import secrets
+
+client = TestClient(app)
+
+
+def _make_link():
+    db = SessionLocal()
+    try:
+        tok = secrets.token_hex(32)
+        db.add(KdmRequestLink(tenant_id=1, token=tok, prefill_json={}))
+        db.commit()
+        return tok
+    finally:
+        db.close()
+
+
+def test_public_form_loads():
+    tok = _make_link()
+    r = client.get(f"/public/kdm/{tok}")
+    assert r.status_code == 200
+    assert "KDM" in r.text
+
+
+def test_public_form_unknown_token_404():
+    r = client.get("/public/kdm/deadbeef")
+    assert r.status_code == 404
+
+
+def test_public_submit_creates_request(monkeypatch):
+    # neutralizza notifica/email per il test
+    import app.routers.kdm_public as pub
+    monkeypatch.setattr(pub, "_notify_finishing", lambda db, req: None)
+    tok = _make_link()
+    r = client.post(f"/public/kdm/{tok}", data={
+        "request_type": "kdm", "requested_title": "QUEER_FTR",
+        "valid_from": "2026-09-01T20:00", "valid_to": "2026-09-30T23:00",
+        "cinema_contact_email": "boxoffice@arcadia.it",
+        "production_contact_name": "Mario Rossi"})
+    assert r.status_code in (200, 303)
+    db = SessionLocal()
+    try:
+        got = (db.query(KdmRequest)
+               .filter(KdmRequest.requested_title == "QUEER_FTR").first())
+        assert got is not None and got.status == "received"
+    finally:
+        db.close()
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_kdm_public.py -v`
+Expected: FAIL (`404`/import error).
+
+- [ ] **Step 3: Create the public template** `app/templates/pages/kdm_public_form.html` (standalone, NOT extending base.html — no admin chrome). Minimal, self-contained:
+
+```html
+<!DOCTYPE html>
+<html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Richiesta KDM/DKDM</title>
+<link rel="stylesheet" href="/static/css/main.css">
+</head><body style="max-width:720px;margin:24px auto;padding:0 16px;">
+<h2>🔑 Richiesta chiavi DCP (KDM / DKDM)</h2>
+{% if project_title %}<p>Progetto: <strong>{{ project_title }}</strong></p>{% endif %}
+<form method="post" action="/public/kdm/{{ token }}" enctype="multipart/form-data">
+  <label>Tipo chiave
+    <select name="request_type">
+      <option value="kdm" {{ 'selected' if pf.get('request_type')=='kdm' else '' }}>KDM (cinema)</option>
+      <option value="dkdm" {{ 'selected' if pf.get('request_type')=='dkdm' else '' }}>DKDM (distributore)</option>
+    </select></label>
+  <label>Titolo film <input name="requested_title" value="{{ pf.get('requested_title','') }}"></label>
+  <label>CPL UUID del DCP <input name="requested_cpl_uuid" value="{{ pf.get('requested_cpl_uuid','') }}"></label>
+  <label>Sblocco DA (data+ora) <input type="datetime-local" name="valid_from"></label>
+  <label>Sblocco A (data+ora) <input type="datetime-local" name="valid_to"></label>
+  <label>Certificato server (.pem) <input type="file" name="cert_file" accept=".pem,.crt,.cer"></label>
+  <fieldset><legend>Contatti</legend>
+    <label>Cinema/Lab destinatario — nome <input name="cinema_contact_name"></label>
+    <label>Cinema/Lab destinatario — email <input type="email" name="cinema_contact_email"></label>
+    <label>Lab email (opz.) <input type="email" name="lab_contact_email"></label>
+    <label>Produzione — nome <input name="production_contact_name"></label>
+    <label>Produzione — email <input type="email" name="production_contact_email"></label>
+  </fieldset>
+  <label>Note <textarea name="notes">{{ pf.get('notes','') }}</textarea></label>
+  <button type="submit">Invia richiesta</button>
+</form>
+</body></html>
+```
+
+- [ ] **Step 4: Create the public router** `app/routers/kdm_public.py`:
+
+```python
+"""Form pubblico richiesta KDM/DKDM (no auth, token capability).
+Pattern public-token come tech-sheet/portale."""
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse
+from typing import Optional
+from datetime import datetime
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import KdmRequestLink, KdmRequest
+
+router = APIRouter(prefix="/public/kdm", tags=["kdm-public"])
+
+
+def _tpl():
+    from app.main import templates
+    return templates
+
+
+def _resolve_link(token: str, db: Session) -> KdmRequestLink:
+    l = (db.query(KdmRequestLink)
+         .filter(KdmRequestLink.token == token,
+                 KdmRequestLink.is_active == True)  # noqa: E712
+         .first())
+    if not l:
+        raise HTTPException(404, "Link non valido o revocato")
+    return l
+
+
+def _parse_dt(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _notify_finishing(db, req):
+    """Notifica in-app (manage_kdm) + email best-effort. Vedi Task 19."""
+    from app.services.kdm_notify import notify_new_kdm_request
+    notify_new_kdm_request(db, req)
+
+
+@router.get("/{token}", response_class=HTMLResponse)
+async def public_form(token: str, request: Request, db: Session = Depends(get_db)):
+    link = _resolve_link(token, db)
+    project_title = None
+    if link.project_id:
+        from app.models import Project
+        p = db.get(Project, link.project_id)
+        project_title = getattr(p, "title", None) if p else None
+    return _tpl().TemplateResponse("pages/kdm_public_form.html", {
+        "request": request, "token": token, "pf": link.prefill_json or {},
+        "project_title": project_title})
+
+
+@router.post("/{token}")
+async def public_submit(token: str, request: Request, db: Session = Depends(get_db),
+                        request_type: str = Form("kdm"),
+                        requested_title: Optional[str] = Form(None),
+                        requested_cpl_uuid: Optional[str] = Form(None),
+                        valid_from: Optional[str] = Form(None),
+                        valid_to: Optional[str] = Form(None),
+                        cinema_contact_name: Optional[str] = Form(None),
+                        cinema_contact_email: Optional[str] = Form(None),
+                        lab_contact_email: Optional[str] = Form(None),
+                        production_contact_name: Optional[str] = Form(None),
+                        production_contact_email: Optional[str] = Form(None),
+                        notes: Optional[str] = Form(None),
+                        cert_file: Optional[UploadFile] = File(None)):
+    link = _resolve_link(token, db)
+    cert_pem = None
+    if cert_file is not None:
+        raw = await cert_file.read()
+        try:
+            cert_pem = raw.decode("utf-8", "ignore")
+        except Exception:
+            cert_pem = None
+    req = KdmRequest(
+        tenant_id=link.tenant_id, request_type=request_type,
+        project_id=link.project_id, requested_title=requested_title,
+        requested_cpl_uuid=requested_cpl_uuid,
+        valid_from=_parse_dt(valid_from), valid_to=_parse_dt(valid_to),
+        cinema_contact_name=cinema_contact_name,
+        cinema_contact_email=cinema_contact_email,
+        lab_contact_email=lab_contact_email,
+        production_contact_name=production_contact_name,
+        production_contact_email=production_contact_email,
+        client_cert_pem=cert_pem, notes=notes,
+        status="received", source_link_id=link.id,
+        requested_by=cinema_contact_email or production_contact_email)
+    db.add(req); db.flush()
+    # auto-match CPL
+    from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD
+    cands = match_request(db, req)
+    if cands and cands[0]["confidence"] >= AUTO_LINK_THRESHOLD:
+        req.dcp_cpl_id = cands[0]["dcp_cpl_id"]
+        req.matched_confidence = cands[0]["confidence"]
+        req.match_source = cands[0]["source"]
+        req.status = "matched"
+    db.commit(); db.refresh(req)
+    _notify_finishing(db, req)
+    return _tpl().TemplateResponse("pages/kdm_public_form.html", {
+        "request": request, "token": token, "pf": {},
+        "project_title": None, "submitted": True})
+```
+
+> The submit returns the same template with `submitted=True`; add a `{% if submitted %}<p>✅ Richiesta inviata.</p>{% endif %}` banner at the top of `kdm_public_form.html` (and guard the form with `{% if not submitted %}`).
+
+- [ ] **Step 5: Register the router** in `app/main.py`:
+
+```python
+from app.routers import kdm_public
+app.include_router(kdm_public.router)
+```
+
+- [ ] **Step 6: Add the submitted banner** to `kdm_public_form.html` — at top of `<body>`:
+
+```html
+{% if submitted %}<div style="padding:12px;background:#1f8b4c;color:#fff;border-radius:8px;">
+✅ Richiesta inviata. Il team finishing è stato avvisato.</div>{% else %}
+```
+and close with `{% endif %}` after the `</form>`.
+
+- [ ] **Step 7: Run test to verify it passes**
+
+Run: `python -m pytest tests/test_kdm_public.py -v`
+Expected: 3 PASS.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add app/routers/kdm_public.py app/templates/pages/kdm_public_form.html app/main.py tests/test_kdm_public.py
+git commit -m "feat(kdm): public no-auth client form + submission (token capability)"
+```
+
+---
+
+## Task 19: Notify finishing (Claqo in-app + email)
+
+**Files:**
+- Create: `app/services/kdm_notify.py`
+- Test: `tests/test_kdm_notify.py`
+
+**Interfaces:**
+- Consumes: `notify_permission` (`app/services/notifications.py`), SMTP env pattern (`app/services/invoice_email.py`).
+- Produces: `notify_new_kdm_request(db, req) -> None` — posts in-app notification to all users with `manage_kdm`, and sends a best-effort email (silent if SMTP unconfigured).
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_kdm_notify.py
+from app.database import SessionLocal, create_tables
+from app.models import KdmRequest
+import app.services.kdm_notify as kn
+
+
+def test_notify_calls_inapp_and_email(monkeypatch):
+    create_tables(); db = SessionLocal()
+    calls = {"inapp": 0, "email": 0}
+    monkeypatch.setattr(kn, "notify_permission",
+                        lambda *a, **k: calls.__setitem__("inapp", calls["inapp"] + 1))
+    monkeypatch.setattr(kn, "_send_email_safe",
+                        lambda *a, **k: calls.__setitem__("email", calls["email"] + 1))
+    try:
+        req = KdmRequest(tenant_id=1, request_type="kdm", status="received",
+                         requested_title="X")
+        db.add(req); db.flush()
+        kn.notify_new_kdm_request(db, req)
+        assert calls["inapp"] == 1 and calls["email"] == 1
+    finally:
+        db.rollback(); db.close()
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_kdm_notify.py -v`
+Expected: FAIL (`ModuleNotFoundError`).
+
+- [ ] **Step 3: Implement** `app/services/kdm_notify.py`:
+
+```python
+"""Notifica finishing alla nuova richiesta KDM: in-app (manage_kdm) + email."""
+import os
+from app.services.notifications import notify_permission
+
+
+def _send_email_safe(subject: str, body: str, to_addrs: list) -> None:
+    """Best-effort SMTP. Silenzioso se SMTP non configurato (.env SMTP_HOST vuoto)."""
+    if not os.environ.get("SMTP_HOST", "").strip() or not to_addrs:
+        return
+    try:
+        import smtplib
+        from email.message import EmailMessage
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = os.environ.get("SMTP_FROM", os.environ.get("SMTP_USER", ""))
+        msg["To"] = ", ".join(to_addrs)
+        msg.set_content(body)
+        port = int(os.environ.get("SMTP_PORT", "587"))
+        with smtplib.SMTP(os.environ["SMTP_HOST"], port, timeout=20) as srv:
+            if os.environ.get("SMTP_USE_TLS", "1") == "1":
+                srv.starttls()
+            user = os.environ.get("SMTP_USER", "")
+            if user:
+                srv.login(user, os.environ.get("SMTP_PASS", ""))
+            srv.send_message(msg)
+    except Exception:
+        return  # mai bloccare il flusso per un'email
+
+
+def _finishing_emails(db, tenant_id) -> list:
+    """Email degli utenti con permesso manage_kdm (best-effort)."""
+    try:
+        from app.models import User
+        from app.services.rbac import has_permission
+        users = db.query(User).filter(User.tenant_id == tenant_id).all() \
+            if hasattr(__import__("app.models", fromlist=["User"]).User, "tenant_id") \
+            else db.query(User).all()
+        return [u.email for u in users
+                if getattr(u, "email", None) and has_permission(u, "manage_kdm")]
+    except Exception:
+        return []
+
+
+def notify_new_kdm_request(db, req) -> None:
+    title = req.requested_title or req.requested_cpl_uuid or f"#{req.id}"
+    kind = (req.request_type or "kdm").upper()
+    msg = f"Nuova richiesta {kind}: {title}"
+    # In-app a tutti gli utenti con manage_kdm
+    notify_permission(db, "manage_kdm", title="Richiesta KDM/DKDM",
+                      message=msg, link=f"/kdm")
+    # Email best-effort
+    _send_email_safe(f"[Claqo] {msg}", msg + "\n\nApri Claqo → /kdm",
+                     _finishing_emails(db, req.tenant_id))
+```
+
+> CRITICAL: confirm the exact signature of `notify_permission` in `app/services/notifications.py` (params: `db`, permission key, `title`, `message`, `link`? maybe `kind`/`severity`). Open the file and match the real signature — adjust the call. Same for `User.email`/`User.tenant_id` field names.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `python -m pytest tests/test_kdm_notify.py -v`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/services/kdm_notify.py tests/test_kdm_notify.py
+git commit -m "feat(kdm): notify finishing on new request (in-app manage_kdm + best-effort email)"
+```
+
+---
+
+## Task 20: Materialize produced KDM as JobDeliverable
+
+**Files:**
+- Modify: `app/services/kdm_state.py` (hook on `generated`)
+- Create: `app/services/kdm_materialize.py`
+- Test: `tests/test_kdm_materialize.py`
+
+**Interfaces:**
+- Consumes: `JobDeliverable`, `KdmRequest`, `ensure_kdm_price_items`.
+- Produces: `materialize_produced_kdm(db, req) -> JobDeliverable` — creates a JobDeliverable in `req`'s job, `price_item_id` = KDM/DKDM listino voce, emission date = `req.generated_at`, sets `req.job_deliverable_produced_id`. Raises `ValueError` if `req` has no job. Called automatically when transition reaches `generated`.
+
+- [ ] **Step 1: Write the failing test**
+
+```python
+# tests/test_kdm_materialize.py
+import pytest
+from app.database import SessionLocal, create_tables
+from app.models import KdmRequest, JobDeliverable
+from app.services.kdm_materialize import materialize_produced_kdm
+
+
+def test_generate_without_job_raises():
+    create_tables(); db = SessionLocal()
+    try:
+        req = KdmRequest(tenant_id=1, request_type="kdm", status="keys_pending")
+        db.add(req); db.flush()
+        with pytest.raises(ValueError):
+            materialize_produced_kdm(db, req)
+    finally:
+        db.rollback(); db.close()
+```
+
+> A full happy-path test needs a Job row; if building a Job is heavy, keep this guard test and assert the happy path in the E2E task (Task 21). Confirm how `JobDeliverable` requires a `job_id` and which columns are NOT NULL before writing the happy path.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `python -m pytest tests/test_kdm_materialize.py -v`
+Expected: FAIL (`ModuleNotFoundError`).
+
+- [ ] **Step 3: Implement** `app/services/kdm_materialize.py`:
+
+```python
+"""Materializza la KDM prodotta come JobDeliverable nella lista consegne."""
+from app.models import JobDeliverable, PriceItem
+from app.services.kdm_pricing import KDM_CODE, DKDM_CODE
+
+
+def _job_id_for(db, req):
+    """Risolvi il job dal DCP di origine matchato (job_deliverable_id → job_id)."""
+    if req.job_deliverable_id:
+        src = db.get(JobDeliverable, req.job_deliverable_id)
+        if src is not None:
+            return src.job_id
+    return None
+
+
+def materialize_produced_kdm(db, req):
+    job_id = _job_id_for(db, req)
+    if not job_id:
+        raise ValueError("Richiesta senza job: aggancia prima un DCP/progetto")
+    if req.job_deliverable_produced_id:
+        return db.get(JobDeliverable, req.job_deliverable_produced_id)  # idempotent
+    code = KDM_CODE if (req.request_type or "kdm") == "kdm" else DKDM_CODE
+    pi = (db.query(PriceItem)
+          .filter(PriceItem.tenant_id == req.tenant_id, PriceItem.code == code)
+          .first())
+    name = f"{(req.request_type or 'kdm').upper()} — {req.requested_title or req.id}"
+    jd = JobDeliverable(tenant_id=req.tenant_id, job_id=job_id, name=name,
+                        status="delivered", price_item_id=pi.id if pi else None,
+                        confirmed_at=req.generated_at)
+    # quantità/quotato secondo le colonne reali del modello (confermare):
+    for fld, val in (("quantity_planned", 1), ("quantity_delivered", 1)):
+        if hasattr(jd, fld):
+            setattr(jd, fld, val)
+    db.add(jd); db.flush()
+    req.job_deliverable_produced_id = jd.id
+    db.flush()
+    return jd
+```
+
+> Confirm `JobDeliverable` required columns (`nature`? `status` enum values?) with `grep -n "class JobDeliverable" -A60 app/models/models.py`. Set the minimum NOT NULL fields. Use a valid `status` value from the model's status set (e.g. "delivered"/"accepted"). The emission date column is `confirmed_at` per the explore report — if a dedicated emission field exists, use it.
+
+- [ ] **Step 4: Hook into the FSM** — in `app/services/kdm_state.py` `transition()`, after stamping timestamps, add:
+
+```python
+    if to_status == "generated":
+        try:
+            from app.services.kdm_materialize import materialize_produced_kdm
+            materialize_produced_kdm(db, req)
+        except ValueError:
+            raise  # propaga: il router lo mappa a HTTP 400
+```
+
+> Place this BEFORE `db.flush()` at the end of `transition()` so the new JobDeliverable flushes in the same unit of work. The router's `do_transition` already maps `ValueError` → HTTP 400.
+
+- [ ] **Step 5: Run test to verify it passes**
+
+Run: `python -m pytest tests/test_kdm_materialize.py tests/test_kdm_state.py -v`
+Expected: PASS (state tests still green — guard only triggers on `generated` with no job).
+
+> NOTE: `test_kdm_state.py::test_legal_transition_stamps_and_logs` transitions `generated→delivered` on a req with no job. That req starts at `generated` (already past the hook), so it won't re-materialize. But if any state test transitions INTO `generated` without a job, it will now raise — review `tests/test_kdm_state.py` and ensure its `generated` transitions either start AT `generated` or attach a job. Adjust that test if needed (acceptable: it's the same feature's test).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add app/services/kdm_materialize.py app/services/kdm_state.py tests/test_kdm_materialize.py
+git commit -m "feat(kdm): materialize produced KDM as JobDeliverable (emission date, listino link)"
+```
+
+---
+
+## Task 21: E2E + version bump + changelog
 
 **Files:**
 - Create: `tests/e2e/test_kdm_e2e.py` (Playwright) — or extend the existing E2E suite following its pattern
@@ -2026,10 +2782,16 @@ git commit -m "feat(kdm): AI capabilities propose_kdm_request + propose_cinema_s
 1. login as admin
 2. goto /kdm → 3 tabs visible
 3. CPL tab → import tests/fixtures/cpl_smpte.xml → row appears with QUEER title
-4. Requests tab → new request, type=kdm, requested_cpl_uuid = the CPL's uuid
-   → after save, row shows status "matched" + ✓ badge (auto-link ≥95)
-5. open request → transition matched→keys_pending→generated→delivered→confirmed
-   → each step persists (reload, status stays)
+   (CPL linked to a JobDeliverable belonging to a seeded Job so materialization has a job)
+4. generate a public link (POST /kdm/api/links) → open /public/kdm/{token} (no auth)
+   → fill form (title, CPL uuid, dates, cinema contact) → submit → success banner
+5. back in /kdm Requests tab → the submitted request appears, status "matched" + ✓ badge
+   (auto-link ≥ threshold via CPL uuid)
+6. open request → transition matched→keys_pending→generated
+   → at "generated" a JobDeliverable is created in the job's produced deliveries list,
+     with emission date = generated_at and price_item KDM (20€)
+7. continue generated→delivered→confirmed → each step persists (reload, status stays)
+8. verify finishing notification appeared in-app (notifications bell) for manage_kdm user
 ```
 
 Use the existing E2E helpers for login/navigation; assert on visible text (status badges) and absence of console errors.
@@ -2069,5 +2831,17 @@ These are codebase-fact confirmations the implementer MUST verify (flagged inlin
 6. AI handler calling convention in `ai_assistant.py` (params + return shape) — mirror an existing `propose_*`.
 7. `build_context` real accumulation variable.
 8. PERMISSIONS dict category to place `manage_kdm`; manager preset list location.
+9. `PriceItem` money field name (`list_price`/`unit_price`/`price_list`) + required NOT NULL cols (`category_id`/`name`/`unit`) — mirror `seed_demo.py` PriceItem construction.
+10. `notify_permission(...)` exact signature in `app/services/notifications.py` (title/message/link/kind params).
+11. `User.email` / `User.tenant_id` field names; how to enumerate users by permission.
+12. `JobDeliverable` NOT NULL columns + valid `status` values + emission-date field (`confirmed_at` vs dedicated) for materialization.
+13. `Project.title` field name (public form project label); `Job.project_id` for materialization job resolution.
+14. `request.base_url` honors tunnel/proxy host (mirror `portal.py` `_public_base`); if portal uses an env `PUBLIC_BASE_URL`, reuse it.
+
+### Execution ordering note (subagent-driven)
+
+Dependency order: **1 → 2 → 3 → (4,5,6,7,8 parallel-safe) → 9 → 10 → 11,12 → 16 (listino) → 17 → 18 → 19 → 20 → 13,14 → 15 → 21**.
+Task 16 (listino `kdm_pricing`) must land before Task 20 (materialize consumes `KDM_CODE`/`DKDM_CODE`).
+Task 19 (`kdm_notify`) must land before Task 18's submit is smoke-tested live (Task 18 unit test monkeypatches `_notify_finishing`, so 18 can be written first; wire order is fine either way).
 
 Each is a 1-line grep before writing the dependent code. None changes the design — they pin the plan to current code.
