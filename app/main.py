@@ -1709,6 +1709,19 @@ def _auto_migrate_bundle_l_stack2():
         print(f"[auto-migrate-stack2] failed: {e}")
 
 
+def _auto_migrate_kdm_tables():
+    """Crea le tabelle KDM (v3.5.0-alpha.172.226) se mancanti. Idempotente.
+    Tutto in tabelle nuove: nessuna ALTER su tabelle esistenti."""
+    from app.database import create_tables
+    from sqlalchemy import inspect as _inspect
+    from app.database import engine
+    insp = _inspect(engine)
+    needed = {"dcp_cpls", "cinema_facilities", "cinema_servers",
+              "kdm_requests", "kdm_request_events", "kdm_request_links"}
+    if not needed.issubset(set(insp.get_table_names())):
+        create_tables()  # Base.metadata.create_all — crea solo le mancanti
+
+
 def _auto_backfill_qc_events_stack2():
     """v3.5.0-alpha.172.98 (Bundle L Stack 2) — Backfill synthetic QCEvent
     stream per JobDeliverable legacy con qc_substatus != NULL (Bundle I).
@@ -1946,6 +1959,11 @@ async def lifespan(app: FastAPI):
         _auto_migrate_bundle_l_stack2()
     except Exception as e:
         print(f"[lifespan] _auto_migrate_bundle_l_stack2 failed: {e}")
+    # v3.5.0-alpha.172.226 — KDM/DKDM request tracking tables.
+    try:
+        _auto_migrate_kdm_tables()
+    except Exception as e:
+        print(f"[lifespan] _auto_migrate_kdm_tables failed: {e}")
     try:
         from app.services.qc_event_listener import init_qc_event_listeners
         init_qc_event_listeners()
