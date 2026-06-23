@@ -55,6 +55,7 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
         "metadata_requirements": t.metadata_requirements or {},
         "suggested_items": t.suggested_items or [],
         "source_document_name": t.source_document_name,
+        "source_document_path": t.source_document_path,
         "ai_generated": t.ai_generated,
         "ai_confidence": t.ai_confidence,
         "is_active": t.is_active,
@@ -875,7 +876,10 @@ async def parse_capitolato(
     from app.services.deliverables_parser import (
         extract_text_from_file, parse_delivery_template,
     )
-    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.ai_provider import pick_parse_provider
+    from app.services.capitolato_storage import (
+        save_capitolato_upload, sweep_capitolato_uploads,
+    )
     from app.services.rbac import current_user_optional
 
     if not file.filename:
@@ -886,18 +890,63 @@ async def parse_capitolato(
     text = extract_text_from_file(file_bytes, file.filename)
     if not text or len(text.strip()) < 20:
         raise HTTPException(400, "Estrazione testo fallita o testo troppo breve (<20 caratteri)")
+
+    # cleanup orphan (best-effort) prima di salvare il nuovo
+    try:
+        sweep_capitolato_uploads(db)
+    except Exception:
+        pass
+
     user = current_user_optional(request)
-    provider = get_provider_for_user(user.id if user else None, db) if user else None
-    if not provider:
-        provider = get_provider()
-    if not provider:
+    picked = pick_parse_provider(user.id if user else None, db)
+    if not picked:
         raise HTTPException(503, "AI non configurata. Vai in Impostazioni → tab AI per configurare un provider.")
-    parsed = parse_delivery_template(text, provider=provider)
+    provider, tier, model_label = picked
+
+    parsed = parse_delivery_template(text, provider=provider, model_tier=tier)
     if parsed is None:
         raise HTTPException(503, "Provider AI non disponibile o estrazione fallita. Configura un provider in /settings → AI.")
+
+    rel_path = save_capitolato_upload(file_bytes, file.filename)
+    parsed["source_document_path"] = rel_path
     parsed.setdefault("source_document_name", file.filename)
     parsed.setdefault("ai_generated", True)
     parsed.setdefault("text_preview", text[:1500])
+    return parsed
+
+
+@router.post("/api/{template_id}/reparse", dependencies=[RequireEditSettings])
+async def reparse_capitolato(template_id: int, request: Request,
+                             db: Session = Depends(get_db)):
+    """Ri-analizza un template dal file sorgente salvato, col modello più forte.
+    Ritorna la preview (come /api/parse) per conferma-sovrascrittura. NON salva."""
+    from app.services.deliverables_parser import parse_delivery_template
+    from app.services.ai_provider import pick_parse_provider
+    from app.services.capitolato_storage import read_capitolato_text
+    from app.services.rbac import current_user_optional
+
+    t = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == current_tenant_id()).first()
+    if not t:
+        raise HTTPException(404, "Template non trovato")
+    if not t.source_document_path:
+        raise HTTPException(404, "Nessun documento sorgente salvato per questo template")
+    try:
+        text = read_capitolato_text(t.source_document_path)
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(404, "File sorgente non più disponibile o non valido")
+    user = current_user_optional(request)
+    picked = pick_parse_provider(user.id if user else None, db)
+    if not picked:
+        raise HTTPException(503, "AI non configurata.")
+    provider, tier, _ = picked
+    parsed = parse_delivery_template(text, provider=provider, model_tier=tier)
+    if parsed is None:
+        raise HTTPException(503, "Estrazione fallita.")
+    parsed["source_document_path"] = t.source_document_path
+    parsed.setdefault("source_document_name",
+                      t.source_document_path.split("/")[-1].split("\\")[-1])
     return parsed
 
 
@@ -917,6 +966,7 @@ async def save_template(
     naming_convention: Optional[str] = Form(None),
     archive_specs: Optional[str] = Form(None),
     metadata_requirements: Optional[str] = Form(None),
+    source_document_path: Optional[str] = Form(None),
     suggested_items: Optional[str] = Form(None),  # v3.5.0-alpha.68.6
     ai_generated: bool = Form(False),
     ai_confidence: Optional[float] = Form(None),
@@ -974,6 +1024,7 @@ async def save_template(
         metadata_requirements=_parse(metadata_requirements),
         suggested_items=_parse_list(suggested_items),
         source_document_name=source_document_name,
+        source_document_path=source_document_path,
         ai_generated=ai_generated,
         ai_confidence=ai_confidence,
     )

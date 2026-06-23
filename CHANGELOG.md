@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.228 — Parser capitolati robusto (23 giu 2026)
+
+Fix del parse capitolati inaffidabile (caso "Paramount Scripted Episode Delivery 2023": output allucinato — layout audio 16ch con M&E duplicati, note "not fully extracted"). Due cause: troncamento a 30k caratteri + modello debole (deepseek-flash attivo).
+
+- **Modello forte automatico**: nuovo `pick_parse_provider` (`ai_provider.py`) sceglie sempre il modello più forte tra quelli configurati (tier strong/medium/weak: Claude/GPT-4o/Gemini-Pro > Haiku/Flash/mini > deepseek/ollama/sonar), **ignorando il provider attivo del copilot**. Refactor del content-lockdown in `_apply_content_lockdown` (riusato). Verificato: con deepseek attivo + Claude configurato, il parser sceglie Claude Sonnet.
+- **Lettura intera del documento**: `parse_delivery_template` passa da troncamento 30k a **single-pass 150k** (sta nel context Sonnet 200k) + **fallback chunk** (`split_into_chunks` con confini di sezione + `merge_template_blocks`) per documenti enormi (hard cap 600k). Ritorna `parse_meta` (model_tier, chunked, n_chunks, truncated, ai_confidence, warnings, merge_notes).
+- **Warning UI**: codici `weak_model_large_doc` / `low_confidence` / `truncated` (`build_parse_warnings`) → banner giallo nel modal di preview con invito a configurare/attivare Claude Sonnet. i18n in 5 lingue.
+- **Persistenza sorgente + ri-analisi**: nuovo `capitolato_storage.py` salva il file caricato in `data/capitolato_uploads/` (cleanup orphan >24h non referenziati, guard path-traversal). `/api/parse` salva + ritorna `source_document_path`; `/api/save` lo memorizza; nuovo `POST /api/{id}/reparse` ri-analizza dal file salvato col modello forte; bottone **"Ri-analizza"** sui template con sorgente.
+- **902 test** (+8 file di test nuovi/estesi), smoke browser verde (0 errori console, 0 chiavi i18n grezze). Eseguito subagent-driven (11 task TDD + review per task).
+
 ## v3.5.0-alpha.172.227 — Fix i18n KDM: 42 chiavi mancanti (23 giu 2026)
 
 Smoke browser della feature KDM (α.172.226) ha rivelato chiavi i18n grezze renderizzate letteralmente nella UI.

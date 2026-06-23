@@ -16,6 +16,7 @@ __pycache__/
 venv/
 uploads/assets/
 uploads/thumbnails/
+data/capitolato_uploads/
 .DS_Store
 Thumbs.db
 *.egg-info/

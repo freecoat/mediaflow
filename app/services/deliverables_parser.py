@@ -4,13 +4,125 @@ Estrae voci di capitolato da PDF / Word / Excel / testo libero
 e le matcha con il listino prezzi tramite AI.
 """
 from __future__ import annotations
-import io, json, logging
+import io, json, logging, re
 from pathlib import Path
 from typing import Optional
 from app.services.ai_provider import get_provider
 from app.services.naming_resolver import normalize_naming_convention
 
 logger = logging.getLogger(__name__)
+
+# ── Chunk splitter per capitolati oversized ───────────────
+
+_SECTION_RE = re.compile(r"^\d+(?:\.\d+)*\s", re.MULTILINE)
+
+
+def split_into_chunks(text: str, size: int = 120_000, overlap: int = 5_000) -> list[str]:
+    """Spezza testo lungo in chunk sovrapposti.
+    Taglio preferito su confine di sezione numerata vicino a `size`; fallback hard cut.
+    Ritorna [text] se rientra in `size`."""
+    if len(text) <= size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    n = len(text)
+    while start < n:
+        end = min(start + size, n)
+        section_cut = False
+        if end < n:
+            # cerca un confine di sezione nella finestra [end-overlap, end]
+            # la finestra non supera end, così il taglio non eccede mai size chars
+            window_start = max(start, end - overlap)
+            window_end = end
+            window = text[window_start:window_end]
+            matches = list(_SECTION_RE.finditer(window))
+            if matches:
+                # usa l'ultimo match nella finestra (il più vicino a end da sinistra)
+                best_match = matches[-1]
+                if best_match is not None:
+                    cut = window_start + best_match.start()
+                    # se il match è preceduto da newline, includi il newline nel chunk precedente
+                    # cercando il newline subito prima della posizione del match
+                    if cut > start and cut > 0 and text[cut - 1] == '\n':
+                        cut = cut - 1
+                    if cut > start:
+                        end = cut
+                        section_cut = True
+        chunks.append(text[start:end])
+        if end >= n:
+            break
+        # se abbiamo tagliato su un confine di sezione, inizia subito da lì (no overlap);
+        # altrimenti applica il normale overlap per continuità
+        if section_cut:
+            start = end
+        else:
+            start = max(0, end - overlap)
+    return chunks
+
+
+# ── Merge blocchi template (per parse chunked) ────────────────
+
+_LIST_MERGE_KEYS = {"deliverables"}  # liste di oggetti a livello root
+
+
+def _dedupe(seq):
+    """Deduplicazione per list items usando repr come chiave."""
+    out, seen = [], []
+    for item in seq:
+        key = repr(item)
+        if key not in seen:
+            seen.append(key)
+            out.append(item)
+    return out
+
+
+def merge_template_blocks(parts: list[dict]) -> tuple[dict, list[str]]:
+    """Unisce dict-template parziali da più chunk.
+
+    Scalare/oggetto: primo non-vuoto vince (conflitto scalare → warning).
+    Liste root note (_LIST_MERGE_KEYS): concat+dedupe preservando ordine.
+    ai_confidence: valore massimo tra tutti i chunk.
+
+    Ritorna (merged, conflict_warnings).
+    """
+    merged: dict = {}
+    warnings: list[str] = []
+
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+
+        for k, v in part.items():
+            # Skip empty/null values
+            if v is None or v == "" or v == {} or v == []:
+                continue
+
+            # ai_confidence → max value
+            if k == "ai_confidence":
+                try:
+                    merged[k] = max(merged.get(k, 0) or 0, float(v))
+                except (TypeError, ValueError):
+                    pass
+                continue
+
+            # List merge keys → concat + dedupe
+            if k in _LIST_MERGE_KEYS and isinstance(v, list):
+                merged[k] = _dedupe((merged.get(k) or []) + v)
+                continue
+
+            # Key non ancora presente → assegna
+            if k not in merged or merged[k] in (None, "", {}, []):
+                merged[k] = v
+            # Entrambi dict → merge superficiale dei campi mancanti
+            elif isinstance(merged[k], dict) and isinstance(v, dict):
+                for sk, sv in v.items():
+                    if sk not in merged[k] or merged[k][sk] in (None, "", {}, []):
+                        merged[k][sk] = sv
+            # Valori scalari conflittanti (non dict/list) → warning, first wins
+            elif merged[k] != v and not isinstance(merged[k], (dict, list)):
+                warnings.append(f"Conflitto su '{k}': tenuto '{merged[k]}', scartato '{v}'")
+
+    return merged, warnings
 
 
 # ── Estrazione testo dai vari formati ───────────────────────
@@ -216,14 +328,42 @@ Schema output:
 Il blocco "deliverables" è opzionale: includilo solo quando il capitolato distingue una convenzione di naming per singola consegna (ogni voce porta il proprio "naming_convention" allo stesso schema del blocco 6). Se un blocco non è menzionato nel capitolato, ometti la chiave. Non inventare specifiche assenti."""
 
 
-def parse_delivery_template(text: str, provider=None) -> Optional[dict]:
+MAX_CHARS_SINGLE = 150_000
+MAX_CHARS_HARD = 600_000
+
+
+def build_parse_warnings(model_tier: str, text_len: int, ai_confidence, truncated: bool) -> list[str]:
+    """Restituisce codici macchina stabili per warning di parsing.
+
+    Codes:
+    - "weak_model_large_doc": modello debole su documento grande (>30k chars)
+    - "low_confidence": ai_confidence < 0.5
+    - "truncated": documento troncato per eccesso lunghezza
+
+    Usato in parse_meta["warnings"]; le note di conflitto merge vanno in parse_meta["merge_notes"].
+    """
+    codes: list[str] = []
+    if model_tier == "weak" and text_len > 30_000:
+        codes.append("weak_model_large_doc")
+    try:
+        if ai_confidence is not None and float(ai_confidence) < 0.5:
+            codes.append("low_confidence")
+    except (TypeError, ValueError):
+        pass
+    if truncated:
+        codes.append("truncated")
+    return codes
+
+
+def parse_delivery_template(text: str, provider=None, model_tier: str = "strong") -> Optional[dict]:
     """Analizza un capitolato e ritorna un dict con i 8 blocchi DeliveryTemplate
-    + metadati (code/name/broadcaster/description/ai_confidence).
+    + metadati (code/name/broadcaster/description/ai_confidence) + parse_meta.
 
     Usato dall'endpoint POST /delivery-templates/api/parse per popolare la
     preview prima del salvataggio. L'utente può poi correggere/integrare
     prima di salvare. v3.5.0-alpha.66.20 Fase 2 step C.
     v3.5.0-alpha.172.81 (Bundle F): accetta provider iniettato dal router.
+    v3.5.0-alpha.172.227 (Task 4): single-pass 150k + chunk fallback + parse_meta.
     """
     if provider is None:
         provider = get_provider()
@@ -232,22 +372,41 @@ def parse_delivery_template(text: str, provider=None) -> Optional[dict]:
         return None
     if len(text.strip()) < 20:
         return None
-    MAX_CHARS = 30000
-    if len(text) > MAX_CHARS:
-        text = text[:MAX_CHARS] + "\n\n[... testo troncato ...]"
-    user_prompt = f"""Capitolato da analizzare:
 
----
-{text}
----
+    warnings: list[str] = []
+    truncated = False
+    if len(text) > MAX_CHARS_HARD:
+        text = text[:MAX_CHARS_HARD] + "\n\n[... testo troncato (oltre limite) ...]"
+        truncated = True
+        warnings.append("Documento oltre il limite massimo: parte finale troncata.")
 
-Estrai i blocchi strutturati come da schema."""
-    # v3.5.0-alpha.172.111 — max_tokens 4000→8000 per capitolati grossi.
-    # Senza questo bump A24/IRDA tornavano JSON troncato a metà struct,
-    # safe_json_parse falliva → 503 "Risposta non JSON valido".
-    result = provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt, max_tokens=8000)
-    if not isinstance(result, dict):
-        return result
+    chunks = split_into_chunks(text, size=MAX_CHARS_SINGLE)
+    chunked = len(chunks) > 1
+
+    def _one(chunk_text: str):
+        user_prompt = (
+            "Capitolato da analizzare:\n\n---\n" + chunk_text +
+            "\n---\n\nEstrai i blocchi strutturati come da schema."
+        )
+        # v3.5.0-alpha.172.111 — max_tokens 8000 per capitolati grossi.
+        return provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt,
+                                     max_tokens=8000)
+
+    if not chunked:
+        result = _one(chunks[0])
+        if not isinstance(result, dict):
+            return result
+    else:
+        parts = []
+        for ch in chunks:
+            r = _one(ch)
+            if isinstance(r, dict):
+                parts.append(r)
+        if not parts:
+            return None
+        result, merge_warn = merge_template_blocks(parts)
+        warnings.extend(merge_warn)
+
     # α.172.182 (NC-T4) — normalizza la naming convention grezza dell'AI prima
     # del save (template + eventuali override per-item). normalize_* ritorna None
     # se l'AI ha omesso/lasciato vuoto il blocco → safe assegnare comunque.
@@ -271,6 +430,18 @@ Estrai i blocchi strutturati come da schema."""
                 # si potrebbe overridare qui — per ora propagazione diretta.
                 it.setdefault("requires_physical", _rp)
                 it.setdefault("physical_media_kind", _pmk)
+
+    merge_notes = warnings  # stringhe di conflitto prodotte sopra
+    codes = build_parse_warnings(model_tier, len(text), result.get("ai_confidence"), truncated)
+    result["parse_meta"] = {
+        "model_tier": model_tier,
+        "chunked": chunked,
+        "n_chunks": len(chunks),
+        "truncated": truncated,
+        "ai_confidence": result.get("ai_confidence"),
+        "warnings": codes,
+        "merge_notes": merge_notes,
+    }
     return result
 
 
