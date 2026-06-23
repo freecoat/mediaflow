@@ -1,4 +1,8 @@
-from app.services.ai_provider import parse_model_tier, rank_parse_models
+import pytest
+from unittest.mock import patch
+from app.services.ai_provider import (
+    parse_model_tier, rank_parse_models, pick_parse_provider, ProviderConfig,
+)
 from app.models.models import UserAISettings
 
 
@@ -44,3 +48,14 @@ def test_rank_only_weak_returns_weak():
 
 def test_rank_empty_returns_none():
     assert rank_parse_models([]) is None
+
+
+def test_pick_parse_provider_global_path_returns_none_on_build_failure():
+    """pick_parse_provider(None, None) must return None (not raise) when
+    build_provider raises — parity with the user-present path."""
+    good_cfg = ProviderConfig(provider="claude", api_key="fake", model="claude-sonnet-4-6")
+    with patch("app.services.ai_provider._global_config", return_value=good_cfg), \
+         patch("app.services.ai_provider._apply_content_lockdown", return_value=good_cfg), \
+         patch("app.services.ai_provider.build_provider", side_effect=RuntimeError("no key")):
+        result = pick_parse_provider(None, None)
+    assert result is None

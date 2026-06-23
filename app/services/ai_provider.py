@@ -991,7 +991,11 @@ def pick_parse_provider(user_id, db):
         if cfg is None:
             return None
         cfg = _apply_content_lockdown(cfg, user_id, db)
-        prov = build_provider(cfg)
+        try:
+            prov = build_provider(cfg)
+        except Exception as e:
+            logger.error(f"pick_parse_provider build fallito (global path): {e}")
+            return None
         return prov, parse_model_tier(cfg.provider, cfg.model), (cfg.model or "")
     rows = db.query(UserAISettings).filter(UserAISettings.user_id == user_id).all()
     ranked = rank_parse_models(rows)
