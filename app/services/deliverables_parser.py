@@ -4,13 +4,67 @@ Estrae voci di capitolato da PDF / Word / Excel / testo libero
 e le matcha con il listino prezzi tramite AI.
 """
 from __future__ import annotations
-import io, json, logging
+import io, json, logging, re
 from pathlib import Path
 from typing import Optional
 from app.services.ai_provider import get_provider
 from app.services.naming_resolver import normalize_naming_convention
 
 logger = logging.getLogger(__name__)
+
+# ── Chunk splitter per capitolati oversized ───────────────
+
+_SECTION_RE = re.compile(r"^\d+(?:\.\d+)*\s", re.MULTILINE)
+
+
+def split_into_chunks(text: str, size: int = 120_000, overlap: int = 5_000) -> list[str]:
+    """Spezza testo lungo in chunk sovrapposti.
+    Taglio preferito su confine di sezione numerata vicino a `size`; fallback hard cut.
+    Ritorna [text] se rientra in `size`."""
+    if len(text) <= size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    n = len(text)
+    while start < n:
+        end = min(start + size, n)
+        section_cut = False
+        if end < n:
+            # cerca un confine di sezione nella finestra [end-overlap, end+overlap]
+            # per trovare il boundary più vicino a end (potrebbe essere prima o dopo)
+            window_start = max(start, end - overlap)
+            window_end = min(n, end + overlap)
+            window = text[window_start:window_end]
+            matches = list(_SECTION_RE.finditer(window))
+            if matches:
+                # trova il match più vicino a end (preferisci quello prima di end)
+                best_match = None
+                for m in matches:
+                    abs_pos = window_start + m.start()
+                    if abs_pos <= end:
+                        best_match = m
+                    elif best_match is None:
+                        best_match = m
+                        break
+                if best_match and best_match is not None:
+                    cut = window_start + best_match.start()
+                    # se il match è preceduto da newline, includi il newline nel chunk precedente
+                    # cercando il newline subito prima della posizione del match
+                    if cut > start and cut > 0 and text[cut - 1] == '\n':
+                        cut = cut - 1
+                    if cut > start:
+                        end = cut
+                        section_cut = True
+        chunks.append(text[start:end])
+        if end >= n:
+            break
+        # se abbiamo tagliato su un confine di sezione, inizia subito da lì (no overlap);
+        # altrimenti applica il normale overlap per continuità
+        if section_cut:
+            start = end
+        else:
+            start = max(0, end - overlap)
+    return chunks
 
 
 # ── Estrazione testo dai vari formati ───────────────────────
