@@ -109,6 +109,45 @@ PROVIDER_LABELS: dict[str, str] = {
 }
 
 
+# ── Parse-model suitability ranking (capitolato parser) ──────
+# Il parser capitolati richiede un modello forte. Classifichiamo i modelli
+# configurati dall'utente in tier per scegliere SEMPRE il migliore.
+_TIER_ORDER = {"strong": 3, "medium": 2, "weak": 1}
+# Preferenza a parità di tier (deterministica).
+_PROVIDER_PREF = {"claude": 6, "openai": 5, "gemini": 4,
+                  "perplexity": 3, "deepseek": 2, "ollama": 1}
+
+
+def parse_model_tier(provider: str, model: Optional[str]) -> str:
+    """Classifica (provider, model) per idoneità al parsing capitolati."""
+    p = (provider or "").lower()
+    m = (model or "").lower()
+    # weak: modelli piccoli/locali/legacy a prescindere
+    if p in ("deepseek", "perplexity", "ollama"):
+        return "weak"
+    if any(t in m for t in ("flash", "-mini", "haiku")):
+        # gemini-*-pro non contiene 'flash'; haiku/mini/flash = medium
+        # NB: '-mini' non '-mini' per evitare false positive su 'gemini'
+        return "medium"
+    if any(t in m for t in ("opus", "sonnet", "gpt-4o", "gpt-4.1",
+                            "o1", "o3", "pro")):
+        return "strong"
+    return "weak"
+
+
+def rank_parse_models(rows):
+    """Sceglie la UserAISettings migliore per il parsing.
+    Ritorna (row, tier) o None se la lista è vuota.
+    Ordina per tier desc, poi preferenza provider desc."""
+    if not rows:
+        return None
+    def _key(r):
+        tier = parse_model_tier(r.provider, r.model)
+        return (_TIER_ORDER.get(tier, 0), _PROVIDER_PREF.get((r.provider or "").lower(), 0))
+    best = max(rows, key=_key)
+    return best, parse_model_tier(best.provider, best.model)
+
+
 # v3.5.0-alpha.66.16.4 — Tabella prezzi per il calcolo del costo USD per
 # token. Sorgenti: pricing pubblico provider al maggio 2026. Aggiornare
 # quando si aggiunge un nuovo modello o cambiano i prezzi.
@@ -914,6 +953,66 @@ def _user_config(user_id: int, db) -> Optional[ProviderConfig]:
     )
 
 
+def _apply_content_lockdown(cfg: "ProviderConfig", user_id, db) -> "ProviderConfig":
+    """Se il tenant ha cloud_ai bloccato e il provider non è locale, forza Ollama.
+    Fail-closed. Estratto da get_provider_for_user per riuso nel parser."""
+    if cfg.provider == "ollama":
+        return cfg
+    try:
+        from app.services import egress_guard
+        tenant = None
+        if user_id and db is not None:
+            from app.models.models import User, Tenant
+            u = db.query(User).filter(User.id == user_id).first()
+            if u is not None:
+                tenant = db.query(Tenant).filter(
+                    Tenant.id == getattr(u, "tenant_id", 1)).first()
+        if not egress_guard.cloud_ai_allowed(tenant):
+            logger.warning("Content Lockdown: provider cloud '%s' → forzo Ollama",
+                           cfg.provider)
+            return ProviderConfig(
+                provider="ollama",
+                model=(settings.ollama_model or "llama3.1:70b"),
+                base_url=(settings.ollama_base_url or "http://localhost:11434"),
+            )
+    except Exception as e:
+        logger.error(f"egress_guard cloud_ai check fallito: {e}")
+    return cfg
+
+
+def pick_parse_provider(user_id, db):
+    """Sceglie il provider AI PIÙ FORTE configurato per l'utente, ignorando
+    l'active_ai_provider del copilot. Ritorna (provider, tier, model_label)
+    o None se nessuna config. Rispetta il content-lockdown (può degradare a Ollama)."""
+    from app.models.models import UserAISettings
+    from app.services.crypto import decrypt_secret
+    if not user_id or db is None:
+        cfg = _global_config()
+        if cfg is None:
+            return None
+        cfg = _apply_content_lockdown(cfg, user_id, db)
+        prov = build_provider(cfg)
+        return prov, parse_model_tier(cfg.provider, cfg.model), (cfg.model or "")
+    rows = db.query(UserAISettings).filter(UserAISettings.user_id == user_id).all()
+    ranked = rank_parse_models(rows)
+    if ranked is None:
+        cfg = _global_config()
+        if cfg is None:
+            return None
+    else:
+        row, _tier = ranked
+        api_key = decrypt_secret(row.api_key_encrypted) if row.api_key_encrypted else None
+        cfg = ProviderConfig(provider=row.provider, api_key=api_key,
+                             model=row.model, base_url=row.base_url)
+    cfg = _apply_content_lockdown(cfg, user_id, db)
+    try:
+        prov = build_provider(cfg)
+    except Exception as e:
+        logger.error(f"pick_parse_provider build fallito: {e}")
+        return None
+    return prov, parse_model_tier(cfg.provider, cfg.model), (cfg.model or "")
+
+
 def get_provider_for_user(user_id: Optional[int], db) -> Optional[AIProvider]:
     """
     Risolve il provider AI da usare per uno specifico utente.
@@ -930,33 +1029,8 @@ def get_provider_for_user(user_id: Optional[int], db) -> Optional[AIProvider]:
         cfg = _global_config()
     if cfg is None:
         return None
-    # v3.5.0-alpha.172.195 — Content Lockdown: se il tenant ha cloud_ai bloccato
-    # e il provider scelto NON è locale (ollama), forza Ollama. Kill l'egress
-    # cloud incl. la native web search lato modello. Fail-closed: tenant non
-    # risolvibile → trattato come locked (force-local).
-    if cfg.provider != "ollama":
-        try:
-            from app.services import egress_guard
-            tenant = None
-            if user_id and db is not None:
-                from app.models.models import User, Tenant
-                u = db.query(User).filter(User.id == user_id).first()
-                if u is not None:
-                    tenant = db.query(Tenant).filter(
-                        Tenant.id == getattr(u, "tenant_id", 1)
-                    ).first()
-            if not egress_guard.cloud_ai_allowed(tenant):
-                logger.warning(
-                    "Content Lockdown attivo: provider cloud '%s' → forzo Ollama locale",
-                    cfg.provider,
-                )
-                cfg = ProviderConfig(
-                    provider="ollama",
-                    model=(settings.ollama_model or "llama3.1:70b"),
-                    base_url=(settings.ollama_base_url or "http://localhost:11434"),
-                )
-        except Exception as e:  # difensivo: non rompere il provider su errore guard
-            logger.error(f"egress_guard cloud_ai check fallito: {e}")
+    # v3.5.0-alpha.172.195 — Content Lockdown (ora delegato a _apply_content_lockdown).
+    cfg = _apply_content_lockdown(cfg, user_id, db)
     try:
         return build_provider(cfg)
     except Exception as e:
