@@ -133,6 +133,9 @@
             <!-- v3.5.0-alpha.132 (Fase 5 QoL) — export JSON + duplica -->
             <a class="btn btn-ghost btn-sm" href="/delivery-templates/api/{{ t.id }}/export-json" target="_blank" title="Esporta come JSON">⬇</a>
             <button class="btn btn-ghost btn-sm" onclick="duplicateTemplate({{ t.id }}, '{{ t.code|e }}')" title="Duplica come bozza modificabile">📋</button>
+            {% if t.source_document_path %}
+            <button class="btn btn-ghost btn-sm" onclick="dtReparse({{ t.id }})" data-i18n="dt.reparse" title="Ri-analizza da documento originale">Ri-analizza</button>
+            {% endif %}
             {% if t.is_active %}
             <button class="btn btn-ghost btn-sm" onclick="confirmDelete({{ t.id }}, '{{ t.code|e }}')" title="Cestina">🗑</button>
             {% else %}
@@ -201,6 +204,7 @@
           <b id="parsed-code"></b> — <span id="parsed-name"></span>
           <span id="parsed-confidence" style="margin-left:8px; color:var(--text3);"></span>
         </div>
+        <div id="dt-parse-warnings" style="display:none;margin:10px 0;padding:10px 14px;border-radius:6px;background:#3a2e00;border:1px solid #6b5200;"></div>
         <div class="form-group">
           <label>Code *</label>
           <input id="f-code" class="form-input mono" maxlength="50">
@@ -472,7 +476,7 @@ async function doParseCapitolato() {
   document.getElementById('btn-parse').disabled = true;
   try {
     const res = await api('POST', '/delivery-templates/api/parse', fd);
-    renderParseStep2(res);
+    openParsePreview(res);
   } catch(e) {
     toast(e.message || 'Errore parse', 'error');
   } finally {
@@ -481,7 +485,7 @@ async function doParseCapitolato() {
   }
 }
 
-function renderParseStep2(parsed) {
+function openParsePreview(parsed) {
   document.getElementById('import-step1').style.display = 'none';
   document.getElementById('import-step2').style.display = '';
   document.getElementById('btn-parse').style.display = 'none';
@@ -492,6 +496,22 @@ function renderParseStep2(parsed) {
   const conf = parsed.ai_confidence;
   document.getElementById('parsed-confidence').textContent =
     (conf != null) ? ('AI confidence ' + Math.round(conf * 100) + '%') : '';
+
+  // warning banner
+  const warnBox = document.getElementById('dt-parse-warnings');
+  const codes = (parsed.parse_meta && parsed.parse_meta.warnings) || [];
+  if (warnBox) {
+    if (codes.length) {
+      warnBox.style.display = 'block';
+      warnBox.innerHTML = '<strong>' + mfT('dt.parse_warning.title') + '</strong><ul style="margin:6px 0 0 18px;">'
+        + codes.map(function(c) { return '<li>' + mfT('dt.parse_warning.' + c) + '</li>'; }).join('') + '</ul>';
+    } else {
+      warnBox.style.display = 'none';
+      warnBox.innerHTML = '';
+    }
+  }
+  // porta avanti il source path al save
+  window._dtSourcePath = parsed.source_document_path || null;
 
   document.getElementById('f-code').value = parsed.code || '';
   document.getElementById('f-name').value = parsed.name || '';
@@ -526,6 +546,16 @@ function renderParseStep2(parsed) {
   };
 }
 
+async function dtReparse(id) {
+  try {
+    const res = await api('POST', '/delivery-templates/api/' + id + '/reparse');
+    openImportModal();
+    openParsePreview(res);
+  } catch(e) {
+    toast(e.message || 'Errore ri-analisi', 'error');
+  }
+}
+
 async function doSaveTemplate() {
   const fd = new FormData();
   fd.append('code', document.getElementById('f-code').value.trim());
@@ -557,6 +587,7 @@ async function doSaveTemplate() {
   fd.append('ai_generated', String(meta.ai_generated || false));
   if (meta.ai_confidence != null) fd.append('ai_confidence', String(meta.ai_confidence));
   if (meta.source_document_name) fd.append('source_document_name', meta.source_document_name);
+  if (window._dtSourcePath) fd.append('source_document_path', window._dtSourcePath);
 
   try {
     await api('POST', '/delivery-templates/api/save', fd);

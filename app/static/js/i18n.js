@@ -693,6 +693,11 @@ window.MF_I18N = {
   'kdm.field.fac_name':    {it: 'Nome *',                    en: 'Name *',                   fr: 'Nom *',                   de: 'Name *',                    es: 'Nombre *'},
   'kdm.field.fac_kind':    {it: 'Tipo',                      en: 'Type',                     fr: 'Type',                    de: 'Typ',                       es: 'Tipo'},
   'kdm.field.fac_city':    {it: 'Città',                     en: 'City',                     fr: 'Ville',                   de: 'Stadt',                     es: 'Ciudad'},
+  'dt.reparse':              {it: 'Ri-analizza',               en: 'Re-analyze',               fr: 'Ré-analyser',             de: 'Neu analysieren',           es: 'Re-analizar'},
+  'dt.parse_warning.title':  {it: '⚠️ Risultato potenzialmente inaffidabile', en: '⚠️ Result may be unreliable', fr: '⚠️ Résultat peu fiable', de: '⚠️ Ergebnis evtl. unzuverlässig', es: '⚠️ Resultado poco fiable'},
+  'dt.parse_warning.weak_model_large_doc': {it: 'Modello AI debole per un documento grande. Configura/attiva Claude Sonnet in Impostazioni → AI e ri-analizza.', en: 'Weak AI model for a large document. Configure/activate Claude Sonnet in Settings → AI and re-analyze.', fr: 'Modèle IA faible pour un grand document. Configurez/activez Claude Sonnet dans Paramètres → IA puis ré-analysez.', de: 'Schwaches KI-Modell für ein großes Dokument. Claude Sonnet in Einstellungen → KI aktivieren und neu analysieren.', es: 'Modelo de IA débil para un documento grande. Configura/activa Claude Sonnet en Ajustes → IA y vuelve a analizar.'},
+  'dt.parse_warning.low_confidence': {it: 'Confidenza AI bassa: verifica i campi estratti.', en: 'Low AI confidence: verify the extracted fields.', fr: 'Faible confiance IA : vérifiez les champs extraits.', de: 'Geringe KI-Konfidenz: extrahierte Felder prüfen.', es: 'Confianza de IA baja: verifica los campos extraídos.'},
+  'dt.parse_warning.truncated': {it: 'Documento troppo lungo: parte finale non analizzata.', en: 'Document too long: final part not analyzed.', fr: 'Document trop long : partie finale non analysée.', de: 'Dokument zu lang: letzter Teil nicht analysiert.', es: 'Documento demasiado largo: la parte final no se analizó.'},
 };
 
 /**
