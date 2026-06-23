@@ -229,7 +229,7 @@ def parse_delivery_items_v2(text: str, db: Session, tenant_id: int = 1,
 
 Estrai gli item richiesti e i termini tecnici."""
         try:
-            pass1_result = provider.extract_json(PASS1_SYSTEM_PROMPT, pass1_user, max_tokens=8000)
+            pass1_result = provider.extract_json(PASS1_SYSTEM_PROMPT, pass1_user, max_tokens=16000)
         except Exception as e:
             logger.error(f"pass1 chunk {i+1} failed: {e}")
             return None

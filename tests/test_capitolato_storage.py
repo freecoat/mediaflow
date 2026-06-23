@@ -93,31 +93,17 @@ def test_resolve_corpus_fallback(tmp_path, monkeypatch):
     up = tmp_path / "up"
     up.mkdir()
     monkeypatch.setattr(cs, "UPLOAD_DIR", up)
-    # Fake a corpus directory and file
+    # Fake a corpus directory and file — monkeypatch CORPUS_DIR constant
     corpus = tmp_path / "corpus"
     corpus.mkdir()
     corpus_file = corpus / "Sample.pdf"
     corpus_file.write_bytes(b"CORPUS")
-    # Patch the corpus dir lookup by monkeypatching __file__ resolution
-    # Instead, monkeypatch the module-level constant via parents path trick:
-    # We patch the _corpus_dir inside resolve_capitolato_source by temporarily
-    # redirecting Path(__file__).resolve().parents[2] via a wrapper approach.
-    # Simplest: monkeypatch the entire function's corpus resolution via partial override.
-    # Actually, let's test via a real corpus file that exists in the project.
-    # Use Amazon_MGM_Deliverables.txt which is a lightweight text file.
-    real_corpus = Path(__file__).resolve().parents[1] / "docs" / "capitolati_esempio"
-    if not real_corpus.exists():
-        pytest.skip("corpus dir not present")
-    # Pick the lightest file in the corpus
-    corpus_names = [f.name for f in real_corpus.iterdir() if f.is_file()]
-    if not corpus_names:
-        pytest.skip("corpus dir empty")
-    pick = corpus_names[0]
-    tpl = _Tpl(path=None, name=pick)
+    monkeypatch.setattr(cs, "CORPUS_DIR", corpus)
+    tpl = _Tpl(path=None, name="Sample.pdf")
     res = cs.resolve_capitolato_source(tpl)
     assert res is not None
-    assert res[1] == pick
-    assert len(res[0]) > 0
+    assert res[0] == b"CORPUS"
+    assert res[1] == "Sample.pdf"
 
 
 def test_resolve_none_when_nothing(tmp_path, monkeypatch):

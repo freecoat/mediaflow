@@ -10,6 +10,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = Path("data/capitolato_uploads")
+CORPUS_DIR = Path(__file__).resolve().parents[2] / "docs" / "capitolati_esempio"
 _ALLOWED_EXT = {".pdf", ".docx", ".doc", ".xlsx", ".txt"}
 
 
@@ -77,8 +78,7 @@ def resolve_capitolato_source(template) -> tuple[bytes, str] | None:
     # Branch 2: corpus fallback
     name = getattr(template, "source_document_name", None)
     if name:
-        # Derive corpus dir relative to this file's repo root
-        _corpus_dir = Path(__file__).resolve().parents[2] / "docs" / "capitolati_esempio"
+        _corpus_dir = CORPUS_DIR
         try:
             candidate = (_corpus_dir / name).resolve()
             # Guard: must be inside corpus dir

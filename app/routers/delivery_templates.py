@@ -1054,7 +1054,6 @@ async def save_template(
                 parsed = parse_delivery_items_v2(text, db, tenant_id=current_tenant_id(), provider=picked[0])
                 if parsed:
                     saved, _sk = materialize_items(db, t.id, parsed, tenant_id=current_tenant_id())
-                    db.commit()
                     result["items_extracted"] = saved
             else:
                 result["items_warning"] = "auto-extract skipped (no source/provider)"
