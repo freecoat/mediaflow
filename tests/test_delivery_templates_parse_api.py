@@ -99,3 +99,33 @@ def test_reparse_404_on_path_traversal(client_admin):
     assert rr.status_code == 404, (
         f"Expected 404 for path traversal, got {rr.status_code}: {rr.text}"
     )
+
+
+def test_save_autoextract_items(client_admin, monkeypatch):
+    import app.services.capitolato_storage as cs
+    import app.services.delivery_items_parser as dip
+    import app.services.ai_provider as ai
+    monkeypatch.setattr(ai, "pick_parse_provider", lambda uid, db: (object(), "strong", "claude-sonnet-4-6"))
+    monkeypatch.setattr(cs, "resolve_capitolato_source", lambda t: (b"x", "x.pdf"))
+    monkeypatch.setattr(dip, "parse_delivery_items_v2",
+                        lambda text, db, tenant_id=1, provider=None: {"items": [{"name": "I1"}]})
+    monkeypatch.setattr(dip, "materialize_items", lambda db, tid, parsed, tenant_id=1: (1, 0))
+    monkeypatch.setattr("app.services.deliverables_parser.extract_text_from_file", lambda b, fn: "capitolato text " * 20)
+    r = client_admin.post("/delivery-templates/api/save", data={
+        "code": "AUTOX", "name": "Auto X", "version": "1.0",
+        "source_document_path": "data/capitolato_uploads/x.pdf"})
+    assert r.status_code in (200, 201), r.text
+    assert r.json().get("items_extracted") == 1
+
+
+def test_save_autoextract_best_effort(client_admin, monkeypatch):
+    import app.services.capitolato_storage as cs
+    import app.services.ai_provider as ai
+    monkeypatch.setattr(ai, "pick_parse_provider", lambda uid, db: (object(), "strong", "m"))
+    def _boom(t): raise RuntimeError("extract boom")
+    monkeypatch.setattr(cs, "resolve_capitolato_source", _boom)
+    r = client_admin.post("/delivery-templates/api/save", data={
+        "code": "AUTOX2", "name": "Auto X2", "version": "1.0",
+        "source_document_path": "data/capitolato_uploads/y.pdf"})
+    assert r.status_code in (200, 201), r.text   # save still succeeds
+    assert r.json().get("items_warning")          # warning present
