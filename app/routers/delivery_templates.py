@@ -915,6 +915,41 @@ async def parse_capitolato(
     return parsed
 
 
+@router.post("/api/{template_id}/reparse", dependencies=[RequireEditSettings])
+async def reparse_capitolato(template_id: int, request: Request,
+                             db: Session = Depends(get_db)):
+    """Ri-analizza un template dal file sorgente salvato, col modello più forte.
+    Ritorna la preview (come /api/parse) per conferma-sovrascrittura. NON salva."""
+    from app.services.deliverables_parser import parse_delivery_template
+    from app.services.ai_provider import pick_parse_provider
+    from app.services.capitolato_storage import read_capitolato_text
+    from app.services.rbac import current_user_optional
+
+    t = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == template_id,
+        DeliveryTemplate.tenant_id == current_tenant_id()).first()
+    if not t:
+        raise HTTPException(404, "Template non trovato")
+    if not t.source_document_path:
+        raise HTTPException(404, "Nessun documento sorgente salvato per questo template")
+    try:
+        text = read_capitolato_text(t.source_document_path)
+    except FileNotFoundError:
+        raise HTTPException(404, "File sorgente non più disponibile sul server")
+    user = current_user_optional(request)
+    picked = pick_parse_provider(user.id if user else None, db)
+    if not picked:
+        raise HTTPException(503, "AI non configurata.")
+    provider, tier, _ = picked
+    parsed = parse_delivery_template(text, provider=provider, model_tier=tier)
+    if parsed is None:
+        raise HTTPException(503, "Estrazione fallita.")
+    parsed["source_document_path"] = t.source_document_path
+    parsed.setdefault("source_document_name",
+                      t.source_document_path.split("/")[-1].split("\\")[-1])
+    return parsed
+
+
 @router.post("/api/save", dependencies=[RequireEditSettings])
 async def save_template(
     request: Request,

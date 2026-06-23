@@ -74,3 +74,12 @@ def test_save_persists_source_path(client_admin):
     row = [t for t in lst if t.get("id") == tid][0]
     assert row.get("source_document_path") == "data/capitolato_uploads/abc.pdf" \
         or row.get("code") == "PARAMOUNT-X"  # source_document_path may not be in list dict
+
+
+def test_reparse_404_without_source(client_admin):
+    # crea template senza source
+    r = client_admin.post("/delivery-templates/api/save", data={
+        "code": "NOSRC", "name": "No Source", "version": "1.0"})
+    tid = r.json()["id"]
+    rr = client_admin.post(f"/delivery-templates/api/{tid}/reparse")
+    assert rr.status_code == 404
