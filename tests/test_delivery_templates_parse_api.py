@@ -83,3 +83,19 @@ def test_reparse_404_without_source(client_admin):
     tid = r.json()["id"]
     rr = client_admin.post(f"/delivery-templates/api/{tid}/reparse")
     assert rr.status_code == 404
+
+
+def test_reparse_404_on_path_traversal(client_admin):
+    """source_document_path outside UPLOAD_DIR raises ValueError in
+    read_capitolato_text → endpoint must return 404, not 500."""
+    # Create template with a path that resolves outside the upload dir
+    r = client_admin.post("/delivery-templates/api/save", data={
+        "code": "TRAVERSAL", "name": "Traversal Test", "version": "1.0",
+        "source_document_path": "../../etc/passwd",
+    })
+    assert r.status_code in (200, 201), r.text
+    tid = r.json()["id"]
+    rr = client_admin.post(f"/delivery-templates/api/{tid}/reparse")
+    assert rr.status_code == 404, (
+        f"Expected 404 for path traversal, got {rr.status_code}: {rr.text}"
+    )

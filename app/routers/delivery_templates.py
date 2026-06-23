@@ -934,8 +934,8 @@ async def reparse_capitolato(template_id: int, request: Request,
         raise HTTPException(404, "Nessun documento sorgente salvato per questo template")
     try:
         text = read_capitolato_text(t.source_document_path)
-    except FileNotFoundError:
-        raise HTTPException(404, "File sorgente non più disponibile sul server")
+    except (FileNotFoundError, ValueError):
+        raise HTTPException(404, "File sorgente non più disponibile o non valido")
     user = current_user_optional(request)
     picked = pick_parse_provider(user.id if user else None, db)
     if not picked:
