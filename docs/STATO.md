@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.227** — 23 giugno 2026 — Fix i18n KDM (42 chiavi mancanti)
+**v3.5.0-alpha.172.228** — 23 giugno 2026 — Parser capitolati robusto
+
+### α.172.228 ✅ (Parser capitolati robusto — 23 giu, subagent-driven 11 task TDD, ramo feat/capitolato-parser-robusto)
+- **Causa bug Paramount**: parse capitolati allucinato per troncamento a 30k char + modello debole (deepseek-flash attivo). 16ch audio con M&E duplicati, note "not fully extracted".
+- **Fix**: `pick_parse_provider` sceglie sempre il modello più forte configurato (tier strong/medium/weak), ignora il provider copilot attivo (verificato: deepseek attivo → parser usa Claude Sonnet). `parse_delivery_template` single-pass 150k + fallback chunk (split/merge) + `parse_meta`. `build_parse_warnings` (weak/low-conf/truncated) → banner UI i18n 5 lingue. `capitolato_storage.py` salva il file sorgente (`data/capitolato_uploads/`, cleanup orphan, guard path-traversal); `/api/parse` salva+ritorna path, `/api/save` lo memorizza, nuovo `/api/{id}/reparse` + bottone "Ri-analizza".
+- **902 test**, smoke browser verde (0 errori console, 0 chiavi i18n grezze). Spec+plan in `docs/superpowers/`.
+- **PENDENTE**: Matteo ri-carica "Paramount Scripted Episode Delivery 2023" → verifica parse con Claude Sonnet (no allucinazioni) + bottone Ri-analizza. Minor accumulati (vedi `.superpowers/sdd/progress.md`): final review li triaging.
+
+**Prossimo / IN CORSO**: merge `feat/capitolato-parser-robusto` → main + push dopo review finale. Le sessioni .226/.227 (KDM + i18n) erano già pushate (ad4a08f).
 
 ### α.172.227 ✅ (Fix i18n KDM — 23 giu, smoke browser)
 - **Smoke browser KDM** (post-merge .226) ha rivelato **40+ chiavi i18n grezze** renderizzate letteralmente: tab Richieste con `kdm.action.transition`/`kdm.action.delete` su ogni riga, idem modali + tab Cinema/Server + CPL. Causa: chiavi usate in `kdm.html`/`kdm.js` ma mai aggiunte a `i18n.js` → `applyI18n` sovrascrive testo hardcoded col fallback key-letterale di `mfT`.
