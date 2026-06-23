@@ -60,6 +60,71 @@ def split_into_chunks(text: str, size: int = 120_000, overlap: int = 5_000) -> l
     return chunks
 
 
+# ── Merge blocchi template (per parse chunked) ────────────────
+
+_LIST_MERGE_KEYS = {"deliverables"}  # liste di oggetti a livello root
+
+
+def _dedupe(seq):
+    """Deduplicazione per list items usando repr come chiave."""
+    out, seen = [], []
+    for item in seq:
+        key = repr(item)
+        if key not in seen:
+            seen.append(key)
+            out.append(item)
+    return out
+
+
+def merge_template_blocks(parts: list[dict]) -> tuple[dict, list[str]]:
+    """Unisce dict-template parziali da più chunk.
+
+    Scalare/oggetto: primo non-vuoto vince (conflitto scalare → warning).
+    Liste root note (_LIST_MERGE_KEYS): concat+dedupe preservando ordine.
+    ai_confidence: valore massimo tra tutti i chunk.
+
+    Ritorna (merged, conflict_warnings).
+    """
+    merged: dict = {}
+    warnings: list[str] = []
+
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+
+        for k, v in part.items():
+            # Skip empty/null values
+            if v is None or v == "" or v == {} or v == []:
+                continue
+
+            # ai_confidence → max value
+            if k == "ai_confidence":
+                try:
+                    merged[k] = max(merged.get(k, 0) or 0, float(v))
+                except (TypeError, ValueError):
+                    pass
+                continue
+
+            # List merge keys → concat + dedupe
+            if k in _LIST_MERGE_KEYS and isinstance(v, list):
+                merged[k] = _dedupe((merged.get(k) or []) + v)
+                continue
+
+            # Key non ancora presente → assegna
+            if k not in merged or merged[k] in (None, "", {}, []):
+                merged[k] = v
+            # Entrambi dict → merge superficiale dei campi mancanti
+            elif isinstance(merged[k], dict) and isinstance(v, dict):
+                for sk, sv in v.items():
+                    if sk not in merged[k] or merged[k][sk] in (None, "", {}, []):
+                        merged[k][sk] = sv
+            # Valori scalari conflittanti (non dict/list) → warning, first wins
+            elif merged[k] != v and not isinstance(merged[k], (dict, list)):
+                warnings.append(f"Conflitto su '{k}': tenuto '{merged[k]}', scartato '{v}'")
+
+    return merged, warnings
+
+
 # ── Estrazione testo dai vari formati ───────────────────────
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
