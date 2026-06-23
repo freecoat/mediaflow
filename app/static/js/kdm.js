@@ -85,7 +85,7 @@ async function kdmLoadRequests() {
         '<button class="btn btn-ghost btn-sm" onclick="kdmOpenTransition(' + r.id + ')" data-i18n="kdm.action.transition">Stato→</button>' +
       '</td>' +
       '<td class="text-right">' +
-        '<button class="btn btn-ghost btn-sm" onclick="kdmDeleteRequest(' + r.id + ')" style="color:#ef4444;" title="Elimina" data-i18n="kdm.action.delete">✕</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="kdmDeleteRequest(' + r.id + ')" style="color:#ef4444;" title="' + mfT('kdm.action.delete') + '" data-i18n="kdm.action.delete" data-i18n-attr="title">✕</button>' +
       '</td>' +
     '</tr>';
   }).join('');

@@ -8,7 +8,14 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.226** — 19 giugno 2026 — KDM/DKDM: feature completa chiavi cinema digitali
+**v3.5.0-alpha.172.227** — 23 giugno 2026 — Fix i18n KDM (42 chiavi mancanti)
+
+### α.172.227 ✅ (Fix i18n KDM — 23 giu, smoke browser)
+- **Smoke browser KDM** (post-merge .226) ha rivelato **40+ chiavi i18n grezze** renderizzate letteralmente: tab Richieste con `kdm.action.transition`/`kdm.action.delete` su ogni riga, idem modali + tab Cinema/Server + CPL. Causa: chiavi usate in `kdm.html`/`kdm.js` ma mai aggiunte a `i18n.js` → `applyI18n` sovrascrive testo hardcoded col fallback key-letterale di `mfT`.
+- **Fix**: 42 chiavi aggiunte in 5 lingue. Pulsante elimina (✕) ora traduce `title`, non il testo. Smoke verde su 3 tab + modale + form pubblico (`/public/kdm/{token}`), 0 chiavi grezze, 0 errori console. 56 test KDM pass.
+- Nota: header `topbar_title` resta IT app-wide (pattern non tradotto su tutte le pagine, fuori scope).
+
+**Prossimo / IN CORSO**: push α.172.226 (33 commit KDM) + .227. Backlog KDM: generazione vera file KDM (Dolby/OpenDCP), upload file KDM come Asset, download sicuro per il cinema.
 
 ### α.172.226 ✅ (KDM/DKDM — 19 giu, subagent-driven, 21 task TDD, ramo feat/kdm-dkdm)
 - **Pagina `/kdm` 3 tab**: Richieste (workflow badge matched→generated→confirmed), Strutture (CinemaFacility+Server CRUD+cert), CPL (import XML SMPTE + manuale + lista).

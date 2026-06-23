@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.227 — Fix i18n KDM: 42 chiavi mancanti (23 giu 2026)
+
+Smoke browser della feature KDM (α.172.226) ha rivelato chiavi i18n grezze renderizzate letteralmente nella UI.
+
+- **Bug**: 40+ chiavi `kdm.*` referenziate in `kdm.html` / `kdm.js` ma mai aggiunte a `i18n.js`. Il pass `applyI18n` sovrascriveva il testo hardcoded con la key letterale (`mfT` fallback). Tab Richieste mostrava `kdm.action.transition` / `kdm.action.delete` su ogni riga; modali, tab Cinema/Server e CPL idem.
+- **Fix**: 42 chiavi aggiunte in tutte le 5 lingue (it/en/fr/de/es) — `kdm.action.*`, `kdm.btn.*`, `kdm.col.*`, `kdm.field.*`, `kdm.modal.*`, `kdm.empty.requests`, `kdm.link_desc`. Pulsante elimina (icona ✕) ora traduce l'attributo `title` invece del testo (preserva l'icona).
+- Smoke browser verde: 3 tab + modale nuova richiesta + form pubblico, 0 chiavi grezze, 0 errori console. 56 test KDM pass.
+
 ## v3.5.0-alpha.172.226 — KDM/DKDM: feature completa (chiavi digitali cinema) (19 giu 2026)
 
 Feature completa per la gestione chiavi KDM e DKDM (21 task TDD + E2E, ramo `feat/kdm-dkdm`).
