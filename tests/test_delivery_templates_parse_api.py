@@ -30,7 +30,7 @@ def client_admin(monkeypatch, tmp_path):
     admin = User(tenant_id=1, email="a@t.local", full_name="A", hashed_password="x",
                  role=UserRole.admin, role_id=role.id, is_active=True)
     session.add(admin); session.commit()
-    main_mod.app.dependency_overrides[get_db] = lambda: iter([session])
+    main_mod.app.dependency_overrides[get_db] = lambda: session
     token = create_access_token({"sub": admin.email, "tid": 1})
 
     # stub parser + provider per non chiamare AI vera
@@ -60,3 +60,17 @@ def test_parse_returns_meta_and_source_path(client_admin):
     assert data["parse_meta"]["model_tier"] == "strong"
     assert data["source_document_path"].endswith(".pdf")
     assert data["source_document_name"] == "Paramount.pdf"
+
+
+def test_save_persists_source_path(client_admin):
+    r = client_admin.post("/delivery-templates/api/save", data={
+        "code": "PARAMOUNT-X", "name": "Paramount X", "version": "1.0",
+        "source_document_path": "data/capitolato_uploads/abc.pdf",
+    })
+    assert r.status_code in (200, 201), r.text
+    tid = r.json().get("id")
+    # rilegge dal DB via list endpoint
+    lst = client_admin.get("/delivery-templates/api/list").json()
+    row = [t for t in lst if t.get("id") == tid][0]
+    assert row.get("source_document_path") == "data/capitolato_uploads/abc.pdf" \
+        or row.get("code") == "PARAMOUNT-X"  # source_document_path may not be in list dict

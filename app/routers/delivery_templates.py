@@ -55,6 +55,7 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
         "metadata_requirements": t.metadata_requirements or {},
         "suggested_items": t.suggested_items or [],
         "source_document_name": t.source_document_name,
+        "source_document_path": t.source_document_path,
         "ai_generated": t.ai_generated,
         "ai_confidence": t.ai_confidence,
         "is_active": t.is_active,
@@ -930,6 +931,7 @@ async def save_template(
     naming_convention: Optional[str] = Form(None),
     archive_specs: Optional[str] = Form(None),
     metadata_requirements: Optional[str] = Form(None),
+    source_document_path: Optional[str] = Form(None),
     suggested_items: Optional[str] = Form(None),  # v3.5.0-alpha.68.6
     ai_generated: bool = Form(False),
     ai_confidence: Optional[float] = Form(None),
@@ -987,6 +989,7 @@ async def save_template(
         metadata_requirements=_parse(metadata_requirements),
         suggested_items=_parse_list(suggested_items),
         source_document_name=source_document_name,
+        source_document_path=source_document_path,
         ai_generated=ai_generated,
         ai_confidence=ai_confidence,
     )
