@@ -30,23 +30,16 @@ def split_into_chunks(text: str, size: int = 120_000, overlap: int = 5_000) -> l
         end = min(start + size, n)
         section_cut = False
         if end < n:
-            # cerca un confine di sezione nella finestra [end-overlap, end+overlap]
-            # per trovare il boundary più vicino a end (potrebbe essere prima o dopo)
+            # cerca un confine di sezione nella finestra [end-overlap, end]
+            # la finestra non supera end, così il taglio non eccede mai size chars
             window_start = max(start, end - overlap)
-            window_end = min(n, end + overlap)
+            window_end = end
             window = text[window_start:window_end]
             matches = list(_SECTION_RE.finditer(window))
             if matches:
-                # trova il match più vicino a end (preferisci quello prima di end)
-                best_match = None
-                for m in matches:
-                    abs_pos = window_start + m.start()
-                    if abs_pos <= end:
-                        best_match = m
-                    elif best_match is None:
-                        best_match = m
-                        break
-                if best_match and best_match is not None:
+                # usa l'ultimo match nella finestra (il più vicino a end da sinistra)
+                best_match = matches[-1]
+                if best_match is not None:
                     cut = window_start + best_match.start()
                     # se il match è preceduto da newline, includi il newline nel chunk precedente
                     # cercando il newline subito prima della posizione del match

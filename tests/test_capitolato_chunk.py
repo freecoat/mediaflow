@@ -9,8 +9,8 @@ def test_long_text_multiple_chunks_with_overlap():
     text = "x" * 300_000
     chunks = split_into_chunks(text, size=120_000, overlap=5_000)
     assert len(chunks) >= 3
-    # ogni chunk non supera size+overlap
-    assert all(len(c) <= 120_000 + 5_000 for c in chunks)
+    # ogni chunk non supera size (hard cap — section-cut e hard-cut entrambi <= size)
+    assert all(len(c) <= 120_000 for c in chunks)
     # overlap: l'inizio del chunk 2 deve ricomparire alla fine del chunk 1
     assert chunks[1][:1000] in chunks[0] or chunks[0][-5000:] == chunks[1][:5000]
 
