@@ -63,3 +63,23 @@ def test_merge_scalar_conflict_warns():
     merged, warnings = merge_template_blocks(parts)
     assert merged["name"] == "Paramount A"
     assert any("name" in w for w in warnings)
+
+
+# ── build_parse_warnings tests (Task 5) ──────────────────────
+from app.services.deliverables_parser import build_parse_warnings
+
+
+def test_warn_weak_model_large_doc():
+    assert "weak_model_large_doc" in build_parse_warnings("weak", 50_000, 0.9, False)
+
+
+def test_no_warn_strong_model_small_doc():
+    assert build_parse_warnings("strong", 5_000, 0.9, False) == []
+
+
+def test_warn_low_confidence():
+    assert "low_confidence" in build_parse_warnings("strong", 5_000, 0.3, False)
+
+
+def test_warn_truncated():
+    assert "truncated" in build_parse_warnings("strong", 700_000, 0.9, True)

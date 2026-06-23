@@ -332,6 +332,29 @@ MAX_CHARS_SINGLE = 150_000
 MAX_CHARS_HARD = 600_000
 
 
+def build_parse_warnings(model_tier: str, text_len: int, ai_confidence, truncated: bool) -> list[str]:
+    """Restituisce codici macchina stabili per warning di parsing.
+
+    Codes:
+    - "weak_model_large_doc": modello debole su documento grande (>30k chars)
+    - "low_confidence": ai_confidence < 0.5
+    - "truncated": documento troncato per eccesso lunghezza
+
+    Usato in parse_meta["warnings"]; le note di conflitto merge vanno in parse_meta["merge_notes"].
+    """
+    codes: list[str] = []
+    if model_tier == "weak" and text_len > 30_000:
+        codes.append("weak_model_large_doc")
+    try:
+        if ai_confidence is not None and float(ai_confidence) < 0.5:
+            codes.append("low_confidence")
+    except (TypeError, ValueError):
+        pass
+    if truncated:
+        codes.append("truncated")
+    return codes
+
+
 def parse_delivery_template(text: str, provider=None, model_tier: str = "strong") -> Optional[dict]:
     """Analizza un capitolato e ritorna un dict con i 8 blocchi DeliveryTemplate
     + metadati (code/name/broadcaster/description/ai_confidence) + parse_meta.
@@ -408,13 +431,16 @@ def parse_delivery_template(text: str, provider=None, model_tier: str = "strong"
                 it.setdefault("requires_physical", _rp)
                 it.setdefault("physical_media_kind", _pmk)
 
+    merge_notes = warnings  # stringhe di conflitto prodotte sopra
+    codes = build_parse_warnings(model_tier, len(text), result.get("ai_confidence"), truncated)
     result["parse_meta"] = {
         "model_tier": model_tier,
         "chunked": chunked,
         "n_chunks": len(chunks),
         "truncated": truncated,
         "ai_confidence": result.get("ai_confidence"),
-        "warnings": warnings,
+        "warnings": codes,
+        "merge_notes": merge_notes,
     }
     return result
 
