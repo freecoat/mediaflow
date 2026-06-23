@@ -61,3 +61,100 @@ def test_read_roundtrip_valid_path(tmp_path, monkeypatch):
     # Usa il path assoluto: deve passare il guard e restituire stringa
     result = cs.read_capitolato_text(str(target))
     assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# resolve_capitolato_source tests
+# ---------------------------------------------------------------------------
+
+class _Tpl:
+    def __init__(self, path=None, name=None):
+        self.source_document_path = path
+        self.source_document_name = name
+
+
+def test_resolve_prefers_persisted(tmp_path, monkeypatch):
+    """Persisted upload branch wins when file exists inside UPLOAD_DIR."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    f = up / "abc.pdf"
+    f.write_bytes(b"PERSISTED")
+    # source_document_path points at the real file (absolute path)
+    tpl = _Tpl(path=str(f), name="whatever.pdf")
+    res = cs.resolve_capitolato_source(tpl)
+    assert res is not None
+    assert res[0] == b"PERSISTED"
+    assert res[1] == "abc.pdf"
+
+
+def test_resolve_corpus_fallback(tmp_path, monkeypatch):
+    """Falls back to corpus dir when persisted file is absent."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    # Fake a corpus directory and file — monkeypatch CORPUS_DIR constant
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    corpus_file = corpus / "Sample.pdf"
+    corpus_file.write_bytes(b"CORPUS")
+    monkeypatch.setattr(cs, "CORPUS_DIR", corpus)
+    tpl = _Tpl(path=None, name="Sample.pdf")
+    res = cs.resolve_capitolato_source(tpl)
+    assert res is not None
+    assert res[0] == b"CORPUS"
+    assert res[1] == "Sample.pdf"
+
+
+def test_resolve_none_when_nothing(tmp_path, monkeypatch):
+    """Returns None when no persisted file and corpus name does not exist."""
+    monkeypatch.setattr(cs, "UPLOAD_DIR", tmp_path / "nope")
+    tpl = _Tpl(path=None, name="does-not-exist-xyz.pdf")
+    assert cs.resolve_capitolato_source(tpl) is None
+
+
+def test_resolve_none_when_no_attrs(tmp_path, monkeypatch):
+    """Returns None when both path and name are None."""
+    monkeypatch.setattr(cs, "UPLOAD_DIR", tmp_path / "nope")
+    tpl = _Tpl(path=None, name=None)
+    assert cs.resolve_capitolato_source(tpl) is None
+
+
+def test_resolve_persisted_path_traversal_returns_none(tmp_path, monkeypatch):
+    """Path-traversal in source_document_path must NOT raise — returns None silently."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    tpl = _Tpl(path="../../etc/passwd", name=None)
+    result = cs.resolve_capitolato_source(tpl)
+    assert result is None
+
+
+def test_read_persisted_bytes_valid(tmp_path, monkeypatch):
+    """_read_persisted_bytes returns bytes for a valid file inside UPLOAD_DIR."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    f = up / "test.pdf"
+    f.write_bytes(b"DATA")
+    result = cs._read_persisted_bytes(str(f))
+    assert result == b"DATA"
+
+
+def test_read_persisted_bytes_outside_dir_returns_none(tmp_path, monkeypatch):
+    """_read_persisted_bytes returns None for paths outside UPLOAD_DIR."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    result = cs._read_persisted_bytes("../../etc/passwd")
+    assert result is None
+
+
+def test_read_persisted_bytes_missing_file_returns_none(tmp_path, monkeypatch):
+    """_read_persisted_bytes returns None for a missing file."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    f = up / "nonexistent.pdf"
+    result = cs._read_persisted_bytes(str(f))
+    assert result is None

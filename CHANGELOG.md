@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.229 — Auto-extract item-list after save (best-effort) (23 giu 2026)
+
+Fix capitolati caricati da UI (es. Paramount) che restavano senza lista item dopo il salvataggio.
+
+- **Auto-extract best-effort**: `POST /api/save` ora esegue automaticamente l'estrazione item-list dalla sorgente persistita usando il modello forte (`pick_parse_provider`) subito dopo il commit del template. Se l'estrazione fallisce per qualsiasi motivo (file mancante, provider non configurato, eccezione AI), il save è già avvenuto e il response include `items_warning` invece di propagare l'errore. Il campo `items_extracted` nella response indica quanti item sono stati materializzati.
+- **Interfaccia arricchita**: response di `/api/save` guadagna `items_extracted: int` e `items_warning: str|null`. Compatibile con tutti i client esistenti (campi aggiuntivi, non breaking).
+- **TDD**: 2 nuovi test (`test_save_autoextract_items`, `test_save_autoextract_best_effort`) con monkeypatch completo; 920 test totali pass.
+
 ## v3.5.0-alpha.172.228 — Parser capitolati robusto (23 giu 2026)
 
 Fix del parse capitolati inaffidabile (caso "Paramount Scripted Episode Delivery 2023": output allucinato — layout audio 16ch con M&E duplicati, note "not fully extracted"). Due cause: troncamento a 30k caratteri + modello debole (deepseek-flash attivo).

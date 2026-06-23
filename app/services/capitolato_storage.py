@@ -10,6 +10,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = Path("data/capitolato_uploads")
+CORPUS_DIR = Path(__file__).resolve().parents[2] / "docs" / "capitolati_esempio"
 _ALLOWED_EXT = {".pdf", ".docx", ".doc", ".xlsx", ".txt"}
 
 
@@ -37,6 +38,57 @@ def read_capitolato_text(rel_path: str) -> str:
     if not p.exists():
         raise FileNotFoundError(rel_path)
     return extract_text_from_file(p.read_bytes(), p.name)
+
+
+def _read_persisted_bytes(rel_path: str) -> bytes | None:
+    """Reads bytes from a file inside UPLOAD_DIR, applying path-traversal guard.
+    Returns None if the path is missing, outside UPLOAD_DIR, or invalid.
+    """
+    try:
+        p = Path(rel_path)
+        base = UPLOAD_DIR.resolve()
+        try:
+            resolved = p.resolve()
+        except OSError:
+            return None
+        if base not in resolved.parents and resolved != base:
+            return None
+        if not p.exists():
+            return None
+        return p.read_bytes()
+    except Exception:
+        return None
+
+
+def resolve_capitolato_source(template) -> tuple[bytes, str] | None:
+    """Returns (file_bytes, filename) for a template's source document.
+    Priority:
+      1. Persisted upload (template.source_document_path inside UPLOAD_DIR).
+      2. Corpus fallback (template.source_document_name under docs/capitolati_esempio/).
+      3. None if neither is available.
+    Path-traversal guard applied to both branches.
+    """
+    # Branch 1: persisted upload
+    rel_path = getattr(template, "source_document_path", None)
+    if rel_path:
+        data = _read_persisted_bytes(rel_path)
+        if data is not None:
+            return (data, Path(rel_path).name)
+
+    # Branch 2: corpus fallback
+    name = getattr(template, "source_document_name", None)
+    if name:
+        _corpus_dir = CORPUS_DIR
+        try:
+            candidate = (_corpus_dir / name).resolve()
+            # Guard: must be inside corpus dir
+            candidate.relative_to(_corpus_dir.resolve())
+        except (ValueError, OSError):
+            return None
+        if candidate.is_file():
+            return (candidate.read_bytes(), name)
+
+    return None
 
 
 def sweep_capitolato_uploads(db, max_age_h: int = 24) -> int:

@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.228** — 23 giugno 2026 — Parser capitolati robusto
+**v3.5.0-alpha.172.229** — 23 giugno 2026 — Auto-extract item-list after save (best-effort)
+
+### α.172.229 ✅ (Auto-extract item-list after save, best-effort — 23 giu, Task 4 SDD)
+- **Fix**: capitolati salvati da UI (es. Paramount) restavano senza lista item perché `/api/save` non chiamava il parser items. Ora `save_template` chiama `pick_parse_provider` + `resolve_capitolato_source` + `parse_delivery_items_v2` + `materialize_items` subito dopo il commit del template. Tutto in `try/except`: il save è già commitato, l'eventuale errore finisce in `items_warning` nella response senza propagarsi al client.
+- Response di `/api/save` guadagna `items_extracted: int` e `items_warning: str|null`.
+- **920 test** (+2: `test_save_autoextract_items`, `test_save_autoextract_best_effort`), 0 fallimenti.
 
 ### α.172.228 ✅ (Parser capitolati robusto — 23 giu, subagent-driven 11 task TDD, ramo feat/capitolato-parser-robusto)
 - **Causa bug Paramount**: parse capitolati allucinato per troncamento a 30k char + modello debole (deepseek-flash attivo). 16ch audio con M&E duplicati, note "not fully extracted".

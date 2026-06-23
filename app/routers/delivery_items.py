@@ -1168,32 +1168,22 @@ async def ai_extract_items(tid: int, request: Request, db: Session = Depends(get
     ).first()
     if not tpl:
         raise HTTPException(404, "DeliveryTemplate non trovato")
-    if not tpl.source_document_name:
-        raise HTTPException(400, "Template senza source_document_name (creato manualmente?). "
-                                  "Aggiungi un capitolato in docs/capitolati_esempio/ e rilancia.")
-    proj_root = Path(__file__).resolve().parents[2]
-    fpath = (proj_root / "docs" / "capitolati_esempio" / tpl.source_document_name).resolve()
-    samples_dir = (proj_root / "docs" / "capitolati_esempio").resolve()
-    try:
-        fpath.relative_to(samples_dir)
-    except ValueError:
-        raise HTTPException(400, "filename fuori scope")
-    if not fpath.is_file():
-        raise HTTPException(404, f"Capitolato sorgente non trovato: {tpl.source_document_name}")
-    # Provider AI per-utente
-    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.capitolato_storage import resolve_capitolato_source
+    from app.services.ai_provider import pick_parse_provider
     from app.services.deliverables_parser import extract_text_from_file
     from app.services.delivery_items_parser import parse_delivery_items_v2, materialize_items
+    src = resolve_capitolato_source(tpl)
+    if src is None:
+        raise HTTPException(404, "Nessun documento sorgente disponibile (caricato o nel corpus).")
+    content, fname = src
     user = current_user_optional(request)
-    provider = get_provider_for_user(user.id, db) if user else None
-    if not provider:
-        provider = get_provider()
-    if not provider:
+    picked = pick_parse_provider(user.id if user else None, db)
+    if not picked:
         raise HTTPException(503, "AI provider non configurato.")
-    content = fpath.read_bytes()
+    provider = picked[0]
     if not content:
         raise HTTPException(400, "Capitolato vuoto.")
-    text = extract_text_from_file(content, tpl.source_document_name)
+    text = extract_text_from_file(content, fname)
     if not text or len(text.strip()) < 20:
         raise HTTPException(400, "Estrazione testo fallita (PDF image-only?).")
     parsed = parse_delivery_items_v2(text, db, tenant_id=current_tenant_id(), provider=provider)
@@ -1207,6 +1197,7 @@ async def ai_extract_items(tid: int, request: Request, db: Session = Depends(get
         "saved": saved,
         "skipped": skipped,
         "pass1_categories": parsed.get("pass1_categories") or [],
+        "parse_meta": parsed.get("parse_meta"),
     }
 
 

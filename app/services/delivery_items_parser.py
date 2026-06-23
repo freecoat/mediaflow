@@ -31,6 +31,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.services.ai_provider import get_provider, safe_json_parse
+from app.services.deliverables_parser import split_into_chunks
 from app.services.naming_resolver import normalize_naming_convention
 from app.models.models import (
     Package, Container, VideoCodec, AudioCodec, AudioChannelConfig,
@@ -38,6 +39,26 @@ from app.models.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+MAX_CHARS_SINGLE = 150_000   # dimensione massima per PASS1 in singolo chunk / riferimento PASS2
+MAX_CHARS_HARD   = 600_000   # hard cap assoluto prima del chunking
+
+
+def _merge_items_by_name(item_lists: list[list[dict]]) -> list[dict]:
+    """Unisce liste di item da più chunk; dedupe per name normalizzato, primo vince, ordine preservato."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    for lst in item_lists:
+        for it in (lst or []):
+            if not isinstance(it, dict):
+                continue
+            key = (it.get("name") or "").strip().lower()
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            out.append(it)
+    return out
 
 
 PASS1_SYSTEM_PROMPT = """Sei un assistente esperto in postproduzione audiovisiva (cinema, TV, streaming, broadcast).
@@ -183,35 +204,62 @@ def parse_delivery_items_v2(text: str, db: Session, tenant_id: int = 1,
         logger.error("parse_delivery_items_v2: nessun provider AI disponibile")
         return None
 
-    MAX_CHARS = 30000
-    if len(text) > MAX_CHARS:
-        text = text[:MAX_CHARS] + "\n\n[... testo troncato ...]"
+    # Hard cap assoluto
+    truncated = False
+    if len(text) > MAX_CHARS_HARD:
+        text = text[:MAX_CHARS_HARD] + "..."
+        truncated = True
+
     if len(text.strip()) < 20:
         return None
 
-    # PASS 1 — extract items + terms
-    pass1_user = f"""Capitolato da analizzare:
+    # Chunking per PASS1: se il testo supera MAX_CHARS_SINGLE lo spezziamo
+    chunks = split_into_chunks(text, size=MAX_CHARS_SINGLE)
+    chunked = len(chunks) > 1
+
+    # PASS 1 — extract items + terms (per chunk, poi merge)
+    all_item_lists: list[list[dict]] = []
+    merged_terms: dict = {}
+    for i, chunk in enumerate(chunks):
+        pass1_user = f"""Capitolato da analizzare{f' (parte {i+1}/{len(chunks)})' if chunked else ''}:
 
 ---
-{text}
+{chunk}
 ---
 
 Estrai gli item richiesti e i termini tecnici."""
-    try:
-        pass1_result = provider.extract_json(PASS1_SYSTEM_PROMPT, pass1_user, max_tokens=4000)
-    except Exception as e:
-        logger.error(f"pass1 failed: {e}")
-        return None
-    if not pass1_result or "items" not in pass1_result:
-        return None
-    items = pass1_result.get("items") or []
-    terms = pass1_result.get("terms") or {}
+        try:
+            pass1_result = provider.extract_json(PASS1_SYSTEM_PROMPT, pass1_user, max_tokens=16000)
+        except Exception as e:
+            logger.error(f"pass1 chunk {i+1} failed: {e}")
+            return None
+        if not pass1_result or "items" not in pass1_result:
+            logger.warning(f"pass1 chunk {i+1} returned no items key")
+            continue
+        chunk_items = pass1_result.get("items") or []
+        all_item_lists.append(chunk_items)
+        # merge terms: shallow, primo non-vuoto vince
+        chunk_terms = pass1_result.get("terms") or {}
+        for k, v in chunk_terms.items():
+            if k not in merged_terms or not merged_terms[k]:
+                merged_terms[k] = v
+
+    items = _merge_items_by_name(all_item_lists)
+    terms = merged_terms
 
     if not items:
-        logger.warning("pass1 returned 0 items")
-        return {"items": [], "pass1_terms": terms, "pass1_categories": []}
+        logger.warning("pass1 returned 0 items across all chunks")
+        return {
+            "items": [],
+            "pass1_terms": terms,
+            "pass1_categories": [],
+            "parse_meta": {"chunked": chunked, "n_chunks": len(chunks),
+                           "truncated": truncated, "n_items": 0},
+        }
 
-    # PASS 2 — map to FK ids
+    # PASS 2 — map to FK ids (singola chiamata sul merged list)
+    # Riferimento testo cappato a MAX_CHARS_SINGLE per non far esplodere il prompt
+    text_ref = text[:MAX_CHARS_SINGLE]
     taxonomy = _taxonomy_dict_for_pass2(db, tenant_id)
     taxonomy_json = json.dumps(taxonomy, ensure_ascii=False, indent=None)
     items_json = json.dumps(items, ensure_ascii=False, indent=None)
@@ -223,7 +271,7 @@ Vocabolario taxonomy disponibile:
 
 Testo capitolato (per riferimento):
 ---
-{text}
+{text_ref}
 ---
 
 Mappa ciascun item agli id taxonomy."""
@@ -240,10 +288,17 @@ Mappa ciascun item agli id taxonomy."""
         logger.error(f"pass2 returned no items. diag={diag}")
         return None
 
+    final_items = pass2_result.get("items") or []
     return {
-        "items": pass2_result.get("items") or [],
+        "items": final_items,
         "pass1_terms": terms,
         "pass1_categories": [it.get("category") for it in items],
+        "parse_meta": {
+            "chunked": chunked,
+            "n_chunks": len(chunks),
+            "truncated": truncated,
+            "n_items": len(final_items),
+        },
     }
 
 

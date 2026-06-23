@@ -14,7 +14,10 @@ Permessi: lettura libera, mutator richiedono `edit_settings`.
 from __future__ import annotations
 from app.services.clock import now_utc
 import json
+import logging
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
@@ -1031,7 +1034,33 @@ async def save_template(
     db.add(t)
     db.commit()
     db.refresh(t)
-    return _dt_dict(t)
+
+    result = _dt_dict(t)
+    result["items_extracted"] = 0
+    result["items_warning"] = None
+    if t.source_document_path:
+        try:
+            from app.services.capitolato_storage import resolve_capitolato_source
+            from app.services.ai_provider import pick_parse_provider
+            from app.services.deliverables_parser import extract_text_from_file
+            from app.services.delivery_items_parser import parse_delivery_items_v2, materialize_items
+            user = current_user_optional(request)
+            uid = user.id if user else None
+            src = resolve_capitolato_source(t)
+            picked = pick_parse_provider(uid, db)
+            if src and picked:
+                content, fname = src
+                text = extract_text_from_file(content, fname)
+                parsed = parse_delivery_items_v2(text, db, tenant_id=current_tenant_id(), provider=picked[0])
+                if parsed:
+                    saved, _sk = materialize_items(db, t.id, parsed, tenant_id=current_tenant_id())
+                    result["items_extracted"] = saved
+            else:
+                result["items_warning"] = "auto-extract skipped (no source/provider)"
+        except Exception as e:
+            logger.warning("auto-extract items failed for template %s: %s", t.id, e)
+            result["items_warning"] = "estrazione item fallita (riprova con Ri-analizza)"
+    return result
 
 
 @router.put("/api/{template_id}", dependencies=[RequireEditSettings])
