@@ -39,3 +39,25 @@ def test_sweep_keeps_recent_orphan(tmp_path, monkeypatch, db):
     removed = cs.sweep_capitolato_uploads(db, max_age_h=24)
     assert removed == 0
     assert fresh.exists()
+
+
+def test_read_path_traversal_raises_value_error(tmp_path, monkeypatch):
+    """Percorsi fuori da UPLOAD_DIR devono sollevare ValueError (path-traversal guard)."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    with pytest.raises(ValueError, match="Path outside upload dir"):
+        cs.read_capitolato_text("../../etc/passwd")
+
+
+def test_read_roundtrip_valid_path(tmp_path, monkeypatch):
+    """Un file valido dentro UPLOAD_DIR deve essere leggibile via read_capitolato_text."""
+    up = tmp_path / "up"
+    up.mkdir()
+    monkeypatch.setattr(cs, "UPLOAD_DIR", up)
+    # Scrive il file direttamente dentro up (simula save_capitolato_upload con UPLOAD_DIR monkeypatched)
+    target = up / "deadbeef.txt"
+    target.write_bytes(b"hello capitolato")
+    # Usa il path assoluto: deve passare il guard e restituire stringa
+    result = cs.read_capitolato_text(str(target))
+    assert isinstance(result, str)

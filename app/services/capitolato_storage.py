@@ -27,6 +27,13 @@ def save_capitolato_upload(file_bytes: bytes, filename: str) -> str:
 def read_capitolato_text(rel_path: str) -> str:
     from app.services.deliverables_parser import extract_text_from_file
     p = Path(rel_path)
+    base = UPLOAD_DIR.resolve()
+    try:
+        resolved = p.resolve()
+    except OSError:
+        raise ValueError(f"Path non valido: {rel_path}")
+    if base not in resolved.parents and resolved != base:
+        raise ValueError(f"Path outside upload dir: {rel_path}")
     if not p.exists():
         raise FileNotFoundError(rel_path)
     return extract_text_from_file(p.read_bytes(), p.name)
