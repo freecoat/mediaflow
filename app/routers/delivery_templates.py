@@ -875,7 +875,10 @@ async def parse_capitolato(
     from app.services.deliverables_parser import (
         extract_text_from_file, parse_delivery_template,
     )
-    from app.services.ai_provider import get_provider_for_user, get_provider
+    from app.services.ai_provider import pick_parse_provider
+    from app.services.capitolato_storage import (
+        save_capitolato_upload, sweep_capitolato_uploads,
+    )
     from app.services.rbac import current_user_optional
 
     if not file.filename:
@@ -886,15 +889,25 @@ async def parse_capitolato(
     text = extract_text_from_file(file_bytes, file.filename)
     if not text or len(text.strip()) < 20:
         raise HTTPException(400, "Estrazione testo fallita o testo troppo breve (<20 caratteri)")
+
+    # cleanup orphan (best-effort) prima di salvare il nuovo
+    try:
+        sweep_capitolato_uploads(db)
+    except Exception:
+        pass
+
     user = current_user_optional(request)
-    provider = get_provider_for_user(user.id if user else None, db) if user else None
-    if not provider:
-        provider = get_provider()
-    if not provider:
+    picked = pick_parse_provider(user.id if user else None, db)
+    if not picked:
         raise HTTPException(503, "AI non configurata. Vai in Impostazioni → tab AI per configurare un provider.")
-    parsed = parse_delivery_template(text, provider=provider)
+    provider, tier, model_label = picked
+
+    parsed = parse_delivery_template(text, provider=provider, model_tier=tier)
     if parsed is None:
         raise HTTPException(503, "Provider AI non disponibile o estrazione fallita. Configura un provider in /settings → AI.")
+
+    rel_path = save_capitolato_upload(file_bytes, file.filename)
+    parsed["source_document_path"] = rel_path
     parsed.setdefault("source_document_name", file.filename)
     parsed.setdefault("ai_generated", True)
     parsed.setdefault("text_preview", text[:1500])
