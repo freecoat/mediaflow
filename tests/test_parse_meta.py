@@ -1,4 +1,33 @@
 from app.services.deliverables_parser import merge_template_blocks
+from app.services import deliverables_parser as dp
+
+
+class _FakeProvider:
+    def __init__(self):
+        self.calls = 0
+    def extract_json(self, system, user, max_tokens=3000):
+        self.calls += 1
+        return {"name": f"chunk{self.calls}", "video_specs": {"codec": "ProRes"},
+                "ai_confidence": 0.9}
+
+
+def test_single_pass_one_call(monkeypatch):
+    prov = _FakeProvider()
+    out = dp.parse_delivery_template("short capitolato text " * 10, provider=prov,
+                                     model_tier="strong")
+    assert prov.calls == 1
+    assert out["parse_meta"]["chunked"] is False
+    assert out["parse_meta"]["n_chunks"] == 1
+    assert out["parse_meta"]["model_tier"] == "strong"
+
+
+def test_oversized_triggers_chunking(monkeypatch):
+    prov = _FakeProvider()
+    big = "A" * 200_000  # > MAX_CHARS_SINGLE
+    out = dp.parse_delivery_template(big, provider=prov, model_tier="strong")
+    assert prov.calls >= 2
+    assert out["parse_meta"]["chunked"] is True
+    assert out["parse_meta"]["n_chunks"] >= 2
 
 
 def test_merge_non_null_wins_and_lists_concat():

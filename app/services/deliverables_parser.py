@@ -328,14 +328,19 @@ Schema output:
 Il blocco "deliverables" è opzionale: includilo solo quando il capitolato distingue una convenzione di naming per singola consegna (ogni voce porta il proprio "naming_convention" allo stesso schema del blocco 6). Se un blocco non è menzionato nel capitolato, ometti la chiave. Non inventare specifiche assenti."""
 
 
-def parse_delivery_template(text: str, provider=None) -> Optional[dict]:
+MAX_CHARS_SINGLE = 150_000
+MAX_CHARS_HARD = 600_000
+
+
+def parse_delivery_template(text: str, provider=None, model_tier: str = "strong") -> Optional[dict]:
     """Analizza un capitolato e ritorna un dict con i 8 blocchi DeliveryTemplate
-    + metadati (code/name/broadcaster/description/ai_confidence).
+    + metadati (code/name/broadcaster/description/ai_confidence) + parse_meta.
 
     Usato dall'endpoint POST /delivery-templates/api/parse per popolare la
     preview prima del salvataggio. L'utente può poi correggere/integrare
     prima di salvare. v3.5.0-alpha.66.20 Fase 2 step C.
     v3.5.0-alpha.172.81 (Bundle F): accetta provider iniettato dal router.
+    v3.5.0-alpha.172.227 (Task 4): single-pass 150k + chunk fallback + parse_meta.
     """
     if provider is None:
         provider = get_provider()
@@ -344,22 +349,41 @@ def parse_delivery_template(text: str, provider=None) -> Optional[dict]:
         return None
     if len(text.strip()) < 20:
         return None
-    MAX_CHARS = 30000
-    if len(text) > MAX_CHARS:
-        text = text[:MAX_CHARS] + "\n\n[... testo troncato ...]"
-    user_prompt = f"""Capitolato da analizzare:
 
----
-{text}
----
+    warnings: list[str] = []
+    truncated = False
+    if len(text) > MAX_CHARS_HARD:
+        text = text[:MAX_CHARS_HARD] + "\n\n[... testo troncato (oltre limite) ...]"
+        truncated = True
+        warnings.append("Documento oltre il limite massimo: parte finale troncata.")
 
-Estrai i blocchi strutturati come da schema."""
-    # v3.5.0-alpha.172.111 — max_tokens 4000→8000 per capitolati grossi.
-    # Senza questo bump A24/IRDA tornavano JSON troncato a metà struct,
-    # safe_json_parse falliva → 503 "Risposta non JSON valido".
-    result = provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt, max_tokens=8000)
-    if not isinstance(result, dict):
-        return result
+    chunks = split_into_chunks(text, size=MAX_CHARS_SINGLE)
+    chunked = len(chunks) > 1
+
+    def _one(chunk_text: str):
+        user_prompt = (
+            "Capitolato da analizzare:\n\n---\n" + chunk_text +
+            "\n---\n\nEstrai i blocchi strutturati come da schema."
+        )
+        # v3.5.0-alpha.172.111 — max_tokens 8000 per capitolati grossi.
+        return provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt,
+                                     max_tokens=8000)
+
+    if not chunked:
+        result = _one(chunks[0])
+        if not isinstance(result, dict):
+            return result
+    else:
+        parts = []
+        for ch in chunks:
+            r = _one(ch)
+            if isinstance(r, dict):
+                parts.append(r)
+        if not parts:
+            return None
+        result, merge_warn = merge_template_blocks(parts)
+        warnings.extend(merge_warn)
+
     # α.172.182 (NC-T4) — normalizza la naming convention grezza dell'AI prima
     # del save (template + eventuali override per-item). normalize_* ritorna None
     # se l'AI ha omesso/lasciato vuoto il blocco → safe assegnare comunque.
@@ -383,6 +407,15 @@ Estrai i blocchi strutturati come da schema."""
                 # si potrebbe overridare qui — per ora propagazione diretta.
                 it.setdefault("requires_physical", _rp)
                 it.setdefault("physical_media_kind", _pmk)
+
+    result["parse_meta"] = {
+        "model_tier": model_tier,
+        "chunked": chunked,
+        "n_chunks": len(chunks),
+        "truncated": truncated,
+        "ai_confidence": result.get("ai_confidence"),
+        "warnings": warnings,
+    }
     return result
 
 
