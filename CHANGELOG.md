@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.232 — KDM: link con attributi + archivio + selezione multipla + CPL collegate (24 giu 2026)
+
+Batch richieste Matteo su KDM.
+
+- **Link con attributi**: `KdmRequestLink` guadagna `label` (nome), `duration_days` (preset) → `expires_at` calcolata alla creazione; `project_id` ora valorizzabile da UI. Colonne aggiunte via auto-migrate al boot. Barra genera-link con campi Nome + Progetto + Durata (7/30/90 gg / senza scadenza) + Titolo. Lista link mostra nome, progetto, data emissione, durata, scadenza (badge "scaduto"). Form pubblico **rifiuta link scaduti** (410).
+- **Filtri DCP CPL**: barra `MFFilterBar` (ricerca testo + fonte) nella tab CPL.
+- **Richieste collegate a una CPL**: `GET /kdm/api/cpl/{id}/requests` + riga espandibile "Richieste collegate" per ogni CPL.
+- **Selezione multipla**: checkbox + select-all sulle richieste → `POST /kdm/api/requests/bulk-delete` (salta le completate); checkbox sui link → `POST /kdm/api/links/bulk-revoke`.
+- **Completate non cancellabili**: stati `generated/delivered/confirmed` = completati. Delete singola e bulk le **bloccano/saltano** (400/skip).
+- **Archivio**: tab dedicata che mostra solo le completate; la lista attiva le esclude. `GET /kdm/api/requests?archived=1`.
+- **i18n**: +35 chiavi (5 lingue). **Test**: +7 router (archivio split/delete-bloccata/bulk-delete/link-attributi/bulk-revoke/cpl-collegate) + 1 public (link scaduto 410). 76 test KDM pass. Smoke browser live verde.
+
 ## v3.5.0-alpha.172.231 — KDM redesign Step 2: certificati multipli + obbligo emissione (24 giu 2026)
 
 I certificati di una richiesta KDM possono ora essere multipli e sono di norma obbligatori per emettere (in alternativa: serial number).

@@ -2,7 +2,7 @@
 Vedi docs/superpowers/specs/2026-06-19-kdm-dkdm-request-design.md
 """
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from typing import Optional
@@ -17,6 +17,9 @@ from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD
 from app.services.kdm_state import transition as _fsm_transition
 
 router = APIRouter(prefix="/kdm", tags=["kdm"])
+
+# Stati "completati" (KDM emessa in poi): non cancellabili, vanno in Archivio.
+COMPLETED_STATUSES = {"generated", "delivered", "confirmed"}
 
 
 def _tpl():
@@ -43,6 +46,7 @@ async def list_requests(
     db: Session = Depends(get_db),
     status: Optional[str] = None,
     type: Optional[str] = None,
+    archived: bool = False,
 ):
     _require_kdm(request, db)
     q = (
@@ -52,6 +56,11 @@ async def list_requests(
             KdmRequest.deleted_at.is_(None),
         )
     )
+    # Archivio = richieste completate (emesse in poi); lista attiva = le altre.
+    if archived:
+        q = q.filter(KdmRequest.status.in_(COMPLETED_STATUSES))
+    else:
+        q = q.filter(KdmRequest.status.notin_(COMPLETED_STATUSES))
     if status:
         q = q.filter(KdmRequest.status == status)
     if type:
@@ -270,6 +279,44 @@ async def create_request(
     db.commit()
     db.refresh(r)
     return _serialize(r)
+
+
+def _parse_ids(raw: Optional[str]) -> list[int]:
+    """CSV di id → lista int (ignora vuoti/non numerici)."""
+    out = []
+    for tok in (raw or "").split(","):
+        tok = tok.strip()
+        if tok.isdigit():
+            out.append(int(tok))
+    return out
+
+
+@router.post("/api/requests/bulk-delete")
+async def bulk_delete_requests(
+    request: Request,
+    db: Session = Depends(get_db),
+    ids: str = Form(...),
+):
+    """Elimina (soft) più richieste. Salta le completate (non cancellabili).
+
+    Dichiarato PRIMA della rotta parametrica POST /api/requests/{rid} per
+    evitare che 'bulk-delete' venga interpretato come {rid} (int).
+    """
+    from app.services.clock import now_utc
+    user = _require_kdm(request, db)
+    deleted, skipped = 0, 0
+    for rid in _parse_ids(ids):
+        r = db.get(KdmRequest, rid)
+        if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
+            continue
+        if r.status in COMPLETED_STATUSES:
+            skipped += 1
+            continue
+        r.deleted_at = now_utc()
+        r.deleted_by_user_id = getattr(user, "id", None)
+        deleted += 1
+    db.commit()
+    return {"ok": True, "deleted": deleted, "skipped": skipped}
 
 
 @router.get("/api/requests/{rid}")
@@ -526,6 +573,8 @@ async def soft_delete(rid: int, request: Request, db: Session = Depends(get_db))
     r = db.get(KdmRequest, rid)
     if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
         raise HTTPException(404, "Richiesta non trovata")
+    if r.status in COMPLETED_STATUSES:
+        raise HTTPException(400, "Richiesta completata: non cancellabile (vedi Archivio)")
     r.deleted_at = now_utc()
     r.deleted_by_user_id = getattr(user, "id", None)
     db.commit()
@@ -820,6 +869,34 @@ async def cpl_manual(
     return _cpl_json(c)
 
 
+@router.get("/api/cpl/{cid}/requests")
+async def cpl_linked_requests(cid: int, request: Request, db: Session = Depends(get_db)):
+    """Richieste KDM collegate a una CPL (dcp_cpl_id == cid), tenant-scoped."""
+    _require_kdm(request, db)
+    cpl = db.get(DcpCpl, cid)
+    if not cpl or cpl.tenant_id != current_tenant_id():
+        raise HTTPException(404, "CPL non trovata")
+    rows = (
+        db.query(KdmRequest)
+        .filter(
+            KdmRequest.tenant_id == current_tenant_id(),
+            KdmRequest.dcp_cpl_id == cid,
+            KdmRequest.deleted_at.is_(None),
+        )
+        .order_by(KdmRequest.requested_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "request_type": r.request_type,
+            "status": r.status,
+            "requested_title": r.requested_title,
+        }
+        for r in rows
+    ]
+
+
 @router.post("/api/cpl/scan")
 async def cpl_scan(request: Request, db: Session = Depends(get_db)):
     _require_kdm(request, db)
@@ -844,23 +921,37 @@ def _public_base(request: Request) -> str:
 async def create_link(
     request: Request,
     db: Session = Depends(get_db),
+    label: Optional[str] = Form(None),
     project_id: Optional[int] = Form(None),
+    duration_days: Optional[int] = Form(None),
     request_type: Optional[str] = Form(None),
     prefill_title: Optional[str] = Form(None),
     prefill_cpl_uuid: Optional[str] = Form(None),
     prefill_notes: Optional[str] = Form(None),
 ):
+    from app.services.clock import now_utc
     user = _require_kdm(request, db)
+    if project_id is not None:
+        from app.models import Project
+        p = db.get(Project, project_id)
+        if not p or p.tenant_id != current_tenant_id():
+            raise HTTPException(404, "Progetto non trovato")
     prefill = {k: v for k, v in {
         "request_type": request_type,
         "requested_title": prefill_title,
         "requested_cpl_uuid": prefill_cpl_uuid,
         "notes": prefill_notes,
     }.items() if v}
+    expires_at = None
+    if duration_days and duration_days > 0:
+        expires_at = now_utc() + timedelta(days=duration_days)
     link = KdmRequestLink(
         tenant_id=current_tenant_id(),
         token=secrets.token_hex(32),
+        label=(label.strip() or None) if label else None,
         project_id=project_id,
+        duration_days=duration_days if (duration_days and duration_days > 0) else None,
+        expires_at=expires_at,
         prefill_json=prefill or None,
         created_by_user_id=getattr(user, "id", None),
     )
@@ -876,6 +967,8 @@ async def create_link(
 
 @router.get("/api/links")
 async def list_links(request: Request, db: Session = Depends(get_db)):
+    from app.services.clock import now_utc
+    from app.models import Project
     _require_kdm(request, db)
     rows = (
         db.query(KdmRequestLink)
@@ -887,15 +980,30 @@ async def list_links(request: Request, db: Session = Depends(get_db)):
         .all()
     )
     base = _public_base(request)
-    return [
-        {
+    now = now_utc()
+    # Mappa progetto per nome (evita N query)
+    proj_ids = {lnk.project_id for lnk in rows if lnk.project_id}
+    proj_names = {}
+    if proj_ids:
+        for p in db.query(Project).filter(Project.id.in_(proj_ids)).all():
+            proj_names[p.id] = p.title
+    out = []
+    for lnk in rows:
+        exp = lnk.expires_at
+        is_expired = bool(exp and exp < now)
+        out.append({
             "id": lnk.id,
             "token": lnk.token,
+            "label": lnk.label,
             "project_id": lnk.project_id,
+            "project_name": proj_names.get(lnk.project_id),
+            "duration_days": lnk.duration_days,
+            "created_at": lnk.created_at.isoformat() if lnk.created_at else None,
+            "expires_at": exp.isoformat() if exp else None,
+            "is_expired": is_expired,
             "url": f"{base}/public/kdm/{lnk.token}",
-        }
-        for lnk in rows
-    ]
+        })
+    return out
 
 
 @router.post("/api/links/{lid}/revoke")
@@ -907,3 +1015,22 @@ async def revoke_link(lid: int, request: Request, db: Session = Depends(get_db))
     lnk.is_active = False
     db.commit()
     return {"ok": True}
+
+
+@router.post("/api/links/bulk-revoke")
+async def bulk_revoke_links(
+    request: Request,
+    db: Session = Depends(get_db),
+    ids: str = Form(...),
+):
+    """Revoca più link in un colpo."""
+    _require_kdm(request, db)
+    revoked = 0
+    for lid in _parse_ids(ids):
+        lnk = db.get(KdmRequestLink, lid)
+        if not lnk or lnk.tenant_id != current_tenant_id() or not lnk.is_active:
+            continue
+        lnk.is_active = False
+        revoked += 1
+    db.commit()
+    return {"ok": True, "revoked": revoked}

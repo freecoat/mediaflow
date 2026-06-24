@@ -318,6 +318,19 @@ def _auto_migrate_columns():
                 if col not in cols:
                     print(f"[auto-migrate] {table_name}.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col} {ddl}"))
+    # v3.5.0-alpha.172.232 — KdmRequestLink: nome + durata/scadenza link.
+    if "kdm_request_links" in insp.get_table_names():
+        kcols = {c["name"] for c in insp.get_columns("kdm_request_links")}
+        kdm_link_alter = [
+            ("label",         "VARCHAR(255) NULL"),
+            ("duration_days", "INTEGER NULL"),
+            ("expires_at",    "DATETIME NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in kdm_link_alter:
+                if col not in kcols:
+                    print(f"[auto-migrate] kdm_request_links.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE kdm_request_links ADD COLUMN {col} {ddl}"))
     # v3.5.0-alpha.172.160 — Soft-delete categoria listino (force-delete soft).
     if "price_categories" in insp.get_table_names():
         pccols = {c["name"] for c in insp.get_columns("price_categories")}
@@ -2350,7 +2363,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.231", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.232", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

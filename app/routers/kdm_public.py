@@ -17,12 +17,15 @@ def _tpl():
 
 
 def _resolve_link(token: str, db: Session) -> KdmRequestLink:
+    from app.services.clock import now_utc
     lnk = (db.query(KdmRequestLink)
            .filter(KdmRequestLink.token == token,
                    KdmRequestLink.is_active == True)  # noqa: E712
            .first())
     if not lnk:
         raise HTTPException(404, "Link non valido o revocato")
+    if lnk.expires_at and lnk.expires_at < now_utc():
+        raise HTTPException(410, "Link scaduto")
     return lnk
 
 

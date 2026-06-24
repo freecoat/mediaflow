@@ -52,6 +52,22 @@ def test_public_form_unknown_token_404():
     assert r.status_code == 404
 
 
+def test_public_form_expired_link_410():
+    """Link con expires_at nel passato → 410 Gone."""
+    from datetime import timedelta
+    from app.services.clock import now_utc
+    db = SessionLocal()
+    try:
+        tok = secrets.token_hex(32)
+        db.add(KdmRequestLink(tenant_id=1, token=tok, prefill_json={},
+                              expires_at=now_utc() - timedelta(days=1)))
+        db.commit()
+    finally:
+        db.close()
+    r = client.get(f"/public/kdm/{tok}")
+    assert r.status_code == 410, r.text
+
+
 def test_public_submit_creates_request(monkeypatch):
     # neutralizza notifica/email per il test
     import app.routers.kdm_public as pub

@@ -5,7 +5,25 @@
 
 function kdmInit() {
   kdmInitFilters();
+  kdmLoadProjectsForLink();
   kdmSwitchTab('requests');
+}
+
+// Popola il select progetto nella barra genera-link
+async function kdmLoadProjectsForLink() {
+  var sel = document.getElementById('kdm-link-project');
+  if (!sel) return;
+  try {
+    var projs = await api('GET', '/projects/api');
+    (projs || []).sort(function(a, b) {
+      return (a.title || '').localeCompare(b.title || '', undefined, {sensitivity: 'base'});
+    }).forEach(function(p) {
+      var o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = (p.code ? p.code + ' — ' : '') + (p.title || ('#' + p.id));
+      sel.appendChild(o);
+    });
+  } catch (e) { /* best-effort */ }
 }
 
 // ── Filtri richieste (MFFilterBar) ────────────────────────────────────────────
@@ -66,6 +84,7 @@ function kdmSwitchTab(name) {
   var pane = document.getElementById('kdm-tab-' + name);
   if (pane) pane.style.display = '';
   if (name === 'requests') kdmLoadRequests();
+  else if (name === 'archive') kdmLoadArchive();
   else if (name === 'facilities') kdmLoadFacilities();
   else if (name === 'cpl') kdmLoadCpl();
 }
@@ -120,6 +139,8 @@ async function kdmLoadRequests() {
   kdmRenderRequests();
 }
 
+var _kdmSelected = {};  // id → true
+
 function kdmRenderRequests() {
   var body = document.getElementById('kdm-requests-body');
   if (!body) return;
@@ -127,7 +148,9 @@ function kdmRenderRequests() {
   if (!rows.length) {
     var emptyKey = _kdmRequests.length ? 'kdm.empty.filtered' : 'kdm.empty.requests';
     var emptyTxt = _kdmRequests.length ? 'Nessun risultato per i filtri.' : 'Nessuna richiesta KDM.';
-    body.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;" data-i18n="' + emptyKey + '">' + emptyTxt + '</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px;" data-i18n="' + emptyKey + '">' + emptyTxt + '</td></tr>';
+    _kdmSelected = {};
+    kdmUpdateBulkToolbar();
     if (window.applyI18n) applyI18n();
     return;
   }
@@ -137,7 +160,9 @@ function kdmRenderRequests() {
       : '<span style="color:#fbbf24;">⚠</span>';
     var win = escapeHtml((r.valid_from || '') + (r.valid_to ? ' → ' + r.valid_to : ''));
     var title = escapeHtml(r.requested_title || r.requested_cpl_uuid || '—');
+    var checked = _kdmSelected[r.id] ? ' checked' : '';
     return '<tr style="cursor:pointer;" onclick="kdmOpenDetail(' + r.id + ')">' +
+      '<td onclick="event.stopPropagation();"><input type="checkbox" class="kdm-row-cb" value="' + r.id + '"' + checked + ' onchange="kdmRowToggle(' + r.id + ',this.checked)"></td>' +
       '<td>' + kdmRenderStatus(r.status) + '</td>' +
       '<td>' + kdmRenderType(r.request_type) + '</td>' +
       '<td><span style="color:var(--indigo2);font-weight:500;">' + title + '</span></td>' +
@@ -152,6 +177,79 @@ function kdmRenderRequests() {
     '</tr>';
   }).join('');
   body.innerHTML = html;  // eslint-disable-line
+  kdmUpdateBulkToolbar();
+  if (window.applyI18n) applyI18n();
+}
+
+function kdmRowToggle(id, on) {
+  if (on) _kdmSelected[id] = true; else delete _kdmSelected[id];
+  kdmUpdateBulkToolbar();
+}
+
+function kdmToggleSelectAll(cb) {
+  var rows = kdmFilteredRequests();
+  _kdmSelected = {};
+  if (cb.checked) rows.forEach(function(r) { _kdmSelected[r.id] = true; });
+  document.querySelectorAll('.kdm-row-cb').forEach(function(c) { c.checked = cb.checked; });
+  kdmUpdateBulkToolbar();
+}
+
+function kdmUpdateBulkToolbar() {
+  var ids = Object.keys(_kdmSelected);
+  var bar = document.getElementById('kdm-bulk-toolbar');
+  var cnt = document.getElementById('kdm-bulk-count');
+  if (cnt) cnt.textContent = ids.length;
+  if (bar) bar.style.display = ids.length ? 'flex' : 'none';
+}
+
+async function kdmBulkDelete() {
+  var ids = Object.keys(_kdmSelected);
+  if (!ids.length) return;
+  if (!confirm(mfT('kdm.bulk.confirm_del').replace('{n}', ids.length))) return;
+  try {
+    var fd = new FormData();
+    fd.append('ids', ids.join(','));
+    var res = await api('POST', '/kdm/api/requests/bulk-delete', fd);
+    var msg = mfT('kdm.bulk.done').replace('{d}', res.deleted || 0).replace('{s}', res.skipped || 0);
+    toast(msg, 'success');
+    _kdmSelected = {};
+    await kdmLoadRequests();
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
+}
+
+// ── Tab: Archivio (richieste completate) ─────────────────────────────────────
+
+async function kdmLoadArchive() {
+  var body = document.getElementById('kdm-archive-body');
+  if (!body) return;
+  body.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;">Caricamento...</td></tr>';
+  var rows;
+  try {
+    rows = await api('GET', '/kdm/api/requests?archived=1');
+  } catch (e) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:24px;">Errore: ' + escapeHtml(e.message || '') + '</td></tr>';
+    return;
+  }
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px;" data-i18n="kdm.archive.empty">Archivio vuoto.</td></tr>';
+    if (window.applyI18n) applyI18n();
+    return;
+  }
+  body.innerHTML = rows.map(function(r) {  // eslint-disable-line
+    var matchCell = r.dcp_cpl_id ? '<span style="color:#22c55e;">✓</span>' : '—';
+    var win = escapeHtml((r.valid_from || '') + (r.valid_to ? ' → ' + r.valid_to : ''));
+    var title = escapeHtml(r.requested_title || r.requested_cpl_uuid || '—');
+    return '<tr style="cursor:pointer;" onclick="kdmOpenDetail(' + r.id + ')">' +
+      '<td>' + kdmRenderStatus(r.status) + '</td>' +
+      '<td>' + kdmRenderType(r.request_type) + '</td>' +
+      '<td><span style="color:var(--indigo2);font-weight:500;">' + title + '</span></td>' +
+      '<td class="text-sm text-muted">' + win + '</td>' +
+      '<td>' + matchCell + '</td>' +
+      '<td class="text-right"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();kdmOpenDetail(' + r.id + ')" data-i18n="kdm.action.open">Apri</button></td>' +
+    '</tr>';
+  }).join('');
   if (window.applyI18n) applyI18n();
 }
 
@@ -458,6 +556,12 @@ async function kdmGenerateLink() {
   var prefillTitle = titleInput ? titleInput.value.trim() : '';
   var fd = new FormData();
   if (prefillTitle) fd.append('prefill_title', prefillTitle);
+  var label = (document.getElementById('kdm-link-label') || {}).value;
+  if (label && label.trim()) fd.append('label', label.trim());
+  var proj = (document.getElementById('kdm-link-project') || {}).value;
+  if (proj) fd.append('project_id', proj);
+  var dur = (document.getElementById('kdm-link-duration') || {}).value;
+  if (dur) fd.append('duration_days', dur);
   try {
     var res = await api('POST', '/kdm/api/links', fd);
     var url = res.url || '';
@@ -490,17 +594,59 @@ async function kdmLoadLinks() {
   } catch (e) {
     _kdmLinks = [];
   }
+  _kdmLinkSel = {};
   if (!_kdmLinks.length) {
-    container.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;">Nessun link attivo.</div>';
+    container.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;" data-i18n="kdm.link.none">Nessun link attivo.</div>';
+    if (window.applyI18n) applyI18n();
     return;
   }
-  container.innerHTML = _kdmLinks.map(function(l) {
-    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);">' +
-      '<span class="text-sm mono" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(l.url) + '</span>' +
-      '<button class="btn btn-ghost btn-sm" onclick="kdmCopyLink(' + l.id + ')">Copia</button>' +
-      '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmRevokeLink(' + l.id + ')">Revoca</button>' +
+  var head = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
+    '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmBulkRevokeLinks()" data-i18n="kdm.link.revoke_selected">Revoca selezionati</button>' +
+    '<span class="text-sm text-muted" id="kdm-link-sel-count"></span></div>';
+  var rows = _kdmLinks.map(function(l) {
+    var when = l.created_at ? escapeHtml(l.created_at.slice(0, 10)) : '—';
+    var exp = l.expires_at ? escapeHtml(l.expires_at.slice(0, 10)) : mfT('kdm.link.no_expiry');
+    var expStyle = l.is_expired ? 'color:#ef4444;font-weight:600;' : '';
+    var dur = l.duration_days ? (l.duration_days + ' gg') : '—';
+    var name = escapeHtml(l.label || mfT('kdm.link.unnamed'));
+    var proj = l.project_name ? ('<span class="text-muted"> · ' + escapeHtml(l.project_name) + '</span>') : '';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">' +
+      '<input type="checkbox" value="' + l.id + '" onchange="kdmLinkToggle(' + l.id + ',this.checked)">' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div class="text-sm"><strong>' + name + '</strong>' + proj + (l.is_expired ? ' <span style="color:#ef4444;" data-i18n="kdm.link.expired">(scaduto)</span>' : '') + '</div>' +
+        '<div class="text-sm mono text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(l.url) + '</div>' +
+        '<div class="text-sm text-muted">📅 ' + when + ' · ⏳ ' + escapeHtml(dur) + ' · <span style="' + expStyle + '">⛔ ' + exp + '</span></div>' +
+      '</div>' +
+      '<button class="btn btn-ghost btn-sm" onclick="kdmCopyLink(' + l.id + ')" data-i18n="kdm.link.copy">Copia</button>' +
+      '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmRevokeLink(' + l.id + ')" data-i18n="kdm.link.revoke">Revoca</button>' +
     '</div>';
   }).join('');
+  container.innerHTML = head + rows;  // eslint-disable-line
+  if (window.applyI18n) applyI18n();
+}
+
+var _kdmLinkSel = {};
+function kdmLinkToggle(id, on) {
+  if (on) _kdmLinkSel[id] = true; else delete _kdmLinkSel[id];
+  var c = document.getElementById('kdm-link-sel-count');
+  var n = Object.keys(_kdmLinkSel).length;
+  if (c) c.textContent = n ? (n + ' ' + mfT('kdm.bulk.selected')) : '';
+}
+
+async function kdmBulkRevokeLinks() {
+  var ids = Object.keys(_kdmLinkSel);
+  if (!ids.length) { toast(mfT('kdm.link.none_selected'), 'warning'); return; }
+  if (!confirm(mfT('kdm.link.confirm_revoke').replace('{n}', ids.length))) return;
+  try {
+    var fd = new FormData();
+    fd.append('ids', ids.join(','));
+    var res = await api('POST', '/kdm/api/links/bulk-revoke', fd);
+    toast(mfT('kdm.link.revoked_n').replace('{n}', res.revoked || 0), 'success');
+    _kdmLinkSel = {};
+    await kdmLoadLinks();
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
 }
 
 function kdmCopyLink(id) {
@@ -623,52 +769,112 @@ async function kdmDeleteFacility(id) {
 
 var _kdmCpls = [];
 
+var _kdmCplFilters = {q: null, source: null};
+
+function kdmInitCplFilters() {
+  var host = document.getElementById('kdm-cpl-filters');
+  if (!host || !window.MFFilterBar || host._mfFilterBar) return;
+  MFFilterBar({
+    host: host,
+    filters: [
+      {kind: 'text', id: 'q', label: mfT('kdm.filter.search'),
+       placeholder: mfT('kdm.cpl.search_ph')},
+      {kind: 'select', id: 'source', label: mfT('kdm.col.cpl_source'), searchable: false,
+       options: [
+         {value: '', label: mfT('kdm.filter.all')},
+         {value: 'manual', label: 'manual'},
+         {value: 'parsed_xml', label: 'parsed_xml'},
+       ]},
+    ],
+    onChange: function(vals) { _kdmCplFilters = vals; kdmRenderCpl(); },
+  });
+}
+
+function kdmCplFiltered() {
+  var q = (_kdmCplFilters.q || '').toLowerCase();
+  return _kdmCpls.filter(function(c) {
+    if (_kdmCplFilters.source && c.source !== _kdmCplFilters.source) return false;
+    if (q) {
+      var hay = ((c.content_title_text || '') + ' ' + (c.cpl_uuid || '')).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+}
+
 async function kdmLoadCpl() {
-  var pane = document.getElementById('kdm-tab-cpl');
-  if (!pane) return;
-  pane.innerHTML = '<div class="text-muted" style="padding:24px;text-align:center;">Caricamento...</div>';
+  kdmInitCplFilters();
+  var list = document.getElementById('kdm-cpl-list');
+  if (!list) return;
+  list.innerHTML = '<div class="text-muted" style="padding:24px;text-align:center;">Caricamento...</div>';
   try {
     _kdmCpls = await api('GET', '/kdm/api/cpl');
   } catch (e) {
-    pane.innerHTML = '<div style="color:#ef4444;padding:24px;text-align:center;">Errore: ' + escapeHtml(e.message || '') + '</div>';
+    list.innerHTML = '<div style="color:#ef4444;padding:24px;text-align:center;">Errore: ' + escapeHtml(e.message || '') + '</div>';
     return;
   }
-  if (!_kdmCpls.length) {
-    pane.innerHTML = '<div class="text-muted text-sm" style="padding:24px;text-align:center;" data-i18n="kdm.empty.cpl">Nessuna CPL registrata. Carica un file CPL XML oppure inserisci manualmente.</div>' +
-      '<div style="display:flex;justify-content:center;gap:10px;margin-top:14px;">' +
-        '<button class="btn btn-secondary btn-sm" onclick="kdmOpenCplManual()" data-i18n="kdm.btn.add_cpl_manual">+ CPL manuale</button>' +
-        '<label class="btn btn-secondary btn-sm" style="cursor:pointer;">' +
-          '<input type="file" accept=".xml" style="display:none;" onchange="kdmUploadCpl(event)">&#8593; Upload CPL XML</label>' +
-      '</div>';
+  kdmRenderCpl();
+}
+
+function kdmRenderCpl() {
+  var list = document.getElementById('kdm-cpl-list');
+  if (!list) return;
+  var toolbar = '<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px;">' +
+    '<label class="btn btn-secondary btn-sm" style="cursor:pointer;">' +
+      '<input type="file" accept=".xml" style="display:none;" onchange="kdmUploadCpl(event)"><span data-i18n="kdm.btn.upload_cpl">&#8593; Upload CPL XML</span></label>' +
+    '<button class="btn btn-secondary btn-sm" onclick="kdmOpenCplManual()" data-i18n="kdm.btn.add_cpl_manual">+ CPL manuale</button>' +
+  '</div>';
+  var rows = kdmCplFiltered();
+  if (!rows.length) {
+    var key = _kdmCpls.length ? 'kdm.empty.filtered' : 'kdm.empty.cpl';
+    var txt = _kdmCpls.length ? 'Nessun risultato.' : 'Nessuna CPL registrata.';
+    list.innerHTML = toolbar + '<div class="text-muted text-sm" style="padding:24px;text-align:center;" data-i18n="' + key + '">' + txt + '</div>';  // eslint-disable-line
     if (window.applyI18n) applyI18n();
     return;
   }
-  var html = '<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px;">' +
-    '<label class="btn btn-secondary btn-sm" style="cursor:pointer;">' +
-      '<input type="file" accept=".xml" style="display:none;" onchange="kdmUploadCpl(event)" data-i18n="kdm.btn.upload_cpl">&#8593; Upload CPL XML</label>' +
-    '<button class="btn btn-secondary btn-sm" onclick="kdmOpenCplManual()" data-i18n="kdm.btn.add_cpl_manual">+ CPL manuale</button>' +
-  '</div>' +
-  '<table class="table"><thead><tr>' +
-    '<th data-i18n="kdm.col.cpl_uuid">CPL UUID</th>' +
-    '<th data-i18n="kdm.col.cpl_title">Titolo</th>' +
-    '<th data-i18n="kdm.col.cpl_content_kind">Tipo</th>' +
-    '<th data-i18n="kdm.col.cpl_duration">Durata</th>' +
-    '<th data-i18n="kdm.col.cpl_source">Fonte</th>' +
-    '<th></th>' +
-  '</tr></thead><tbody>' +
-  _kdmCpls.map(function(c) {
+  var body = rows.map(function(c) {
     return '<tr>' +
       '<td class="mono text-sm" title="' + escapeHtml(c.cpl_uuid || '') + '">' + escapeHtml((c.cpl_uuid || '').slice(-12) || '—') + '</td>' +
       '<td>' + escapeHtml(c.content_title_text || '—') + '</td>' +
-      '<td class="text-sm text-muted">' + escapeHtml(c.content_kind || '—') + '</td>' +
       '<td class="text-sm mono">' + escapeHtml(c.duration_frames ? String(c.duration_frames) + 'f' : '—') + '</td>' +
       '<td class="text-sm text-muted">' + escapeHtml(c.source || '—') + '</td>' +
-      '<td></td>' +
-    '</tr>';
-  }).join('') +
-  '</tbody></table>';
-  pane.innerHTML = html;  // eslint-disable-line
+      '<td><button class="btn btn-ghost btn-sm" onclick="kdmToggleCplRequests(' + c.id + ')" data-i18n="kdm.cpl.linked_requests">Richieste collegate</button></td>' +
+    '</tr>' +
+    '<tr id="kdm-cpl-req-' + c.id + '" style="display:none;"><td colspan="5" style="background:var(--bg2);"><div class="text-sm" id="kdm-cpl-req-body-' + c.id + '"></div></td></tr>';
+  }).join('');
+  list.innerHTML = toolbar +  // eslint-disable-line
+    '<table class="table"><thead><tr>' +
+      '<th data-i18n="kdm.col.cpl_uuid">CPL UUID</th>' +
+      '<th data-i18n="kdm.col.cpl_title">Titolo</th>' +
+      '<th data-i18n="kdm.col.cpl_duration">Durata</th>' +
+      '<th data-i18n="kdm.col.cpl_source">Fonte</th>' +
+      '<th></th>' +
+    '</tr></thead><tbody>' + body + '</tbody></table>';
   if (window.applyI18n) applyI18n();
+}
+
+async function kdmToggleCplRequests(cid) {
+  var row = document.getElementById('kdm-cpl-req-' + cid);
+  var body = document.getElementById('kdm-cpl-req-body-' + cid);
+  if (!row || !body) return;
+  if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+  row.style.display = '';
+  body.innerHTML = '<span class="text-muted">…</span>';
+  try {
+    var reqs = await api('GET', '/kdm/api/cpl/' + cid + '/requests');
+    if (!reqs.length) {
+      body.innerHTML = '<span class="text-muted" data-i18n="kdm.cpl.no_requests">Nessuna richiesta collegata.</span>';
+    } else {
+      body.innerHTML = reqs.map(function(r) {  // eslint-disable-line
+        return '<div style="padding:3px 0;cursor:pointer;" onclick="kdmOpenDetail(' + r.id + ')">' +
+          kdmRenderStatus(r.status) + ' ' + kdmRenderType(r.request_type) + ' ' +
+          '<span style="color:var(--indigo2);">' + escapeHtml(r.requested_title || ('#' + r.id)) + '</span></div>';
+      }).join('');
+    }
+    if (window.applyI18n) applyI18n();
+  } catch (e) {
+    body.innerHTML = '<span style="color:#ef4444;">' + escapeHtml(e.message || 'Errore') + '</span>';
+  }
 }
 
 function kdmOpenCplManual() {

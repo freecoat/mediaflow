@@ -288,6 +288,89 @@ def test_confirm_delivery_reaches_confirmed(client_admin):
 
 
 # ---------------------------------------------------------------------------
+# Batch — archivio, bulk, link attributi, CPL collegate
+# ---------------------------------------------------------------------------
+
+def test_active_list_excludes_completed(client_admin):
+    """Lista attiva esclude le completate; archived=1 le mostra."""
+    session = client_admin.session
+    active = KdmRequest(tenant_id=1, request_type="kdm", status="received",
+                        requested_title="ACTIVE_ONE")
+    done = KdmRequest(tenant_id=1, request_type="kdm", status="confirmed",
+                      requested_title="DONE_ONE")
+    session.add_all([active, done]); session.commit()
+
+    act = client_admin.get("/kdm/api/requests").json()
+    titles = [r["requested_title"] for r in act]
+    assert "ACTIVE_ONE" in titles and "DONE_ONE" not in titles
+
+    arch = client_admin.get("/kdm/api/requests?archived=1").json()
+    atitles = [r["requested_title"] for r in arch]
+    assert "DONE_ONE" in atitles and "ACTIVE_ONE" not in atitles
+
+
+def test_delete_completed_blocked(client_admin):
+    """Singola delete su richiesta completata → 400."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="confirmed")
+    session.add(req); session.commit()
+    r = client_admin.delete(f"/kdm/api/requests/{req.id}")
+    assert r.status_code == 400, r.text
+
+
+def test_bulk_delete_skips_completed(client_admin):
+    """bulk-delete elimina le attive, salta le completate."""
+    session = client_admin.session
+    a = KdmRequest(tenant_id=1, request_type="kdm", status="received")
+    b = KdmRequest(tenant_id=1, request_type="kdm", status="confirmed")
+    session.add_all([a, b]); session.commit()
+    fd = {"ids": f"{a.id},{b.id}"}
+    r = client_admin.post("/kdm/api/requests/bulk-delete", data=fd)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["deleted"] == 1 and body["skipped"] == 1
+
+
+def test_create_link_with_attributes(client_admin):
+    """Link con nome + durata → expires_at calcolata; list espone gli attributi."""
+    r = client_admin.post("/kdm/api/links", data={
+        "label": "Arcadia", "duration_days": "30", "prefill_title": "FILM"})
+    assert r.status_code == 200, r.text
+    links = client_admin.get("/kdm/api/links").json()
+    lk = next(l for l in links if l["id"] == r.json()["id"])
+    assert lk["label"] == "Arcadia"
+    assert lk["duration_days"] == 30
+    assert lk["expires_at"] is not None
+    assert lk["is_expired"] is False
+
+
+def test_bulk_revoke_links(client_admin):
+    """bulk-revoke disattiva più link."""
+    a = client_admin.post("/kdm/api/links", data={"label": "A"}).json()["id"]
+    b = client_admin.post("/kdm/api/links", data={"label": "B"}).json()["id"]
+    r = client_admin.post("/kdm/api/links/bulk-revoke", data={"ids": f"{a},{b}"})
+    assert r.status_code == 200, r.text
+    assert r.json()["revoked"] == 2
+    remaining = [l["id"] for l in client_admin.get("/kdm/api/links").json()]
+    assert a not in remaining and b not in remaining
+
+
+def test_cpl_linked_requests(client_admin):
+    """GET /kdm/api/cpl/{id}/requests ritorna le richieste con dcp_cpl_id."""
+    session = client_admin.session
+    cpl = DcpCpl(tenant_id=1, cpl_uuid="urn:uuid:link-req", source="manual",
+                 content_title_text="LINKREQ")
+    session.add(cpl); session.commit()
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="matched",
+                     dcp_cpl_id=cpl.id, requested_title="REQ_ON_CPL")
+    session.add(req); session.commit()
+
+    r = client_admin.get(f"/kdm/api/cpl/{cpl.id}/requests")
+    assert r.status_code == 200, r.text
+    assert any(x["requested_title"] == "REQ_ON_CPL" for x in r.json())
+
+
+# ---------------------------------------------------------------------------
 # Step 2 — credenziali: certificati multipli + serial number
 # ---------------------------------------------------------------------------
 
