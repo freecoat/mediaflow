@@ -388,9 +388,14 @@ def parse_delivery_template(text: str, provider=None, model_tier: str = "strong"
             "Capitolato da analizzare:\n\n---\n" + chunk_text +
             "\n---\n\nEstrai i blocchi strutturati come da schema."
         )
-        # v3.5.0-alpha.172.111 — max_tokens 8000 per capitolati grossi.
+        # v3.5.0-alpha.172.233 — max_tokens 8000 troncava il JSON di template
+        # grossi (es. Paramount 8-blocchi: output ~22k char > 8000 token →
+        # JSON incompleto → safe_json_parse None → parse fallito). Allineato a
+        # 32000 (come delivery_items_parser pass2): > 16000 attiva lo streaming
+        # in ClaudeProvider.complete (evita il rifiuto SDK non-streaming) e dà
+        # margine per gli 8 blocchi. Vedi repro: 8000=troncato, 24000=completo.
         return provider.extract_json(PARSE_TEMPLATE_SYSTEM_PROMPT, user_prompt,
-                                     max_tokens=8000)
+                                     max_tokens=32000)
 
     if not chunked:
         result = _one(chunks[0])

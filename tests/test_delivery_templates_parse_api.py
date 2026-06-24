@@ -101,31 +101,27 @@ def test_reparse_404_on_path_traversal(client_admin):
     )
 
 
-def test_save_autoextract_items(client_admin, monkeypatch):
-    import app.services.capitolato_storage as cs
+def test_save_is_fast_no_synchronous_extract(client_admin, monkeypatch):
+    """α.172.233: il save NON estrae item in modo sincrono (era la causa di
+    save multi-minuto → timeout/409). Se chiamasse il parser, esploderebbe;
+    invece il save resta veloce e segnala needs_item_extraction al frontend."""
     import app.services.delivery_items_parser as dip
-    import app.services.ai_provider as ai
-    monkeypatch.setattr(ai, "pick_parse_provider", lambda uid, db: (object(), "strong", "claude-sonnet-4-6"))
-    monkeypatch.setattr(cs, "resolve_capitolato_source", lambda t: (b"x", "x.pdf"))
-    monkeypatch.setattr(dip, "parse_delivery_items_v2",
-                        lambda text, db, tenant_id=1, provider=None: {"items": [{"name": "I1"}]})
-    monkeypatch.setattr(dip, "materialize_items", lambda db, tid, parsed, tenant_id=1: (1, 0))
-    monkeypatch.setattr("app.services.deliverables_parser.extract_text_from_file", lambda b, fn: "capitolato text " * 20)
+    def _must_not_be_called(*a, **k):
+        raise AssertionError("parse_delivery_items_v2 NON deve girare dentro /api/save")
+    monkeypatch.setattr(dip, "parse_delivery_items_v2", _must_not_be_called)
     r = client_admin.post("/delivery-templates/api/save", data={
-        "code": "AUTOX", "name": "Auto X", "version": "1.0",
+        "code": "FASTX", "name": "Fast X", "version": "1.0",
         "source_document_path": "data/capitolato_uploads/x.pdf"})
     assert r.status_code in (200, 201), r.text
-    assert r.json().get("items_extracted") == 1
+    body = r.json()
+    assert body.get("items_extracted") == 0
+    assert body.get("needs_item_extraction") is True
+    assert body.get("id")
 
 
-def test_save_autoextract_best_effort(client_admin, monkeypatch):
-    import app.services.capitolato_storage as cs
-    import app.services.ai_provider as ai
-    monkeypatch.setattr(ai, "pick_parse_provider", lambda uid, db: (object(), "strong", "m"))
-    def _boom(t): raise RuntimeError("extract boom")
-    monkeypatch.setattr(cs, "resolve_capitolato_source", _boom)
+def test_save_without_source_no_extraction_flag(client_admin):
+    """Senza sorgente → needs_item_extraction False (niente step estrazione)."""
     r = client_admin.post("/delivery-templates/api/save", data={
-        "code": "AUTOX2", "name": "Auto X2", "version": "1.0",
-        "source_document_path": "data/capitolato_uploads/y.pdf"})
-    assert r.status_code in (200, 201), r.text   # save still succeeds
-    assert r.json().get("items_warning")          # warning present
+        "code": "NOSRC", "name": "No Src", "version": "1.0"})
+    assert r.status_code in (200, 201), r.text
+    assert r.json().get("needs_item_extraction") is False

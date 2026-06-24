@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.233 — Fix import capitolato: parse troncato + save lento disaccoppiato (24 giu 2026)
+
+Risolti i due problemi sull'import capitolato (riprodotti col Paramount 8-blocchi).
+
+- **Parse interrotto al primo tentativo (root cause)**: `parse_delivery_template` chiamava l'AI con `max_tokens=8000`. Per template grossi (Paramount: output ~22k caratteri) il JSON veniva **troncato** → `safe_json_parse` ritornava None → parse fallito (503). Flaky perché la lunghezza variava run-to-run ("al secondo parsa"). **Fix**: `max_tokens` 8000 → **32000** (allineato a `delivery_items_parser` pass2; >16000 attiva lo streaming in `ClaudeProvider.complete`, niente rifiuto SDK). Riprodotto: 8000=troncato/None, 24000=JSON completo/OK.
+- **"Parsa ma non salva" (root cause)**: il template **veniva** salvato, ma `/api/save` eseguiva l'estrazione item **sincrona** (2 chiamate AI lente: pass1 16k + pass2 32k) → save multi-minuto → su tunnel andava in timeout di gateway → il client credeva fallito e ritentava → **409** (code già esistente). **Fix**: estrazione item **disaccoppiata** dal save. Ora `/api/save` committa solo il template (veloce) e ritorna `needs_item_extraction`; il frontend, se c'è una sorgente, chiama lo step esistente `POST /api/{id}/items/ai-extract` con messaggio di progresso.
+- **Test**: i 2 test di auto-extract sincrono sostituiti (save veloce, nessuna chiamata AI sincrona, flag `needs_item_extraction`). 105 test delivery pass. Parse Paramount riprodotto end-to-end (146s, 8 blocchi, confidence 0.91).
+- i18n: +4 chiavi (5 lingue) per i messaggi di estrazione.
+
 ## v3.5.0-alpha.172.232 — KDM: link con attributi + archivio + selezione multipla + CPL collegate (24 giu 2026)
 
 Batch richieste Matteo su KDM.

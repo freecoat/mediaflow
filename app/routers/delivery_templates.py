@@ -1036,30 +1036,14 @@ async def save_template(
     db.refresh(t)
 
     result = _dt_dict(t)
+    # v3.5.0-alpha.172.233 — estrazione item DISACCOPPIATA dal save.
+    # Prima era sincrona qui dentro (2 chiamate AI lente: pass1 16k + pass2
+    # 32k) → save multi-minuto → su tunnel andava in timeout di gateway →
+    # il client credeva fallito e ritentava → 409 (code già esistente).
+    # Ora il save è veloce (solo commit template); il frontend, se c'è una
+    # sorgente, chiama /api/{id}/items/ai-extract con barra di progresso.
     result["items_extracted"] = 0
-    result["items_warning"] = None
-    if t.source_document_path:
-        try:
-            from app.services.capitolato_storage import resolve_capitolato_source
-            from app.services.ai_provider import pick_parse_provider
-            from app.services.deliverables_parser import extract_text_from_file
-            from app.services.delivery_items_parser import parse_delivery_items_v2, materialize_items
-            user = current_user_optional(request)
-            uid = user.id if user else None
-            src = resolve_capitolato_source(t)
-            picked = pick_parse_provider(uid, db)
-            if src and picked:
-                content, fname = src
-                text = extract_text_from_file(content, fname)
-                parsed = parse_delivery_items_v2(text, db, tenant_id=current_tenant_id(), provider=picked[0])
-                if parsed:
-                    saved, _sk = materialize_items(db, t.id, parsed, tenant_id=current_tenant_id())
-                    result["items_extracted"] = saved
-            else:
-                result["items_warning"] = "auto-extract skipped (no source/provider)"
-        except Exception as e:
-            logger.warning("auto-extract items failed for template %s: %s", t.id, e)
-            result["items_warning"] = "estrazione item fallita (riprova con Ri-analizza)"
+    result["needs_item_extraction"] = bool(t.source_document_path)
     return result
 
 

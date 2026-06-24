@@ -589,13 +589,29 @@ async function doSaveTemplate() {
   if (meta.source_document_name) fd.append('source_document_name', meta.source_document_name);
   if (window._dtSourcePath) fd.append('source_document_path', window._dtSourcePath);
 
+  const saveBtn = document.getElementById('btn-save');
+  if (saveBtn) saveBtn.disabled = true;
   try {
-    await api('POST', '/delivery-templates/api/save', fd);
-    toast('Template salvato', 'success');
+    const saved = await api('POST', '/delivery-templates/api/save', fd);
+    toast(mfT('dt.template_saved'), 'success');
+    // α.172.233 — estrazione item disaccoppiata: ora è uno step esplicito
+    // con progresso, così il save resta veloce (no timeout tunnel / 409).
+    if (saved && saved.needs_item_extraction && saved.id) {
+      toast(mfT('dt.extracting_items'), 'info');
+      try {
+        const ex = await api('POST', '/delivery-templates/api/' + saved.id + '/items/ai-extract');
+        const n = (ex && ex.saved != null) ? ex.saved : 0;
+        toast(mfT('dt.items_extracted').replace('{n}', n), 'success');
+      } catch(ie) {
+        toast(mfT('dt.items_extract_failed'), 'warning');
+      }
+    }
     closeModal('modal-import');
-    setTimeout(() => window.location.reload(), 500);
+    setTimeout(() => window.location.reload(), 700);
   } catch(e) {
     toast(e.message || 'Errore salvataggio', 'error');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
 
