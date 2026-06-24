@@ -165,6 +165,114 @@ def test_soft_delete(client_admin):
 
 
 # ---------------------------------------------------------------------------
+# Step 1 redesign — detail view, edit, leggibili emit/confirm
+# ---------------------------------------------------------------------------
+
+def _make_linked_request(session, status="received"):
+    """Crea Tenant→Client→Project→Job→DCP src + KdmRequest agganciata."""
+    from app.models import Client, Project, Job, JobDeliverable, DeliverableStatus
+    cli = Client(tenant_id=1, name="Cinema SRL")
+    session.add(cli); session.flush()
+    proj = Project(tenant_id=1, code="FILM-X", title="Film X", client_id=cli.id)
+    session.add(proj); session.flush()
+    job = Job(tenant_id=1, code="J-X", title="Job X", project_id=proj.id, client_id=cli.id)
+    session.add(job); session.flush()
+    src = JobDeliverable(tenant_id=1, job_id=job.id, name="DCP src",
+                         status=DeliverableStatus.delivered)
+    session.add(src); session.flush()
+    req = KdmRequest(tenant_id=1, request_type="kdm", status=status,
+                     job_deliverable_id=src.id, requested_title="Film X KDM")
+    session.add(req); session.commit()
+    return req
+
+
+def test_get_request_detail(client_admin):
+    """GET /kdm/api/requests/{id}: dettaglio completo con timeline eventi."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received",
+                     requested_title="Detail Film", notes="hello")
+    session.add(req); session.commit()
+
+    r = client_admin.get(f"/kdm/api/requests/{req.id}")
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["requested_title"] == "Detail Film"
+    assert b["notes"] == "hello"
+    assert "events" in b and isinstance(b["events"], list)
+    assert "cinema_contact_email" in b
+    assert b["has_client_cert"] is False
+
+
+def test_update_request_fields(client_admin):
+    """POST /kdm/api/requests/{id}: producer/operatore amplia e corregge."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received",
+                     requested_title="Old")
+    session.add(req); session.commit()
+
+    r = client_admin.post(f"/kdm/api/requests/{req.id}", data={
+        "requested_title": "New Title",
+        "cinema_contact_email": "proj@cinema.it",
+        "notes": "corretto dall'operatore",
+    })
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["requested_title"] == "New Title"
+    assert b["cinema_contact_email"] == "proj@cinema.it"
+    assert b["notes"] == "corretto dall'operatore"
+
+
+def test_update_request_sentinel_clears(client_admin):
+    """Sentinel '0' svuota un campo (FormData vuoto = None non basta)."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received",
+                     notes="da cancellare")
+    session.add(req); session.commit()
+
+    r = client_admin.post(f"/kdm/api/requests/{req.id}", data={"notes": "0"})
+    assert r.status_code == 200, r.text
+    assert r.json()["notes"] is None
+
+
+def test_emit_without_job_returns_400(client_admin):
+    """Emetti su richiesta senza DCP agganciato → 400 con messaggio guida."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received")
+    session.add(req); session.commit()
+
+    r = client_admin.post(f"/kdm/api/requests/{req.id}/emit")
+    assert r.status_code == 400, r.text
+
+
+def test_emit_happy_path_materializes(client_admin):
+    """Emetti porta a 'generated' e materializza il deliverable."""
+    session = client_admin.session
+    req = _make_linked_request(session, status="received")
+
+    r = client_admin.post(f"/kdm/api/requests/{req.id}/emit")
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["status"] == "generated"
+    assert b["generated_at"] is not None
+    assert b["job_deliverable_produced_id"] is not None
+
+
+def test_confirm_delivery_reaches_confirmed(client_admin):
+    """Conferma consegna porta la richiesta fino a 'confirmed'."""
+    session = client_admin.session
+    req = _make_linked_request(session, status="received")
+    # emette prima
+    r1 = client_admin.post(f"/kdm/api/requests/{req.id}/emit")
+    assert r1.status_code == 200, r1.text
+
+    r2 = client_admin.post(f"/kdm/api/requests/{req.id}/confirm-delivery")
+    assert r2.status_code == 200, r2.text
+    b = r2.json()
+    assert b["status"] == "confirmed"
+    assert b["confirmed_at"] is not None
+
+
+# ---------------------------------------------------------------------------
 # Task 11 tests — facility + server CRUD + cert upload
 # ---------------------------------------------------------------------------
 
@@ -362,3 +470,14 @@ def test_kdm_page_contains_tab_panes(client_admin):
     assert 'id="kdm-tab-requests"' in html
     assert 'id="kdm-tab-facilities"' in html
     assert 'id="kdm-tab-cpl"' in html
+
+
+def test_kdm_page_has_step1_redesign_elements(client_admin):
+    """GET /kdm: render contiene filtri + modal dettaglio + azioni leggibili."""
+    r = client_admin.get("/kdm")
+    assert r.status_code == 200, r.text
+    html = r.text
+    assert 'id="kdm-filters"' in html, "host filtri mancante"
+    assert 'id="kdm-modal-detail"' in html, "modal dettaglio mancante"
+    assert 'data-i18n="kdm.btn.emit"' in html, "bottone Emetti mancante"
+    assert 'data-i18n="kdm.btn.confirm_delivery"' in html, "bottone Conferma mancante"

@@ -51,6 +51,9 @@
     {# Pannello link attivi (visibile dopo load) #}
     <div id="kdm-links-list" style="margin-bottom:14px;display:none;"></div>
 
+    {# Barra filtri (MFFilterBar, popolata da kdm.js) #}
+    <div id="kdm-filters"></div>
+
     <div class="table-wrap">
       <table class="table" id="kdm-requests-table">
         <thead>
@@ -249,6 +252,107 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('kdm-modal-cpl-manual')" data-i18n="kdm.btn.cancel">Annulla</button>
       <button class="btn btn-primary" onclick="kdmSaveCplManual()" data-i18n="kdm.btn.save">Salva</button>
+    </div>
+  </div>
+</div>
+
+{# ────────────────────── Modal: Dettaglio richiesta ────────────────────── #}
+<div class="modal-overlay" id="kdm-modal-detail">
+  <div class="modal" style="max-width:720px;">
+    <div class="modal-header">
+      <span class="modal-title">
+        <span id="kdm-detail-type-badge"></span>
+        <span data-i18n="kdm.modal.detail">Dettaglio richiesta</span>
+        <span id="kdm-detail-status-badge"></span>
+      </span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('kdm-modal-detail')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="kdm-detail-id">
+
+      {# Azioni principali leggibili #}
+      <div id="kdm-detail-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+        <button class="btn btn-secondary btn-sm" id="kdm-detail-btn-match" onclick="kdmDetailMatch()" data-i18n="kdm.action.match">Match</button>
+        <button class="btn btn-primary btn-sm" id="kdm-detail-btn-emit" onclick="kdmDetailEmit()" data-i18n="kdm.btn.emit">Emetti KDM</button>
+        <button class="btn btn-primary btn-sm" id="kdm-detail-btn-confirm" onclick="kdmDetailConfirm()" data-i18n="kdm.btn.confirm_delivery">Conferma consegna</button>
+        <button class="btn btn-ghost btn-sm" id="kdm-detail-btn-fsm" onclick="kdmDetailOpenFsm()" title="Cambio stato avanzato" data-i18n="kdm.btn.advanced_status">Stato avanzato…</button>
+      </div>
+
+      {# Form editabile (producer/operatore ampliano e correggono) #}
+      <form id="kdm-detail-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.title">Titolo film</label>
+            <input class="form-input" name="requested_title">
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.delivery">Consegna</label>
+            <select class="form-select" name="delivery_method">
+              <option value="email">Email</option>
+              <option value="usb">USB/FTP</option>
+              <option value="api">API</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.cpl_uuid_opt">CPL UUID</label>
+          <input class="form-input" name="requested_cpl_uuid" placeholder="urn:uuid:…">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.valid_from">Valido dal</label>
+            <input class="form-input" type="datetime-local" name="valid_from">
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.valid_to">Valido al</label>
+            <input class="form-input" type="datetime-local" name="valid_to">
+          </div>
+        </div>
+        <fieldset style="border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+          <legend class="text-sm text-muted" style="padding:0 6px;" data-i18n="kdm.fieldset.contacts">Contatti</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" data-i18n="kdm.field.cinema_name">Cinema/Lab — nome</label>
+              <input class="form-input" name="cinema_contact_name">
+            </div>
+            <div class="form-group">
+              <label class="form-label" data-i18n="kdm.field.cinema_email">Cinema/Lab — email</label>
+              <input class="form-input" type="email" name="cinema_contact_email">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" data-i18n="kdm.field.prod_name">Produzione — referente</label>
+              <input class="form-input" name="production_contact_name">
+            </div>
+            <div class="form-group">
+              <label class="form-label" data-i18n="kdm.field.prod_email">Produzione — email</label>
+              <input class="form-input" type="email" name="production_contact_email">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="kdm.field.lab_email">Lab email</label>
+            <input class="form-input" type="email" name="lab_contact_email">
+          </div>
+        </fieldset>
+        <div class="form-group">
+          <label class="form-label" data-i18n="kdm.field.notes">Note</label>
+          <textarea class="form-textarea" name="notes" rows="2"></textarea>
+        </div>
+      </form>
+
+      {# Info read-only: match, provenienza, deliverable prodotto #}
+      <div id="kdm-detail-meta" class="text-sm text-muted" style="margin-bottom:14px;"></div>
+
+      {# Timeline eventi #}
+      <div>
+        <div class="text-sm" style="font-weight:600;margin-bottom:6px;" data-i18n="kdm.detail.timeline">Cronologia</div>
+        <div id="kdm-detail-timeline" class="text-sm text-muted"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('kdm-modal-detail')" data-i18n="kdm.btn.close">Chiudi</button>
+      <button class="btn btn-primary" onclick="kdmDetailSave()" data-i18n="kdm.btn.save">Salva modifiche</button>
     </div>
   </div>
 </div>

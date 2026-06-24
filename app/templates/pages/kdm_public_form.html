@@ -14,66 +14,77 @@
   .banner-ok { padding: 14px 18px; background: #1f8b4c; color: #fff; border-radius: 8px; margin-bottom: 20px; font-size: 1rem; }
 </style>
 </head><body>
-<h2>🔑 Richiesta chiavi DCP (KDM / DKDM)</h2>
-{% if project_title %}<p>Progetto: <strong>{{ project_title }}</strong></p>{% endif %}
+<h2 data-i18n="kdm.pub.heading">🔑 Richiesta chiavi DCP (KDM / DKDM)</h2>
+{% if project_title %}<p><span data-i18n="kdm.pub.project">Progetto:</span> <strong>{{ project_title }}</strong></p>{% endif %}
 
 {% if submitted %}
-<div class="banner-ok">
+<div class="banner-ok" data-i18n="kdm.pub.submitted">
   ✅ Richiesta inviata. Il team finishing è stato avvisato e riceverai conferma a breve.
 </div>
 {% else %}
 <form method="post" action="/public/kdm/{{ token }}" enctype="multipart/form-data">
-  <label>Tipo chiave
+  <label><span data-i18n="kdm.pub.type">Tipo chiave</span>
     <select name="request_type">
-      <option value="kdm" {% if pf.get('request_type')=='kdm' %}selected{% endif %}>KDM (cinema)</option>
-      <option value="dkdm" {% if pf.get('request_type')=='dkdm' %}selected{% endif %}>DKDM (distributore)</option>
+      <option value="kdm" {% if pf.get('request_type')=='kdm' %}selected{% endif %} data-i18n="kdm.pub.type_kdm">KDM (cinema)</option>
+      <option value="dkdm" {% if pf.get('request_type')=='dkdm' %}selected{% endif %} data-i18n="kdm.pub.type_dkdm">DKDM (distributore)</option>
     </select>
   </label>
 
-  <label>Titolo film
+  <label><span data-i18n="kdm.pub.title">Titolo film</span>
     <input name="requested_title" value="{{ pf.get('requested_title','') }}" placeholder="es. QUEER_FTR_IT-XX_EN_51_2K_20240901">
   </label>
 
-  <label>CPL UUID del DCP <small>(opzionale — aiuta il matching automatico)</small>
+  <label><span data-i18n="kdm.pub.cpl">CPL UUID del DCP</span> <small data-i18n="kdm.pub.cpl_hint">(opzionale — aiuta il matching automatico)</small>
     <input name="requested_cpl_uuid" value="{{ pf.get('requested_cpl_uuid','') }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
   </label>
 
-  <label>Sblocco DA (data+ora)
+  <label><span data-i18n="kdm.pub.valid_from">Sblocco DA (data+ora)</span>
     <input type="datetime-local" name="valid_from">
   </label>
 
-  <label>Sblocco A (data+ora)
+  <label><span data-i18n="kdm.pub.valid_to">Sblocco A (data+ora)</span>
     <input type="datetime-local" name="valid_to">
   </label>
 
-  <label>Certificato server (.pem) <small>(opzionale)</small>
+  <label><span data-i18n="kdm.pub.cert">Certificato server (.pem)</span> <small data-i18n="kdm.pub.optional">(opzionale)</small>
     <input type="file" name="cert_file" accept=".pem,.crt,.cer">
   </label>
 
   <fieldset>
-    <legend>Contatti</legend>
-    <label>Cinema / Lab destinatario — nome
+    <legend data-i18n="kdm.pub.contacts">Contatti</legend>
+    <label><span data-i18n="kdm.pub.cinema_name">Cinema / Lab destinatario — nome</span>
       <input name="cinema_contact_name">
     </label>
-    <label>Cinema / Lab destinatario — email
+    <label><span data-i18n="kdm.pub.cinema_email">Cinema / Lab destinatario — email</span>
       <input type="email" name="cinema_contact_email" placeholder="proiettore@cinema.it">
     </label>
-    <label>Lab email <small>(opzionale)</small>
+    <label><span data-i18n="kdm.pub.lab_email">Lab email</span> <small data-i18n="kdm.pub.optional">(opzionale)</small>
       <input type="email" name="lab_contact_email">
     </label>
-    <label>Produzione — nome referente
+    <label><span data-i18n="kdm.pub.prod_name">Produzione — nome referente</span>
       <input name="production_contact_name">
     </label>
-    <label>Produzione — email referente
+    <label><span data-i18n="kdm.pub.prod_email">Produzione — email referente</span>
       <input type="email" name="production_contact_email">
     </label>
   </fieldset>
 
-  <label>Note
+  <label><span data-i18n="kdm.pub.notes">Note</span>
     <textarea name="notes" rows="3">{{ pf.get('notes','') }}</textarea>
   </label>
 
-  <button type="submit">Invia richiesta</button>
+  <button type="submit" data-i18n="kdm.pub.submit">Invia richiesta</button>
 </form>
 {% endif %}
+
+<script src="/static/js/i18n.js?v={{ app_version }}"></script>
+<script src="/static/js/global.js?v={{ app_version }}"></script>
+<script>
+  // Form pubblico standalone: applica traduzioni + picker data/ora MF (memo
+  // project_kdm_redesign — questa pagina non eredita base.html).
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.applyI18n) applyI18n();
+    if (window.mfApplyTimePickers) mfApplyTimePickers(document);
+  });
+</script>
 </body></html>

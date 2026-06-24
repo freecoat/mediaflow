@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.230 — KDM redesign Step 1: dettaglio editabile + azioni leggibili (24 giu 2026)
+
+Risposta ai feedback di Matteo su KDM: interfaccia poco leggibile, richieste non editabili, niente filtri, azioni di emissione/conferma sepolte nel dropdown FSM, form pubblico fuori standard. Step 1 di un redesign incrementale (Step 2 = certificati multipli, a seguire).
+
+- **Dettaglio richiesta editabile**: nuovo `GET /kdm/api/requests/{id}` (vista completa human-readable con timeline eventi) + `POST /kdm/api/requests/{id}` (producer/operatore ampliano e correggono titolo, CPL, finestra validità, contatti, note; sentinel `'0'` per svuotare). Modal dettaglio in `/kdm` aperto al click di riga, con badge tipo/stato, info read-only (match, provenienza link, deliverable prodotto) e cronologia.
+- **Azioni leggibili** al posto del dropdown FSM grezzo: bottone **"Emetti KDM"** (`POST .../emit` → avanza a `generated`, registra emissione e materializza il deliverable — KDM Studio emette esternamente, Claqo tiene solo il registro) + **"Conferma consegna"** (`POST .../confirm-delivery` → avanza a `confirmed`). Cammino felice `_advance_to` valida ogni hop sulla FSM. Dropdown FSM resta come "Stato avanzato…".
+- **Filtri lista** via `MFFilterBar`: ricerca testo + stato + tipo (client-side). Badge tipo KDM/DKDM colorato.
+- **Form pubblico allineato**: `kdm_public_form.html` ora carica `i18n.js` + `global.js` → picker data/ora MF standard (`mfApplyTimePickers`) e traduzioni; tutte le label tradotte in 5 lingue (era italiano hardcoded).
+- **i18n**: +50 chiavi nuove (dettaglio operatore + form pubblico) in tutte le 5 lingue; coverage verificata (0 chiavi grezze).
+- **Test**: +7 test router (detail/update/sentinel/emit-no-job-400/emit-happy/confirm/render). 63 test KDM pass. Smoke browser live verde: 0 errori console su `/kdm` e form pubblico, dettaglio/filtri/picker funzionanti.
+
 ## v3.5.0-alpha.172.229 — Auto-extract item-list after save (best-effort) (23 giu 2026)
 
 Fix capitolati caricati da UI (es. Paramount) che restavano senza lista item dopo il salvataggio.

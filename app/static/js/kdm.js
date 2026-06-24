@@ -4,7 +4,52 @@
 // applyI18n(root?) da i18n.js (opzionale, legge window.MF_I18N)
 
 function kdmInit() {
+  kdmInitFilters();
   kdmSwitchTab('requests');
+}
+
+// ── Filtri richieste (MFFilterBar) ────────────────────────────────────────────
+
+var _kdmFilters = {q: null, status: null, type: null};
+
+function kdmInitFilters() {
+  var host = document.getElementById('kdm-filters');
+  if (!host || !window.MFFilterBar || host._mfFilterBar) return;
+  MFFilterBar({
+    host: host,
+    filters: [
+      {kind: 'text', id: 'q', label: mfT('kdm.filter.search'),
+       placeholder: mfT('kdm.filter.search_ph')},
+      {kind: 'select', id: 'status', label: mfT('kdm.col.status'), searchable: false,
+       options: [{value: '', label: mfT('kdm.filter.all')}].concat(
+         KDM_STATUS_ORDER.map(function(s) {
+           return {value: s, label: (KDM_STATUS_LABEL[s] || {}).lbl || s};
+         }))},
+      {kind: 'select', id: 'type', label: mfT('kdm.col.type'), searchable: false,
+       options: [
+         {value: '', label: mfT('kdm.filter.all')},
+         {value: 'kdm', label: 'KDM'},
+         {value: 'dkdm', label: 'DKDM'},
+       ]},
+    ],
+    onChange: function(vals) {
+      _kdmFilters = vals;
+      kdmRenderRequests();
+    },
+  });
+}
+
+function kdmFilteredRequests() {
+  var q = (_kdmFilters.q || '').toLowerCase();
+  return _kdmRequests.filter(function(r) {
+    if (_kdmFilters.status && r.status !== _kdmFilters.status) return false;
+    if (_kdmFilters.type && r.request_type !== _kdmFilters.type) return false;
+    if (q) {
+      var hay = ((r.requested_title || '') + ' ' + (r.requested_cpl_uuid || '')).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
 }
 
 function kdmSwitchTab(name) {
@@ -47,6 +92,14 @@ function kdmRenderStatus(st) {
     m.color + ';background:' + m.bg + ';">' + m.lbl + '</span>';
 }
 
+function kdmRenderType(t) {
+  var isDkdm = (t || '').toLowerCase() === 'dkdm';
+  var color = isDkdm ? '#c084fc' : '#60a5fa';
+  var bg = isDkdm ? 'rgba(192,132,252,.18)' : 'rgba(96,165,250,.18)';
+  return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;color:' +
+    color + ';background:' + bg + ';">' + escapeHtml((t || 'kdm').toUpperCase()) + '</span>';
+}
+
 // ── Tab: Richieste ───────────────────────────────────────────────────────────
 
 var _kdmRequests = [];
@@ -64,28 +117,37 @@ async function kdmLoadRequests() {
   _kdmRequests.sort(function(a, b) {
     return KDM_STATUS_ORDER.indexOf(a.status) - KDM_STATUS_ORDER.indexOf(b.status);
   });
-  if (!_kdmRequests.length) {
-    body.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;" data-i18n="kdm.empty.requests">Nessuna richiesta KDM.</td></tr>';
+  kdmRenderRequests();
+}
+
+function kdmRenderRequests() {
+  var body = document.getElementById('kdm-requests-body');
+  if (!body) return;
+  var rows = kdmFilteredRequests();
+  if (!rows.length) {
+    var emptyKey = _kdmRequests.length ? 'kdm.empty.filtered' : 'kdm.empty.requests';
+    var emptyTxt = _kdmRequests.length ? 'Nessun risultato per i filtri.' : 'Nessuna richiesta KDM.';
+    body.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px;" data-i18n="' + emptyKey + '">' + emptyTxt + '</td></tr>';
     if (window.applyI18n) applyI18n();
     return;
   }
-  var html = _kdmRequests.map(function(r) {
+  var html = rows.map(function(r) {
     var matchCell = r.dcp_cpl_id
       ? '<span style="color:#22c55e;">✓ ' + escapeHtml(String(r.matched_confidence || '')) + '%</span>'
       : '<span style="color:#fbbf24;">⚠</span>';
     var win = escapeHtml((r.valid_from || '') + (r.valid_to ? ' → ' + r.valid_to : ''));
-    return '<tr>' +
+    var title = escapeHtml(r.requested_title || r.requested_cpl_uuid || '—');
+    return '<tr style="cursor:pointer;" onclick="kdmOpenDetail(' + r.id + ')">' +
       '<td>' + kdmRenderStatus(r.status) + '</td>' +
-      '<td class="text-sm">' + escapeHtml((r.request_type || '').toUpperCase()) + '</td>' +
-      '<td>' + escapeHtml(r.requested_title || r.requested_cpl_uuid || '—') + '</td>' +
+      '<td>' + kdmRenderType(r.request_type) + '</td>' +
+      '<td><span style="color:var(--indigo2);font-weight:500;">' + title + '</span></td>' +
       '<td class="text-sm text-muted">' + win + '</td>' +
       '<td>' + matchCell + '</td>' +
       '<td>' +
-        '<button class="btn btn-ghost btn-sm" onclick="kdmRematch(' + r.id + ')" data-i18n="kdm.action.match">Match</button> ' +
-        '<button class="btn btn-ghost btn-sm" onclick="kdmOpenTransition(' + r.id + ')" data-i18n="kdm.action.transition">Stato→</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();kdmOpenDetail(' + r.id + ')" data-i18n="kdm.action.open">Apri</button>' +
       '</td>' +
       '<td class="text-right">' +
-        '<button class="btn btn-ghost btn-sm" onclick="kdmDeleteRequest(' + r.id + ')" style="color:#ef4444;" title="' + mfT('kdm.action.delete') + '" data-i18n="kdm.action.delete" data-i18n-attr="title">✕</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();kdmDeleteRequest(' + r.id + ')" style="color:#ef4444;" title="' + mfT('kdm.action.delete') + '" data-i18n="kdm.action.delete" data-i18n-attr="title">✕</button>' +
       '</td>' +
     '</tr>';
   }).join('');
@@ -123,16 +185,166 @@ function kdmOpenTransition(id) {
   openModal('kdm-modal-transition');
 }
 
+// ── Dettaglio richiesta (editabile + azioni leggibili) ────────────────────────
+
+var _kdmDetail = null;
+
+// ISO → valore per <input type="datetime-local"> (YYYY-MM-DDTHH:MM, local-ish)
+function _kdmIsoToLocal(iso) {
+  if (!iso) return '';
+  return String(iso).slice(0, 16);
+}
+
+async function kdmOpenDetail(id) {
+  try {
+    _kdmDetail = await api('GET', '/kdm/api/requests/' + id);
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+    return;
+  }
+  var d = _kdmDetail;
+  document.getElementById('kdm-detail-id').value = d.id;
+  document.getElementById('kdm-detail-type-badge').innerHTML = kdmRenderType(d.request_type);  // eslint-disable-line
+  document.getElementById('kdm-detail-status-badge').innerHTML = kdmRenderStatus(d.status);  // eslint-disable-line
+
+  var form = document.getElementById('kdm-detail-form');
+  function setF(name, val) { var el = form.elements[name]; if (el) el.value = (val == null ? '' : val); }
+  setF('requested_title', d.requested_title);
+  setF('delivery_method', d.delivery_method || 'email');
+  setF('requested_cpl_uuid', d.requested_cpl_uuid);
+  setF('valid_from', _kdmIsoToLocal(d.valid_from));
+  setF('valid_to', _kdmIsoToLocal(d.valid_to));
+  setF('cinema_contact_name', d.cinema_contact_name);
+  setF('cinema_contact_email', d.cinema_contact_email);
+  setF('production_contact_name', d.production_contact_name);
+  setF('production_contact_email', d.production_contact_email);
+  setF('lab_contact_email', d.lab_contact_email);
+  setF('notes', d.notes);
+
+  // Info read-only
+  var meta = [];
+  if (d.dcp_cpl_id) {
+    meta.push('🎬 CPL: ' + escapeHtml(d.dcp_cpl_title || ('#' + d.dcp_cpl_id)) +
+      (d.matched_confidence != null ? ' (' + escapeHtml(String(d.matched_confidence)) + '% · ' + escapeHtml(d.match_source || '') + ')' : ''));
+  } else {
+    meta.push('⚠ ' + mfT('kdm.detail.no_cpl'));
+  }
+  if (d.target_facility_name) meta.push('🏛 ' + escapeHtml(d.target_facility_name));
+  if (d.has_client_cert) meta.push('🔐 ' + mfT('kdm.detail.has_cert'));
+  if (d.source_link_id) meta.push('🔗 ' + mfT('kdm.detail.from_link'));
+  if (d.job_deliverable_produced_id) meta.push('📦 ' + mfT('kdm.detail.deliverable_done'));
+  document.getElementById('kdm-detail-meta').innerHTML = meta.join(' &nbsp;·&nbsp; ');  // eslint-disable-line
+
+  // Timeline
+  var tl = (d.events || []).map(function(e) {
+    var p = e.payload || {};
+    var when = escapeHtml(_kdmIsoToLocal(e.created_at).replace('T', ' '));
+    var what = (p.from && p.to)
+      ? (((KDM_STATUS_LABEL[p.from] || {}).lbl || p.from) + ' → ' + ((KDM_STATUS_LABEL[p.to] || {}).lbl || p.to))
+      : escapeHtml(e.event_type || '');
+    return '<div style="padding:2px 0;">• ' + when + ' — ' + escapeHtml(what) + '</div>';
+  }).join('');
+  document.getElementById('kdm-detail-timeline').innerHTML = tl || ('<span data-i18n="kdm.detail.no_events">' + mfT('kdm.detail.no_events') + '</span>');  // eslint-disable-line
+
+  // Abilita/disabilita azioni in base allo stato
+  var canEmit = ['received', 'matched', 'keys_pending'].indexOf(d.status) !== -1;
+  var canConfirm = ['generated', 'delivered'].indexOf(d.status) !== -1;
+  var canMatch = !d.dcp_cpl_id && ['received', 'matched'].indexOf(d.status) !== -1;
+  _kdmToggleBtn('kdm-detail-btn-emit', canEmit);
+  _kdmToggleBtn('kdm-detail-btn-confirm', canConfirm);
+  _kdmToggleBtn('kdm-detail-btn-match', canMatch);
+
+  openModal('kdm-modal-detail');
+  if (window.applyI18n) applyI18n();
+}
+
+function _kdmToggleBtn(id, on) {
+  var b = document.getElementById(id);
+  if (!b) return;
+  b.style.display = on ? '' : 'none';
+}
+
+async function kdmDetailSave() {
+  var id = document.getElementById('kdm-detail-id').value;
+  if (!id) return;
+  var form = document.getElementById('kdm-detail-form');
+  var fd = new FormData();
+  ['requested_title', 'delivery_method', 'requested_cpl_uuid', 'valid_from',
+   'valid_to', 'cinema_contact_name', 'cinema_contact_email',
+   'production_contact_name', 'production_contact_email', 'lab_contact_email',
+   'notes'].forEach(function(name) {
+    var el = form.elements[name];
+    if (!el) return;
+    var v = el.value.trim();
+    // Sentinel '0' per svuotare un campo già valorizzato (memo empty-multipart=None)
+    if (v === '' && _kdmDetail && _kdmDetail[name]) v = '0';
+    if (v !== '') fd.append(name, v);
+  });
+  try {
+    await api('POST', '/kdm/api/requests/' + id, fd);
+    toast(mfT('kdm.toast.saved'), 'success');
+    closeModal('kdm-modal-detail');
+    await kdmLoadRequests();
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
+}
+
+async function kdmDetailEmit() {
+  var id = document.getElementById('kdm-detail-id').value;
+  if (!id) return;
+  if (!confirm(mfT('kdm.confirm.emit'))) return;
+  try {
+    await api('POST', '/kdm/api/requests/' + id + '/emit');
+    toast(mfT('kdm.toast.emitted'), 'success');
+    await kdmOpenDetail(parseInt(id, 10));
+    await kdmLoadRequests();
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
+}
+
+async function kdmDetailConfirm() {
+  var id = document.getElementById('kdm-detail-id').value;
+  if (!id) return;
+  if (!confirm(mfT('kdm.confirm.delivery'))) return;
+  try {
+    await api('POST', '/kdm/api/requests/' + id + '/confirm-delivery');
+    toast(mfT('kdm.toast.confirmed'), 'success');
+    await kdmOpenDetail(parseInt(id, 10));
+    await kdmLoadRequests();
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
+}
+
+async function kdmDetailMatch() {
+  var id = document.getElementById('kdm-detail-id').value;
+  if (!id) return;
+  await kdmRematch(parseInt(id, 10));
+  await kdmOpenDetail(parseInt(id, 10));
+}
+
+function kdmDetailOpenFsm() {
+  var id = document.getElementById('kdm-detail-id').value;
+  if (!id) return;
+  kdmOpenTransition(parseInt(id, 10));
+}
+
 async function kdmDoTransition() {
   var sel = document.getElementById('kdm-transition-status');
   if (!sel || !_kdmTransitionTargetId) return;
   var toStatus = sel.value;
   if (!toStatus) { toast('Seleziona uno stato', 'warning'); return; }
   try {
-    await api('POST', '/kdm/api/requests/' + _kdmTransitionTargetId + '/transition',
+    var tid = _kdmTransitionTargetId;
+    await api('POST', '/kdm/api/requests/' + tid + '/transition',
       new URLSearchParams({to_status: toStatus}));
     closeModal('kdm-modal-transition');
     toast('Stato aggiornato', 'success');
+    var detailOpen = _kdmDetail && String(_kdmDetail.id) === String(tid) &&
+      document.getElementById('kdm-modal-detail').classList.contains('open');
+    if (detailOpen) await kdmOpenDetail(parseInt(tid, 10));
     await kdmLoadRequests();
   } catch (e) {
     toast('Errore: ' + (e.message || ''), 'error');

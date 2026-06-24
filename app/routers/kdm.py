@@ -11,7 +11,7 @@ from app.database import get_db
 from app.context import current_tenant_id
 from app.models import KdmRequest, DcpCpl, CinemaFacility, CinemaServer
 from app.models import Job, JobDeliverable
-from app.models import KdmRequestLink
+from app.models import KdmRequestLink, KdmRequestEvent
 from app.services.rbac import has_permission, current_user_optional
 from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD
 from app.services.kdm_state import transition as _fsm_transition
@@ -104,6 +104,85 @@ def _serialize(r: KdmRequest) -> dict:
     }
 
 
+def _serialize_detail(db, r: KdmRequest) -> dict:
+    """Vista completa human-readable per il pannello dettaglio."""
+    fac = db.get(CinemaFacility, r.target_facility_id) if r.target_facility_id else None
+    srv = db.get(CinemaServer, r.target_server_id) if r.target_server_id else None
+    cpl = db.get(DcpCpl, r.dcp_cpl_id) if r.dcp_cpl_id else None
+    events = (
+        db.query(KdmRequestEvent)
+        .filter(KdmRequestEvent.kdm_request_id == r.id)
+        .order_by(KdmRequestEvent.created_at.asc())
+        .all()
+    )
+    return {
+        "id": r.id,
+        "request_type": r.request_type,
+        "status": r.status,
+        "client_id": r.client_id,
+        "project_id": r.project_id,
+        "dcp_cpl_id": r.dcp_cpl_id,
+        "dcp_cpl_title": getattr(cpl, "content_title_text", None) if cpl else None,
+        "job_deliverable_id": r.job_deliverable_id,
+        "job_deliverable_produced_id": r.job_deliverable_produced_id,
+        "matched_confidence": r.matched_confidence,
+        "match_source": r.match_source,
+        "requested_title": r.requested_title,
+        "requested_cpl_uuid": r.requested_cpl_uuid,
+        "valid_from": r.valid_from.isoformat() if r.valid_from else None,
+        "valid_to": r.valid_to.isoformat() if r.valid_to else None,
+        "delivery_method": r.delivery_method,
+        "target_facility_id": r.target_facility_id,
+        "target_facility_name": getattr(fac, "name", None) if fac else None,
+        "target_server_id": r.target_server_id,
+        "target_server_serial": getattr(srv, "serial", None) if srv else None,
+        "requested_by": r.requested_by,
+        "notes": r.notes,
+        "cinema_contact_name": r.cinema_contact_name,
+        "cinema_contact_email": r.cinema_contact_email,
+        "lab_contact_email": r.lab_contact_email,
+        "production_contact_name": r.production_contact_name,
+        "production_contact_email": r.production_contact_email,
+        "has_client_cert": bool(r.client_cert_pem),
+        "source_link_id": r.source_link_id,
+        "requested_at": r.requested_at.isoformat() if r.requested_at else None,
+        "generated_at": r.generated_at.isoformat() if r.generated_at else None,
+        "delivered_at": r.delivered_at.isoformat() if r.delivered_at else None,
+        "confirmed_at": r.confirmed_at.isoformat() if r.confirmed_at else None,
+        "events": [
+            {
+                "event_type": e.event_type,
+                "payload": e.payload_json,
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+            }
+            for e in events
+        ],
+    }
+
+
+# Cammino "felice" per le azioni leggibili Emetti/Conferma. Ogni hop è
+# validato da kdm_state.ALLOWED_TRANSITIONS; salta gli stati già superati.
+_HAPPY_PATH = ["received", "matched", "keys_pending", "generated", "delivered", "confirmed"]
+
+
+def _advance_to(db, r: KdmRequest, target: str, user_id=None):
+    """Avanza la richiesta lungo _HAPPY_PATH fino a `target` (incluso).
+
+    Esegue ogni transizione legale intermedia. Solleva ValueError se lo stato
+    corrente è terminale/fuori cammino o `target` non è raggiungibile in avanti.
+    """
+    if target not in _HAPPY_PATH:
+        raise ValueError(f"Stato target non valido: {target!r}")
+    if r.status not in _HAPPY_PATH:
+        raise ValueError(f"Stato corrente {r.status!r} fuori dal cammino di emissione")
+    cur_i = _HAPPY_PATH.index(r.status)
+    tgt_i = _HAPPY_PATH.index(target)
+    if tgt_i <= cur_i:
+        raise ValueError(f"Richiesta già in stato {r.status!r}: nessun avanzamento a {target!r}")
+    for nxt in _HAPPY_PATH[cur_i + 1 : tgt_i + 1]:
+        _fsm_transition(db, r, nxt, user_id=user_id)
+
+
 def _apply_link(db, r: KdmRequest, cpl_id: int, confidence: int, source: str):
     """Link a CPL to a request; resolve project_id via Job (JobDeliverable has no project_id)."""
     cpl = db.get(DcpCpl, cpl_id)
@@ -166,6 +245,119 @@ async def create_request(
     db.commit()
     db.refresh(r)
     return _serialize(r)
+
+
+@router.get("/api/requests/{rid}")
+async def get_request(rid: int, request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    r = db.get(KdmRequest, rid)
+    if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
+        raise HTTPException(404, "Richiesta non trovata")
+    return _serialize_detail(db, r)
+
+
+_EDITABLE_FIELDS = (
+    "requested_title",
+    "requested_cpl_uuid",
+    "delivery_method",
+    "requested_by",
+    "notes",
+    "cinema_contact_name",
+    "cinema_contact_email",
+    "lab_contact_email",
+    "production_contact_name",
+    "production_contact_email",
+)
+
+
+@router.post("/api/requests/{rid}")
+async def update_request(
+    rid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    requested_title: Optional[str] = Form(None),
+    requested_cpl_uuid: Optional[str] = Form(None),
+    delivery_method: Optional[str] = Form(None),
+    requested_by: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    valid_from: Optional[str] = Form(None),
+    valid_to: Optional[str] = Form(None),
+    target_facility_id: Optional[int] = Form(None),
+    cinema_contact_name: Optional[str] = Form(None),
+    cinema_contact_email: Optional[str] = Form(None),
+    lab_contact_email: Optional[str] = Form(None),
+    production_contact_name: Optional[str] = Form(None),
+    production_contact_email: Optional[str] = Form(None),
+):
+    """Producer/operatore ampliano e correggono la richiesta.
+
+    Campi testo: valorizzati se forniti; sentinel '0' per svuotare (memo
+    feedback_empty_multipart_is_none — FormData vuoto arriva come None).
+    Date: ISO se fornite; '0' per azzerare.
+    """
+    _require_kdm(request, db)
+    r = db.get(KdmRequest, rid)
+    if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
+        raise HTTPException(404, "Richiesta non trovata")
+
+    local = locals()
+    for f in _EDITABLE_FIELDS:
+        v = local.get(f)
+        if v is None:
+            continue
+        setattr(r, f, None if v == "0" else v)
+
+    for f, raw in (("valid_from", valid_from), ("valid_to", valid_to)):
+        if raw is None:
+            continue
+        setattr(r, f, None if raw == "0" else _parse_dt(raw))
+
+    if target_facility_id is not None:
+        if target_facility_id == 0:
+            r.target_facility_id = None
+        else:
+            fac = db.get(CinemaFacility, target_facility_id)
+            if not fac or fac.tenant_id != current_tenant_id():
+                raise HTTPException(404, "Facility non trovata")
+            r.target_facility_id = target_facility_id
+
+    db.commit()
+    db.refresh(r)
+    return _serialize_detail(db, r)
+
+
+@router.post("/api/requests/{rid}/emit")
+async def emit_kdm(rid: int, request: Request, db: Session = Depends(get_db)):
+    """Registra l'emissione (KDM Studio emette esternamente): porta la
+    richiesta a 'generated' e materializza il deliverable. Memo
+    project_kdm_redesign: in Claqo la KDM resta solo come registro."""
+    user = _require_kdm(request, db)
+    r = db.get(KdmRequest, rid)
+    if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
+        raise HTTPException(404, "Richiesta non trovata")
+    try:
+        _advance_to(db, r, "generated", user_id=getattr(user, "id", None))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    db.commit()
+    db.refresh(r)
+    return _serialize_detail(db, r)
+
+
+@router.post("/api/requests/{rid}/confirm-delivery")
+async def confirm_delivery(rid: int, request: Request, db: Session = Depends(get_db)):
+    """Conferma avvenuta consegna: porta la richiesta a 'confirmed'."""
+    user = _require_kdm(request, db)
+    r = db.get(KdmRequest, rid)
+    if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
+        raise HTTPException(404, "Richiesta non trovata")
+    try:
+        _advance_to(db, r, "confirmed", user_id=getattr(user, "id", None))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    db.commit()
+    db.refresh(r)
+    return _serialize_detail(db, r)
 
 
 @router.post("/api/requests/{rid}/match")
