@@ -233,7 +233,12 @@ async function kdmOpenDetail(id) {
   if (d.has_client_cert) meta.push('🔐 ' + mfT('kdm.detail.has_cert'));
   if (d.source_link_id) meta.push('🔗 ' + mfT('kdm.detail.from_link'));
   if (d.job_deliverable_produced_id) meta.push('📦 ' + mfT('kdm.detail.deliverable_done'));
+  if (!d.has_credentials) meta.push('<span style="color:#fbbf24;">⚠ ' + mfT('kdm.cert.required_warn') + '</span>');
   document.getElementById('kdm-detail-meta').innerHTML = meta.join(' &nbsp;·&nbsp; ');  // eslint-disable-line
+
+  // Credenziali (certificati + serial)
+  kdmRenderCerts(d.certificates);
+  kdmCertKindToggle();
 
   // Timeline
   var tl = (d.events || []).map(function(e) {
@@ -329,6 +334,79 @@ function kdmDetailOpenFsm() {
   var id = document.getElementById('kdm-detail-id').value;
   if (!id) return;
   kdmOpenTransition(parseInt(id, 10));
+}
+
+// ── Credenziali: certificati multipli + serial ───────────────────────────────
+
+function kdmRenderCerts(certs) {
+  var host = document.getElementById('kdm-detail-certs');
+  if (!host) return;
+  certs = certs || [];
+  if (!certs.length) {
+    host.innerHTML = '<span class="text-muted" data-i18n="kdm.cert.none">Nessuna credenziale.</span>';  // eslint-disable-line
+    if (window.applyI18n) applyI18n();
+    return;
+  }
+  host.innerHTML = certs.map(function(c) {  // eslint-disable-line
+    var icon = c.kind === 'serial' ? '#' : '🔐';
+    var main = c.kind === 'serial'
+      ? escapeHtml(c.serial || '')
+      : escapeHtml((c.cert_thumbprint || '').slice(0, 16) || mfT('kdm.cert.pem')) +
+        (c.cert_expires_at ? ' · ' + mfT('kdm.cert.expires') + ' ' + escapeHtml(c.cert_expires_at.slice(0, 10)) : '');
+    var lbl = c.label ? ' <span class="text-muted">(' + escapeHtml(c.label) + ')</span>' : '';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-bottom:1px solid var(--border);">' +
+      '<span style="flex:1;">' + icon + ' ' + main + lbl + '</span>' +
+      '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmCertDelete(' + c.id + ')">✕</button>' +
+    '</div>';
+  }).join('');
+}
+
+function kdmCertKindToggle() {
+  var kind = document.getElementById('kdm-cert-kind').value;
+  document.getElementById('kdm-cert-serial').style.display = kind === 'serial' ? '' : 'none';
+  document.getElementById('kdm-cert-pem').style.display = kind === 'cert' ? '' : 'none';
+}
+
+async function kdmCertAdd() {
+  var id = document.getElementById('kdm-detail-id').value;
+  if (!id) return;
+  var kind = document.getElementById('kdm-cert-kind').value;
+  var fd = new FormData();
+  fd.append('kind', kind);
+  var label = document.getElementById('kdm-cert-label').value.trim();
+  if (label) fd.append('label', label);
+  if (kind === 'cert') {
+    var pem = document.getElementById('kdm-cert-pem').value.trim();
+    if (!pem) { toast(mfT('kdm.cert.need_pem'), 'warning'); return; }
+    fd.append('cert_pem', pem);
+  } else {
+    var serial = document.getElementById('kdm-cert-serial').value.trim();
+    if (!serial) { toast(mfT('kdm.cert.need_serial'), 'warning'); return; }
+    fd.append('serial', serial);
+  }
+  try {
+    await api('POST', '/kdm/api/requests/' + id + '/certs', fd);
+    toast(mfT('kdm.cert.added'), 'success');
+    document.getElementById('kdm-cert-pem').value = '';
+    document.getElementById('kdm-cert-serial').value = '';
+    document.getElementById('kdm-cert-label').value = '';
+    await kdmOpenDetail(parseInt(id, 10));
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
+}
+
+async function kdmCertDelete(cid) {
+  var id = document.getElementById('kdm-detail-id').value;
+  if (!id) return;
+  if (!confirm(mfT('kdm.cert.confirm_del'))) return;
+  try {
+    await api('DELETE', '/kdm/api/requests/' + id + '/certs/' + cid);
+    toast(mfT('kdm.cert.removed'), 'success');
+    await kdmOpenDetail(parseInt(id, 10));
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
 }
 
 async function kdmDoTransition() {

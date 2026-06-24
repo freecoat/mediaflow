@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import KdmRequestLink, KdmRequest
+from app.models import KdmRequestLink, KdmRequest, KdmRequestCertificate
 
 router = APIRouter(prefix="/public/kdm", tags=["kdm-public"])
 
@@ -73,19 +73,26 @@ async def public_submit(
         production_contact_name: Optional[str] = Form(None),
         production_contact_email: Optional[str] = Form(None),
         notes: Optional[str] = Form(None),
-        cert_file: Optional[UploadFile] = File(None)):
+        serials: Optional[str] = Form(None),
+        cert_file: list[UploadFile] = File(None)):
     link = _resolve_link(token, db)
     # I2: normalize request_type to valid enum values
     if request_type not in ("kdm", "dkdm"):
         request_type = "kdm"
-    cert_pem = None
-    if cert_file is not None:
+    # Step 2: certificati multipli. Legge tutti i PEM caricati; il primo
+    # popola anche client_cert_pem (backcompat). FastAPI passa singolo file
+    # come lista di 1; None/lista vuota se nessun upload.
+    cert_pems: list[str] = []
+    for f in (cert_file or []):
+        if f is None:
+            continue
         try:
-            raw = await cert_file.read()
+            raw = await f.read()
             if raw:
-                cert_pem = raw.decode("utf-8", "ignore")
+                cert_pems.append(raw.decode("utf-8", "ignore"))
         except Exception:
-            cert_pem = None
+            pass
+    cert_pem = cert_pems[0] if cert_pems else None
     req = KdmRequest(
         tenant_id=link.tenant_id,
         request_type=request_type,
@@ -106,6 +113,20 @@ async def public_submit(
         requested_by=cinema_contact_email or production_contact_email)
     db.add(req)
     db.flush()
+    # Step 2: materializza credenziali multiple (cert PEM + serial number)
+    from app.services.kdm_cert import parse_cert
+    for pem in cert_pems:
+        meta = parse_cert(pem)
+        db.add(KdmRequestCertificate(
+            tenant_id=link.tenant_id, kdm_request_id=req.id, kind="cert",
+            cert_pem=pem, cert_thumbprint=meta["thumbprint"],
+            cert_expires_at=meta["expires_at"]))
+    for line in (serials or "").splitlines():
+        s = line.strip()
+        if s:
+            db.add(KdmRequestCertificate(
+                tenant_id=link.tenant_id, kdm_request_id=req.id,
+                kind="serial", serial=s))
     # auto-match CPL
     try:
         from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD

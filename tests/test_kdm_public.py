@@ -2,7 +2,7 @@
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import SessionLocal
-from app.models import KdmRequestLink, KdmRequest, Project, Client
+from app.models import KdmRequestLink, KdmRequest, KdmRequestCertificate, Project, Client
 import secrets
 
 client = TestClient(app)
@@ -68,6 +68,30 @@ def test_public_submit_creates_request(monkeypatch):
         got = (db.query(KdmRequest)
                .filter(KdmRequest.requested_title == "QUEER_FTR").first())
         assert got is not None and got.status == "received"
+    finally:
+        db.close()
+
+
+def test_public_submit_creates_serial_credentials(monkeypatch):
+    """Step 2: serials nel form pubblico → righe KdmRequestCertificate kind=serial."""
+    import app.routers.kdm_public as pub
+    monkeypatch.setattr(pub, "_notify_finishing", lambda db, req: None)
+    tok = _make_link()
+    title = f"CRED_TEST_{secrets.token_hex(6)}"
+    r = client.post(f"/public/kdm/{tok}", data={
+        "request_type": "kdm", "requested_title": title,
+        "cinema_contact_email": "x@y.it",
+        "serials": "SN-AAA\nSN-BBB\n\nSN-CCC"})
+    assert r.status_code in (200, 303)
+    db = SessionLocal()
+    try:
+        got = db.query(KdmRequest).filter(KdmRequest.requested_title == title).first()
+        assert got is not None
+        certs = (db.query(KdmRequestCertificate)
+                 .filter(KdmRequestCertificate.kdm_request_id == got.id).all())
+        serials = sorted(c.serial for c in certs)
+        assert serials == ["SN-AAA", "SN-BBB", "SN-CCC"], serials
+        assert all(c.kind == "serial" for c in certs)
     finally:
         db.close()
 

@@ -11,7 +11,7 @@ from app.database import get_db
 from app.context import current_tenant_id
 from app.models import KdmRequest, DcpCpl, CinemaFacility, CinemaServer
 from app.models import Job, JobDeliverable
-from app.models import KdmRequestLink, KdmRequestEvent
+from app.models import KdmRequestLink, KdmRequestEvent, KdmRequestCertificate
 from app.services.rbac import has_permission, current_user_optional
 from app.services.kdm_match import match_request, AUTO_LINK_THRESHOLD
 from app.services.kdm_state import transition as _fsm_transition
@@ -104,6 +104,23 @@ def _serialize(r: KdmRequest) -> dict:
     }
 
 
+def _cert_json(c: KdmRequestCertificate) -> dict:
+    return {
+        "id": c.id,
+        "kind": c.kind,
+        "label": c.label,
+        "serial": c.serial,
+        "cert_thumbprint": c.cert_thumbprint,
+        "cert_expires_at": c.cert_expires_at.isoformat() if c.cert_expires_at else None,
+        "has_pem": bool(c.cert_pem),
+    }
+
+
+def _has_credentials(r: KdmRequest, certs) -> bool:
+    """≥1 credenziale presente: riga cert/serial OPPURE legacy client_cert_pem."""
+    return bool(certs) or bool(r.client_cert_pem)
+
+
 def _serialize_detail(db, r: KdmRequest) -> dict:
     """Vista completa human-readable per il pannello dettaglio."""
     fac = db.get(CinemaFacility, r.target_facility_id) if r.target_facility_id else None
@@ -113,6 +130,12 @@ def _serialize_detail(db, r: KdmRequest) -> dict:
         db.query(KdmRequestEvent)
         .filter(KdmRequestEvent.kdm_request_id == r.id)
         .order_by(KdmRequestEvent.created_at.asc())
+        .all()
+    )
+    certs = (
+        db.query(KdmRequestCertificate)
+        .filter(KdmRequestCertificate.kdm_request_id == r.id)
+        .order_by(KdmRequestCertificate.created_at.asc())
         .all()
     )
     return {
@@ -144,6 +167,8 @@ def _serialize_detail(db, r: KdmRequest) -> dict:
         "production_contact_name": r.production_contact_name,
         "production_contact_email": r.production_contact_email,
         "has_client_cert": bool(r.client_cert_pem),
+        "certificates": [_cert_json(c) for c in certs],
+        "has_credentials": _has_credentials(r, certs),
         "source_link_id": r.source_link_id,
         "requested_at": r.requested_at.isoformat() if r.requested_at else None,
         "generated_at": r.generated_at.isoformat() if r.generated_at else None,
@@ -335,6 +360,16 @@ async def emit_kdm(rid: int, request: Request, db: Session = Depends(get_db)):
     r = db.get(KdmRequest, rid)
     if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
         raise HTTPException(404, "Richiesta non trovata")
+    # Gate Step 2: niente emissione senza ≥1 credenziale (cert o serial).
+    certs = (
+        db.query(KdmRequestCertificate)
+        .filter(KdmRequestCertificate.kdm_request_id == r.id)
+        .all()
+    )
+    if not _has_credentials(r, certs):
+        raise HTTPException(
+            400, "Serve almeno un certificato o serial number per emettere la KDM"
+        )
     try:
         _advance_to(db, r, "generated", user_id=getattr(user, "id", None))
     except ValueError as e:
@@ -358,6 +393,82 @@ async def confirm_delivery(rid: int, request: Request, db: Session = Depends(get
     db.commit()
     db.refresh(r)
     return _serialize_detail(db, r)
+
+
+# ---------------------------------------------------------------------------
+# Step 2 — credenziali richiesta: certificati multipli + serial number
+# ---------------------------------------------------------------------------
+
+def _get_request_or_404(db, rid: int) -> KdmRequest:
+    r = db.get(KdmRequest, rid)
+    if not r or r.tenant_id != current_tenant_id() or r.deleted_at:
+        raise HTTPException(404, "Richiesta non trovata")
+    return r
+
+
+@router.get("/api/requests/{rid}/certs")
+async def list_certs(rid: int, request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    r = _get_request_or_404(db, rid)
+    certs = (
+        db.query(KdmRequestCertificate)
+        .filter(KdmRequestCertificate.kdm_request_id == r.id)
+        .order_by(KdmRequestCertificate.created_at.asc())
+        .all()
+    )
+    return [_cert_json(c) for c in certs]
+
+
+@router.post("/api/requests/{rid}/certs")
+async def add_cert(
+    rid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    kind: str = Form("cert"),
+    cert_pem: Optional[str] = Form(None),
+    serial: Optional[str] = Form(None),
+    label: Optional[str] = Form(None),
+):
+    """Aggiunge una credenziale: 'cert' (PEM, thumbprint/scadenza parsati) o 'serial'."""
+    _require_kdm(request, db)
+    r = _get_request_or_404(db, rid)
+    if kind not in ("cert", "serial"):
+        raise HTTPException(400, "kind deve essere 'cert' o 'serial'")
+
+    c = KdmRequestCertificate(
+        tenant_id=current_tenant_id(),
+        kdm_request_id=r.id,
+        kind=kind,
+        label=label,
+    )
+    if kind == "cert":
+        if not cert_pem or not cert_pem.strip():
+            raise HTTPException(400, "cert_pem richiesto per kind='cert'")
+        c.cert_pem = cert_pem
+        meta = parse_cert(cert_pem)
+        c.cert_thumbprint = meta["thumbprint"]
+        c.cert_expires_at = meta["expires_at"]
+    else:
+        if not serial or not serial.strip():
+            raise HTTPException(400, "serial richiesto per kind='serial'")
+        c.serial = serial.strip()
+
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return _cert_json(c)
+
+
+@router.delete("/api/requests/{rid}/certs/{cid}")
+async def delete_cert(rid: int, cid: int, request: Request, db: Session = Depends(get_db)):
+    _require_kdm(request, db)
+    r = _get_request_or_404(db, rid)
+    c = db.get(KdmRequestCertificate, cid)
+    if not c or c.kdm_request_id != r.id or c.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Credenziale non trovata")
+    db.delete(c)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/api/requests/{rid}/match")

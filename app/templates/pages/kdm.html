@@ -341,6 +341,22 @@
         </div>
       </form>
 
+      {# Credenziali: certificati multipli + serial (≥1 per emettere) #}
+      <div style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+        <div class="text-sm" style="font-weight:600;margin-bottom:6px;" data-i18n="kdm.cert.title">Certificati / Serial</div>
+        <div id="kdm-detail-certs" class="text-sm"></div>
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+          <select class="form-select" id="kdm-cert-kind" style="max-width:140px;" onchange="kdmCertKindToggle()">
+            <option value="cert" data-i18n="kdm.cert.kind_cert">Certificato</option>
+            <option value="serial" data-i18n="kdm.cert.kind_serial">Serial number</option>
+          </select>
+          <input class="form-input" id="kdm-cert-label" placeholder="etichetta (opz.)" style="flex:1;min-width:120px;" data-i18n="kdm.cert.label_ph" data-i18n-attr="placeholder">
+          <button class="btn btn-secondary btn-sm" onclick="kdmCertAdd()" data-i18n="kdm.cert.add">+ Aggiungi</button>
+        </div>
+        <input class="form-input" id="kdm-cert-serial" placeholder="serial number" style="margin-top:6px;display:none;" data-i18n="kdm.cert.serial_ph" data-i18n-attr="placeholder">
+        <textarea class="form-textarea" id="kdm-cert-pem" rows="3" placeholder="-----BEGIN CERTIFICATE-----" style="margin-top:6px;"></textarea>
+      </div>
+
       {# Info read-only: match, provenienza, deliverable prodotto #}
       <div id="kdm-detail-meta" class="text-sm text-muted" style="margin-bottom:14px;"></div>
 

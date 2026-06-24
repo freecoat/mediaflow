@@ -59,7 +59,7 @@ from app.models.models import (
     QCEvent, QCReport, QCEventType,
     # v3.5.0-alpha.172.226 — KDM/DKDM request tracking
     DcpCpl, CinemaFacility, CinemaServer, KdmRequest, KdmRequestEvent,
-    KdmRequestLink,
+    KdmRequestLink, KdmRequestCertificate,
     KDM_REQUEST_TYPES, KDM_STATUSES, CPL_SOURCES, SERVER_MANUFACTURERS,
     FACILITY_KINDS, KDM_DELIVERY_METHODS,
 )

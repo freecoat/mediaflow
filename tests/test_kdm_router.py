@@ -244,10 +244,23 @@ def test_emit_without_job_returns_400(client_admin):
     assert r.status_code == 400, r.text
 
 
-def test_emit_happy_path_materializes(client_admin):
-    """Emetti porta a 'generated' e materializza il deliverable."""
+def test_emit_blocked_without_credentials(client_admin):
+    """Emetti senza credenziali (cert/serial) → 400 anche se DCP agganciato."""
     session = client_admin.session
     req = _make_linked_request(session, status="received")
+    r = client_admin.post(f"/kdm/api/requests/{req.id}/emit")
+    assert r.status_code == 400, r.text
+    assert "certificato" in r.text.lower() or "serial" in r.text.lower()
+
+
+def test_emit_happy_path_materializes(client_admin):
+    """Emetti porta a 'generated' e materializza il deliverable (con credenziale)."""
+    session = client_admin.session
+    req = _make_linked_request(session, status="received")
+    # Step 2 gate: serve ≥1 credenziale
+    rc = client_admin.post(f"/kdm/api/requests/{req.id}/certs",
+                           data={"kind": "serial", "serial": "SN-001"})
+    assert rc.status_code == 200, rc.text
 
     r = client_admin.post(f"/kdm/api/requests/{req.id}/emit")
     assert r.status_code == 200, r.text
@@ -261,6 +274,8 @@ def test_confirm_delivery_reaches_confirmed(client_admin):
     """Conferma consegna porta la richiesta fino a 'confirmed'."""
     session = client_admin.session
     req = _make_linked_request(session, status="received")
+    client_admin.post(f"/kdm/api/requests/{req.id}/certs",
+                      data={"kind": "serial", "serial": "SN-002"})
     # emette prima
     r1 = client_admin.post(f"/kdm/api/requests/{req.id}/emit")
     assert r1.status_code == 200, r1.text
@@ -270,6 +285,67 @@ def test_confirm_delivery_reaches_confirmed(client_admin):
     b = r2.json()
     assert b["status"] == "confirmed"
     assert b["confirmed_at"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Step 2 — credenziali: certificati multipli + serial number
+# ---------------------------------------------------------------------------
+
+def test_add_serial_credential(client_admin):
+    """POST .../certs kind=serial → 200 + appare in lista + has_credentials."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received")
+    session.add(req); session.commit()
+
+    r = client_admin.post(f"/kdm/api/requests/{req.id}/certs",
+                          data={"kind": "serial", "serial": "ABC-123", "label": "Sala 1"})
+    assert r.status_code == 200, r.text
+    assert r.json()["serial"] == "ABC-123"
+
+    lst = client_admin.get(f"/kdm/api/requests/{req.id}/certs")
+    assert lst.status_code == 200
+    assert any(c["serial"] == "ABC-123" for c in lst.json())
+
+    detail = client_admin.get(f"/kdm/api/requests/{req.id}").json()
+    assert detail["has_credentials"] is True
+    assert len(detail["certificates"]) == 1
+
+
+def test_add_cert_requires_pem(client_admin):
+    """kind=cert senza cert_pem → 400."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received")
+    session.add(req); session.commit()
+    r = client_admin.post(f"/kdm/api/requests/{req.id}/certs", data={"kind": "cert"})
+    assert r.status_code == 400, r.text
+
+
+def test_delete_credential(client_admin):
+    """DELETE .../certs/{cid} rimuove la credenziale."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received")
+    session.add(req); session.commit()
+    r = client_admin.post(f"/kdm/api/requests/{req.id}/certs",
+                          data={"kind": "serial", "serial": "DEL-1"})
+    cid = r.json()["id"]
+
+    rd = client_admin.delete(f"/kdm/api/requests/{req.id}/certs/{cid}")
+    assert rd.status_code == 200, rd.text
+    lst = client_admin.get(f"/kdm/api/requests/{req.id}/certs").json()
+    assert not any(c["id"] == cid for c in lst)
+
+
+def test_multiple_credentials(client_admin):
+    """Più credenziali (cert + serial) coesistono sulla stessa richiesta."""
+    session = client_admin.session
+    req = KdmRequest(tenant_id=1, request_type="kdm", status="received")
+    session.add(req); session.commit()
+    client_admin.post(f"/kdm/api/requests/{req.id}/certs",
+                      data={"kind": "serial", "serial": "S1"})
+    client_admin.post(f"/kdm/api/requests/{req.id}/certs",
+                      data={"kind": "serial", "serial": "S2"})
+    lst = client_admin.get(f"/kdm/api/requests/{req.id}/certs").json()
+    assert len(lst) == 2
 
 
 # ---------------------------------------------------------------------------

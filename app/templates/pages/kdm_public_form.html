@@ -46,9 +46,16 @@
     <input type="datetime-local" name="valid_to">
   </label>
 
-  <label><span data-i18n="kdm.pub.cert">Certificato server (.pem)</span> <small data-i18n="kdm.pub.optional">(opzionale)</small>
-    <input type="file" name="cert_file" accept=".pem,.crt,.cer">
-  </label>
+  <fieldset>
+    <legend data-i18n="kdm.pub.credentials">Certificati / Serial</legend>
+    <p class="text-sm" style="margin:0 0 10px;opacity:.8;" data-i18n="kdm.pub.credentials_hint">Fornisci i certificati server (.pem) e/o i serial number. Almeno uno è necessario per emettere le chiavi.</p>
+    <label><span data-i18n="kdm.pub.cert">Certificati server (.pem)</span> <small data-i18n="kdm.pub.cert_multi">(uno o più)</small>
+      <input type="file" name="cert_file" accept=".pem,.crt,.cer" multiple>
+    </label>
+    <label><span data-i18n="kdm.pub.serials">Serial number</span> <small data-i18n="kdm.pub.serials_hint">(uno per riga)</small>
+      <textarea name="serials" rows="3" placeholder="es. 1234-ABCD-..."></textarea>
+    </label>
+  </fieldset>
 
   <fieldset>
     <legend data-i18n="kdm.pub.contacts">Contatti</legend>

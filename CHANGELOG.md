@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.231 — KDM redesign Step 2: certificati multipli + obbligo emissione (24 giu 2026)
+
+I certificati di una richiesta KDM possono ora essere multipli e sono di norma obbligatori per emettere (in alternativa: serial number).
+
+- **Modello `KdmRequestCertificate`** (N per richiesta): `kind` ('cert' | 'serial'), `cert_pem` (+ `cert_thumbprint`/`cert_expires_at` parsati via `kdm_cert.parse_cert`), `serial`, `label`. Tabella creata automaticamente al boot (`create_all`), nessuno script di migrazione necessario.
+- **Endpoint credenziali**: `GET/POST /kdm/api/requests/{id}/certs` (aggiungi cert PEM o serial) + `DELETE .../certs/{cid}`. `_serialize_detail` espone `certificates[]` + `has_credentials`.
+- **Gate emissione**: `POST .../emit` ritorna **400** se nessuna credenziale (cert riga, serial riga, o legacy `client_cert_pem`) — "Serve almeno un certificato o serial number per emettere la KDM".
+- **Form pubblico**: upload **certificati multipli** (`<input multiple>`) + textarea **serial number** (uno per riga) → materializza righe `KdmRequestCertificate` al submit. Label/hint tradotti 5 lingue.
+- **Detail operatore**: sezione Certificati/Serial con lista, aggiunta (PEM incolla o serial + etichetta), rimozione; warning ⚠ se nessuna credenziale (emissione bloccata).
+- **i18n**: +20 chiavi (5 lingue). **Test**: +5 router (serial/cert-requires-pem/delete/multiple/emit-blocked) + 1 public (serials→credenziali); emit/confirm aggiornati al gate. 69 test KDM pass.
+
 ## v3.5.0-alpha.172.230 — KDM redesign Step 1: dettaglio editabile + azioni leggibili (24 giu 2026)
 
 Risposta ai feedback di Matteo su KDM: interfaccia poco leggibile, richieste non editabili, niente filtri, azioni di emissione/conferma sepolte nel dropdown FSM, form pubblico fuori standard. Step 1 di un redesign incrementale (Step 2 = certificati multipli, a seguire).

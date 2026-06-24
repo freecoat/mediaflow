@@ -4709,3 +4709,25 @@ class KdmRequestEvent(Base):
     payload_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class KdmRequestCertificate(Base):
+    """Credenziale di una richiesta KDM: certificato server PEM OPPURE serial number.
+
+    Step 2 redesign: i certificati possono essere multipli e sono di norma
+    obbligatori (≥1 cert o serial richiesto per emettere). `kind` discrimina
+    le due forme; per 'cert' valorizza cert_pem (+ thumbprint/scadenza parsati),
+    per 'serial' valorizza serial.
+    """
+    __tablename__ = "kdm_request_certificates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    kdm_request_id: Mapped[int] = mapped_column(ForeignKey("kdm_requests.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(8), default="cert")  # 'cert' | 'serial'
+    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cert_pem: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cert_thumbprint: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    cert_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    serial: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
