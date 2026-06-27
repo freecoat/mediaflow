@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 from datetime import date, timedelta
 from sqlalchemy.orm import Session, selectinload
-from app.models.models import Acquisition, AcquisitionStage
+from app.models.models import Acquisition, AcquisitionStage, ProjectStatus
 
 DEFAULT_ACQ_PROBABILITY: dict[AcquisitionStage, float] = {
     AcquisitionStage.lead: 10,
@@ -88,3 +88,41 @@ def upcoming_actions(db, tenant_id, *, owner_id=None, days=30):
                     "title": a.subject, "date": a.next_action_date.isoformat()})
     out.sort(key=lambda x: x["date"])
     return out
+
+
+STAGE_TO_PROJECT_STATUS = {
+    AcquisitionStage.lead: ProjectStatus.prospect,
+    AcquisitionStage.qualified: ProjectStatus.quoting,
+    AcquisitionStage.quoting: ProjectStatus.quoting,
+    AcquisitionStage.negotiation: ProjectStatus.quoting,
+    AcquisitionStage.won: ProjectStatus.active,
+    AcquisitionStage.lost: ProjectStatus.archived,
+}
+
+
+def apply_stage_change(db, acq, new_stage):
+    acq.stage = new_stage
+    if acq.project_id:
+        from app.models.models import Project
+        p = db.query(Project).filter(Project.id == acq.project_id,
+                                     Project.tenant_id == acq.tenant_id).first()
+        if p:
+            p.status = STAGE_TO_PROJECT_STATUS.get(new_stage, p.status)
+    db.commit()
+
+
+def convert_to_project(db, acq, *, code, title=None):
+    from app.models.models import Project, Client
+    if acq.client_id is None:
+        cl = Client(tenant_id=acq.tenant_id, name=(acq.prospect_name or acq.title))
+        db.add(cl); db.flush()
+        acq.client_id = cl.id
+    if acq.project_id:
+        return db.query(Project).filter(Project.id == acq.project_id).first()
+    p = Project(tenant_id=acq.tenant_id, code=code, title=title or acq.title,
+                client_id=acq.client_id,
+                status=STAGE_TO_PROJECT_STATUS.get(acq.stage, ProjectStatus.prospect))
+    db.add(p); db.flush()
+    acq.project_id = p.id
+    db.commit()
+    return p
