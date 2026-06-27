@@ -187,7 +187,7 @@
     <option value="won" data-i18n="acq.state.won">Vinte</option>
     <option value="lost" data-i18n="acq.state.lost">Perse</option>
   </select>
-  <input type="text" id="acq-filter-search" placeholder="Cerca…" style="min-width:160px;">
+  <input type="text" id="acq-filter-search" data-i18n="acq.ph.search" data-i18n-attr="placeholder" placeholder="Cerca…" style="min-width:160px;">
 </div>
 
 {# ── Toggle vista ─────────────────────────────────────────────────── #}
@@ -275,7 +275,7 @@
           </div>
           <div class="form-group" style="flex:1;">
             <label data-i18n="acq.act.subject">Oggetto *</label>
-            <input type="text" id="det-act-subject" placeholder="es. Chiamata di follow-up">
+            <input type="text" id="det-act-subject" data-i18n="acq.ph.activity_subject" data-i18n-attr="placeholder" placeholder="es. Chiamata di follow-up">
           </div>
         </div>
         <div class="form-group">
@@ -411,9 +411,9 @@
       <div class="form-row">
         <div class="form-group" style="flex:1;">
           <label class="form-label" data-i18n="acq.form.source">Fonte</label>
-          <input class="form-input" id="acq-form-source" type="text" placeholder="es. referral, cold outreach…">
+          <input class="form-input" id="acq-form-source" type="text" data-i18n="acq.ph.source" data-i18n-attr="placeholder" placeholder="es. referral, cold outreach…">
         </div>
-        <div class="form-group" style="flex:1;" id="acq-form-lost-reason-group" style="display:none;">
+        <div class="form-group" id="acq-form-lost-reason-group" style="flex:1; display:none;">
           <label class="form-label" data-i18n="acq.form.lost_reason">Motivo perdita</label>
           <input class="form-input" id="acq-form-lost-reason" type="text">
         </div>
@@ -442,7 +442,7 @@
       <input type="hidden" id="acq-convert-id">
       <div class="form-group">
         <label class="form-label" data-i18n="acq.convert.code">Codice progetto *</label>
-        <input class="form-input" id="acq-convert-code" type="text" placeholder="es. P-2026-001">
+        <input class="form-input" id="acq-convert-code" type="text" data-i18n="acq.ph.convert_code" data-i18n-attr="placeholder" placeholder="es. P-2026-001">
       </div>
       <div class="form-group">
         <label class="form-label" data-i18n="acq.convert.title_field">Titolo progetto</label>
@@ -506,6 +506,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('acq-filter-dept').addEventListener('change',  acqApplyFilters);
   document.getElementById('acq-filter-state').addEventListener('change', acqApplyFilters);
   document.getElementById('acq-filter-search').addEventListener('input', acqApplyFilters);
+
+  // lost-reason visibility based on stage
+  document.getElementById('acq-form-stage').addEventListener('change', e => acqToggleLostReason(e.target.value));
 
   // detail panel action buttons — wired via data-acq-id set at render time
   document.getElementById('det-btn-edit').addEventListener('click', () => acqOpenForm(_acqCurrentId));
@@ -819,7 +822,7 @@ async function acqDetLoadActivities(aid) {
       const el = document.createElement('div');
       el.className = 'acq-activity-item';
       el.innerHTML = `
-        <span class="acq-activity-type-badge">${escapeHtml(act.type||'')}</span>
+        <span class="acq-activity-type-badge">${escapeHtml(mfT('acq.act.type.' + act.type, act.type))}</span>
         <strong>${escapeHtml(act.subject||'')}</strong>
         ${act.occurred_at ? '<span style="color:var(--text3);font-size:11px;margin-left:4px;">' + escapeHtml(act.occurred_at.substring(0,10)) + '</span>' : ''}
         ${act.body ? '<div style="color:var(--text3);margin-top:3px;">' + escapeHtml(act.body) + '</div>' : ''}
@@ -905,7 +908,7 @@ async function acqAddActivity() {
 async function acqAddContact() {
   if (!_acqCurrentId) return;
   const acq = _acqItems.find(a => a.id === _acqCurrentId);
-  if (!acq || !acq.client_id) { toast('Nessun cliente collegato', 'error'); return; }
+  if (!acq || !acq.client_id) { toast(mfT('acq.toast.no_client'), 'error'); return; }
   const name = document.getElementById('det-contact-name').value.trim();
   if (!name) { toast(mfT('toast.required_fields','Compila i campi obbligatori'), 'error'); return; }
   const fd = new FormData();
@@ -983,6 +986,11 @@ function acqUpdateDeptsCSV() {
   document.getElementById('acq-form-depts-csv').value = ids.join(',');
 }
 
+function acqToggleLostReason(stage) {
+  const g = document.getElementById('acq-form-lost-reason-group');
+  if (g) g.style.display = stage === 'lost' ? '' : 'none';
+}
+
 function acqOpenForm(aid) {
   const isNew = !aid;
   document.getElementById('acq-modal-form-title').textContent = mfT(isNew ? 'acq.new' : 'acq.btn.edit', isNew ? '+ Nuova trattativa' : 'Modifica');
@@ -995,6 +1003,7 @@ function acqOpenForm(aid) {
   document.getElementById('acq-form-value').value = '0';
   document.getElementById('acq-form-prob').value  = '';
   document.getElementById('acq-form-stage').value = 'lead';
+  acqToggleLostReason('lead');
   document.getElementById('acq-form-client').value = '';
   document.querySelectorAll('#acq-form-depts-checkboxes input[type=checkbox]').forEach(cb => { cb.checked = false; });
   document.getElementById('acq-form-depts-csv').value = '';
@@ -1004,6 +1013,7 @@ function acqOpenForm(aid) {
     if (a) {
       document.getElementById('acq-form-title').value = a.title || '';
       document.getElementById('acq-form-stage').value = a.stage || 'lead';
+      acqToggleLostReason(a.stage || 'lead');
       document.getElementById('acq-form-value').value = a.estimated_value || '0';
       document.getElementById('acq-form-prob').value  = a.win_probability_pct != null ? a.win_probability_pct : '';
       document.getElementById('acq-form-close-date').value = a.expected_close_date || '';

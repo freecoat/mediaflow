@@ -931,6 +931,12 @@ window.MF_I18N = {
   'acq.toast.converted':            {it: 'Convertita in progetto', en: 'Converted to project',    fr: 'Convertie en projet',     de: 'In Projekt umgewandelt',    es: 'Convertida a proyecto'},
   'acq.toast.act_added':            {it: 'Attività aggiunta',      en: 'Activity added',          fr: 'Activité ajoutée',        de: 'Aktivität hinzugefügt',     es: 'Actividad añadida'},
   'acq.toast.contact_added':        {it: 'Contatto aggiunto',      en: 'Contact added',           fr: 'Contact ajouté',          de: 'Kontakt hinzugefügt',       es: 'Contacto añadido'},
+  'acq.toast.no_client':            {it: 'Nessun cliente collegato', en: 'No client linked',        fr: 'Aucun client lié',        de: 'Kein Kunde verknüpft',      es: 'Sin cliente vinculado'},
+  // Placeholders
+  'acq.ph.search':                  {it: 'Cerca…',                 en: 'Search…',                 fr: 'Rechercher…',             de: 'Suchen…',                   es: 'Buscar…'},
+  'acq.ph.activity_subject':        {it: 'es. Chiamata di follow-up', en: 'e.g. Follow-up call',  fr: 'ex. Appel de suivi',      de: 'z.B. Follow-up-Anruf',      es: 'p.ej. Llamada de seguimiento'},
+  'acq.ph.source':                  {it: 'es. referral, cold outreach…', en: 'e.g. referral, cold outreach…', fr: 'ex. référence, démarchage…', de: 'z.B. Empfehlung, Kaltakquise…', es: 'p.ej. referido, contacto en frío…'},
+  'acq.ph.convert_code':            {it: 'es. P-2026-001',         en: 'e.g. P-2026-001',         fr: 'ex. P-2026-001',          de: 'z.B. P-2026-001',           es: 'p.ej. P-2026-001'},
   // Convert modal
   'acq.convert.title':              {it: 'Converti in progetto',   en: 'Convert to project',      fr: 'Convertir en projet',     de: 'In Projekt umwandeln',      es: 'Convertir a proyecto'},
   'acq.convert.code':               {it: 'Codice progetto *',      en: 'Project code *',          fr: 'Code projet *',           de: 'Projekt-Code *',            es: 'Código de proyecto *'},
