@@ -32,6 +32,7 @@ from app.routers import (
     kdm as kdm_router,  # v3.5.0-alpha.172.226 — KDM/DKDM request tracking
     kdm_public,  # Task 18 — Form pubblico no-auth KDM/DKDM (token capability)
     acquisitions,  # feat/acquisizioni-fase1 — Pipeline commerciale CRUD + summary + agenda
+    contacts,  # feat/acquisizioni-fase1 Task 10 — Contatti multipli per cliente
 )
 
 
@@ -2705,11 +2706,15 @@ _ADMIN_ONLY_PREFIXES = ("/departments", "/settings/api/working-hours", "/setting
 
 
 def _is_forbidden_for_role(path: str, user) -> bool:
-    from app.services.rbac import is_admin, is_elevated, can_view_finance
+    from app.services.rbac import is_admin, is_elevated, can_view_finance, has_permission
     # Staff/viewer: niente finanza/quote/listino/clienti
     if not can_view_finance(user):
         for pref in _FINANCE_BLOCKED_PREFIXES:
             if path == pref or path.startswith(pref + "/"):
+                # /clients/* è accessibile anche con view_clients granulare
+                # (es. contatti e anagrafica clienti senza permesso finance completo)
+                if pref == "/clients" and has_permission(user, "view_clients"):
+                    continue
                 return True
     # Staff/viewer: niente anagrafica risorse globale
     if not is_elevated(user):
@@ -2809,6 +2814,7 @@ from app.routers.delivery_variants import router as delivery_variants_router
 app.include_router(delivery_variants_router)
 app.include_router(mobile_router.router)  # v3.5.0-alpha.172.158 — PWA companion staff /m
 app.include_router(acquisitions.router)  # feat/acquisizioni-fase1 — Pipeline commerciale
+app.include_router(contacts.router)  # feat/acquisizioni-fase1 Task 10 — Contatti cliente
 
 
 @app.get("/", response_class=HTMLResponse)
