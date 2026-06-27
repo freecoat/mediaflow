@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.237** — 27 giugno 2026 — Acquisizioni Fase 2: estrazione email + incrocio web
+
+### α.172.237 ✅ (Acquisizioni Fase 2 — 27 giu, subagent-driven 8 task TDD, ramo feat/acquisizioni-fase2)
+- **Estrazione email nel copilot**: bottone "📥 Incolla email" nel drawer → avvolge il testo + system prompt email-aware → propone `propose_activity`/`propose_contact`/`update_client`/`propose_acquisition_stage` (confermabili via AIAction).
+- **Incrocio web**: "🔎 Cerca sul web" = turno copilot; `web_search` ora ristretto alle **fonti configurate** (`Tenant.web_sources` → `include_domains` Tavily, egress-gated). Propone `update_client`/`propose_project_metadata`/`propose_client_work` (filmografia).
+- **Nuove capability**: `update_client` (aggiorna cliente esistente), `propose_client_work`. **Fonti web** gestibili in `/settings` (sezione Fonti web, `GET/POST /settings/api/web-sources`).
+- **1004 test** (+12). Smoke browser verde (bottoni copilot, settings roundtrip, 0 errori console). Spec: `docs/superpowers/specs/2026-06-27-acquisizioni-fase2-design.md`, plan: `.../plans/2026-06-27-acquisizioni-fase2.md`.
+
+**Prossimo / IN CORSO**: merge `feat/acquisizioni-fase2` → main dopo review finale + smoke Matteo. **Fase 3 Acquisizioni**: agenda piena + Google Calendar (OAuth)/ICS. Nota: tenant esistenti hanno `web_sources` NULL finché non eseguono `scripts/migrate_web_sources.py` o impostano le fonti in UI (default = ricerca non ristretta). Backlog minori (ledger): i18n placeholder textarea fonti web (data-i18n-attr), typo DE.
+
+### α.172.236 ✅ (storico sotto)
 **v3.5.0-alpha.172.236** — 27 giugno 2026 — Acquisizioni Fase 1: pipeline trattative + attività
 
 ### α.172.236 ✅ (Acquisizioni Fase 1 — 27 giu, subagent-driven 14 task TDD, ramo feat/acquisizioni-fase1)

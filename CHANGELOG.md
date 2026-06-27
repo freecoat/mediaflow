@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.237 — Acquisizioni Fase 2: estrazione email + incrocio web (27 giu 2026)
+
+Fase 2 del modulo Acquisizioni: il commerciale incolla una conversazione email nel copilot e l'AI propone (confermabili) le informazioni estratte; più uno step web esplicito ristretto a fonti configurabili. Tutto nel copilot esistente, niente pagina nuova. Subagent-driven TDD (8 task).
+
+- **Estrazione email**: nel drawer copilot, "📥 Incolla email" avvolge il testo con un'istruzione e lo invia al copilot. System prompt "email-aware" → propone in un turno il sottoinsieme rilevante di `propose_activity` (email salvata, direzione inferita), `propose_contact` (firma), `update_client` (dati cliente), `propose_acquisition_stage` (+ prossimo passo). Regola anti-invenzione.
+- **Capability `update_client`**: aggiorna i campi di un cliente ESISTENTE (solo quelli forniti); `propose_client` resta per la creazione.
+- **Incrocio web**: "🔎 Cerca sul web" = turno copilot esplicito. `web_search` (Tavily, egress-gated) ora passa le **fonti configurate** come `include_domains`. Il copilot propone `update_client` (azienda) + `propose_project_metadata` (intel progetto) + nuova capability **`propose_client_work`** (filmografia, `ai_imported`).
+- **Fonti web in Impostazioni**: nuova colonna `Tenant.web_sources` (JSON domini) + sezione "Fonti web" in `/settings` (textarea, lowercase+dedup) + `GET/POST /settings/api/web-sources` (gate `manage_settings_global`). Seed default `filmitalia.org`/`cinema.cultura.gov.it`/`imdb.com`/`mymovies.it` via migrazione.
+- **1004 test** (+12). Smoke browser verde: bottoni copilot wired a `copilotSend()`, settings fonti web roundtrip (cleaning + dedup), 0 errori console. Spec+plan in `docs/superpowers/`.
+
 ## v3.5.0-alpha.172.236 — Acquisizioni Fase 1: pipeline trattative + attività (27 giu 2026)
 
 Nuovo modulo **Acquisizioni** (CRM/pipeline vendite AI-assisted), sezione Anagrafica. Fase 1 di 3 (email-AI = Fase 2, calendario = Fase 3). Costruito subagent-driven TDD (14 task).
