@@ -689,7 +689,7 @@ function kdmRenderLinks() {
       : (l.is_expired ? ' <span style="color:#f59e0b;font-size:11px;font-weight:600;" data-i18n="kdm.link.filter.expired">Scaduto</span>' : '');
     var reqTitle = l.requested_title ? ('<div class="text-sm text-muted">' + escapeHtml(l.requested_title) + '</div>') : '';
     var editBtn = !l.revoked
-      ? '<button class="btn btn-ghost btn-sm" onclick="kdmEditLink(' + l.id + ')" title="' + escapeHtml(mfT('kdm.link.edit')) + '" data-i18n="kdm.link.edit" data-i18n-attr="title">✎</button>'
+      ? '<button class="btn btn-ghost btn-sm" onclick="kdmEditLink(' + l.id + ')" title="' + escapeHtml(mfT('kdm.link.edit')) + '" data-i18n-attr="title">✎</button>'
       : '<button class="btn btn-ghost btn-sm" disabled style="opacity:0.3;">✎</button>';
     return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);' + revokedStyle + '">' +
       '<input type="checkbox" value="' + l.id + '" onchange="kdmLinkToggle(' + l.id + ',this.checked)"' + (_kdmLinkSel[l.id] ? ' checked' : '') + '>' +
@@ -775,7 +775,7 @@ function kdmEditLink(id) {
   if (!l || l.revoked) return;
   document.getElementById('kdm-edit-link-id').value = l.id;
   document.getElementById('kdm-edit-link-label').value = l.label || '';
-  document.getElementById('kdm-edit-link-prefill-title').value = l.prefill_title || '';
+  document.getElementById('kdm-edit-link-prefill-title').value = l.requested_title || '';
   document.getElementById('kdm-edit-link-duration').value = l.duration_days ? String(l.duration_days) : '';
   // Copia opzioni progetto dal select genera-link (già popolato da kdmLoadProjectsForLink)
   var srcSel = document.getElementById('kdm-link-project');

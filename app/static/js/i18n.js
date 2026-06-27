@@ -821,6 +821,8 @@ window.MF_I18N = {
   'kdm.link.filter.client_all':{it: '— tutti i clienti —',       en: '— all clients —',          fr: '— tous les clients —',    de: '— alle Kunden —',           es: '— todos los clientes —'},
   'kdm.link.edit':            {it: 'Modifica',                   en: 'Edit',                     fr: 'Modifier',                de: 'Bearbeiten',                es: 'Editar'},
   'kdm.link.edit_title':      {it: 'Modifica link',              en: 'Edit link',                fr: 'Modifier le lien',        de: 'Link bearbeiten',           es: 'Editar enlace'},
+  'kdm.link.edit_label_ph':   {it: 'es. Arcadia Roma',           en: 'e.g. Arcadia Rome',        fr: 'ex. Arcadia Rome',        de: 'z.B. Arcadia Rom',          es: 'ej. Arcadia Roma'},
+  'kdm.link.edit_title_ph':   {it: 'opzionale',                  en: 'optional',                 fr: 'optionnel',               de: 'optional',                  es: 'opcional'},
   'kdm.link.save':            {it: 'Salva modifiche',            en: 'Save changes',             fr: 'Enregistrer',             de: 'Speichern',                 es: 'Guardar cambios'},
   'kdm.link.select_all':      {it: 'Seleziona tutti',            en: 'Select all',               fr: 'Tout sélectionner',       de: 'Alle auswählen',            es: 'Seleccionar todos'},
   'dt.reparse':              {it: 'Ri-analizza',               en: 'Re-analyze',               fr: 'Ré-analyser',             de: 'Neu analysieren',           es: 'Re-analizar'},
