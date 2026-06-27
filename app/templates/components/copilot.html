@@ -230,6 +230,11 @@
   <div class="cp-typing" id="cp-typing" style="display:none;">Sta pensando…</div>
   <!-- v3.5.0-alpha.51: lista allegati visibili sopra l'input -->
   <div class="cp-attachments" id="cp-attachments" style="display:none;"></div>
+  <!-- v3.5.0-alpha.X — acquisizioni-f2 Task 7: incolla email + cerca web -->
+  <div style="padding: 0 10px 6px; display: flex; gap: 6px;">
+    <button type="button" id="cp-paste-email" class="btn btn-ghost btn-sm" data-i18n="copilot.email.btn" data-i18n-attr="title" title="Incolla email">📥</button>
+    <button type="button" id="cp-web-search" class="btn btn-ghost btn-sm" data-i18n="copilot.web.btn" data-i18n-attr="title" title="Cerca sul web">🔎</button>
+  </div>
   <div class="cp-input-bar">
     <button class="cp-attach-btn" type="button" onclick="document.getElementById('cp-file-input').click()" title="Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)">
       <i data-lucide="paperclip" style="width:16px;height:16px;"></i>
@@ -243,3 +248,19 @@
   </div>
 </div>
 <script src="/static/js/copilot.js?v={{ app_version }}"></script>
+<script>
+// acquisizioni-f2 Task 7 — incolla email + cerca web
+// Meccanismo reale: imposta cp-input.value poi chiama copilotSend()
+document.getElementById('cp-paste-email')?.addEventListener('click', () => {
+  const email = prompt(mfT('copilot.email.prompt'));
+  if (!email || !email.trim()) return;
+  const ta = document.getElementById('cp-input');
+  ta.value = mfT('copilot.email.instruction') + '\n\n' + email.trim();
+  copilotSend();
+});
+document.getElementById('cp-web-search')?.addEventListener('click', () => {
+  const ta = document.getElementById('cp-input');
+  ta.value = mfT('copilot.web.instruction');
+  copilotSend();
+});
+</script>

@@ -639,6 +639,8 @@ class Tenant(Base):
     # (vedi naming_resolver.normalize_naming_convention). NULL = usa i default
     # industry costanti (DEFAULT_TENANT_NAMING_CONVENTIONS) finché l'utente non salva.
     naming_conventions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # v3.5.0-alpha.172.237 — fonti web (domini) per l'incrocio dati AI (include_domains Tavily)
+    web_sources: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     invoice_footer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)         # testo libero in calce
     # v3.5.0-alpha.172.60 — Sede strutturata FatturaPA (CedentePrestatore/Sede).
     # `address` resta come legacy free-text (compat PDF); per SDI XML servono

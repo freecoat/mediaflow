@@ -76,6 +76,17 @@ from app.services.ai_capability_registry import (
     get_handlers as _registry_get_handlers,
     get_action_types as _registry_get_action_types,
 )
+# ── Email extraction guidance ────────────────────────────────
+EMAIL_EXTRACTION_GUIDANCE = """\
+ESTRAZIONE DA EMAIL (Acquisizioni):
+Quando l'utente incolla una conversazione email, estrai le informazioni rilevanti e proponi in UN turno il sottoinsieme pertinente di azioni, collegandole al contesto corrente (trattativa/cliente/progetto se presente):
+- propose_activity: registra la comunicazione (type="email", direction inbound/outbound inferita, subject sintetico, body = testo email rilevante, next_action_date se c'è una scadenza).
+- propose_contact: se la firma/testo rivela una persona nuova (nome, ruolo, email, telefono).
+- update_client: se l'email rivela dati del cliente ESISTENTE (P.IVA, sede, sito, PEC, referente). NON inventare dati assenti.
+- propose_acquisition_stage: se l'intento implica un avanzamento (es. brief ricevuto→qualified, discussione prezzo→negotiation) + next_action.
+Non cercare sul web automaticamente: se utile, suggerisci all'utente il pulsante "Cerca sul web".
+Regola: proponi solo ciò che è effettivamente nell'email; non inventare recapiti o P.IVA."""
+
 # ── Chat principale ─────────────────────────────────────────
 
 def build_system_prompt(db: Session, *, use_tools: bool,
@@ -93,10 +104,12 @@ def build_system_prompt(db: Session, *, use_tools: bool,
         from app.services.ai_tools import ASSISTANT_SYSTEM_PROMPT_TOOLS as base
     else:
         base = ASSISTANT_SYSTEM_PROMPT
-    context = build_context(db, project_id, quote_id, job_id, page=page)
+    context = build_context(db, project_id, quote_id, job_id, page=page) if db is not None else ""
     if context:
-        return base + f"\n\n━━━ CONTESTO ATTUALE ━━━\n{context}"
-    return base
+        result = base + f"\n\n━━━ CONTESTO ATTUALE ━━━\n{context}"
+    else:
+        result = base
+    return result + "\n\n" + EMAIL_EXTRACTION_GUIDANCE
 
 
 def chat_with_assistant(db: Session,
@@ -236,6 +249,32 @@ def _h_propose_price_item(db: Session, data: dict) -> dict:
             "message": f"Voce listino '{item.name}' creata con id={item.id} (categoria {cat.name}, {item.unit}, prezzo €{item.price_list:.2f}/unità)."}
 
 
+_UPDATE_CLIENT_FIELDS = (
+    "name", "legal_form", "contact_name", "contact_role", "contact_email",
+    "contact_phone", "admin_email", "vat_number", "tax_code", "sdi_code",
+    "pec", "address", "city", "country", "zip_code", "province", "website",
+    "industry", "company_size", "founded_year", "notes",
+)
+
+
+@ai_capability("update_client")
+def _h_update_client(db: Session, data: dict) -> dict:
+    cid = data.get("client_id")
+    if not cid:
+        raise ValueError("Manca 'client_id'")
+    c = db.query(Client).filter(Client.id == cid,
+                                Client.tenant_id == current_tenant_id()).first()
+    if not c:
+        raise ValueError(f"Cliente {cid} non trovato")
+    changed = []
+    for f in _UPDATE_CLIENT_FIELDS:
+        if f in data and data[f] is not None and str(data[f]).strip() != "":
+            setattr(c, f, data[f]); changed.append(f)
+    db.flush()
+    return {"updated": True, "client_id": c.id, "changed_fields": changed,
+            "message": f"Cliente '{c.name}': aggiornati {', '.join(changed) or 'nessun campo'}."}
+
+
 @ai_capability("propose_client")
 def _h_propose_client(db: Session, data: dict) -> dict:
     name = (data.get("name") or "").strip()
@@ -259,6 +298,42 @@ def _h_propose_client(db: Session, data: dict) -> dict:
     db.add(c); db.flush()
     return {"created": True, "client_id": c.id, "name": c.name,
             "message": f"Cliente '{c.name}' creato con id={c.id}."}
+
+
+@ai_capability("propose_client_work")
+def _h_propose_client_work(db: Session, data: dict) -> dict:
+    import json as _json
+    from app.context import current_tenant_id
+    from app.models.models import ClientWork
+    cid = data.get("client_id")
+    title = (data.get("title") or "").strip()
+    if not cid:
+        raise ValueError("Manca 'client_id'")
+    if not title:
+        raise ValueError("Manca 'title'")
+    tid = current_tenant_id()
+    c = db.query(Client).filter(Client.id == cid,
+                                Client.tenant_id == tid).first()
+    if not c:
+        raise ValueError(f"Cliente {cid} non trovato")
+    sources = data.get("sources")
+    sources_json = _json.dumps(sources) if sources else None
+    w = ClientWork(
+        tenant_id=tid,
+        client_id=cid,
+        title=title,
+        year=data.get("year"),
+        kind=data.get("kind"),
+        our_role=data.get("our_role"),
+        director=data.get("director"),
+        country=data.get("country"),
+        notes=data.get("notes"),
+        sources_json=sources_json,
+        ai_imported=True,
+    )
+    db.add(w); db.flush()
+    return {"created": True, "client_work_id": w.id,
+            "message": f"Filmografia: '{title}' aggiunta al cliente {cid}."}
 
 
 def _resolve_project(db: Session, data: dict) -> Project:
@@ -747,6 +822,8 @@ def _h_propose_project_metadata(db: Session, data: dict) -> dict:
 def _h_web_search(db: Session, data: dict) -> dict:
     """Ricerca web read-only via Tavily, restituisce snippet testuali."""
     from app.services.web_search import tavily_search
+    from app.models.models import Tenant
+    from app.context import current_tenant_id
     query = (data.get("query") or "").strip()
     if not query:
         raise ValueError("Manca 'query'")
@@ -758,7 +835,11 @@ def _h_web_search(db: Session, data: dict) -> dict:
                          "questo tenant (egress cloud bloccato). Riattiva da "
                          "Impostazioni → Sicurezza per usare la ricerca web."}
     # α.172.146 — depth basic (più rapido per copilot) + timeout bound.
-    results = tavily_search(query, max_results=5, search_depth="basic", timeout=15)
+    # Task 2: web_search usa include_domains dalle fonti tenant configurate.
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first() if db is not None else None
+    domains = (t.web_sources if t and t.web_sources else None)
+    results = tavily_search(query, max_results=5, search_depth="basic", timeout=15,
+                            include_domains=domains)
     if results is None:
         return {"query": query, "results": None,
                 "error": "Ricerca web non disponibile (Tavily non configurato o timeout). "

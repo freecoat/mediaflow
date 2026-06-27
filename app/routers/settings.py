@@ -10,7 +10,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, WorkingHoursPolicy, Resource, Holiday
-from app.models.models import UserAISettings
+from app.models.models import UserAISettings, Tenant
 from datetime import time
 from app.services.auth import get_current_user_from_token, hash_password, verify_password
 from app.services.ai_provider import (
@@ -1293,3 +1293,47 @@ async def preview_numbering(
             if (used_proj_placeholder or used_cli_placeholder) else None
         ),
     }
+
+
+# ── FONTI WEB PER CROSS-REFERENCE ─────────────────────────────────────────
+
+def _parse_sources(raw: str) -> list:
+    """Pulisce CSV/newline di domini: strip, lowercase, dedup, drop empties."""
+    out = []
+    for line in (raw or "").replace(",", "\n").splitlines():
+        d = line.strip().lower()
+        if d and d not in out:
+            out.append(d)
+    return out
+
+
+@router.get("/api/web-sources")
+async def web_sources_get(
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(404, "Utente non trovato")
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    return {"sources": (t.web_sources if t and t.web_sources else [])}
+
+
+@router.post("/api/web-sources")
+async def web_sources_set(
+    sources: str = Form(""),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(404, "Utente non trovato")
+    from app.services.rbac import has_permission
+    if not has_permission(u, "manage_settings_global"):
+        raise HTTPException(403, "Permesso mancante")
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first()
+    if not t:
+        raise HTTPException(404, "Tenant non trovato")
+    t.web_sources = _parse_sources(sources)
+    db.commit()
+    return {"ok": True, "sources": t.web_sources}
