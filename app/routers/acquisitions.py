@@ -15,7 +15,7 @@ from app.models.models import (
     Acquisition, AcquisitionStage, Department, Client, Quote,
     Activity, ActivityType, ActivityDirection,
 )
-from app.services.rbac import requires_permission
+from app.services.rbac import requires_permission, current_user_optional
 from app.services.clock import now_utc
 from app.services.acquisition_service import (
     weighted_value, effective_probability, pipeline_summary, upcoming_actions,
@@ -274,16 +274,26 @@ async def add_activity(aid: int, request: Request, type: str = Form("note"),
                        occurred_at: Optional[str] = Form(None),
                        next_action_date: Optional[str] = Form(None),
                        db: Session = Depends(get_db)):
-    from app.services.rbac import current_user_optional
     acq = db.query(Acquisition).filter(Acquisition.id == aid,
                                        Acquisition.tenant_id == current_tenant_id()).first()
     if not acq:
         raise HTTPException(404, "Acquisizione non trovata")
+    try:
+        act_type = ActivityType(type)
+    except ValueError:
+        raise HTTPException(422, "type non valido")
+    if direction:
+        try:
+            act_direction = ActivityDirection(direction)
+        except ValueError:
+            raise HTTPException(422, "direction non valida")
+    else:
+        act_direction = None
     u = current_user_optional(request)
     a = Activity(tenant_id=current_tenant_id(), acquisition_id=aid,
                  client_id=acq.client_id, project_id=acq.project_id,
-                 contact_id=contact_id, type=ActivityType(type),
-                 direction=ActivityDirection(direction) if direction else None,
+                 contact_id=contact_id, type=act_type,
+                 direction=act_direction,
                  occurred_at=datetime.fromisoformat(occurred_at) if occurred_at else now_utc(),
                  subject=subject.strip(), body=body,
                  next_action_date=_parse_date(next_action_date),
@@ -298,7 +308,8 @@ async def update_activity(act_id: int, subject: Optional[str] = Form(None),
                           next_action_date: Optional[str] = Form(None),
                           db: Session = Depends(get_db)):
     a = db.query(Activity).filter(Activity.id == act_id,
-                                  Activity.tenant_id == current_tenant_id()).first()
+                                  Activity.tenant_id == current_tenant_id(),
+                                  Activity.is_active == True).first()  # noqa: E712
     if not a:
         raise HTTPException(404, "Attività non trovata")
     if subject is not None: a.subject = subject.strip()
@@ -311,7 +322,8 @@ async def update_activity(act_id: int, subject: Optional[str] = Form(None),
 @router.delete("/activities/api/{act_id}", dependencies=[RequireManage])
 async def delete_activity(act_id: int, db: Session = Depends(get_db)):
     a = db.query(Activity).filter(Activity.id == act_id,
-                                  Activity.tenant_id == current_tenant_id()).first()
+                                  Activity.tenant_id == current_tenant_id(),
+                                  Activity.is_active == True).first()  # noqa: E712
     if not a:
         raise HTTPException(404, "Attività non trovata")
     a.is_active = False
