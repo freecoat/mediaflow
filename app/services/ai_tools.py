@@ -1263,6 +1263,21 @@ TOOLS: list[dict] = [
         }, "required": ["client_id"]},
         "handler": "update_client",
     },
+    {
+        "name": "propose_client_work",
+        "description": "Aggiunge una voce di filmografia/portfolio a un cliente ESISTENTE (da dati web). client_id PK numerico + title obbligatori.",
+        "input_schema": {"type": "object", "properties": {
+            "client_id": {"type": "integer"},
+            "title": {"type": "string"},
+            "year": {"type": "integer"},
+            "kind": {"type": "string"},
+            "our_role": {"type": "string"},
+            "director": {"type": "string"},
+            "country": {"type": "string"},
+            "sources": {"type": "array", "items": {"type": "string"}},
+        }, "required": ["client_id", "title"]},
+        "handler": "propose_client_work",
+    },
 ]
 
 

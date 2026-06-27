@@ -287,6 +287,41 @@ def _h_propose_client(db: Session, data: dict) -> dict:
             "message": f"Cliente '{c.name}' creato con id={c.id}."}
 
 
+@ai_capability("propose_client_work")
+def _h_propose_client_work(db: Session, data: dict) -> dict:
+    import json as _json
+    from app.context import current_tenant_id
+    from app.models.models import ClientWork
+    cid = data.get("client_id")
+    title = (data.get("title") or "").strip()
+    if not cid:
+        raise ValueError("Manca 'client_id'")
+    if not title:
+        raise ValueError("Manca 'title'")
+    c = db.query(Client).filter(Client.id == cid,
+                                Client.tenant_id == current_tenant_id()).first()
+    if not c:
+        raise ValueError(f"Cliente {cid} non trovato")
+    sources = data.get("sources")
+    sources_json = _json.dumps(sources) if sources else None
+    w = ClientWork(
+        tenant_id=current_tenant_id(),
+        client_id=cid,
+        title=title,
+        year=data.get("year"),
+        kind=data.get("kind"),
+        our_role=data.get("our_role"),
+        director=data.get("director"),
+        country=data.get("country"),
+        notes=data.get("notes"),
+        sources_json=sources_json,
+        ai_imported=True,
+    )
+    db.add(w); db.flush()
+    return {"created": True, "client_work_id": w.id,
+            "message": f"Filmografia: '{title}' aggiunta al cliente {cid}."}
+
+
 def _resolve_project(db: Session, data: dict) -> Project:
     """Risolve un progetto da `project_id` (numero PK) o `code` (stringa)."""
     pid = data.get("project_id")
