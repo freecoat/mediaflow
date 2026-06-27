@@ -5,7 +5,7 @@
 {% block topbar_title %}<a href="/projects" class="text-muted" style="text-decoration:none;">Progetti</a> <span class="text-muted">/</span> <span id="breadcrumb-title">—</span>{% endblock %}
 
 {% block topbar_actions %}
-  {% if can_view_finance(request.state.current_user) %}
+  {% if can_edit_projects(request.state.current_user) %}
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-edit-project')">✎ Modifica</button>
   <button class="btn btn-secondary btn-sm" onclick="projectCrossCheck(this)" title="Verifica info progetto vs IMDB/BoxOffice/Variety">🔍 Cross-check</button>
   <button class="btn btn-primary btn-sm" onclick="openNewQuoteModal()">+ Nuova quotazione</button>

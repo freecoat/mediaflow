@@ -2462,6 +2462,7 @@ templates.env.globals["can_create_booking"] = _rbac.can_create_booking
 templates.env.globals["can_approve_unavailability"] = _rbac.can_approve_unavailability
 templates.env.globals["can_manage_users"] = _rbac.can_manage_users
 templates.env.globals["can_manage_roles"] = _rbac.can_manage_roles
+templates.env.globals["can_edit_projects"] = lambda u: _rbac.has_permission(u, "edit_projects")
 templates.env.globals["has_permission"] = _rbac.has_permission
 
 # v3.5.0-alpha.172.39 (Sprint 4.F BLOCCO 5) — cache-buster automatico via
