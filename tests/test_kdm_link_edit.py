@@ -9,7 +9,7 @@ from app.services.auth import create_access_token
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
     import app.database as database
     import app.main as main_mod
     from app.database import get_db
@@ -28,7 +28,8 @@ def client():
     s.add(KdmRequestLink(id=1, tenant_id=1, token="tok1", label="Vecchio", is_active=True))
     s.add(KdmRequestLink(id=2, tenant_id=1, token="tok2", label="Revocato", is_active=False))
     s.commit()
-    database.engine = e; database.SessionLocal = S
+    monkeypatch.setattr(database, "engine", e)
+    monkeypatch.setattr(database, "SessionLocal", S)
     main_mod.app.dependency_overrides[get_db] = lambda: s
     tok = create_access_token({"sub": "a@t.local", "tid": 1})
     with TestClient(main_mod.app, headers={"Cookie": f"access_token={tok}"}) as c:
