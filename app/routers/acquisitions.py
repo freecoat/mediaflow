@@ -6,15 +6,17 @@ Fase 1 Acquisizioni: gestione pipeline commerciale con probabilità pesata.
 from __future__ import annotations
 from typing import Optional
 from decimal import Decimal, InvalidOperation
-from datetime import date
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.context import current_tenant_id
 from app.models.models import (
     Acquisition, AcquisitionStage, Department, Client, Quote,
+    Activity, ActivityType, ActivityDirection,
 )
 from app.services.rbac import requires_permission
+from app.services.clock import now_utc
 from app.services.acquisition_service import (
     weighted_value, effective_probability, pipeline_summary, upcoming_actions,
     apply_stage_change, convert_to_project,
@@ -240,3 +242,78 @@ async def delete_acquisition(aid: int, db: Session = Depends(get_db)):
     acq.is_active = False
     db.commit()
     return {"ok": True, "id": aid}
+
+
+# ---------------------------------------------------------------------------
+# Activity timeline
+# ---------------------------------------------------------------------------
+
+def _activity_dict(a: Activity) -> dict:
+    return {"id": a.id, "acquisition_id": a.acquisition_id, "client_id": a.client_id,
+            "project_id": a.project_id, "contact_id": a.contact_id,
+            "type": a.type.value, "direction": a.direction.value if a.direction else None,
+            "occurred_at": a.occurred_at.isoformat() if a.occurred_at else None,
+            "subject": a.subject, "body": a.body,
+            "next_action_date": a.next_action_date.isoformat() if a.next_action_date else None,
+            "ai_extracted": a.ai_extracted}
+
+
+@router.get("/acquisitions/api/{aid}/activities", dependencies=[RequireView])
+async def list_activities(aid: int, db: Session = Depends(get_db)):
+    rows = (db.query(Activity).filter(Activity.tenant_id == current_tenant_id(),
+            Activity.acquisition_id == aid, Activity.is_active == True)  # noqa: E712
+            .order_by(Activity.occurred_at.desc(), Activity.id.desc()).all())
+    return {"items": [_activity_dict(a) for a in rows]}
+
+
+@router.post("/acquisitions/api/{aid}/activities", dependencies=[RequireManage])
+async def add_activity(aid: int, request: Request, type: str = Form("note"),
+                       subject: str = Form(...), body: Optional[str] = Form(None),
+                       direction: Optional[str] = Form(None),
+                       contact_id: Optional[int] = Form(None),
+                       occurred_at: Optional[str] = Form(None),
+                       next_action_date: Optional[str] = Form(None),
+                       db: Session = Depends(get_db)):
+    from app.services.rbac import current_user_optional
+    acq = db.query(Acquisition).filter(Acquisition.id == aid,
+                                       Acquisition.tenant_id == current_tenant_id()).first()
+    if not acq:
+        raise HTTPException(404, "Acquisizione non trovata")
+    u = current_user_optional(request)
+    a = Activity(tenant_id=current_tenant_id(), acquisition_id=aid,
+                 client_id=acq.client_id, project_id=acq.project_id,
+                 contact_id=contact_id, type=ActivityType(type),
+                 direction=ActivityDirection(direction) if direction else None,
+                 occurred_at=datetime.fromisoformat(occurred_at) if occurred_at else now_utc(),
+                 subject=subject.strip(), body=body,
+                 next_action_date=_parse_date(next_action_date),
+                 created_by=(u.id if u else None))
+    db.add(a); db.commit(); db.refresh(a)
+    return _activity_dict(a)
+
+
+@router.put("/activities/api/{act_id}", dependencies=[RequireManage])
+async def update_activity(act_id: int, subject: Optional[str] = Form(None),
+                          body: Optional[str] = Form(None),
+                          next_action_date: Optional[str] = Form(None),
+                          db: Session = Depends(get_db)):
+    a = db.query(Activity).filter(Activity.id == act_id,
+                                  Activity.tenant_id == current_tenant_id()).first()
+    if not a:
+        raise HTTPException(404, "Attività non trovata")
+    if subject is not None: a.subject = subject.strip()
+    if body is not None: a.body = body
+    if next_action_date is not None: a.next_action_date = _parse_date(next_action_date)
+    db.commit(); db.refresh(a)
+    return _activity_dict(a)
+
+
+@router.delete("/activities/api/{act_id}", dependencies=[RequireManage])
+async def delete_activity(act_id: int, db: Session = Depends(get_db)):
+    a = db.query(Activity).filter(Activity.id == act_id,
+                                  Activity.tenant_id == current_tenant_id()).first()
+    if not a:
+        raise HTTPException(404, "Attività non trovata")
+    a.is_active = False
+    db.commit()
+    return {"ok": True, "id": act_id}
