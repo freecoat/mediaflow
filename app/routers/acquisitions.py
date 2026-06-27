@@ -5,7 +5,7 @@ Fase 1 Acquisizioni: gestione pipeline commerciale con probabilità pesata.
 """
 from __future__ import annotations
 from typing import Optional
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from sqlalchemy.orm import Session, selectinload
@@ -34,7 +34,7 @@ def _acq_dict(acq: Acquisition) -> dict:
         "stage": acq.stage.value,
         "estimated_value": str(Decimal(str(acq.estimated_value or 0)).quantize(Decimal("0.01"))),
         "win_probability_pct": acq.win_probability_pct,
-        "effective_probability": effective_probability(acq),
+        "effective_probability": str(effective_probability(acq)),
         "weighted_value": str(weighted_value(acq)),
         "expected_close_date": acq.expected_close_date.isoformat() if acq.expected_close_date else None,
         "owner_user_id": acq.owner_user_id,
@@ -105,7 +105,8 @@ async def agenda(owner_id: Optional[int] = None, days: int = 30, db: Session = D
 async def get_acquisition(aid: int, db: Session = Depends(get_db)):
     acq = (db.query(Acquisition)
            .options(selectinload(Acquisition.departments), selectinload(Acquisition.client))
-           .filter(Acquisition.id == aid, Acquisition.tenant_id == current_tenant_id()).first())
+           .filter(Acquisition.id == aid, Acquisition.tenant_id == current_tenant_id(),
+                   Acquisition.is_active == True).first())  # noqa: E712
     if not acq:
         raise HTTPException(404, "Acquisizione non trovata")
     d = _acq_dict(acq)
@@ -131,7 +132,7 @@ async def create_acquisition(request: Request, title: str = Form(...),
                              client_id: Optional[int] = Form(None),
                              prospect_name: Optional[str] = Form(None),
                              stage: str = Form("lead"),
-                             estimated_value: float = Form(0),
+                             estimated_value: str = Form("0"),
                              win_probability_pct: Optional[float] = Form(None),
                              expected_close_date: Optional[str] = Form(None),
                              owner_user_id: Optional[int] = Form(None),
@@ -141,10 +142,14 @@ async def create_acquisition(request: Request, title: str = Form(...),
                              department_ids: Optional[str] = Form(None),
                              db: Session = Depends(get_db)):
     from app.services.rbac import current_user_optional
+    try:
+        ev = Decimal(estimated_value or "0")
+    except InvalidOperation:
+        raise HTTPException(400, "estimated_value non valido")
     u = current_user_optional(request)
     acq = Acquisition(tenant_id=current_tenant_id(), title=title.strip(),
                       client_id=client_id, prospect_name=(prospect_name or None),
-                      stage=AcquisitionStage(stage), estimated_value=estimated_value,
+                      stage=AcquisitionStage(stage), estimated_value=ev,
                       win_probability_pct=win_probability_pct,
                       expected_close_date=_parse_date(expected_close_date),
                       owner_user_id=owner_user_id or (u.id if u else None),
@@ -160,7 +165,7 @@ async def create_acquisition(request: Request, title: str = Form(...),
 async def update_acquisition(aid: int, title: Optional[str] = Form(None),
                              client_id: Optional[int] = Form(None),
                              prospect_name: Optional[str] = Form(None),
-                             estimated_value: Optional[float] = Form(None),
+                             estimated_value: Optional[str] = Form(None),
                              win_probability_pct: Optional[float] = Form(None),
                              expected_close_date: Optional[str] = Form(None),
                              owner_user_id: Optional[int] = Form(None),
@@ -172,13 +177,18 @@ async def update_acquisition(aid: int, title: Optional[str] = Form(None),
                              db: Session = Depends(get_db)):
     acq = (db.query(Acquisition)
            .options(selectinload(Acquisition.departments), selectinload(Acquisition.client))
-           .filter(Acquisition.id == aid, Acquisition.tenant_id == current_tenant_id()).first())
+           .filter(Acquisition.id == aid, Acquisition.tenant_id == current_tenant_id(),
+                   Acquisition.is_active == True).first())  # noqa: E712
     if not acq:
         raise HTTPException(404, "Acquisizione non trovata")
     if title is not None: acq.title = title.strip()
     if client_id is not None: acq.client_id = client_id or None
     if prospect_name is not None: acq.prospect_name = prospect_name or None
-    if estimated_value is not None: acq.estimated_value = estimated_value
+    if estimated_value is not None:
+        try:
+            acq.estimated_value = Decimal(estimated_value)
+        except InvalidOperation:
+            raise HTTPException(400, "estimated_value non valido")
     if win_probability_pct is not None: acq.win_probability_pct = win_probability_pct
     if expected_close_date is not None: acq.expected_close_date = _parse_date(expected_close_date)
     if owner_user_id is not None: acq.owner_user_id = owner_user_id or None

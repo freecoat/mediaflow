@@ -70,3 +70,13 @@ def test_delete_soft(client):
     assert c.delete(f"/acquisitions/api/{aid}").status_code == 200
     lst = c.get("/acquisitions/api/list").json()
     assert all(a["id"] != aid for a in lst["items"])
+
+
+def test_soft_deleted_returns_404(client):
+    """GET /acquisitions/api/{id} must 404 after soft-delete (is_active=False)."""
+    c, _ = client
+    aid = c.post("/acquisitions/api", data={"title": "ToDelete", "client_id": "1",
+                 "stage": "lead", "estimated_value": "0"}).json()["id"]
+    assert c.delete(f"/acquisitions/api/{aid}").status_code == 200
+    r = c.get(f"/acquisitions/api/{aid}")
+    assert r.status_code == 404, f"Expected 404 for soft-deleted record, got {r.status_code}"
