@@ -5,7 +5,7 @@
 {% block topbar_title %}<a href="/projects" class="text-muted" style="text-decoration:none;">Progetti</a> <span class="text-muted">/</span> <span id="breadcrumb-title">—</span>{% endblock %}
 
 {% block topbar_actions %}
-  {% if can_view_finance(request.state.current_user) %}
+  {% if can_edit_projects(request.state.current_user) %}
   <button class="btn btn-secondary btn-sm" onclick="openModal('modal-edit-project')">✎ Modifica</button>
   <button class="btn btn-secondary btn-sm" onclick="projectCrossCheck(this)" title="Verifica info progetto vs IMDB/BoxOffice/Variety">🔍 Cross-check</button>
   <button class="btn btn-primary btn-sm" onclick="openNewQuoteModal()">+ Nuova quotazione</button>
@@ -596,11 +596,11 @@
         <div class="form-group">
           <label class="form-label">Stato</label>
           <select class="form-select" id="e-status">
-            <option value="prospect">Prospect</option>
-            <option value="quoting">In quotazione</option>
-            <option value="active">Attivo</option>
-            <option value="completed">Completato</option>
-            <option value="archived">Archiviato</option>
+            <option value="prospect" data-i18n="projects.status.prospect">Prospect</option>
+            <option value="quoting" data-i18n="projects.status.quoting">In quotazione</option>
+            <option value="active" data-i18n="projects.status.active">Attivo</option>
+            <option value="completed" data-i18n="projects.status.completed">Completato</option>
+            <option value="archived" data-i18n="projects.status.archived">Archiviato</option>
           </select>
         </div>
         <div class="form-group">

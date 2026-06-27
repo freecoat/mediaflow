@@ -411,6 +411,31 @@ def build_context(db: Session,
     except Exception:
         pass
 
+    # v3.5.0 Task 11 — Trattative aperte (acquisizioni CRM) nel context.
+    # Wrapped in try/except: non deve mai interrompere il context per modelli
+    # che non hanno ancora la tabella acquisitions (DB non migrato).
+    try:
+        from app.models.models import Acquisition, AcquisitionStage
+        open_acqs = (
+            db.query(Acquisition)
+            .filter(
+                Acquisition.tenant_id == CURRENT_TENANT,
+                Acquisition.is_active == True,  # noqa: E712
+                Acquisition.stage.notin_([AcquisitionStage.won, AcquisitionStage.lost]),
+            )
+            .order_by(Acquisition.id.desc())
+            .limit(20)
+            .all()
+        )
+        if open_acqs:
+            overview.append("TRATTATIVE APERTE (id | title | client | stage | valore stimato):")
+            for acq in open_acqs:
+                client_label = acq.client.name if acq.client else (acq.prospect_name or "—")
+                val = f"€{acq.estimated_value:.0f}" if acq.estimated_value else "€n/d"
+                overview.append(f"  {acq.id} | {acq.title} | {client_label} | {acq.stage.value} | {val}")
+    except Exception:
+        pass
+
     parts.append("\n".join(overview))
 
     # v3.5.0-alpha.50 — Sezione PIANIFICAZIONE viva (in-depth context).

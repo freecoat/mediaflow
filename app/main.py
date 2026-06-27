@@ -31,6 +31,8 @@ from app.routers import (
     storage_admin,  # v3.5.0-alpha.172.211 (F1) — Admin storage: volumi/agent/job/proposte
     kdm as kdm_router,  # v3.5.0-alpha.172.226 — KDM/DKDM request tracking
     kdm_public,  # Task 18 — Form pubblico no-auth KDM/DKDM (token capability)
+    acquisitions,  # feat/acquisizioni-fase1 — Pipeline commerciale CRUD + summary + agenda
+    contacts,  # feat/acquisizioni-fase1 Task 10 — Contatti multipli per cliente
 )
 
 
@@ -2372,7 +2374,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.235", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.236", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2460,6 +2462,7 @@ templates.env.globals["can_create_booking"] = _rbac.can_create_booking
 templates.env.globals["can_approve_unavailability"] = _rbac.can_approve_unavailability
 templates.env.globals["can_manage_users"] = _rbac.can_manage_users
 templates.env.globals["can_manage_roles"] = _rbac.can_manage_roles
+templates.env.globals["can_edit_projects"] = lambda u: _rbac.has_permission(u, "edit_projects")
 templates.env.globals["has_permission"] = _rbac.has_permission
 
 # v3.5.0-alpha.172.39 (Sprint 4.F BLOCCO 5) — cache-buster automatico via
@@ -2701,14 +2704,22 @@ async def tenant_resolver(request: Request, call_next):
 _FINANCE_BLOCKED_PREFIXES = ("/quotes", "/cost-report", "/finance", "/pricelist", "/clients")
 _NON_ELEVATED_BLOCKED_PREFIXES = ("/resources",)  # anagrafica risorse globale
 _ADMIN_ONLY_PREFIXES = ("/departments", "/settings/api/working-hours", "/settings/api/ai")
+# Solo i sottopath /contacts sono accessibili a chi ha view_clients (senza view_finance).
+# Tutti gli altri /clients/api/* (create/update/delete/enrich) restano dietro la finance gate.
+_CONTACTS_PATH_RE = _re_mod.compile(r"^/clients/api/\d+/contacts$")
 
 
 def _is_forbidden_for_role(path: str, user) -> bool:
-    from app.services.rbac import is_admin, is_elevated, can_view_finance
+    from app.services.rbac import is_admin, is_elevated, can_view_finance, has_permission
     # Staff/viewer: niente finanza/quote/listino/clienti
     if not can_view_finance(user):
         for pref in _FINANCE_BLOCKED_PREFIXES:
             if path == pref or path.startswith(pref + "/"):
+                # Solo /clients/api/* è accessibile con view_clients granulare
+                # (es. endpoint contatti). Le pagine HTML /clients e /clients/{id}
+                # restano dietro view_finance.
+                if pref == "/clients" and _CONTACTS_PATH_RE.match(path) and has_permission(user, "view_clients"):
+                    continue
                 return True
     # Staff/viewer: niente anagrafica risorse globale
     if not is_elevated(user):
@@ -2807,6 +2818,8 @@ app.include_router(ingest_deliverables_router.router)
 from app.routers.delivery_variants import router as delivery_variants_router
 app.include_router(delivery_variants_router)
 app.include_router(mobile_router.router)  # v3.5.0-alpha.172.158 — PWA companion staff /m
+app.include_router(acquisitions.router)  # feat/acquisizioni-fase1 — Pipeline commerciale
+app.include_router(contacts.router)  # feat/acquisizioni-fase1 Task 10 — Contatti cliente
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.236 — Acquisizioni Fase 1: pipeline trattative + attività (27 giu 2026)
+
+Nuovo modulo **Acquisizioni** (CRM/pipeline vendite AI-assisted), sezione Anagrafica. Fase 1 di 3 (email-AI = Fase 2, calendario = Fase 3). Costruito subagent-driven TDD (14 task).
+
+- **Entità `Acquisition`** (la trattativa): può precedere un Progetto (lead vago con `prospect_name`) e convertirsi. 6 stadi (lead→qualified→quoting→negotiation→won→lost), valore stimato, probabilità (default da stadio, override), **potenziale pesato = valore × prob%**, tag reparti multi (M:N), owner commerciale, prossima azione+data (mini-agenda), source, lost_reason. Soft-delete, tenant-scoped.
+- **`Contact`** (contatti multipli per cliente; `is_primary` sincronizza il referente su `Client.contact_*`) e **`Activity`** (log comunicazioni email/call/meeting/note/task, link flessibile a trattativa/cliente/progetto/contatto, prossima azione).
+- **Pagina `/acquisitions`**: KPI potenziale pesato (totale + per-reparto) + n° aperte; filtri reparto/commerciale/cliente/stato; **toggle Kanban ⇄ Tabella**; kanban con drag→cambio stadio; mini-agenda prossimi impegni; pannello dettaglio con quotazioni collegate, timeline attività (quick-add), contatti, azioni Converti/Vinta/Persa.
+- **Servizio `acquisition_service.py`**: probabilità effettiva, pesato, `pipeline_summary` (per-stadio/reparto, no N+1), `upcoming_actions` (agenda, filtrata per owner), `apply_stage_change` (sincronizza `Project.status`), `convert_to_project` (crea/collega progetto+cliente, idempotente).
+- **Router** form-based tenant-scoped: CRUD trattative + stage + convert + activities + contacts. Gate nuovi permessi **`view_acquisitions`/`manage_acquisitions`** (preset manager/producer/accounting).
+- **4 capability copilot**: `propose_acquisition`, `propose_activity`, `propose_contact`, `propose_acquisition_stage` (+ tool descriptor + blocco "TRATTATIVE APERTE" nel context). Gancio per la Fase 2 (estrazione email).
+- **Fix bug segnalato (stato progetto non modificabile)**: causa duplice — debito i18n sulle opzioni stato (chiavi errate `on_hold`/`cancelled`, mancanti prospect/quoting/archived/es) **e** bottone "Modifica" gated su `view_finance` invece di `edit_projects` (un project-owner senza finanza non poteva editare). Aggiunto Jinja global `can_edit_projects`. Verificato in browser.
+- **989 test** (+39). Smoke browser verde: pagina, kanban, drag-stadio, KPI, dettaglio, attività, conversione, 0 chiavi i18n grezze, 0 errori console. Spec+plan in `docs/superpowers/`.
+
 ## v3.5.0-alpha.172.235 — Estrazione item AI in background + delete items dalla lista (27 giu 2026)
 
 Due richieste Matteo: l'estrazione item AI deve girare in background (prima sincrona = confusione/timeout), e dev'essere possibile eliminare item da un template (delete sepolto nell'editor).

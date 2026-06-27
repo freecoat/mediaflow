@@ -8,6 +8,19 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.236** — 27 giugno 2026 — Acquisizioni Fase 1: pipeline trattative + attività
+
+### α.172.236 ✅ (Acquisizioni Fase 1 — 27 giu, subagent-driven 14 task TDD, ramo feat/acquisizioni-fase1)
+- **Nuovo modulo CRM/pipeline vendite** (sezione Anagrafica → Acquisizioni). Fase 1 di 3: pipeline trattative + attività/comunicazioni + contatti multipli + mini-agenda + capability AI. Fase 2 = incolla-email→AI+web; Fase 3 = Google Calendar.
+- **Modelli**: `Acquisition` (trattativa, può precedere il Progetto via `prospect_name`, 6 stadi, potenziale pesato valore×prob, tag reparti M:N, owner, next_action), `Contact` (contatti multipli, is_primary→sync Client.contact_*), `Activity` (log comunicazioni). Permessi `view/manage_acquisitions` (manager/producer/accounting).
+- **Pagina** `/acquisitions`: KPI pesato totale+reparto, filtri, toggle Kanban⇄Tabella, drag→stadio, mini-agenda, dettaglio con quote collegate + timeline attività + contatti + Converti/Vinta/Persa.
+- **Servizio** `acquisition_service.py`: probabilità/pesato/summary/agenda/`apply_stage_change` (sync Project.status)/`convert_to_project`. **4 capability copilot** propose_*.
+- **Fix bug stato progetto**: i18n opzioni stato + bottone Modifica gated su `view_finance`→`edit_projects` (nuovo Jinja global `can_edit_projects`). Verificato in browser.
+- **989 test** (+39). Smoke browser verde (kanban/drag/KPI/dettaglio/attività/conversione, 0 chiavi grezze, 0 errori console). Spec: `docs/superpowers/specs/2026-06-27-acquisizioni-fase1-design.md`, plan: `docs/superpowers/plans/2026-06-27-acquisizioni-fase1.md`.
+
+**Prossimo / IN CORSO**: merge `feat/acquisizioni-fase1` → main dopo review finale + smoke Matteo. **Fase 2 Acquisizioni**: incolla conversazione email → AI estrae contatto/intel/intento/prossimo passo → propone Attività/Contatti/aggiornamenti (capability propose_* già pronte) + incrocio web (Tavily/client_enrichment). **Fase 3**: agenda piena + Google Calendar/ICS. Backlog minori (final-review ledger): guard propose_acquisition_stage, escaping numeri UI, label modal progetto i18n.
+
+### α.172.235 ✅ (storico sotto)
 **v3.5.0-alpha.172.235** — 27 giugno 2026 — Estrazione item AI in background + delete items dalla lista
 
 ### α.172.235 ✅ (Estrazione item background + delete items — 27 giu)

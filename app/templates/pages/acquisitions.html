@@ -1,0 +1,1130 @@
+{% extends "base.html" %}
+{% set active_page = "acquisitions" %}
+{% block title %}Acquisizioni — Claqo{% endblock %}
+{% block topbar_title %}<span data-i18n="acq.title">Pipeline Commerciale</span>{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" id="acq-btn-new" data-i18n="acq.new">+ Nuova trattativa</button>
+{% endblock %}
+
+{% block head %}
+<style>
+/* ── Acquisizioni page styles ─────────────────────────────────────────── */
+.acq-kpi-bar {
+  display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.acq-kpi-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px; min-width: 140px; flex: 1;
+}
+.acq-kpi-card .kpi-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+.acq-kpi-card .kpi-value { font-size: 22px; font-weight: 700; color: var(--text); margin-top: 2px; }
+.acq-kpi-card .kpi-sub   { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+.acq-filters {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center;
+}
+.acq-filters select, .acq-filters input {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px; font-size: 13px; color: var(--text);
+  min-width: 120px;
+}
+
+.acq-view-toggle {
+  display: flex; gap: 4px; margin-bottom: 12px;
+}
+.acq-view-btn {
+  padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--text3); cursor: pointer; font-size: 13px;
+  transition: background 0.15s;
+}
+.acq-view-btn.active { background: var(--indigo2); color: var(--text); border-color: var(--indigo2); }
+
+/* Kanban */
+.acq-kanban {
+  display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px;
+}
+.acq-kanban-col {
+  min-width: 200px; flex: 1; background: var(--bg2);
+  border-radius: 8px; padding: 10px; min-height: 200px;
+}
+.acq-kanban-col.drag-over { outline: 2px dashed var(--indigo2); }
+.acq-col-header {
+  font-size: 12px; font-weight: 600; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.4px;
+  margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;
+}
+.acq-col-count {
+  background: var(--bg3); border-radius: 10px;
+  font-size: 11px; padding: 1px 6px; color: var(--text3);
+}
+.acq-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 7px;
+  padding: 10px 11px; margin-bottom: 8px; cursor: pointer;
+  transition: box-shadow 0.12s; font-size: 13px;
+}
+.acq-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+.acq-card.selected { border-color: var(--indigo2); box-shadow: 0 0 0 2px rgba(98,114,245,0.25); }
+.acq-card-title { font-weight: 600; color: var(--text); margin-bottom: 3px; line-height: 1.3; }
+.acq-card-client { font-size: 12px; color: var(--text3); margin-bottom: 4px; }
+.acq-card-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.acq-card-value { font-size: 12px; font-weight: 600; color: var(--text2); }
+.acq-card-prob  { font-size: 11px; color: var(--text3); }
+.acq-dept-badge {
+  font-size: 10px; padding: 1px 5px; background: var(--bg3);
+  border-radius: 4px; color: var(--text3);
+}
+.acq-next-action { font-size: 11px; color: var(--indigo2); margin-top: 3px; }
+
+/* Table */
+.acq-table-wrap { overflow-x: auto; }
+.acq-stage-select {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text); font-size: 12px; padding: 2px 6px; cursor: pointer;
+}
+
+/* Agenda strip */
+.acq-agenda {
+  display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px; margin-bottom: 14px;
+}
+.acq-agenda-item {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 7px;
+  padding: 7px 11px; white-space: nowrap; font-size: 12px; flex-shrink: 0; cursor: pointer;
+}
+.acq-agenda-item .ag-date { font-size: 11px; color: var(--text3); }
+.acq-agenda-item .ag-title { font-weight: 600; color: var(--text); }
+
+/* Detail panel */
+.acq-layout {
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.acq-list-side { flex: 1; min-width: 0; }
+.acq-detail-panel {
+  width: 380px; flex-shrink: 0; background: var(--card);
+  border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  position: sticky; top: 16px; max-height: calc(100vh - 100px); overflow-y: auto;
+}
+.acq-detail-panel.hidden { display: none; }
+.acq-detail-header { margin-bottom: 12px; }
+.acq-detail-header h3 { font-size: 15px; font-weight: 700; color: var(--text); margin: 0 0 4px; }
+.acq-detail-header .det-client { font-size: 13px; color: var(--text3); }
+.acq-detail-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 12px; }
+.acq-detail-meta .meta-item { background: var(--bg2); border-radius: 5px; padding: 3px 8px; }
+.acq-det-tabs { display: flex; gap: 0; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+.acq-det-tab {
+  padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
+  border-bottom: 2px solid transparent; color: var(--text3); background: none; border-top: none; border-left: none; border-right: none;
+}
+.acq-det-tab.active { border-bottom-color: var(--indigo2); color: var(--text); }
+.acq-det-content { display: none; }
+.acq-det-content.active { display: block; }
+.acq-activity-item {
+  padding: 7px 0; border-bottom: 1px solid var(--border2);
+  font-size: 12px; color: var(--text2);
+}
+.acq-activity-item:last-child { border-bottom: none; }
+.acq-activity-type-badge {
+  display: inline-block; font-size: 10px; padding: 1px 5px;
+  border-radius: 4px; background: var(--bg3); color: var(--text3);
+  margin-right: 4px; text-transform: uppercase;
+}
+.acq-contact-item {
+  padding: 6px 0; border-bottom: 1px solid var(--border2);
+  font-size: 12px; display: flex; justify-content: space-between; align-items: center;
+}
+.acq-contact-item:last-child { border-bottom: none; }
+.acq-quote-item {
+  padding: 5px 0; border-bottom: 1px solid var(--border2);
+  font-size: 12px;
+}
+.acq-quote-item:last-child { border-bottom: none; }
+.acq-detail-actions { margin-top: 14px; display: flex; gap: 6px; flex-wrap: wrap; }
+.acq-add-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border2); }
+.acq-add-form .form-row { display: flex; gap: 8px; }
+.acq-add-form .form-group { margin-bottom: 6px; }
+.acq-add-form label { font-size: 11px; color: var(--text3); display: block; margin-bottom: 2px; }
+.acq-add-form input, .acq-add-form select, .acq-add-form textarea {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 5px 8px; font-size: 12px; color: var(--text);
+}
+@media (max-width: 900px) {
+  .acq-layout { flex-direction: column; }
+  .acq-detail-panel { width: 100%; position: static; max-height: none; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Bar ──────────────────────────────────────────────────────── #}
+<div class="acq-kpi-bar" id="acq-kpi-bar">
+  <div class="acq-kpi-card">
+    <div class="kpi-label" data-i18n="acq.kpi.weighted">Potenziale pesato</div>
+    <div class="kpi-value" id="acq-kpi-weighted">—</div>
+    <div class="kpi-sub" id="acq-kpi-open-count">—</div>
+  </div>
+  <div class="acq-kpi-card" id="acq-kpi-dept-card" style="display:none;">
+    <div class="kpi-label" data-i18n="acq.kpi.by_dept">Per reparto</div>
+    <div id="acq-kpi-dept-list" style="font-size:12px;line-height:1.8;"></div>
+  </div>
+</div>
+
+{# ── Agenda strip ─────────────────────────────────────────────────── #}
+<div id="acq-agenda-wrap">
+  <div style="font-size:11px;color:var(--text3);margin-bottom:4px;" data-i18n="acq.agenda.title">Agenda — prossimi 30 gg</div>
+  <div class="acq-agenda" id="acq-agenda-list">
+    <div class="text-muted" style="font-size:12px;padding:6px 0;" data-i18n="misc.loading">Caricamento…</div>
+  </div>
+</div>
+
+{# ── Filtri ───────────────────────────────────────────────────────── #}
+<div class="acq-filters">
+  <select id="acq-filter-dept" data-i18n-attr="data-placeholder">
+    <option value="" data-i18n="acq.filter.all">— tutti —</option>
+  </select>
+  <select id="acq-filter-state">
+    <option value="" data-i18n="acq.filter.all">— tutti —</option>
+    <option value="open" data-i18n="acq.state.open">Aperte</option>
+    <option value="won" data-i18n="acq.state.won">Vinte</option>
+    <option value="lost" data-i18n="acq.state.lost">Perse</option>
+  </select>
+  <input type="text" id="acq-filter-search" data-i18n="acq.ph.search" data-i18n-attr="placeholder" placeholder="Cerca…" style="min-width:160px;">
+</div>
+
+{# ── Toggle vista ─────────────────────────────────────────────────── #}
+<div class="acq-view-toggle">
+  <button class="acq-view-btn active" id="acq-btn-kanban" data-view="kanban" data-i18n="acq.view.kanban">Kanban</button>
+  <button class="acq-view-btn" id="acq-btn-table" data-view="table" data-i18n="acq.view.table">Tabella</button>
+</div>
+
+{# ── Layout principale: lista + dettaglio ─────────────────────────── #}
+<div class="acq-layout">
+  <div class="acq-list-side">
+
+    {# ── Kanban ──────────────────────────────────────────────────── #}
+    <div id="acq-view-kanban">
+      <div class="acq-kanban" id="acq-kanban-board"></div>
+    </div>
+
+    {# ── Tabella ─────────────────────────────────────────────────── #}
+    <div id="acq-view-table" style="display:none;">
+      <div class="acq-table-wrap">
+        <table class="table" id="acq-table">
+          <thead>
+            <tr>
+              <th data-i18n="acq.col.title">Trattativa</th>
+              <th data-i18n="acq.col.client">Cliente / Prospect</th>
+              <th data-i18n="acq.col.stage">Stadio</th>
+              <th data-i18n="acq.col.value">Valore €</th>
+              <th data-i18n="acq.col.prob">Prob. %</th>
+              <th data-i18n="acq.col.weighted">Pesato €</th>
+              <th data-i18n="acq.col.close_date">Chiusura prev.</th>
+              <th data-i18n="acq.col.depts">Reparti</th>
+              <th data-i18n="col.actions">Azioni</th>
+            </tr>
+          </thead>
+          <tbody id="acq-table-body">
+            <tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;" data-i18n="misc.loading">Caricamento…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>{# /acq-list-side #}
+
+  {# ── Dettaglio (pannello destro) ───────────────────────────────── #}
+  <div class="acq-detail-panel hidden" id="acq-detail-panel">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+      <span style="font-size:13px;font-weight:600;color:var(--text2);" data-i18n="acq.detail.title">Dettaglio trattativa</span>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick="acqCloseDetail()" title="Chiudi">&times;</button>
+    </div>
+    <div class="acq-detail-header">
+      <h3 id="det-title">—</h3>
+      <div class="det-client" id="det-client"></div>
+    </div>
+    <div class="acq-detail-meta" id="det-meta"></div>
+
+    {# Linked project #}
+    <div id="det-project-row" style="display:none;margin-bottom:10px;font-size:12px;">
+      <span style="color:var(--text3);" data-i18n="acq.detail.linked_project">Progetto collegato:</span>
+      <a id="det-project-link" href="#" style="color:var(--indigo2);margin-left:4px;"></a>
+    </div>
+
+    {# Tab navigation #}
+    <div class="acq-det-tabs">
+      <button class="acq-det-tab active" data-tab="activities" onclick="acqDetTab(this,'activities')" data-i18n="acq.detail.tab.activities">Attività</button>
+      <button class="acq-det-tab" data-tab="contacts" onclick="acqDetTab(this,'contacts')" data-i18n="acq.detail.tab.contacts">Contatti</button>
+      <button class="acq-det-tab" data-tab="quotes" onclick="acqDetTab(this,'quotes')" data-i18n="acq.detail.tab.quotes">Quotazioni</button>
+    </div>
+
+    {# Activities tab #}
+    <div class="acq-det-content active" id="det-tab-activities">
+      <div id="det-activities-list"></div>
+      <div class="acq-add-form" id="det-act-add-form">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px;" data-i18n="acq.act.add">+ Aggiungi attività</div>
+        <div class="form-row">
+          <div class="form-group" style="flex:0 0 120px;">
+            <label data-i18n="acq.act.type">Tipo</label>
+            <select id="det-act-type">
+              <option value="note" data-i18n="acq.act.type.note">Nota</option>
+              <option value="call" data-i18n="acq.act.type.call">Chiamata</option>
+              <option value="email" data-i18n="acq.act.type.email">Email</option>
+              <option value="meeting" data-i18n="acq.act.type.meeting">Incontro</option>
+              <option value="task" data-i18n="acq.act.type.task">Task</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label data-i18n="acq.act.subject">Oggetto *</label>
+            <input type="text" id="det-act-subject" data-i18n="acq.ph.activity_subject" data-i18n-attr="placeholder" placeholder="es. Chiamata di follow-up">
+          </div>
+        </div>
+        <div class="form-group">
+          <label data-i18n="acq.act.body">Corpo / Note</label>
+          <textarea id="det-act-body" rows="2" style="resize:vertical;"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label data-i18n="acq.act.date">Data</label>
+            <input type="datetime-local" id="det-act-occurred">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label data-i18n="acq.act.next_action">Prossima azione al</label>
+            <input type="date" id="det-act-next-date">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="acqAddActivity()" data-i18n="btn.add">Aggiungi</button>
+      </div>
+    </div>
+
+    {# Contacts tab #}
+    <div class="acq-det-content" id="det-tab-contacts">
+      <div id="det-contacts-list"></div>
+      <div class="acq-add-form" id="det-contact-add-form" style="display:none;">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px;" data-i18n="acq.contact.add">+ Aggiungi contatto</div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label data-i18n="acq.contact.name">Nome *</label>
+            <input type="text" id="det-contact-name">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label data-i18n="acq.contact.role">Ruolo</label>
+            <input type="text" id="det-contact-role">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label data-i18n="acq.contact.email">Email</label>
+            <input type="email" id="det-contact-email">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label data-i18n="acq.contact.phone">Telefono</label>
+            <input type="text" id="det-contact-phone">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="acqAddContact()" data-i18n="btn.add">Aggiungi</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('det-contact-add-form').style.display='none'" data-i18n="btn.cancel">Annulla</button>
+      </div>
+      <div style="margin-top:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('det-contact-add-form').style.display='block'" id="det-contact-show-form" data-i18n="acq.contact.add">+ Aggiungi contatto</button>
+      </div>
+    </div>
+
+    {# Quotes tab #}
+    <div class="acq-det-content" id="det-tab-quotes">
+      <div id="det-quotes-list"></div>
+    </div>
+
+    {# Actions #}
+    <div class="acq-detail-actions">
+      <button class="btn btn-secondary btn-sm" id="det-btn-edit" data-i18n="acq.btn.edit">Modifica</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--green,#4ade80);" id="det-btn-won" data-i18n="acq.btn.won">Segna Vinta</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--text3);" id="det-btn-lost" data-i18n="acq.btn.lost">Segna Persa</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--indigo2);" id="det-btn-convert" data-i18n="acq.btn.convert">Converti</button>
+      <button class="btn btn-ghost btn-sm" style="color:#ef4444;" id="det-btn-delete" data-i18n="acq.btn.delete">Elimina</button>
+    </div>
+  </div>{# /acq-detail-panel #}
+
+</div>{# /acq-layout #}
+
+{# ── Modal: Nuova / Modifica trattativa ─────────────────────────────── #}
+<div class="modal-overlay" id="acq-modal-form">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="acq-modal-form-title" data-i18n="acq.new">+ Nuova trattativa</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('acq-modal-form')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="acq-form-id">
+      <div class="form-group">
+        <label class="form-label" data-i18n="acq.form.title">Titolo trattativa *</label>
+        <input class="form-input" id="acq-form-title" type="text" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.client">Cliente (esistente)</label>
+          <select class="form-select" id="acq-form-client">
+            <option value="" data-i18n="acq.filter.all">— nessuno —</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.prospect">Prospect</label>
+          <input class="form-input" id="acq-form-prospect" type="text">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.stage">Stadio</label>
+          <select class="form-select" id="acq-form-stage">
+            <option value="lead" data-i18n="acq.stage.lead">Lead</option>
+            <option value="qualified" data-i18n="acq.stage.qualified">Qualificato</option>
+            <option value="quoting" data-i18n="acq.stage.quoting">In quotazione</option>
+            <option value="negotiation" data-i18n="acq.stage.negotiation">Negoziazione</option>
+            <option value="won" data-i18n="acq.stage.won">Vinto</option>
+            <option value="lost" data-i18n="acq.stage.lost">Perso</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.value">Valore stimato (€)</label>
+          <input class="form-input" id="acq-form-value" type="number" min="0" step="0.01" value="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.prob">Probabilità (0-100)</label>
+          <input class="form-input" id="acq-form-prob" type="number" min="0" max="100" step="1" placeholder="auto">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.close_date">Data chiusura prevista</label>
+          <input class="form-input" id="acq-form-close-date" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.next_action">Prossima azione</label>
+          <input class="form-input" id="acq-form-next-action" type="text">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.next_action_date">Data prossima azione</label>
+          <input class="form-input" id="acq-form-next-action-date" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;">
+          <label class="form-label" data-i18n="acq.form.source">Fonte</label>
+          <input class="form-input" id="acq-form-source" type="text" data-i18n="acq.ph.source" data-i18n-attr="placeholder" placeholder="es. referral, cold outreach…">
+        </div>
+        <div class="form-group" id="acq-form-lost-reason-group" style="flex:1; display:none;">
+          <label class="form-label" data-i18n="acq.form.lost_reason">Motivo perdita</label>
+          <input class="form-input" id="acq-form-lost-reason" type="text">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="acq.form.depts">Reparti</label>
+        <div id="acq-form-depts-checkboxes" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+        <input type="hidden" id="acq-form-depts-csv">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('acq-modal-form')" data-i18n="btn.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="acqSaveForm()" data-i18n="btn.save">Salva</button>
+    </div>
+  </div>
+</div>
+
+{# ── Modal: Converti in progetto ────────────────────────────────────── #}
+<div class="modal-overlay" id="acq-modal-convert">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <span class="modal-title" data-i18n="acq.convert.title">Converti in progetto</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('acq-modal-convert')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="acq-convert-id">
+      <div class="form-group">
+        <label class="form-label" data-i18n="acq.convert.code">Codice progetto *</label>
+        <input class="form-input" id="acq-convert-code" type="text" data-i18n="acq.ph.convert_code" data-i18n-attr="placeholder" placeholder="es. P-2026-001">
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="acq.convert.title_field">Titolo progetto</label>
+        <input class="form-input" id="acq-convert-title" type="text">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('acq-modal-convert')" data-i18n="btn.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="acqDoConvert()" data-i18n="acq.btn.convert">Converti</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ────────────────────────────────────────────────────────────────────────
+   Acquisizioni — JS
+   Follows project conventions:
+   - api() helper from global.js
+   - No JSON.stringify in onclick — data-* attributes + delegation
+   - mfT() for dynamic strings
+   - escapeHtml() from global.js
+──────────────────────────────────────────────────────────────────────── */
+
+// ── State ──────────────────────────────────────────────────────────────
+let _acqItems = [];          // all loaded acquisitions
+let _acqDepts = [];          // departments list
+let _acqClients = [];        // clients list
+let _acqCurrentId = null;    // currently selected acquisition id
+let _acqView = 'kanban';     // 'kanban' or 'table'
+
+const ACQ_STAGES = ['lead','qualified','quoting','negotiation','won','lost'];
+
+const ACQ_STAGE_COLORS = {
+  lead: '#94a3b8', qualified: '#60a5fa', quoting: '#f59e0b',
+  negotiation: '#c084fc', won: '#4ade80', lost: '#f87171'
+};
+
+function acqStageLabel(s) {
+  return mfT('acq.stage.' + s, s);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  acqLoadDepts();
+  acqLoadClients();
+  acqLoadAgenda();
+  acqLoadSummary();
+  acqLoadList();
+
+  // view toggle
+  document.getElementById('acq-btn-kanban').addEventListener('click', () => acqSetView('kanban'));
+  document.getElementById('acq-btn-table').addEventListener('click',  () => acqSetView('table'));
+
+  // new button
+  document.getElementById('acq-btn-new').addEventListener('click', () => acqOpenForm(null));
+
+  // filters
+  document.getElementById('acq-filter-dept').addEventListener('change',  acqApplyFilters);
+  document.getElementById('acq-filter-state').addEventListener('change', acqApplyFilters);
+  document.getElementById('acq-filter-search').addEventListener('input', acqApplyFilters);
+
+  // lost-reason visibility based on stage
+  document.getElementById('acq-form-stage').addEventListener('change', e => acqToggleLostReason(e.target.value));
+
+  // detail panel action buttons — wired via data-acq-id set at render time
+  document.getElementById('det-btn-edit').addEventListener('click', () => acqOpenForm(_acqCurrentId));
+  document.getElementById('det-btn-won').addEventListener('click', () => {
+    if (confirm(mfT('acq.confirm.won', 'Segnare la trattativa come Vinta?'))) acqChangeStage(_acqCurrentId, 'won');
+  });
+  document.getElementById('det-btn-lost').addEventListener('click', () => {
+    if (confirm(mfT('acq.confirm.lost', 'Segnare la trattativa come Persa?'))) acqChangeStage(_acqCurrentId, 'lost');
+  });
+  document.getElementById('det-btn-convert').addEventListener('click', () => acqOpenConvert(_acqCurrentId));
+  document.getElementById('det-btn-delete').addEventListener('click', () => {
+    if (confirm(mfT('acq.confirm.delete', 'Eliminare questa trattativa?'))) acqDelete(_acqCurrentId);
+  });
+});
+
+// ── Load helpers ───────────────────────────────────────────────────────
+async function acqLoadDepts() {
+  try {
+    const r = await api('GET', '/departments/api');
+    _acqDepts = r.departments || r || [];
+    const sel = document.getElementById('acq-filter-dept');
+    _acqDepts.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.id; o.textContent = d.name;
+      sel.appendChild(o);
+    });
+    acqRenderFormDepts();
+  } catch(e) {}
+}
+
+async function acqLoadClients() {
+  try {
+    const r = await api('GET', '/clients/api');
+    _acqClients = r.clients || r || [];
+    const sel = document.getElementById('acq-form-client');
+    _acqClients.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    _acqClients.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = escapeHtml(c.name);
+      sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+async function acqLoadAgenda() {
+  try {
+    const r = await api('GET', '/acquisitions/api/agenda?days=30');
+    const items = r.items || [];
+    const wrap = document.getElementById('acq-agenda-list');
+    if (!items.length) {
+      wrap.innerHTML = '<span class="text-muted" style="font-size:12px;padding:6px 0;" data-i18n="acq.agenda.empty">' + mfT('acq.agenda.empty', 'Nessuna scadenza imminente.') + '</span>';
+      return;
+    }
+    wrap.innerHTML = '';
+    items.forEach(it => {
+      const el = document.createElement('div');
+      el.className = 'acq-agenda-item';
+      el.dataset.acqId = it.acquisition_id || '';
+      el.innerHTML = '<div class="ag-date">' + escapeHtml(it.date || '') + '</div><div class="ag-title">' + escapeHtml(it.title || '') + '</div>';
+      el.addEventListener('click', () => { if (it.acquisition_id) acqOpenDetail(it.acquisition_id); });
+      wrap.appendChild(el);
+    });
+  } catch(e) {}
+}
+
+async function acqLoadSummary() {
+  try {
+    const r = await api('GET', '/acquisitions/api/summary');
+    const wv = parseFloat(r.total_weighted || '0');
+    document.getElementById('acq-kpi-weighted').textContent = '€ ' + wv.toLocaleString('it-IT', {minimumFractionDigits:0, maximumFractionDigits:0});
+    const oc = r.open_count || 0;
+    document.getElementById('acq-kpi-open-count').textContent = oc + ' ' + mfT('acq.kpi.open', 'Trattative aperte');
+    const byDept = r.by_department || {};
+    const dKeys = Object.keys(byDept);
+    if (dKeys.length) {
+      const card = document.getElementById('acq-kpi-dept-card');
+      card.style.display = '';
+      const list = document.getElementById('acq-kpi-dept-list');
+      list.innerHTML = dKeys.map(k => '<div><strong>' + escapeHtml(k) + '</strong>: € ' + parseFloat(byDept[k]).toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0}) + '</div>').join('');
+    }
+  } catch(e) {}
+}
+
+async function acqLoadList() {
+  try {
+    const r = await api('GET', '/acquisitions/api/list');
+    _acqItems = r.items || [];
+    acqApplyFilters();
+  } catch(e) {
+    toast(mfT('toast.error_loading','Errore caricamento'), 'error');
+  }
+}
+
+// ── Filtering ──────────────────────────────────────────────────────────
+function acqApplyFilters() {
+  const dept   = document.getElementById('acq-filter-dept').value;
+  const state  = document.getElementById('acq-filter-state').value;
+  const search = document.getElementById('acq-filter-search').value.toLowerCase().trim();
+
+  let items = _acqItems.filter(a => {
+    if (dept  && !a.departments.some(d => String(d.id) === dept)) return false;
+    if (state === 'open' && ['won','lost'].includes(a.stage)) return false;
+    if (state === 'won'  && a.stage !== 'won')  return false;
+    if (state === 'lost' && a.stage !== 'lost') return false;
+    if (search) {
+      const hay = ((a.title||'') + (a.client_name||'') + (a.next_action||'')).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  if (_acqView === 'kanban') acqRenderKanban(items);
+  else acqRenderTable(items);
+}
+
+// ── View toggle ────────────────────────────────────────────────────────
+function acqSetView(v) {
+  _acqView = v;
+  document.getElementById('acq-view-kanban').style.display = v === 'kanban' ? '' : 'none';
+  document.getElementById('acq-view-table').style.display  = v === 'table'  ? '' : 'none';
+  document.getElementById('acq-btn-kanban').classList.toggle('active', v === 'kanban');
+  document.getElementById('acq-btn-table').classList.toggle('active',  v === 'table');
+  acqApplyFilters();
+}
+
+// ── Kanban ─────────────────────────────────────────────────────────────
+function acqRenderKanban(items) {
+  const board = document.getElementById('acq-kanban-board');
+  board.innerHTML = '';
+  ACQ_STAGES.forEach(stage => {
+    const col = document.createElement('div');
+    col.className = 'acq-kanban-col';
+    col.dataset.stage = stage;
+    const stageItems = items.filter(a => a.stage === stage);
+    col.innerHTML = `<div class="acq-col-header">
+      <span style="color:${ACQ_STAGE_COLORS[stage] || 'var(--text3)'};">${escapeHtml(acqStageLabel(stage))}</span>
+      <span class="acq-col-count">${stageItems.length}</span>
+    </div>`;
+    if (!stageItems.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'font-size:12px;color:var(--text3);padding:8px 4px;text-align:center;';
+      empty.textContent = mfT('acq.empty.kanban','Nessuna trattativa');
+      col.appendChild(empty);
+    }
+    stageItems.forEach(a => { col.appendChild(acqBuildCard(a)); });
+
+    // drag events on column
+    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+    col.addEventListener('drop', async e => {
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      const aid = e.dataTransfer.getData('text/plain');
+      if (aid && stage) {
+        await acqChangeStage(parseInt(aid), stage);
+      }
+    });
+    board.appendChild(col);
+  });
+}
+
+function acqBuildCard(a) {
+  const card = document.createElement('div');
+  card.className = 'acq-card';
+  card.draggable = true;
+  card.dataset.acqId = a.id;
+  if (_acqCurrentId === a.id) card.classList.add('selected');
+  const deptBadges = (a.departments || []).map(d => `<span class="acq-dept-badge">${escapeHtml(d.name)}</span>`).join('');
+  const nextAct = a.next_action ? `<div class="acq-next-action">${escapeHtml(a.next_action)}${a.next_action_date ? ' · ' + escapeHtml(a.next_action_date) : ''}</div>` : '';
+  card.innerHTML = `
+    <div class="acq-card-title">${escapeHtml(a.title)}</div>
+    <div class="acq-card-client">${escapeHtml(a.client_name || '—')}</div>
+    <div class="acq-card-row">
+      <span class="acq-card-value">€ ${parseFloat(a.estimated_value||0).toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+      <span class="acq-card-prob">${a.effective_probability || '?'}%</span>
+      ${deptBadges}
+    </div>
+    ${nextAct}
+  `;
+  card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', String(a.id)); });
+  card.addEventListener('click', () => acqOpenDetail(a.id));
+  return card;
+}
+
+// ── Table ──────────────────────────────────────────────────────────────
+function acqRenderTable(items) {
+  const tbody = document.getElementById('acq-table-body');
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px;">${mfT('acq.empty.table','Nessuna trattativa.')}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = '';
+  items.forEach(a => {
+    const tr = document.createElement('tr');
+    if (_acqCurrentId === a.id) tr.style.background = 'var(--bg2)';
+    const deptStr = (a.departments||[]).map(d => d.name).join(', ');
+    tr.innerHTML = `
+      <td><a href="#" style="color:var(--text);text-decoration:none;font-weight:600;" data-acq-id="${a.id}">${escapeHtml(a.title)}</a></td>
+      <td>${escapeHtml(a.client_name||'—')}</td>
+      <td>
+        <select class="acq-stage-select" data-acq-id="${a.id}">
+          ${ACQ_STAGES.map(s => `<option value="${s}"${a.stage===s?' selected':''}>${escapeHtml(acqStageLabel(s))}</option>`).join('')}
+        </select>
+      </td>
+      <td>€ ${parseFloat(a.estimated_value||0).toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0})}</td>
+      <td>${a.win_probability_pct != null ? a.win_probability_pct + '%' : a.effective_probability + '%'}</td>
+      <td>€ ${parseFloat(a.weighted_value||0).toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0})}</td>
+      <td>${escapeHtml(a.expected_close_date||'—')}</td>
+      <td>${escapeHtml(deptStr||'—')}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm btn-icon" data-acq-id="${a.id}" title="${mfT('acq.btn.edit','Modifica')}"><i data-lucide="pencil"></i></button>
+        <button class="btn btn-ghost btn-sm btn-icon" style="color:#ef4444;" data-acq-del="${a.id}" title="${mfT('acq.btn.delete','Elimina')}"><i data-lucide="trash-2"></i></button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // delegated handlers
+  tbody.querySelectorAll('a[data-acq-id]').forEach(a => {
+    a.addEventListener('click', e => { e.preventDefault(); acqOpenDetail(parseInt(a.dataset.acqId)); });
+  });
+  tbody.querySelectorAll('select.acq-stage-select').forEach(sel => {
+    sel.addEventListener('change', () => acqChangeStage(parseInt(sel.dataset.acqId), sel.value));
+  });
+  tbody.querySelectorAll('button[data-acq-id]').forEach(btn => {
+    btn.addEventListener('click', () => acqOpenForm(parseInt(btn.dataset.acqId)));
+  });
+  tbody.querySelectorAll('button[data-acq-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (confirm(mfT('acq.confirm.delete','Eliminare questa trattativa?'))) acqDelete(parseInt(btn.dataset.acqDel));
+    });
+  });
+
+  // re-init lucide icons in tbody
+  if (typeof lucide !== 'undefined') lucide.createIcons({nodes: [tbody]});
+}
+
+// ── Detail panel ───────────────────────────────────────────────────────
+async function acqOpenDetail(aid) {
+  _acqCurrentId = aid;
+  acqApplyFilters(); // re-render to show selection
+
+  const panel = document.getElementById('acq-detail-panel');
+  panel.classList.remove('hidden');
+
+  try {
+    const a = await api('GET', '/acquisitions/api/' + aid);
+    document.getElementById('det-title').textContent  = a.title || '—';
+    document.getElementById('det-client').textContent = a.client_name || a.prospect_name || '—';
+
+    // meta pills
+    const meta = document.getElementById('det-meta');
+    meta.innerHTML = `
+      <span class="meta-item" style="border-left:3px solid ${ACQ_STAGE_COLORS[a.stage]||'#aaa'};">${escapeHtml(acqStageLabel(a.stage))}</span>
+      <span class="meta-item">€ ${parseFloat(a.estimated_value||0).toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+      <span class="meta-item">${a.effective_probability||'?'}% → € ${parseFloat(a.weighted_value||0).toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0})}</span>
+      ${a.expected_close_date ? '<span class="meta-item">📅 ' + escapeHtml(a.expected_close_date) + '</span>' : ''}
+      ${a.next_action ? '<span class="meta-item">▶ ' + escapeHtml(a.next_action) + '</span>' : ''}
+      ${(a.departments||[]).map(d => '<span class="acq-dept-badge">' + escapeHtml(d.name) + '</span>').join('')}
+    `;
+
+    // linked project
+    const projRow = document.getElementById('det-project-row');
+    if (a.project_id) {
+      projRow.style.display = '';
+      const lnk = document.getElementById('det-project-link');
+      lnk.href = '/projects/' + a.project_id;
+      lnk.textContent = '#' + a.project_id;
+    } else {
+      projRow.style.display = 'none';
+    }
+
+    // load activities
+    acqDetLoadActivities(aid);
+    // load contacts
+    acqDetLoadContacts(a.client_id);
+    // render quotes
+    acqDetRenderQuotes(a.quotes || []);
+
+    // show/hide convert button
+    document.getElementById('det-btn-convert').style.display = a.project_id ? 'none' : '';
+  } catch(e) {
+    toast(mfT('toast.error_loading','Errore caricamento'), 'error');
+  }
+}
+
+function acqCloseDetail() {
+  _acqCurrentId = null;
+  document.getElementById('acq-detail-panel').classList.add('hidden');
+  acqApplyFilters();
+}
+
+function acqDetTab(btn, tab) {
+  document.querySelectorAll('.acq-det-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.acq-det-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('det-tab-' + tab).classList.add('active');
+}
+
+async function acqDetLoadActivities(aid) {
+  try {
+    const r = await api('GET', '/acquisitions/api/' + aid + '/activities');
+    const list = document.getElementById('det-activities-list');
+    const items = r.items || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.no_activities">' + mfT('acq.detail.no_activities','Nessuna attività.') + '</div>';
+      return;
+    }
+    list.innerHTML = '';
+    items.forEach(act => {
+      const el = document.createElement('div');
+      el.className = 'acq-activity-item';
+      el.innerHTML = `
+        <span class="acq-activity-type-badge">${escapeHtml(mfT('acq.act.type.' + act.type, act.type))}</span>
+        <strong>${escapeHtml(act.subject||'')}</strong>
+        ${act.occurred_at ? '<span style="color:var(--text3);font-size:11px;margin-left:4px;">' + escapeHtml(act.occurred_at.substring(0,10)) + '</span>' : ''}
+        ${act.body ? '<div style="color:var(--text3);margin-top:3px;">' + escapeHtml(act.body) + '</div>' : ''}
+        ${act.next_action_date ? '<div style="font-size:11px;color:var(--indigo2);">▶ ' + escapeHtml(act.next_action_date) + '</div>' : ''}
+      `;
+      list.appendChild(el);
+    });
+  } catch(e) {}
+}
+
+async function acqDetLoadContacts(clientId) {
+  const list = document.getElementById('det-contacts-list');
+  if (!clientId) {
+    list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.no_contacts">' + mfT('acq.detail.no_contacts','Nessun contatto.') + '</div>';
+    return;
+  }
+  try {
+    const r = await api('GET', '/clients/api/' + clientId + '/contacts');
+    const items = r.items || r || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.no_contacts">' + mfT('acq.detail.no_contacts','Nessun contatto.') + '</div>';
+      return;
+    }
+    list.innerHTML = '';
+    items.forEach(c => {
+      const el = document.createElement('div');
+      el.className = 'acq-contact-item';
+      el.innerHTML = `
+        <div>
+          <strong>${escapeHtml(c.name||'')}</strong>${c.role ? ' — ' + escapeHtml(c.role) : ''}
+          ${c.is_primary ? '<span style="font-size:10px;background:var(--indigo2);color:#fff;border-radius:4px;padding:1px 4px;margin-left:4px;">' + mfT('acq.contact.primary','Principale') + '</span>' : ''}
+          <div style="color:var(--text3);font-size:11px;">${c.email ? escapeHtml(c.email) : ''} ${c.phone ? '· ' + escapeHtml(c.phone) : ''}</div>
+        </div>
+      `;
+      list.appendChild(el);
+    });
+  } catch(e) {}
+}
+
+function acqDetRenderQuotes(quotes) {
+  const list = document.getElementById('det-quotes-list');
+  if (!quotes.length) {
+    list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.no_quotes">' + mfT('acq.detail.no_quotes','Nessuna quotazione collegata.') + '</div>';
+    return;
+  }
+  list.innerHTML = '';
+  quotes.forEach(q => {
+    const el = document.createElement('div');
+    el.className = 'acq-quote-item';
+    el.innerHTML = `<a href="/quotes#${q.id}" style="color:var(--indigo2);">${escapeHtml(q.number||('#'+q.id))}</a> — ${escapeHtml(q.status||'')} — € ${parseFloat(q.total_with_vat||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    list.appendChild(el);
+  });
+}
+
+// ── Add activity ───────────────────────────────────────────────────────
+async function acqAddActivity() {
+  if (!_acqCurrentId) return;
+  const subj = document.getElementById('det-act-subject').value.trim();
+  if (!subj) { toast(mfT('toast.required_fields','Compila i campi obbligatori'), 'error'); return; }
+  const fd = new FormData();
+  fd.append('type',    document.getElementById('det-act-type').value);
+  fd.append('subject', subj);
+  const body = document.getElementById('det-act-body').value;
+  if (body) fd.append('body', body);
+  const occ = document.getElementById('det-act-occurred').value;
+  if (occ) fd.append('occurred_at', occ);
+  const nad = document.getElementById('det-act-next-date').value;
+  if (nad) fd.append('next_action_date', nad);
+  try {
+    await api('POST', '/acquisitions/api/' + _acqCurrentId + '/activities', fd);
+    document.getElementById('det-act-subject').value = '';
+    document.getElementById('det-act-body').value    = '';
+    document.getElementById('det-act-occurred').value = '';
+    document.getElementById('det-act-next-date').value = '';
+    acqDetLoadActivities(_acqCurrentId);
+    toast(mfT('acq.toast.act_added','Attività aggiunta'), 'success');
+  } catch(e) {
+    toast(mfT('toast.error_save','Errore salvataggio'), 'error');
+  }
+}
+
+// ── Add contact ────────────────────────────────────────────────────────
+async function acqAddContact() {
+  if (!_acqCurrentId) return;
+  const acq = _acqItems.find(a => a.id === _acqCurrentId);
+  if (!acq || !acq.client_id) { toast(mfT('acq.toast.no_client'), 'error'); return; }
+  const name = document.getElementById('det-contact-name').value.trim();
+  if (!name) { toast(mfT('toast.required_fields','Compila i campi obbligatori'), 'error'); return; }
+  const fd = new FormData();
+  fd.append('name', name);
+  const role = document.getElementById('det-contact-role').value;
+  if (role) fd.append('role', role);
+  const email = document.getElementById('det-contact-email').value;
+  if (email) fd.append('email', email);
+  const phone = document.getElementById('det-contact-phone').value;
+  if (phone) fd.append('phone', phone);
+  try {
+    await api('POST', '/clients/api/' + acq.client_id + '/contacts', fd);
+    document.getElementById('det-contact-name').value  = '';
+    document.getElementById('det-contact-role').value  = '';
+    document.getElementById('det-contact-email').value = '';
+    document.getElementById('det-contact-phone').value = '';
+    document.getElementById('det-contact-add-form').style.display = 'none';
+    acqDetLoadContacts(acq.client_id);
+    toast(mfT('acq.toast.contact_added','Contatto aggiunto'), 'success');
+  } catch(e) {
+    toast(mfT('toast.error_save','Errore salvataggio'), 'error');
+  }
+}
+
+// ── CRUD ───────────────────────────────────────────────────────────────
+async function acqChangeStage(aid, stage) {
+  const fd = new FormData(); fd.append('stage', stage);
+  try {
+    const updated = await api('POST', '/acquisitions/api/' + aid + '/stage', fd);
+    // update in local state
+    const idx = _acqItems.findIndex(a => a.id === aid);
+    if (idx >= 0) Object.assign(_acqItems[idx], updated);
+    acqApplyFilters();
+    acqLoadSummary();
+    toast(mfT('acq.toast.stage_changed','Stadio aggiornato'), 'success');
+    if (_acqCurrentId === aid) acqOpenDetail(aid);
+  } catch(e) {
+    toast(mfT('toast.error_save','Errore'), 'error');
+  }
+}
+
+async function acqDelete(aid) {
+  if (!aid) return;
+  try {
+    await api('DELETE', '/acquisitions/api/' + aid);
+    _acqItems = _acqItems.filter(a => a.id !== aid);
+    if (_acqCurrentId === aid) acqCloseDetail();
+    else acqApplyFilters();
+    acqLoadSummary();
+    toast(mfT('acq.toast.deleted','Trattativa eliminata'), 'success');
+  } catch(e) {
+    toast(mfT('toast.error_save','Errore'), 'error');
+  }
+}
+
+// ── Form (create / edit) ───────────────────────────────────────────────
+function acqRenderFormDepts() {
+  const wrap = document.getElementById('acq-form-depts-checkboxes');
+  wrap.innerHTML = '';
+  _acqDepts.forEach(d => {
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = d.id; cb.dataset.deptId = d.id;
+    cb.addEventListener('change', acqUpdateDeptsCSV);
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(d.name));
+    wrap.appendChild(label);
+  });
+}
+
+function acqUpdateDeptsCSV() {
+  const ids = [];
+  document.querySelectorAll('#acq-form-depts-checkboxes input[type=checkbox]:checked').forEach(cb => ids.push(cb.value));
+  document.getElementById('acq-form-depts-csv').value = ids.join(',');
+}
+
+function acqToggleLostReason(stage) {
+  const g = document.getElementById('acq-form-lost-reason-group');
+  if (g) g.style.display = stage === 'lost' ? '' : 'none';
+}
+
+function acqOpenForm(aid) {
+  const isNew = !aid;
+  document.getElementById('acq-modal-form-title').textContent = mfT(isNew ? 'acq.new' : 'acq.btn.edit', isNew ? '+ Nuova trattativa' : 'Modifica');
+  document.getElementById('acq-form-id').value = aid || '';
+  // reset
+  ['acq-form-title','acq-form-prospect','acq-form-source','acq-form-next-action',
+   'acq-form-close-date','acq-form-next-action-date','acq-form-lost-reason'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('acq-form-value').value = '0';
+  document.getElementById('acq-form-prob').value  = '';
+  document.getElementById('acq-form-stage').value = 'lead';
+  acqToggleLostReason('lead');
+  document.getElementById('acq-form-client').value = '';
+  document.querySelectorAll('#acq-form-depts-checkboxes input[type=checkbox]').forEach(cb => { cb.checked = false; });
+  document.getElementById('acq-form-depts-csv').value = '';
+
+  if (!isNew) {
+    const a = _acqItems.find(x => x.id === aid);
+    if (a) {
+      document.getElementById('acq-form-title').value = a.title || '';
+      document.getElementById('acq-form-stage').value = a.stage || 'lead';
+      acqToggleLostReason(a.stage || 'lead');
+      document.getElementById('acq-form-value').value = a.estimated_value || '0';
+      document.getElementById('acq-form-prob').value  = a.win_probability_pct != null ? a.win_probability_pct : '';
+      document.getElementById('acq-form-close-date').value = a.expected_close_date || '';
+      document.getElementById('acq-form-next-action').value = a.next_action || '';
+      document.getElementById('acq-form-next-action-date').value = a.next_action_date || '';
+      document.getElementById('acq-form-source').value = a.source || '';
+      document.getElementById('acq-form-prospect').value = a.prospect_name || '';
+      document.getElementById('acq-form-lost-reason').value = a.lost_reason || '';
+      if (a.client_id) document.getElementById('acq-form-client').value = a.client_id;
+      // departments
+      const depIds = (a.departments||[]).map(d => String(d.id));
+      document.querySelectorAll('#acq-form-depts-checkboxes input[type=checkbox]').forEach(cb => {
+        cb.checked = depIds.includes(cb.value);
+      });
+      acqUpdateDeptsCSV();
+    }
+  }
+  openModal('acq-modal-form');
+}
+
+async function acqSaveForm() {
+  const title = document.getElementById('acq-form-title').value.trim();
+  if (!title) { toast(mfT('toast.required_fields','Compila i campi obbligatori'), 'error'); return; }
+
+  const aid = document.getElementById('acq-form-id').value;
+  const fd  = new FormData();
+  fd.append('title', title);
+  fd.append('stage', document.getElementById('acq-form-stage').value);
+  fd.append('estimated_value', document.getElementById('acq-form-value').value || '0');
+
+  const prob = document.getElementById('acq-form-prob').value;
+  if (prob !== '') fd.append('win_probability_pct', prob);
+
+  const client = document.getElementById('acq-form-client').value;
+  if (client) fd.append('client_id', client);
+
+  const prospect = document.getElementById('acq-form-prospect').value.trim();
+  if (prospect) fd.append('prospect_name', prospect);
+
+  const closeDate = document.getElementById('acq-form-close-date').value;
+  if (closeDate) fd.append('expected_close_date', closeDate);
+
+  const na = document.getElementById('acq-form-next-action').value.trim();
+  if (na) fd.append('next_action', na);
+
+  const nad = document.getElementById('acq-form-next-action-date').value;
+  if (nad) fd.append('next_action_date', nad);
+
+  const src = document.getElementById('acq-form-source').value.trim();
+  if (src) fd.append('source', src);
+
+  const lr = document.getElementById('acq-form-lost-reason').value.trim();
+  if (lr) fd.append('lost_reason', lr);
+
+  const deptsCSV = document.getElementById('acq-form-depts-csv').value;
+  fd.append('department_ids', deptsCSV);
+
+  try {
+    let result;
+    if (aid) {
+      result = await api('PUT', '/acquisitions/api/' + aid, fd);
+      const idx = _acqItems.findIndex(a => a.id === parseInt(aid));
+      if (idx >= 0) _acqItems[idx] = result; else _acqItems.push(result);
+      toast(mfT('acq.toast.updated','Trattativa aggiornata'), 'success');
+    } else {
+      result = await api('POST', '/acquisitions/api', fd);
+      _acqItems.unshift(result);
+      toast(mfT('acq.toast.created','Trattativa creata'), 'success');
+    }
+    closeModal('acq-modal-form');
+    acqApplyFilters();
+    acqLoadSummary();
+    if (aid) _acqCurrentId = parseInt(aid);
+    else _acqCurrentId = result.id;
+    acqOpenDetail(_acqCurrentId);
+  } catch(e) {
+    toast(mfT('toast.error_save','Errore salvataggio'), 'error');
+  }
+}
+
+// ── Convert ────────────────────────────────────────────────────────────
+function acqOpenConvert(aid) {
+  if (!aid) return;
+  const a = _acqItems.find(x => x.id === aid);
+  document.getElementById('acq-convert-id').value = aid;
+  document.getElementById('acq-convert-code').value = '';
+  document.getElementById('acq-convert-title').value = a ? a.title : '';
+  openModal('acq-modal-convert');
+}
+
+async function acqDoConvert() {
+  const aid  = document.getElementById('acq-convert-id').value;
+  const code = document.getElementById('acq-convert-code').value.trim();
+  if (!code) { toast(mfT('toast.required_fields','Compila i campi obbligatori'), 'error'); return; }
+  const fd = new FormData();
+  fd.append('code', code);
+  const titleVal = document.getElementById('acq-convert-title').value.trim();
+  if (titleVal) fd.append('title', titleVal);
+  try {
+    const result = await api('POST', '/acquisitions/api/' + aid + '/convert', fd);
+    const idx = _acqItems.findIndex(a => a.id === parseInt(aid));
+    if (idx >= 0) _acqItems[idx] = result;
+    closeModal('acq-modal-convert');
+    acqApplyFilters();
+    acqOpenDetail(parseInt(aid));
+    toast(mfT('acq.toast.converted','Convertita in progetto'), 'success');
+    if (result.project_id) {
+      setTimeout(() => { window.location.href = '/projects/' + result.project_id; }, 1200);
+    }
+  } catch(e) {
+    toast(mfT('toast.error_save','Errore conversione'), 'error');
+  }
+}
+</script>
+{% endblock %}

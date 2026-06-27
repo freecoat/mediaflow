@@ -36,6 +36,10 @@ from app.models import (
     JobCostLine, BookingChange,
 )
 from app.models.models import AIAction, JCLBillingStatus
+from app.models.models import (
+    Acquisition, AcquisitionStage, Activity, ActivityType, Contact,
+)
+from app.context import current_tenant_id
 from app.services.ai_provider import get_provider_for_user, get_provider, safe_json_parse
 
 logger = logging.getLogger(__name__)
@@ -4389,6 +4393,71 @@ def _sync_legacy_parser_action_types() -> None:
 
 
 _sync_legacy_parser_action_types()
+
+
+# ── Capability AI Acquisizioni (Task 11) ──────────────────────
+
+@ai_capability("propose_acquisition")
+def _h_propose_acquisition(db: Session, data: dict) -> dict:
+    title = (data.get("title") or "").strip()
+    if not title:
+        raise ValueError("Manca 'title'")
+    acq = Acquisition(
+        tenant_id=current_tenant_id(), title=title,
+        client_id=data.get("client_id"),
+        prospect_name=data.get("prospect_name"),
+        stage=AcquisitionStage(data.get("stage") or "lead"),
+        estimated_value=data.get("estimated_value") or 0,
+        next_action=data.get("next_action"))
+    db.add(acq); db.flush()
+    return {"created": True, "acquisition_id": acq.id,
+            "message": f"Trattativa '{title}' creata (stadio {acq.stage.value})."}
+
+
+@ai_capability("propose_activity")
+def _h_propose_activity(db: Session, data: dict) -> dict:
+    subject = (data.get("subject") or "").strip()
+    if not subject:
+        raise ValueError("Manca 'subject'")
+    a = Activity(tenant_id=current_tenant_id(),
+                 acquisition_id=data.get("acquisition_id"),
+                 client_id=data.get("client_id"), project_id=data.get("project_id"),
+                 type=ActivityType(data.get("type") or "note"), subject=subject,
+                 body=data.get("body"))
+    db.add(a); db.flush()
+    return {"created": True, "activity_id": a.id,
+            "message": f"Attività '{subject}' registrata."}
+
+
+@ai_capability("propose_contact")
+def _h_propose_contact(db: Session, data: dict) -> dict:
+    name = (data.get("name") or "").strip()
+    cid = data.get("client_id")
+    if not name or not cid:
+        raise ValueError("Servono 'name' e 'client_id'")
+    c = Contact(tenant_id=current_tenant_id(), client_id=cid, name=name,
+                role=data.get("role"), email=data.get("email"),
+                phone=data.get("phone"), ai_extracted=True)
+    db.add(c); db.flush()
+    return {"created": True, "contact_id": c.id,
+            "message": f"Contatto '{name}' aggiunto al cliente {cid}."}
+
+
+@ai_capability("propose_acquisition_stage")
+def _h_propose_acquisition_stage(db: Session, data: dict) -> dict:
+    aid = data.get("acquisition_id")
+    if not aid:
+        raise ValueError("Manca 'acquisition_id'")
+    if not data.get("stage"):
+        raise ValueError("Manca 'stage'")
+    acq = db.query(Acquisition).filter(Acquisition.id == aid,
+                                       Acquisition.tenant_id == current_tenant_id()).first()
+    if not acq:
+        raise ValueError(f"Trattativa {aid} non trovata")
+    from app.services.acquisition_service import apply_stage_change
+    apply_stage_change(db, acq, AcquisitionStage(data.get("stage")))
+    return {"updated": True, "acquisition_id": acq.id,
+            "message": f"Trattativa avanzata a stadio {acq.stage.value}."}
 
 
 # ── Review quotazione (legacy, immutato funzionalmente) ──────
