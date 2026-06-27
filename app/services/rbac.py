@@ -35,6 +35,10 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "create_projects":  ["Crea nuovi progetti"],
         "delete_projects":  ["Elimina progetti (cestino)"],
     },
+    "Acquisizioni": {
+        "view_acquisitions":   ["Visualizza acquisizioni/trattative"],
+        "manage_acquisitions": ["Gestisce acquisizioni/trattative"],
+    },
     "Pianificazione": {
         "view_planning":         ["Visualizza pianificazione"],
         "edit_planning_own":     ["Modifica i propri booking"],
@@ -135,6 +139,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
     "manager": [
         "view_clients", "edit_clients",
         "view_projects", "edit_projects", "create_projects", "delete_projects",
+        "view_acquisitions", "manage_acquisitions",
         "view_planning", "edit_planning_own", "edit_planning_all", "assign_resources",
         "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
@@ -159,6 +164,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
     "producer": [
         "view_clients",
         "view_projects", "edit_projects", "create_projects", "delete_projects",
+        "view_acquisitions", "manage_acquisitions",
         "view_planning", "edit_planning_own", "edit_planning_all", "assign_resources",
         "approve_overtime",
         "view_punches_own", "view_punches_all", "edit_punches_own", "edit_punches_all",
@@ -176,6 +182,7 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
     "accounting": [
         "view_clients",
         "view_projects",
+        "view_acquisitions", "manage_acquisitions",
         "view_planning",
         "view_punches_all",
         "view_finance", "view_quotes", "edit_quotes", "delete_quotes",
