@@ -218,6 +218,20 @@
         </div>
       </div>
 
+      <!-- Fonti web per cross-reference (Task 6 Acquisizioni Fase 2) -->
+      <div class="card mb-4">
+        <div class="card-title" data-i18n="settings.web_sources.title">Fonti web</div>
+        <p class="text-sm text-muted" style="margin:4px 0 12px;" data-i18n="settings.web_sources.desc">
+          Domini usati dal cross-reference web automatico (un dominio per riga, oppure separati da virgola).
+        </p>
+        <textarea id="web-sources-box" class="form-input" rows="5" style="font-family:'DM Mono',monospace;font-size:12px;resize:vertical;"
+          data-i18n-placeholder="settings.web_sources.placeholder"
+          placeholder="filmitalia.org&#10;imdb.com&#10;mymovies.it"></textarea>
+        <div class="flex gap-2 mt-2">
+          <button class="btn btn-primary btn-sm" onclick="saveWebSources()" data-i18n="settings.web_sources.save">Salva fonti</button>
+        </div>
+      </div>
+
       <!-- α.172.234 — Motore di parsing capitolati (separato dal copilot) -->
       <div class="card mb-4">
         <div class="card-title" data-i18n="settings.parse_engine_title">Motore di parsing capitolati</div>
@@ -2131,6 +2145,30 @@ async function aiDelete(provider) {
 }
 
 loadAISettings();
+
+// ── Fonti web (Task 6 Acquisizioni Fase 2) ────────────────────
+async function loadWebSources() {
+  const box = document.getElementById('web-sources-box');
+  if (!box) return;
+  try {
+    const data = await api('GET', '/settings/api/web-sources');
+    box.value = (data.sources || []).join('\n');
+  } catch (e) { /* silenzioso al caricamento */ }
+}
+
+async function saveWebSources() {
+  const box = document.getElementById('web-sources-box');
+  if (!box) return;
+  const fd = new FormData();
+  fd.append('sources', box.value);
+  try {
+    const data = await api('POST', '/settings/api/web-sources', fd);
+    box.value = (data.sources || []).join('\n');
+    toast(mfT('settings.web_sources.saved'), 'success');
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
+loadWebSources();
 
 // ── v3.5.0-alpha.52: Tab Azienda (dati fiscali per fattura) ──
 // v3.5.0-alpha.66.13: aggiunti campi branding (tagline, brand_color,
