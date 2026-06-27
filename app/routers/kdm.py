@@ -691,6 +691,31 @@ async def delete_facility(fid: int, request: Request, db: Session = Depends(get_
     return {"ok": True}
 
 
+@router.post("/api/facilities/bulk-delete")
+async def bulk_delete_facilities(request: Request, db: Session = Depends(get_db),
+                                 ids: Optional[str] = Form(None)):
+    _require_kdm(request, db)
+    parsed = _parse_ids(ids)
+    if not parsed:
+        raise HTTPException(400, "Nessun id valido")
+    deleted = servers_deleted = 0
+    for fid in parsed:
+        f = db.get(CinemaFacility, fid)
+        if not f or f.tenant_id != current_tenant_id() or not f.is_active:
+            continue
+        f.is_active = False
+        deleted += 1
+        for srv in db.query(CinemaServer).filter(
+                CinemaServer.facility_id == fid,
+                CinemaServer.tenant_id == current_tenant_id(),
+                CinemaServer.is_active == True):  # noqa: E712
+            srv.is_active = False
+            servers_deleted += 1
+    db.commit()
+    return {"ok": True, "deleted": deleted, "servers_deleted": servers_deleted,
+            "requested": len(parsed)}
+
+
 @router.get("/api/servers")
 async def list_servers(
     request: Request,
