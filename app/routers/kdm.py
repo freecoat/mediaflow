@@ -968,39 +968,38 @@ async def create_link(
 @router.get("/api/links")
 async def list_links(request: Request, db: Session = Depends(get_db)):
     from app.services.clock import now_utc
-    from app.models import Project
+    from app.models import Project, Client
     _require_kdm(request, db)
-    rows = (
-        db.query(KdmRequestLink)
-        .filter(
-            KdmRequestLink.tenant_id == current_tenant_id(),
-            KdmRequestLink.is_active == True,  # noqa: E712
-        )
-        .order_by(KdmRequestLink.created_at.desc())
-        .all()
-    )
+    rows = (db.query(KdmRequestLink)
+            .filter(KdmRequestLink.tenant_id == current_tenant_id())
+            .order_by(KdmRequestLink.created_at.desc()).all())
     base = _public_base(request)
     now = now_utc()
-    # Mappa progetto per nome (evita N query)
-    proj_ids = {lnk.project_id for lnk in rows if lnk.project_id}
-    proj_names = {}
+    proj_ids = {l.project_id for l in rows if l.project_id}
+    proj_names, proj_client = {}, {}
     if proj_ids:
-        for p in db.query(Project).filter(Project.id.in_(proj_ids)).all():
+        projs = db.query(Project).filter(Project.id.in_(proj_ids)).all()
+        client_ids = {p.client_id for p in projs if p.client_id}
+        client_names = {}
+        if client_ids:
+            for cl in db.query(Client).filter(Client.id.in_(client_ids)).all():
+                client_names[cl.id] = cl.name
+        for p in projs:
             proj_names[p.id] = p.title
+            proj_client[p.id] = client_names.get(p.client_id)
     out = []
     for lnk in rows:
         exp = lnk.expires_at
-        is_expired = bool(exp and exp < now)
         out.append({
-            "id": lnk.id,
-            "token": lnk.token,
-            "label": lnk.label,
-            "project_id": lnk.project_id,
-            "project_name": proj_names.get(lnk.project_id),
+            "id": lnk.id, "token": lnk.token, "label": lnk.label,
+            "project_id": lnk.project_id, "project_name": proj_names.get(lnk.project_id),
+            "client_name": proj_client.get(lnk.project_id),
+            "requested_title": (lnk.prefill_json or {}).get("requested_title"),
             "duration_days": lnk.duration_days,
             "created_at": lnk.created_at.isoformat() if lnk.created_at else None,
             "expires_at": exp.isoformat() if exp else None,
-            "is_expired": is_expired,
+            "is_expired": bool(exp and exp < now),
+            "revoked": not lnk.is_active,
             "url": f"{base}/public/kdm/{lnk.token}",
         })
     return out
