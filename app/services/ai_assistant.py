@@ -236,6 +236,32 @@ def _h_propose_price_item(db: Session, data: dict) -> dict:
             "message": f"Voce listino '{item.name}' creata con id={item.id} (categoria {cat.name}, {item.unit}, prezzo €{item.price_list:.2f}/unità)."}
 
 
+_UPDATE_CLIENT_FIELDS = (
+    "name", "legal_form", "contact_name", "contact_role", "contact_email",
+    "contact_phone", "admin_email", "vat_number", "tax_code", "sdi_code",
+    "pec", "address", "city", "country", "zip_code", "province", "website",
+    "industry", "company_size", "founded_year", "notes",
+)
+
+
+@ai_capability("update_client")
+def _h_update_client(db: Session, data: dict) -> dict:
+    cid = data.get("client_id")
+    if not cid:
+        raise ValueError("Manca 'client_id'")
+    c = db.query(Client).filter(Client.id == cid,
+                                Client.tenant_id == current_tenant_id()).first()
+    if not c:
+        raise ValueError(f"Cliente {cid} non trovato")
+    changed = []
+    for f in _UPDATE_CLIENT_FIELDS:
+        if f in data and data[f] is not None and str(data[f]).strip() != "":
+            setattr(c, f, data[f]); changed.append(f)
+    db.flush()
+    return {"updated": True, "client_id": c.id, "changed_fields": changed,
+            "message": f"Cliente '{c.name}': aggiornati {', '.join(changed) or 'nessun campo'}."}
+
+
 @ai_capability("propose_client")
 def _h_propose_client(db: Session, data: dict) -> dict:
     name = (data.get("name") or "").strip()

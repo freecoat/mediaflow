@@ -1241,6 +1241,24 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_kdm_request",
     },
+    {
+        "name": "update_client",
+        "category": "mutation",
+        "description": "Aggiorna i campi di un cliente ESISTENTE (client_id PK numerico). Usa propose_client per crearne uno nuovo. Aggiorna SOLO i campi forniti.",
+        "input_schema": {"type": "object", "properties": {
+            "client_id":     {"type": "integer"},
+            "vat_number":    {"type": "string"}, "tax_code":      {"type": "string"},
+            "pec":           {"type": "string"}, "sdi_code":      {"type": "string"},
+            "address":       {"type": "string"}, "city":          {"type": "string"},
+            "province":      {"type": "string"}, "zip_code":      {"type": "string"},
+            "country":       {"type": "string"}, "website":       {"type": "string"},
+            "contact_name":  {"type": "string"}, "contact_role":  {"type": "string"},
+            "contact_email": {"type": "string"}, "contact_phone": {"type": "string"},
+            "admin_email":   {"type": "string"}, "industry":      {"type": "string"},
+            "notes":         {"type": "string"},
+        }, "required": ["client_id"]},
+        "handler": "update_client",
+    },
 ]
 
 
