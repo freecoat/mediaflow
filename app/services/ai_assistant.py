@@ -311,14 +311,15 @@ def _h_propose_client_work(db: Session, data: dict) -> dict:
         raise ValueError("Manca 'client_id'")
     if not title:
         raise ValueError("Manca 'title'")
+    tid = current_tenant_id()
     c = db.query(Client).filter(Client.id == cid,
-                                Client.tenant_id == current_tenant_id()).first()
+                                Client.tenant_id == tid).first()
     if not c:
         raise ValueError(f"Cliente {cid} non trovato")
     sources = data.get("sources")
     sources_json = _json.dumps(sources) if sources else None
     w = ClientWork(
-        tenant_id=current_tenant_id(),
+        tenant_id=tid,
         client_id=cid,
         title=title,
         year=data.get("year"),

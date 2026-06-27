@@ -1265,6 +1265,7 @@ TOOLS: list[dict] = [
     },
     {
         "name": "propose_client_work",
+        "category": "mutation",
         "description": "Aggiunge una voce di filmografia/portfolio a un cliente ESISTENTE (da dati web). client_id PK numerico + title obbligatori.",
         "input_schema": {"type": "object", "properties": {
             "client_id": {"type": "integer"},
