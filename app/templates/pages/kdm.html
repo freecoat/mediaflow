@@ -32,6 +32,11 @@
             style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
       <span data-i18n="kdm.tab.cpl">CPL DCP</span>
     </button>
+    <button class="tab-btn" id="kdm-tab-btn-links" data-tab="links"
+            onclick="kdmSwitchTab('links')"
+            style="padding:12px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text3);cursor:pointer;font-size:13px;font-weight:500;">
+      <span data-i18n="kdm.tab.links">🔗 Link</span>
+    </button>
   </div>
 </div>
 
@@ -39,42 +44,6 @@
 
   {# ── Tab: Richieste ── #}
   <div id="kdm-tab-requests" class="kdm-tab">
-    {# Barra genera-link cliente #}
-    <div style="margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:6px;">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-        <i data-lucide="link" style="width:16px;height:16px;flex-shrink:0;"></i>
-        <span class="text-sm" data-i18n="kdm.link_desc">Genera link pubblico per richiesta cliente:</span>
-      </div>
-      <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
-        <div class="form-group" style="margin:0;flex:1;min-width:150px;">
-          <label class="form-label text-sm" data-i18n="kdm.link.name">Nome link</label>
-          <input class="form-input" id="kdm-link-label" placeholder="es. Arcadia Roma" data-i18n="kdm.link.name_ph" data-i18n-attr="placeholder">
-        </div>
-        <div class="form-group" style="margin:0;min-width:160px;">
-          <label class="form-label text-sm" data-i18n="kdm.link.project">Progetto</label>
-          <select class="form-select" id="kdm-link-project"><option value="" data-i18n="kdm.link.no_project">— nessuno —</option></select>
-        </div>
-        <div class="form-group" style="margin:0;min-width:120px;">
-          <label class="form-label text-sm" data-i18n="kdm.link.duration">Durata</label>
-          <select class="form-select" id="kdm-link-duration">
-            <option value="7">7 gg</option>
-            <option value="30" selected>30 gg</option>
-            <option value="90">90 gg</option>
-            <option value="" data-i18n="kdm.link.no_expiry">Senza scadenza</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin:0;flex:1;min-width:160px;">
-          <label class="form-label text-sm" data-i18n="kdm.link.prefill_title">Titolo pre-compilato</label>
-          <input class="form-input" id="kdm-link-prefill-title" placeholder="opzionale">
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="kdmGenerateLink()" data-i18n="kdm.btn.gen_link">Genera link &amp; copia</button>
-        <button class="btn btn-ghost btn-sm" id="kdm-show-links-btn" title="Mostra link attivi" data-i18n="kdm.btn.show_links">&#8635; Link attivi</button>
-      </div>
-    </div>
-
-    {# Pannello link attivi (visibile dopo load) #}
-    <div id="kdm-links-list" style="margin-bottom:14px;display:none;"></div>
-
     {# Barra filtri (MFFilterBar, popolata da kdm.js) #}
     <div id="kdm-filters"></div>
 
@@ -142,6 +111,63 @@
     <div id="kdm-cpl-list">
       <div class="text-muted text-sm" style="padding:24px;text-align:center;" data-i18n="kdm.empty.cpl">Nessuna CPL. Carica...</div>
     </div>
+  </div>
+
+  {# ── Tab: Link ── #}
+  <div id="kdm-tab-links" class="kdm-tab" style="display:none;">
+    {# Barra genera-link cliente #}
+    <div style="margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:6px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <i data-lucide="link" style="width:16px;height:16px;flex-shrink:0;"></i>
+        <span class="text-sm" data-i18n="kdm.link_desc">Genera link pubblico per richiesta cliente:</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;flex:1;min-width:150px;">
+          <label class="form-label text-sm" data-i18n="kdm.link.name">Nome link</label>
+          <input class="form-input" id="kdm-link-label" data-i18n="kdm.link.name_ph" data-i18n-attr="placeholder" placeholder="es. Arcadia Roma">
+        </div>
+        <div class="form-group" style="margin:0;min-width:160px;">
+          <label class="form-label text-sm" data-i18n="kdm.link.project">Progetto</label>
+          <select class="form-select" id="kdm-link-project"><option value="" data-i18n="kdm.link.no_project">— nessuno —</option></select>
+        </div>
+        <div class="form-group" style="margin:0;min-width:120px;">
+          <label class="form-label text-sm" data-i18n="kdm.link.duration">Durata</label>
+          <select class="form-select" id="kdm-link-duration">
+            <option value="7">7 gg</option>
+            <option value="30" selected>30 gg</option>
+            <option value="90">90 gg</option>
+            <option value="" data-i18n="kdm.link.no_expiry">Senza scadenza</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;flex:1;min-width:160px;">
+          <label class="form-label text-sm" data-i18n="kdm.link.prefill_title">Titolo pre-compilato</label>
+          <input class="form-input" id="kdm-link-prefill-title" placeholder="opzionale">
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="kdmGenerateLink()" data-i18n="kdm.btn.gen_link">Genera link &amp; copia</button>
+      </div>
+    </div>
+
+    {# Barra filtri #}
+    <div class="kdm-link-filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <select id="kdm-link-f-status" class="form-select" onchange="kdmRenderLinks()">
+        <option value="active" data-i18n="kdm.link.filter.active">Attivi</option>
+        <option value="expired" data-i18n="kdm.link.filter.expired">Scaduti</option>
+        <option value="revoked" data-i18n="kdm.link.filter.revoked">Revocati</option>
+        <option value="all" data-i18n="kdm.link.filter.all">Tutti</option>
+      </select>
+      <select id="kdm-link-f-project" class="form-select" onchange="kdmRenderLinks()"></select>
+      <select id="kdm-link-f-client" class="form-select" onchange="kdmRenderLinks()"></select>
+      <input id="kdm-link-f-q" class="form-input" data-i18n="kdm.link.filter.search_ph" data-i18n-attr="placeholder" placeholder="Cerca nome/titolo" oninput="kdmRenderLinks()">
+    </div>
+
+    {# Toolbar selezione multipla link #}
+    <div id="kdm-link-bulk-toolbar" style="display:none;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:var(--bg2);border-radius:6px;">
+      <span class="text-sm text-muted" id="kdm-link-sel-count"></span>
+      <button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmBulkRevokeLinks()" data-i18n="kdm.link.revoke_selected">Revoca selezionati</button>
+    </div>
+
+    {# Lista link #}
+    <div id="kdm-links-list"></div>
   </div>
 
 </div>
@@ -430,6 +456,44 @@
   </div>
 </div>
 
+{# ────────────────────── Modal: Modifica link ────────────────────── #}
+<div class="modal-overlay" id="kdm-modal-link-edit">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title" data-i18n="kdm.link.edit_title">Modifica link</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('kdm-modal-link-edit')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="kdm-edit-link-id">
+      <div class="form-group">
+        <label class="form-label" data-i18n="kdm.link.name">Nome link</label>
+        <input class="form-input" id="kdm-edit-link-label" placeholder="es. Arcadia Roma">
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="kdm.link.project">Progetto</label>
+        <select class="form-select" id="kdm-edit-link-project"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="kdm.link.duration">Durata (giorni)</label>
+        <select class="form-select" id="kdm-edit-link-duration">
+          <option value="7">7 gg</option>
+          <option value="30">30 gg</option>
+          <option value="90">90 gg</option>
+          <option value="" data-i18n="kdm.link.no_expiry">Senza scadenza</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i18n="kdm.link.prefill_title">Titolo pre-compilato</label>
+        <input class="form-input" id="kdm-edit-link-prefill-title" placeholder="opzionale">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('kdm-modal-link-edit')" data-i18n="kdm.btn.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="kdmEditLinkSave()" data-i18n="kdm.link.save">Salva modifiche</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -437,15 +501,6 @@
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     kdmInit();
-    // Mostra lista link solo dopo click esplicito (evita caricamento inutile)
-    var linksEl = document.getElementById('kdm-links-list');
-    var showLinksBtn = document.getElementById('kdm-show-links-btn');
-    if (showLinksBtn && linksEl) {
-      showLinksBtn.addEventListener('click', function() {
-        linksEl.style.display = linksEl.style.display === 'none' ? '' : 'none';
-        if (linksEl.style.display !== 'none') kdmLoadLinks();
-      });
-    }
     if (window.applyI18n) applyI18n();
     if (window.lucide) lucide.createIcons();
   });
