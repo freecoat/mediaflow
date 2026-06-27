@@ -351,8 +351,9 @@ def test_bulk_revoke_links(client_admin):
     r = client_admin.post("/kdm/api/links/bulk-revoke", data={"ids": f"{a},{b}"})
     assert r.status_code == 200, r.text
     assert r.json()["revoked"] == 2
-    remaining = [l["id"] for l in client_admin.get("/kdm/api/links").json()]
-    assert a not in remaining and b not in remaining
+    by_id = {l["id"]: l for l in client_admin.get("/kdm/api/links").json()}
+    assert a in by_id and by_id[a]["revoked"] is True
+    assert b in by_id and by_id[b]["revoked"] is True
 
 
 def test_cpl_linked_requests(client_admin):
@@ -591,11 +592,12 @@ def test_revoke_public_link(client_admin):
     assert r2.status_code == 200, r2.text
     assert r2.json()["ok"] is True
 
-    # Non deve più apparire nella lista
+    # Deve ancora apparire nella lista ma con revoked=True (nuovo contratto)
     r3 = client_admin.get("/kdm/api/links")
     assert r3.status_code == 200, r3.text
-    ids = [l["id"] for l in r3.json()]
-    assert link_id not in ids
+    by_id = {l["id"]: l for l in r3.json()}
+    assert link_id in by_id
+    assert by_id[link_id]["revoked"] is True
 
 
 def test_revoke_nonexistent_link(client_admin):
