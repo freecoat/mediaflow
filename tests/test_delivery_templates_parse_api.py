@@ -37,7 +37,7 @@ def client_admin(monkeypatch, tmp_path):
     import app.services.deliverables_parser as dp
     import app.services.ai_provider as ai
     monkeypatch.setattr(ai, "pick_parse_provider",
-                        lambda uid, db: (object(), "strong", "claude-sonnet-4-6"))
+                        lambda uid, db, override_provider=None: (object(), "strong", "claude-sonnet-4-6"))
     monkeypatch.setattr(dp, "extract_text_from_file",
                         lambda b, fn: "capitolato " * 50)
     monkeypatch.setattr(dp, "parse_delivery_template",
@@ -60,6 +60,17 @@ def test_parse_returns_meta_and_source_path(client_admin):
     assert data["parse_meta"]["model_tier"] == "strong"
     assert data["source_document_path"].endswith(".pdf")
     assert data["source_document_name"] == "Paramount.pdf"
+
+
+def test_parse_returns_parse_engine_label(client_admin):
+    """α.172.234: la response espone quale AI ha parsato (badge UI)."""
+    r = client_admin.post("/delivery-templates/api/parse",
+                          files={"file": ("Cap.pdf", b"%PDF fake", "application/pdf")})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["parse_model_label"] == "claude-sonnet-4-6"
+    assert data["parse_tier"] == "strong"
+    assert "parse_provider" in data
 
 
 def test_save_persists_source_path(client_admin):

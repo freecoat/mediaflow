@@ -217,6 +217,22 @@
           <button class="btn btn-secondary btn-sm" onclick="aiDisableAll()">Disabilita AI</button>
         </div>
       </div>
+
+      <!-- α.172.234 — Motore di parsing capitolati (separato dal copilot) -->
+      <div class="card mb-4">
+        <div class="card-title" data-i18n="settings.parse_engine_title">Motore di parsing capitolati</div>
+        <p class="text-sm text-muted" style="margin:4px 0 12px;"
+           data-i18n="settings.parse_engine_desc">
+          Quale AI analizza i capitolati di consegna. È indipendente dal provider del copilot:
+          il parser usa sempre il modello più potente, salvo override esplicito qui sotto.
+        </p>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <label class="form-label" style="margin:0;" data-i18n="settings.parse_engine_label">Motore:</label>
+          <select id="parse-engine-select" class="form-select" style="min-width:280px;"
+                  onchange="saveParseEngine()"></select>
+        </div>
+        <div id="parse-engine-effective" class="text-sm" style="margin-top:10px;"></div>
+      </div>
     </div>
 
     <!-- ── Pannello Orari lavorativi ──────────────────────────── -->
@@ -1946,6 +1962,50 @@ async function loadAISettings() {
   } catch (e) { toast('Errore caricamento config AI: ' + e.message, 'error'); }
 }
 
+// α.172.234 — rende esplicito QUALE AI parsa i capitolati.
+function renderParseEngine() {
+  const s = _aiState;
+  const sel = document.getElementById('parse-engine-select');
+  const eff = document.getElementById('parse-engine-effective');
+  if (!sel || !s) return;
+  const models = s.parse_models || [];
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  const strongest = models.find(m => m.is_strongest);
+  const auto = document.createElement('option');
+  auto.value = 'auto';
+  auto.textContent = mfT('settings.parse_engine_auto')
+    + (strongest ? ' — ' + strongest.label : '');
+  sel.appendChild(auto);
+  models.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.provider;
+    o.textContent = m.label + ' · ' + mfT('dt.tier_' + m.tier);
+    sel.appendChild(o);
+  });
+  sel.value = s.parse_provider || 'auto';
+  sel.disabled = !models.length;
+  const e = s.parse_effective;
+  if (e) {
+    eff.innerHTML = '🤖 <span class="text-muted" data-i18n="settings.parse_engine_effective">Modello usato dal parser</span>: <b>'
+      + escapeHtml(e.label) + '</b> · ' + mfT('dt.tier_' + e.tier);
+  } else {
+    eff.innerHTML = '<span class="text-muted" data-i18n="settings.parse_engine_none">Nessun provider configurato — configura un provider qui sopra.</span>';
+  }
+  if (window.applyI18n) applyI18n();
+}
+
+async function saveParseEngine() {
+  const sel = document.getElementById('parse-engine-select');
+  if (!sel) return;
+  const fd = new FormData();
+  fd.append('provider', sel.value || 'auto');
+  try {
+    await api('POST', '/settings/api/parse-model', fd);
+    toast(mfT('settings.parse_engine_saved'), 'success');
+    await loadAISettings();
+  } catch (e) { toast(e.message || 'Errore', 'error'); }
+}
+
 function statusFor(p) {
   if (!p.config || !p.config.has_key && p.needs_api_key) return { dot: 'off', label: 'Non configurato' };
   if (p.config.last_error) return { dot: 'err', label: 'Errore test' };
@@ -1964,6 +2024,8 @@ function renderAISettings() {
   } else {
     badge.innerHTML = `<span style="color:var(--text3);">● AI disabilitata</span>`;
   }
+
+  renderParseEngine();
 
   const wrap = document.getElementById('ai-providers');
   wrap.innerHTML = s.providers.map(p => {

@@ -866,6 +866,7 @@ async def duplicate_template(template_id: int, db: Session = Depends(get_db)):
 async def parse_capitolato(
     request: Request,
     file: UploadFile = File(...),
+    parse_provider: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Estrae da un capitolato (PDF/docx/xlsx/txt) gli 8 blocchi DeliveryTemplate
@@ -901,7 +902,16 @@ async def parse_capitolato(
         pass
 
     user = current_user_optional(request)
-    picked = pick_parse_provider(user.id if user else None, db)
+
+    # α.172.234 — override esplicito del motore di parsing. Se l'utente sceglie
+    # un provider nel dropdown, lo persistiamo come preferenza (così reparse +
+    # auto-extract + Impostazioni restano coerenti). "auto"/"" = automatico.
+    override = (parse_provider or "").strip() or None
+    if user and override is not None:
+        user.parse_ai_provider = None if override == "auto" else override
+        db.commit()
+
+    picked = pick_parse_provider(user.id if user else None, db, override_provider=override)
     if not picked:
         raise HTTPException(503, "AI non configurata. Vai in Impostazioni → tab AI per configurare un provider.")
     provider, tier, model_label = picked
@@ -915,6 +925,10 @@ async def parse_capitolato(
     parsed.setdefault("source_document_name", file.filename)
     parsed.setdefault("ai_generated", True)
     parsed.setdefault("text_preview", text[:1500])
+    # Trasparenza: quale AI ha effettivamente parsato (badge UI).
+    parsed["parse_model_label"] = model_label
+    parsed["parse_tier"] = tier
+    parsed["parse_provider"] = getattr(provider, "name", None) or model_label
     return parsed
 
 
@@ -943,13 +957,16 @@ async def reparse_capitolato(template_id: int, request: Request,
     picked = pick_parse_provider(user.id if user else None, db)
     if not picked:
         raise HTTPException(503, "AI non configurata.")
-    provider, tier, _ = picked
+    provider, tier, model_label = picked
     parsed = parse_delivery_template(text, provider=provider, model_tier=tier)
     if parsed is None:
         raise HTTPException(503, "Estrazione fallita.")
     parsed["source_document_path"] = t.source_document_path
     parsed.setdefault("source_document_name",
                       t.source_document_path.split("/")[-1].split("\\")[-1])
+    parsed["parse_model_label"] = model_label
+    parsed["parse_tier"] = tier
+    parsed["parse_provider"] = getattr(provider, "name", None) or model_label
     return parsed
 
 

@@ -148,6 +148,43 @@ def rank_parse_models(rows):
     return best, parse_model_tier(best.provider, best.model)
 
 
+def parse_model_human_label(provider: str, model: Optional[str]) -> str:
+    """Etichetta leggibile per UI: "Claude (Anthropic) — claude-sonnet-4-6".
+    Usa PROVIDER_LABELS per il nome provider; il model resta tecnico."""
+    plabel = PROVIDER_LABELS.get((provider or "").lower(), provider or "?")
+    m = (model or "").strip()
+    return f"{plabel} — {m}" if m else plabel
+
+
+def list_parse_models(user_id, db):
+    """Lista dei modelli configurati dall'utente, ordinati per idoneità al
+    parsing capitolati (tier desc, preferenza provider desc).
+
+    Ritorna `list[dict]` con: provider, model, tier, label, is_strongest.
+    Il primo elemento (`is_strongest=True`) è quello scelto in automatico.
+    Lista vuota se l'utente non ha provider configurati (db None/assente)."""
+    from app.models.models import UserAISettings
+    if not user_id or db is None:
+        return []
+    rows = db.query(UserAISettings).filter(UserAISettings.user_id == user_id).all()
+    if not rows:
+        return []
+    def _key(r):
+        tier = parse_model_tier(r.provider, r.model)
+        return (_TIER_ORDER.get(tier, 0), _PROVIDER_PREF.get((r.provider or "").lower(), 0))
+    ordered = sorted(rows, key=_key, reverse=True)
+    out = []
+    for i, r in enumerate(ordered):
+        out.append({
+            "provider": r.provider,
+            "model": r.model or "",
+            "tier": parse_model_tier(r.provider, r.model),
+            "label": parse_model_human_label(r.provider, r.model),
+            "is_strongest": i == 0,
+        })
+    return out
+
+
 # v3.5.0-alpha.66.16.4 — Tabella prezzi per il calcolo del costo USD per
 # token. Sorgenti: pricing pubblico provider al maggio 2026. Aggiornare
 # quando si aggiunge un nuovo modello o cambiano i prezzi.
@@ -980,11 +1017,19 @@ def _apply_content_lockdown(cfg: "ProviderConfig", user_id, db) -> "ProviderConf
     return cfg
 
 
-def pick_parse_provider(user_id, db):
-    """Sceglie il provider AI PIÙ FORTE configurato per l'utente, ignorando
-    l'active_ai_provider del copilot. Ritorna (provider, tier, model_label)
-    o None se nessuna config. Rispetta il content-lockdown (può degradare a Ollama)."""
-    from app.models.models import UserAISettings
+def pick_parse_provider(user_id, db, override_provider=None):
+    """Sceglie il provider AI per il parsing capitolati. Ritorna
+    (provider, tier, model_label) o None se nessuna config.
+
+    Ordine di scelta del provider per utente:
+      1. `override_provider` esplicito (arg, es. scelta UI per-richiesta);
+      2. `User.parse_ai_provider` salvato (preferenza persistente);
+      3. automatico = modello PIÙ FORTE configurato (rank_parse_models),
+         ignorando l'active_ai_provider del copilot.
+    Override/pref che non corrispondono a un provider configurato valido →
+    si ricade su automatico (non si rompe mai il parsing).
+    Rispetta il content-lockdown (può degradare a Ollama)."""
+    from app.models.models import UserAISettings, User
     from app.services.crypto import decrypt_secret
     if not user_id or db is None:
         cfg = _global_config()
@@ -998,16 +1043,42 @@ def pick_parse_provider(user_id, db):
             return None
         return prov, parse_model_tier(cfg.provider, cfg.model), (cfg.model or "")
     rows = db.query(UserAISettings).filter(UserAISettings.user_id == user_id).all()
-    ranked = rank_parse_models(rows)
-    if ranked is None:
-        cfg = _global_config()
-        if cfg is None:
-            return None
-    else:
-        row, _tier = ranked
-        api_key = decrypt_secret(row.api_key_encrypted) if row.api_key_encrypted else None
-        cfg = ProviderConfig(provider=row.provider, api_key=api_key,
-                             model=row.model, base_url=row.base_url)
+
+    # Risolve l'override effettivo: arg esplicito > pref salvata. "auto"/""/None = automatico.
+    eff_override = override_provider
+    if eff_override in (None, ""):
+        u = db.query(User).filter(User.id == user_id).first()
+        eff_override = getattr(u, "parse_ai_provider", None) if u else None
+    if eff_override in ("auto", ""):
+        eff_override = None
+
+    chosen_row = None
+    if eff_override:
+        for r in rows:
+            if (r.provider or "").lower() == eff_override.lower():
+                # valido solo se ha credenziali (ollama escluso) o è ollama
+                if r.provider == "ollama" or r.api_key_encrypted:
+                    chosen_row = r
+                break
+
+    if chosen_row is None:
+        ranked = rank_parse_models(rows)
+        if ranked is None:
+            cfg = _global_config()
+            if cfg is None:
+                return None
+            cfg = _apply_content_lockdown(cfg, user_id, db)
+            try:
+                prov = build_provider(cfg)
+            except Exception as e:
+                logger.error(f"pick_parse_provider build fallito: {e}")
+                return None
+            return prov, parse_model_tier(cfg.provider, cfg.model), (cfg.model or "")
+        chosen_row = ranked[0]
+
+    api_key = decrypt_secret(chosen_row.api_key_encrypted) if chosen_row.api_key_encrypted else None
+    cfg = ProviderConfig(provider=chosen_row.provider, api_key=api_key,
+                         model=chosen_row.model, base_url=chosen_row.base_url)
     cfg = _apply_content_lockdown(cfg, user_id, db)
     try:
         prov = build_provider(cfg)

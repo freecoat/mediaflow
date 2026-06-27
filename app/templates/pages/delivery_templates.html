@@ -194,6 +194,12 @@
         </p>
         <input type="file" id="capitolato-file" accept=".pdf,.docx,.xlsx,.xls,.txt,.md"
                class="form-input" style="margin-bottom:14px;">
+        <div class="form-group" style="margin-bottom:14px;">
+          <label data-i18n="dt.parse_engine">Motore di parsing</label>
+          <select id="capitolato-engine" class="form-input"></select>
+          <small class="text-muted text-sm" id="capitolato-engine-hint"
+                 data-i18n="dt.parse_engine_hint">Modello AI che analizza il capitolato. "Automatico" usa il più potente configurato.</small>
+        </div>
         <div id="import-progress" style="display:none; color:var(--indigo2); font-size:13px;">
           🔄 Estrazione testo + analisi AI in corso (può richiedere 10-30 secondi)…
         </div>
@@ -203,6 +209,7 @@
         <div style="background:var(--bg3); padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:13px;">
           <b id="parsed-code"></b> — <span id="parsed-name"></span>
           <span id="parsed-confidence" style="margin-left:8px; color:var(--text3);"></span>
+          <span id="parsed-engine" style="margin-left:8px;"></span>
         </div>
         <div id="dt-parse-warnings" style="display:none;margin:10px 0;padding:10px 14px;border-radius:6px;background:#3a2e00;border:1px solid #6b5200;"></div>
         <div class="form-group">
@@ -464,7 +471,35 @@ function openImportModal() {
   document.getElementById('btn-save').style.display = 'none';
   document.getElementById('import-progress').style.display = 'none';
   document.getElementById('capitolato-file').value = '';
+  loadParseEngines();
   openModal('modal-import');
+}
+
+// α.172.234 — popola il dropdown "Motore di parsing" dai provider configurati.
+async function loadParseEngines() {
+  const sel = document.getElementById('capitolato-engine');
+  if (!sel) return;
+  while (sel.firstChild) sel.removeChild(sel.firstChild);
+  let data = { selected: 'auto', models: [] };
+  try { data = await api('GET', '/settings/api/parse-model'); } catch(e) {}
+  const auto = document.createElement('option');
+  auto.value = 'auto';
+  const strongest = (data.models || []).find(m => m.is_strongest);
+  auto.textContent = mfT('dt.parse_engine_auto')
+    + (strongest ? ' — ' + strongest.label : '');
+  sel.appendChild(auto);
+  (data.models || []).forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.provider;
+    o.textContent = m.label + ' · ' + mfT('dt.tier_' + m.tier);
+    sel.appendChild(o);
+  });
+  sel.value = data.selected || 'auto';
+  if (!(data.models || []).length) {
+    const o = document.createElement('option');
+    o.value = 'auto'; o.textContent = mfT('dt.parse_engine_none');
+    sel.innerHTML = ''; sel.appendChild(o);
+  }
 }
 
 async function doParseCapitolato() {
@@ -472,6 +507,8 @@ async function doParseCapitolato() {
   if (!fileInput.files || !fileInput.files[0]) { toast('Seleziona un file', 'error'); return; }
   const fd = new FormData();
   fd.append('file', fileInput.files[0]);
+  const eng = document.getElementById('capitolato-engine');
+  if (eng && eng.value) fd.append('parse_provider', eng.value);
   document.getElementById('import-progress').style.display = '';
   document.getElementById('btn-parse').disabled = true;
   try {
@@ -496,6 +533,21 @@ function openParsePreview(parsed) {
   const conf = parsed.ai_confidence;
   document.getElementById('parsed-confidence').textContent =
     (conf != null) ? ('AI confidence ' + Math.round(conf * 100) + '%') : '';
+
+  // α.172.234 — badge "Analizzato con": rende esplicito QUALE AI ha parsato.
+  const engBox = document.getElementById('parsed-engine');
+  if (engBox) {
+    const lbl = parsed.parse_model_label;
+    if (lbl) {
+      const tier = parsed.parse_tier || '';
+      const tierTxt = tier ? (' · ' + mfT('dt.tier_' + tier)) : '';
+      engBox.textContent = '🤖 ' + mfT('dt.parsed_with') + ': ' + lbl + tierTxt;
+      engBox.style.cssText = 'margin-left:8px;padding:2px 8px;border-radius:4px;'
+        + 'font-size:12px;background:var(--bg2);color:var(--text2);';
+    } else {
+      engBox.textContent = '';
+    }
+  }
 
   // warning banner
   const warnBox = document.getElementById('dt-parse-warnings');

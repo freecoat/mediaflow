@@ -8,6 +8,21 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.234** — 27 giugno 2026 — Motore parsing capitolati esplicito (chi parsa è chiaro)
+
+### α.172.234 ✅ (Motore di parsing capitolati esplicito — 27 giu, pacchetto completo)
+- **Nodo riaperto risolto** (24 giu): "Come definiamo e rendiamo chiaro QUALE AI parsa i capitolati?". Prima `pick_parse_provider` sceglieva in silenzio il modello più forte → opaco (causa originale del bug Paramount: deepseek-flash degradato senza che l'utente lo sapesse).
+- **3 pezzi**:
+  1. **Trasparenza (badge)**: `/api/parse` + `/reparse` ritornano `parse_model_label`/`parse_tier`/`parse_provider` → badge "🤖 Analizzato con: Claude Sonnet 4.6 · forte" nel preview import.
+  2. **Override**: dropdown "Motore di parsing" nel modal import (default Automatico=più forte, + override per-provider con tier). Scelta persistita su `users.parse_ai_provider` → reparse + auto-extract + Impostazioni restano coerenti.
+  3. **Definizione (Impostazioni → AI)**: card "Motore di parsing capitolati" con selector + riga "Modello usato dal parser: X · tier" calcolata live.
+- **Backend**: `User.parse_ai_provider` (NULL=auto); `ai_provider.list_parse_models()` + `parse_model_human_label()`; `pick_parse_provider(..., override_provider=)` con ordine arg>pref-salvata>auto e fallback robusto se pref non configurata; endpoint `GET/POST /settings/api/parse-model` + `/api/ai` esteso (`parse_provider`/`parse_models`/`parse_effective`). Migrazione `scripts/migrate_parse_provider.py` + auto-migrate al boot.
+- **i18n**: 16 chiavi nuove (`dt.parse_engine*`, `dt.tier_*`, `dt.parsed_with`, `settings.parse_engine_*`) in 5 lingue.
+- **946 test** (+9), 0 fallimenti. **Smoke browser verde**: dropdown import popolato (auto=Claude strongest, override claude/deepseek con tier), badge, card Impostazioni con effective live, persistenza set deepseek→effective deepseek / reset auto→effective claude, 0 errori console.
+
+**Prossimo / PENDENTE**: Matteo ri-carica "Paramount Scripted Episode Delivery 2023" → verifica parse con Claude Sonnet (no allucinazioni) ora che il motore è esplicito + bottone Ri-analizza. Backlog KDM: generazione vera file KDM, upload come Asset, download sicuro cinema.
+
+### α.172.229 ✅ (Auto-extract item-list after save, best-effort — 23 giu, Task 4 SDD) — storico sotto
 **v3.5.0-alpha.172.229** — 23 giugno 2026 — Auto-extract item-list after save (best-effort)
 
 ### α.172.229 ✅ (Auto-extract item-list after save, best-effort — 23 giu, Task 4 SDD)

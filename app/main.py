@@ -64,6 +64,11 @@ def _auto_migrate_columns():
                 if col not in cols:
                     print(f"[auto-migrate] users.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {ddl}"))
+        # v3.5.0-alpha.172.234 — motore parsing capitolati esplicito
+        if "parse_ai_provider" not in cols:
+            print("[auto-migrate] users.parse_ai_provider mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN parse_ai_provider VARCHAR(32) NULL"))
         # v3.5.0-alpha.101 — Multi-tenant HARD R-MT1: users.tenant_id FK.
         # Default=1 (tenant Default). UNIQUE switch da email globale a
         # (tenant_id, email): per SQLite serve DROP+CREATE table; qui faccio
@@ -2363,7 +2368,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.233", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.234", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

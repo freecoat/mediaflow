@@ -531,6 +531,10 @@ class User(Base):
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # Provider AI attivo per questo utente (claude|openai|gemini|perplexity|ollama|None=disabilitato)
     active_ai_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # v3.5.0-alpha.172.234 — Override esplicito del motore di parsing capitolati.
+    # None = automatico (modello più forte configurato, via rank_parse_models).
+    # Valorizzato = forza quel provider per il parser (parse/reparse/auto-extract).
+    parse_ai_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     # v3.5.0-alpha.70.4 — MFA TOTP (pyotp). Secret Fernet-encrypted con
     # AI_KEY_ENCRYPTION_KEY (riuso chiave per non aggiungere env var nuova).
     # mfa_enabled è True solo dopo verify-setup riuscito.

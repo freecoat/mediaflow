@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.234 — Motore di parsing capitolati esplicito (27 giu 2026)
+
+Rende chiaro e controllabile **quale AI** analizza i capitolati — finora scelta in silenzio (modello più forte), causa originale dell'ambiguità del bug Paramount (deepseek-flash degradato senza che l'utente lo sapesse).
+
+- **Trasparenza (badge)**: `/api/parse` e `/reparse` ritornano `parse_model_label`/`parse_tier`/`parse_provider`. Il preview import mostra "🤖 Analizzato con: Claude Sonnet 4.6 · forte".
+- **Override**: dropdown "Motore di parsing" nel modal import (Automatico=più forte di default, + opzioni per-provider con tier). La scelta è persistita su `users.parse_ai_provider` (NULL=auto) così reparse + auto-extract + Impostazioni restano coerenti.
+- **Definizione (Impostazioni → AI)**: nuova card "Motore di parsing capitolati" con selector e riga "Modello usato dal parser: X · tier" calcolata live (indipendente dal provider del copilot).
+- **Backend**: `ai_provider.list_parse_models()` + `parse_model_human_label()`; `pick_parse_provider(..., override_provider=)` con ordine arg > pref salvata > auto e fallback robusto se la pref punta a un provider non configurato; `GET/POST /settings/api/parse-model`; `/api/ai` esteso. Migrazione `scripts/migrate_parse_provider.py` + auto-migrate al boot.
+- **i18n**: 16 chiavi (5 lingue).
+- **Test**: 946 (+9). Smoke browser verde (dropdown import, badge, card Impostazioni, persistenza set/reset, 0 errori console).
+
 ## v3.5.0-alpha.172.233 — Fix import capitolato: parse troncato + save lento disaccoppiato (24 giu 2026)
 
 Risolti i due problemi sull'import capitolato (riprodotti col Paramount 8-blocchi).

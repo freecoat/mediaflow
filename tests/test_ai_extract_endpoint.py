@@ -61,7 +61,7 @@ def client_admin_extract(monkeypatch, tmp_path):
     fake_provider = object()
     monkeypatch.setattr(
         ai, "pick_parse_provider",
-        lambda uid, db: (fake_provider, "strong", "claude-sonnet-4-6"),
+        lambda uid, db, override_provider=None: (fake_provider, "strong", "claude-sonnet-4-6"),
     )
     monkeypatch.setattr(
         dp, "extract_text_from_file",
@@ -174,7 +174,7 @@ def test_ai_extract_503_no_provider(client_admin_extract, monkeypatch):
 
     monkeypatch.setattr(cs, "resolve_capitolato_source",
                         lambda t: (b"%PDF fake", "x.pdf"))
-    monkeypatch.setattr(ai, "pick_parse_provider", lambda uid, db: None)
+    monkeypatch.setattr(ai, "pick_parse_provider", lambda uid, db, override_provider=None: None)
 
     tpl = _create_template(session, source_document_path="data/capitolato_uploads/x.pdf")
     r = c.post(f"/delivery-templates/api/{tpl.id}/items/ai-extract")

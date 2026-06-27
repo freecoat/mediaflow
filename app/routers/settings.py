@@ -15,6 +15,7 @@ from datetime import time
 from app.services.auth import get_current_user_from_token, hash_password, verify_password
 from app.services.ai_provider import (
     PROVIDER_LABELS, PROVIDER_MODELS, ProviderConfig, build_provider,
+    list_parse_models,
 )
 from app.services.crypto import encrypt_secret, decrypt_secret
 from app.context import current_tenant_id
@@ -140,9 +141,20 @@ async def ai_settings_get(
             "config": _ai_row_dict(rows.get(pid)),
             "needs_api_key": pid != "ollama",
         })
+    # α.172.234 — motore di parsing capitolati: lista modelli idonei + scelta.
+    parse_models = list_parse_models(u.id, db)
+    parse_effective = next((m for m in parse_models if m["is_strongest"]), None)
+    if u.parse_ai_provider:
+        match = next((m for m in parse_models
+                      if (m["provider"] or "").lower() == u.parse_ai_provider.lower()), None)
+        if match:
+            parse_effective = match
     return {
         "active_provider": u.active_ai_provider,
         "providers": providers,
+        "parse_provider": u.parse_ai_provider,   # None = automatico
+        "parse_models": parse_models,
+        "parse_effective": parse_effective,      # modello realmente usato dal parser
     }
 
 
@@ -275,8 +287,68 @@ async def ai_settings_delete(
         db.delete(row)
         if u.active_ai_provider == provider:
             u.active_ai_provider = None
+        # se il provider rimosso era il motore di parsing forzato → torna auto
+        if u.parse_ai_provider == provider:
+            u.parse_ai_provider = None
         db.commit()
     return {"ok": True}
+
+
+# ── Motore di parsing capitolati (α.172.234) ───────────────────────
+# Definisce/espone esplicitamente QUALE AI parsa i capitolati, separata
+# dal provider attivo del copilot. None = automatico (modello più forte).
+
+@router.get("/api/parse-model")
+async def parse_model_get(
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Lista modelli idonei al parsing (ranked) + scelta corrente.
+    `selected` = "auto" oppure il provider forzato."""
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(404, "Utente non trovato")
+    models = list_parse_models(u.id, db)
+    effective = next((m for m in models if m["is_strongest"]), None)
+    if u.parse_ai_provider:
+        match = next((m for m in models
+                      if (m["provider"] or "").lower() == u.parse_ai_provider.lower()), None)
+        if match:
+            effective = match
+    return {
+        "selected": u.parse_ai_provider or "auto",
+        "models": models,
+        "effective": effective,
+    }
+
+
+@router.post("/api/parse-model")
+async def parse_model_set(
+    provider: Optional[str] = Form(None),
+    access_token: Optional[str] = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    """Imposta il motore di parsing. provider="auto"/""/None → automatico
+    (modello più forte). Altrimenti deve essere un provider configurato."""
+    u = _resolve_current_user(db, access_token)
+    if not u:
+        raise HTTPException(404, "Utente non trovato")
+    p = (provider or "").strip().lower()
+    if p in ("", "auto"):
+        u.parse_ai_provider = None
+        db.commit()
+        return {"ok": True, "selected": "auto"}
+    if p not in PROVIDER_LABELS:
+        raise HTTPException(400, f"Provider non supportato: {provider}")
+    row = db.query(UserAISettings).filter(
+        UserAISettings.user_id == u.id, UserAISettings.provider == p).first()
+    if not row:
+        raise HTTPException(400, "Configura il provider prima di sceglierlo come motore di parsing")
+    if p != "ollama" and not row.api_key_encrypted:
+        raise HTTPException(400, "Salva una API key prima di usare il provider come motore di parsing")
+    u.parse_ai_provider = p
+    db.commit()
+    return {"ok": True, "selected": p}
 
 
 # ── Content Lockdown (TPN) v3.5.0-alpha.172.195 ────────────────────
