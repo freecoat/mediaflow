@@ -1170,6 +1170,10 @@ def _auto_migrate_columns():
             ("default_tc_start", "VARCHAR(20) NULL"),
             ("default_program_start", "VARCHAR(20) NULL"),
             ("default_timeline_segments", "JSON NULL"),
+            # v3.5.0-alpha.172.235 — estrazione item AI in background
+            ("items_extraction_status", "VARCHAR(16) NULL"),
+            ("items_extraction_msg", "TEXT NULL"),
+            ("items_extraction_at", "DATETIME NULL"),
         ]
         with engine.begin() as conn:
             for col, ddl in dt_add:
@@ -2368,7 +2372,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.234", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.235", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

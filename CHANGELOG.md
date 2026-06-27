@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.235 — Estrazione item AI in background + delete items dalla lista (27 giu 2026)
+
+Due richieste Matteo: l'estrazione item AI deve girare in background (prima sincrona = confusione/timeout), e dev'essere possibile eliminare item da un template (delete sepolto nell'editor).
+
+- **Estrazione in background**: `POST /delivery-templates/api/{tid}/items/ai-extract` ora fa pre-check sincroni (404 sorgente / 503 provider / 409 già in corso) e poi lancia un thread con sessione propria, rispondendo subito **202 running**. Lo stato vive su `delivery_templates.items_extraction_status` (idle/running/done/failed) + msg + at; nuovo `GET .../items/extract-status` per il polling. Niente più attesa sincrona → no timeout gateway/tunnel.
+- **UI**: badge live nel pane Items (⏳ in corso → ✅ N aggiunti / ❌ errore) con polling 3s e auto-refresh; badge ⏳ sulla riga della lista con poller a fine pagina; save-flow fire-and-forget con toast; auto-resume del polling riaprendo un template "running".
+- **Delete item**: 🗑 per-riga sulla card + selezione multipla (checkbox + barra azioni → elimina in blocco) via nuovo `POST /delivery-items/api/bulk-delete` (CSV di id, soft-delete idempotente). Resta il delete nell'editor.
+- **Backend**: 3 colonne su `delivery_templates` + auto-migrate al boot + `scripts/migrate_items_extraction_bg.py`. i18n 17 chiavi (5 lingue).
+- **Test**: 950. Smoke browser verde (pane checkbox+🗑, multiselect, stati badge, status endpoint, 0 errori console).
+
 ## v3.5.0-alpha.172.234 — Motore di parsing capitolati esplicito (27 giu 2026)
 
 Rende chiaro e controllabile **quale AI** analizza i capitolati — finora scelta in silenzio (modello più forte), causa originale dell'ambiguità del bug Paramount (deepseek-flash degradato senza che l'utente lo sapesse).

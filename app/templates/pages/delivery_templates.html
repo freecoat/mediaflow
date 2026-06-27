@@ -110,7 +110,10 @@
           <td>{{ t.name }}</td>
           <td style="color:var(--text2); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ t.broadcaster or '' }}">{{ t.broadcaster or '—' }}</td>
           <td class="mono text-sm">{{ t.version }}</td>
-          <td class="text-right mono text-sm" style="color:var(--text2);">{{ items_count.get(t.id, 0) }}</td>
+          <td class="text-right mono text-sm" style="color:var(--text2);">
+            <span class="dt-items-n">{{ items_count.get(t.id, 0) }}</span>
+            {% if t.items_extraction_status == 'running' %}<span class="dt-row-extract" data-tid="{{ t.id }}" title="Estrazione items in corso" style="margin-left:6px;">⏳</span>{% endif %}
+          </td>
           <td class="text-sm" style="color:var(--text2);">
             {% set blocks = [] %}
             {% if t.video_specs %}{% set _ = blocks.append('video') %}{% endif %}
@@ -646,14 +649,13 @@ async function doSaveTemplate() {
   try {
     const saved = await api('POST', '/delivery-templates/api/save', fd);
     toast(mfT('dt.template_saved'), 'success');
-    // α.172.233 — estrazione item disaccoppiata: ora è uno step esplicito
-    // con progresso, così il save resta veloce (no timeout tunnel / 409).
+    // α.172.235 — estrazione item in BACKGROUND: avvio fire-and-forget (202),
+    // niente attesa sincrona (no timeout tunnel). Lo stato è visibile aprendo
+    // il template (badge + polling) e qui con un toast informativo.
     if (saved && saved.needs_item_extraction && saved.id) {
-      toast(mfT('dt.extracting_items'), 'info');
       try {
-        const ex = await api('POST', '/delivery-templates/api/' + saved.id + '/items/ai-extract');
-        const n = (ex && ex.saved != null) ? ex.saved : 0;
-        toast(mfT('dt.items_extracted').replace('{n}', n), 'success');
+        await api('POST', '/delivery-templates/api/' + saved.id + '/items/ai-extract');
+        toast(mfT('dt.extract_started_bg'), 'info', 5000);
       } catch(ie) {
         toast(mfT('dt.items_extract_failed'), 'warning');
       }
@@ -1364,25 +1366,11 @@ function renderItemsPane(pane, tid) {
   btns.style.cssText = 'display:flex;gap:8px;';
   if (_currentTemplate.source_document_name) {
     const aiBtn = document.createElement('button');
+    aiBtn.id = 'dt-ai-extract-btn';
     aiBtn.className = 'btn btn-secondary btn-sm';
-    aiBtn.innerHTML = '🤖 Estrai items via AI';
+    aiBtn.innerHTML = '🤖 ' + mfT('dt.extract_items_ai');
     aiBtn.title = `Re-parsing del capitolato sorgente: ${_currentTemplate.source_document_name}`;
-    aiBtn.onclick = async () => {
-      if (!confirm(`Estrai items dal capitolato AI?\n\nUsa il file "${_currentTemplate.source_document_name}" come sorgente.\nGli items con stesso nome esistente saranno saltati.\nL'operazione richiede ~30-90s di chiamate Claude.`)) return;
-      aiBtn.disabled = true; aiBtn.innerHTML = '⏳ AI parsing in corso…';
-      try {
-        const r = await api('POST', `/delivery-templates/api/${tid}/items/ai-extract`, {});
-        toast(`🤖 ${r.saved} items aggiunti (skip ${r.skipped}, extracted ${r.items_extracted})`, 'success', 4000);
-        await _loadItemsForTemplate(tid);
-        renderItemsPane(pane, tid);
-        const tab = document.getElementById('dt-tab-items');
-        if (tab) tab.textContent = `📦 Items (${_currentItems.length})`;
-      } catch(e) {
-        toast(`Errore AI: ${e.message||''}`, 'error', 6000);
-      } finally {
-        aiBtn.disabled = false; aiBtn.innerHTML = '🤖 Estrai items via AI';
-      }
-    };
+    aiBtn.onclick = () => dtStartExtraction(tid, pane);
     btns.appendChild(aiBtn);
   }
   // Bottone Estrai TC/Timeline/Audio (head specs vision)
@@ -1394,11 +1382,38 @@ function renderItemsPane(pane, tid) {
   btns.appendChild(headBtn);
   const addBtn = document.createElement('button');
   addBtn.className = 'btn btn-primary btn-sm';
-  addBtn.innerHTML = '+ Aggiungi item';
+  addBtn.innerHTML = '+ ' + mfT('dt.add_item');
   addBtn.onclick = () => openItemEditor(null, tid);
   btns.appendChild(addBtn);
   head.appendChild(btns);
   pane.appendChild(head);
+
+  // α.172.235 — barra azioni multiselect (nascosta finché 0 selezionati)
+  const bulkBar = document.createElement('div');
+  bulkBar.id = 'dt-bulk-bar';
+  bulkBar.style.cssText = 'display:none;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:6px;font-size:13px;';
+  const bulkLbl = document.createElement('span'); bulkLbl.id = 'dt-bulk-count';
+  const bulkDel = document.createElement('button');
+  bulkDel.className = 'btn btn-sm'; bulkDel.style.cssText = 'background:#ef4444;color:#fff;';
+  bulkDel.textContent = '🗑 ' + mfT('dt.delete_selected');
+  bulkDel.onclick = () => dtBulkDeleteItems(tid, pane);
+  const bulkClear = document.createElement('button');
+  bulkClear.className = 'btn btn-ghost btn-sm';
+  bulkClear.textContent = mfT('dt.clear_selection');
+  bulkClear.onclick = () => { _dtSelectedItems.clear(); renderItemsPane(pane, tid); };
+  bulkBar.appendChild(bulkLbl); bulkBar.appendChild(bulkDel); bulkBar.appendChild(bulkClear);
+  pane.appendChild(bulkBar);
+
+  // α.172.235 — badge stato estrazione background (resume se 'running')
+  const exBadge = document.createElement('div');
+  exBadge.id = 'dt-extract-badge';
+  exBadge.style.cssText = 'display:none;margin-bottom:10px;padding:8px 12px;border-radius:6px;font-size:13px;';
+  pane.appendChild(exBadge);
+  if (_currentTemplate.items_extraction_status === 'running') {
+    dtSetExtractBadge('running');
+    dtPollExtraction(tid, pane);
+  }
+
   // Preview box per extract-head (ricostruita ogni volta; visibile se c'è stato in attesa)
   const previewBox = document.createElement('div');
   previewBox.id = 'head-preview';
@@ -1429,8 +1444,24 @@ function renderItemsPane(pane, tid) {
     if (it.pending_review) {
       card.style.borderLeft = '3px solid #f59e0b';
     }
+    if (_dtSelectedItems.has(it.id)) card.style.outline = '2px solid #6272f5';
     const row1 = document.createElement('div');
     row1.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:8px;';
+    // α.172.235 — checkbox selezione multipla
+    const cbWrap = document.createElement('label');
+    cbWrap.style.cssText = 'display:flex;align-items:center;padding-top:2px;cursor:pointer;';
+    cbWrap.title = mfT('dt.select_item');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = _dtSelectedItems.has(it.id);
+    cb.onclick = (e) => {
+      e.stopPropagation();
+      if (cb.checked) _dtSelectedItems.add(it.id); else _dtSelectedItems.delete(it.id);
+      card.style.outline = cb.checked ? '2px solid #6272f5' : '';
+      dtUpdateBulkBar();
+    };
+    cbWrap.onclick = (e) => e.stopPropagation();
+    cbWrap.appendChild(cb);
+    row1.appendChild(cbWrap);
     const nm = document.createElement('div');
     nm.style.cssText = 'flex:1;';
     const nmTitle = document.createElement('div');
@@ -1461,12 +1492,127 @@ function renderItemsPane(pane, tid) {
       u.textContent = `${it.suggested_qty} ${it.suggested_unit}`;
       meta.appendChild(u);
     }
+    // α.172.235 — cestino per-riga diretto
+    const del = document.createElement('button');
+    del.className = 'btn btn-ghost btn-sm';
+    del.style.cssText = 'color:#ef4444;padding:2px 6px;font-size:13px;';
+    del.textContent = '🗑'; del.title = mfT('dt.delete_item');
+    del.onclick = (e) => {
+      e.stopPropagation();
+      dtDeleteSingleItem(it, tid, pane);
+    };
+    meta.appendChild(del);
     row1.appendChild(meta);
     card.appendChild(row1);
     card.onclick = () => openItemEditor(it, tid);
     list.appendChild(card);
   });
   pane.appendChild(list);
+  dtUpdateBulkBar();
+}
+
+// ── α.172.235 — selezione multipla + delete + estrazione background ──────
+let _dtSelectedItems = new Set();
+let _dtExtractTimer = null;
+
+function dtUpdateBulkBar() {
+  const bar = document.getElementById('dt-bulk-bar');
+  const cnt = document.getElementById('dt-bulk-count');
+  if (!bar) return;
+  const n = _dtSelectedItems.size;
+  bar.style.display = n ? 'flex' : 'none';
+  if (cnt) cnt.textContent = mfT('dt.n_selected').replace('{n}', n);
+}
+
+async function dtDeleteSingleItem(it, tid, pane) {
+  if (!confirm(mfT('dt.confirm_delete_item').replace('{name}', it.name))) return;
+  try {
+    await api('DELETE', `/delivery-items/api/${it.id}`);
+    _dtSelectedItems.delete(it.id);
+    toast(mfT('dt.item_deleted'), 'success', 1500);
+    await _loadItemsForTemplate(tid);
+    renderItemsPane(pane, tid);
+    const tab = document.getElementById('dt-tab-items');
+    if (tab) tab.textContent = `📦 Items (${_currentItems.length})`;
+  } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 3000); }
+}
+
+async function dtBulkDeleteItems(tid, pane) {
+  const ids = Array.from(_dtSelectedItems);
+  if (!ids.length) return;
+  if (!confirm(mfT('dt.confirm_delete_selected').replace('{n}', ids.length))) return;
+  try {
+    const fd = new FormData(); fd.append('ids', ids.join(','));
+    const r = await api('POST', '/delivery-items/api/bulk-delete', fd);
+    _dtSelectedItems.clear();
+    toast(mfT('dt.n_items_deleted').replace('{n}', r.deleted), 'success', 2000);
+    await _loadItemsForTemplate(tid);
+    renderItemsPane(pane, tid);
+    const tab = document.getElementById('dt-tab-items');
+    if (tab) tab.textContent = `📦 Items (${_currentItems.length})`;
+  } catch(e) { toast(`Errore: ${e.message||''}`, 'error', 3000); }
+}
+
+function dtSetExtractBadge(status, msg) {
+  const el = document.getElementById('dt-extract-badge');
+  if (!el) return;
+  const btn = document.getElementById('dt-ai-extract-btn');
+  if (status === 'running') {
+    el.style.display = 'block';
+    el.style.cssText = 'display:block;margin-bottom:10px;padding:8px 12px;border-radius:6px;font-size:13px;background:rgba(98,114,245,.10);border:1px solid rgba(98,114,245,.30);color:var(--text2);';
+    el.innerHTML = '⏳ ' + mfT('dt.extract_running');
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ ' + mfT('dt.extract_running_short'); }
+  } else if (status === 'done') {
+    el.style.display = 'block';
+    el.style.cssText = 'display:block;margin-bottom:10px;padding:8px 12px;border-radius:6px;font-size:13px;background:rgba(34,197,94,.10);border:1px solid rgba(34,197,94,.30);color:var(--text2);';
+    el.innerHTML = '✅ ' + (msg ? escapeHtml(msg) : mfT('dt.extract_done'));
+    if (btn) { btn.disabled = false; btn.innerHTML = '🤖 ' + mfT('dt.extract_items_ai'); }
+  } else if (status === 'failed') {
+    el.style.display = 'block';
+    el.style.cssText = 'display:block;margin-bottom:10px;padding:8px 12px;border-radius:6px;font-size:13px;background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.30);color:var(--text2);';
+    el.innerHTML = '❌ ' + (msg ? escapeHtml(msg) : mfT('dt.extract_failed'));
+    if (btn) { btn.disabled = false; btn.innerHTML = '🤖 ' + mfT('dt.extract_items_ai'); }
+  } else {
+    el.style.display = 'none';
+    if (btn) { btn.disabled = false; btn.innerHTML = '🤖 ' + mfT('dt.extract_items_ai'); }
+  }
+}
+
+async function dtStartExtraction(tid, pane) {
+  if (!confirm(mfT('dt.confirm_extract').replace('{name}', _currentTemplate.source_document_name || ''))) return;
+  try {
+    await api('POST', `/delivery-templates/api/${tid}/items/ai-extract`, {});
+    dtSetExtractBadge('running');
+    if (_currentTemplate) _currentTemplate.items_extraction_status = 'running';
+    dtPollExtraction(tid, pane);
+  } catch(e) {
+    if ((e.message||'').includes('409')) { dtSetExtractBadge('running'); dtPollExtraction(tid, pane); return; }
+    toast(`Errore AI: ${e.message||''}`, 'error', 6000);
+  }
+}
+
+function dtPollExtraction(tid, pane) {
+  if (_dtExtractTimer) clearTimeout(_dtExtractTimer);
+  const tick = async () => {
+    let st;
+    try { st = await api('GET', `/delivery-templates/api/${tid}/items/extract-status`); }
+    catch(e) { _dtExtractTimer = setTimeout(tick, 4000); return; }
+    if (st.status === 'running') { _dtExtractTimer = setTimeout(tick, 3000); return; }
+    // done | failed | idle
+    if (_currentTemplate) _currentTemplate.items_extraction_status = st.status;
+    dtSetExtractBadge(st.status, st.msg);
+    if (st.status === 'done') {
+      toast('🤖 ' + (st.msg || mfT('dt.extract_done')), 'success', 4000);
+      await _loadItemsForTemplate(tid);
+      const p = document.getElementById('dt-pane-items');
+      if (p) renderItemsPane(p, tid);
+      const tab = document.getElementById('dt-tab-items');
+      if (tab) tab.textContent = `📦 Items (${_currentItems.length})`;
+    } else if (st.status === 'failed') {
+      toast('❌ ' + (st.msg || mfT('dt.extract_failed')), 'error', 6000);
+    }
+  };
+  _dtExtractTimer = setTimeout(tick, 1500);
 }
 
 // ── Auto-format SMPTE timecode (v3.5.0-alpha.172.164) ─────────────────────
@@ -3096,7 +3242,38 @@ document.addEventListener('DOMContentLoaded', () => {
   const br = document.getElementById('dt-filter-broadcaster');
   if (q) q.addEventListener('input', applyDtFilters);
   if (br) br.addEventListener('change', applyDtFilters);
+  dtPollRowExtractions();
 });
+
+// α.172.235 — polla le righe con estrazione in corso (badge ⏳ nella lista),
+// aggiorna il count e rimuove il badge a fine estrazione.
+function dtPollRowExtractions() {
+  const badges = Array.from(document.querySelectorAll('.dt-row-extract'));
+  badges.forEach(badge => {
+    const tid = badge.getAttribute('data-tid');
+    if (!tid) return;
+    const tick = async () => {
+      let st;
+      try { st = await api('GET', `/delivery-templates/api/${tid}/items/extract-status`); }
+      catch(e) { setTimeout(tick, 5000); return; }
+      if (st.status === 'running') { setTimeout(tick, 4000); return; }
+      badge.remove();
+      const row = document.querySelector(`tr[data-tid="${tid}"]`);
+      if (st.status === 'done') {
+        try {
+          const r = await api('GET', `/delivery-templates/api/${tid}/items`);
+          const n = (r.items || []).length;
+          const cell = row && row.querySelector('.dt-items-n');
+          if (cell) cell.textContent = n;
+        } catch(_) {}
+        toast('🤖 ' + (st.msg || mfT('dt.extract_done')), 'success', 4000);
+      } else if (st.status === 'failed') {
+        toast('❌ ' + (st.msg || mfT('dt.extract_failed')), 'error', 6000);
+      }
+    };
+    setTimeout(tick, 2000);
+  });
+}
 
 // v3.5.0-alpha.172.123 (Tier 3 Bundle D) — Search globale DeliveryItem cross-template.
 function openSearchItemsModal() {

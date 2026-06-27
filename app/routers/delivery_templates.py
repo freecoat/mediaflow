@@ -68,6 +68,9 @@ def _dt_dict(t: DeliveryTemplate) -> dict:
         "default_program_start": t.default_program_start,
         # v3.5.0-alpha.172.132 — struttura timeline default (ereditata dagli item)
         "default_timeline_segments": t.default_timeline_segments or [],
+        # v3.5.0-alpha.172.235 — stato estrazione item AI (background)
+        "items_extraction_status": t.items_extraction_status or "idle",
+        "items_extraction_msg": t.items_extraction_msg,
     }
 
 

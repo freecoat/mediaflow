@@ -8,6 +8,18 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.235** — 27 giugno 2026 — Estrazione item AI in background + delete items dalla lista
+
+### α.172.235 ✅ (Estrazione item background + delete items — 27 giu)
+- **Richiesta Matteo**: (1) l'estrazione item AI deve girare in background (o almeno mostrare attesa fino a fine, prima era solo toast effimeri = confusione + rischio timeout tunnel); (2) non si potevano eliminare item da un template (il delete era sepolto solo dentro l'editor).
+- **Background estrazione**: `POST .../items/ai-extract` ora fa pre-check sincroni (404 sorgente / 503 provider / 409 già in corso) poi lancia un **thread** (sessione propria via SessionLocal, `set_tenant_id`) e risponde **202 running**. Stato su `delivery_templates.items_extraction_status` (idle/running/done/failed) + msg + at. Nuovo `GET .../items/extract-status` per polling. `_run_item_extraction_bg` worker isolato. Niente più attesa sincrona = no timeout gateway/tunnel.
+- **UI background**: badge live nel pane Items (⏳ in corso → ✅ N aggiunti / ❌ errore), polling 3s, auto-refresh lista a fine. Badge ⏳ anche sulla riga della lista (server-rendered + poller page-load che aggiorna count a fine). Save flow: fire-and-forget + toast "avviata in background". Auto-resume polling se si apre un template con status running.
+- **Delete items**: 🗑 **per-riga** diretto sulla card + **selezione multipla** (checkbox + barra "N selezionati" → elimina in blocco via nuovo `POST /delivery-items/api/bulk-delete` CSV ids, soft-delete idempotente). Resta il delete nell'editor.
+- **Backend**: 3 colonne `delivery_templates` + auto-migrate boot + `scripts/migrate_items_extraction_bg.py`. i18n 17 chiavi 5 lingue. **950 test** (+4 netti), 0 fallimenti. **Smoke browser verde**: pane 3 checkbox + 3 🗑, multiselect "2 selected", badge running/done/failed, status endpoint, 0 errori console.
+
+**Prossimo / PENDENTE**: Matteo testa estrazione AI reale in background (lancia su un capitolato con sorgente → badge ⏳ → ✅, puoi chiudere modal/navigare) + delete singolo/multiplo. Verifica anche ri-carica Paramount (motore parsing α.234).
+
+### α.172.234 ✅ (Motore parsing capitolati esplicito — storico sotto)
 **v3.5.0-alpha.172.234** — 27 giugno 2026 — Motore parsing capitolati esplicito (chi parsa è chiaro)
 
 ### α.172.234 ✅ (Motore di parsing capitolati esplicito — 27 giu, pacchetto completo)

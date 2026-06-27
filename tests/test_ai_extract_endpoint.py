@@ -109,38 +109,85 @@ def _create_template(session, *, source_document_path=None, source_document_name
 
 # ── happy path: persisted source_document_path ──────────────────────────────
 
-def test_ai_extract_with_persisted_path(client_admin_extract, tmp_path, monkeypatch):
-    """Endpoint uses resolve_capitolato_source (persisted branch) and strong provider."""
+def test_ai_extract_starts_background(client_admin_extract, monkeypatch):
+    """α.172.235: l'endpoint risponde 202 running e marca il template, NON
+    esegue il parse in modo sincrono (gira in thread)."""
     import app.services.capitolato_storage as cs
+    from app.models.models import DeliveryTemplate
 
     c, session = client_admin_extract
-
-    # Write a real file into the mocked UPLOAD_DIR
-    upload_dir = tmp_path / "up"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    fake_file = upload_dir / "test.pdf"
-    fake_file.write_bytes(b"%PDF-1.4 fake")
-
-    rel_path = f"data/capitolato_uploads/test.pdf"
-    monkeypatch.setattr(cs, "UPLOAD_DIR", upload_dir)
-
-    tpl = _create_template(session, source_document_path=rel_path)
-
-    # Also monkeypatch resolve_capitolato_source directly to avoid path-resolve issues
-    monkeypatch.setattr(
-        cs, "resolve_capitolato_source",
-        lambda t: (b"%PDF-1.4 fake", "test.pdf"),
-    )
+    monkeypatch.setattr(cs, "resolve_capitolato_source",
+                        lambda t: (b"%PDF-1.4 fake", "test.pdf"))
+    tpl = _create_template(session, source_document_path="data/capitolato_uploads/test.pdf")
 
     r = c.post(f"/delivery-templates/api/{tpl.id}/items/ai-extract")
-    assert r.status_code == 200, r.text
-    data = r.json()
-    assert data["saved"] == 1
-    assert data["items_extracted"] == 1
-    assert data.get("parse_meta") is not None
+    assert r.status_code == 202, r.text
+    assert r.json()["status"] == "running"
+    # status endpoint riflette lo stato
+    s = c.get(f"/delivery-templates/api/{tpl.id}/items/extract-status")
+    assert s.status_code == 200
+    assert s.json()["status"] in ("running", "done")  # il thread può aver già finito
+
+
+def test_run_item_extraction_bg_does_work(client_admin_extract, monkeypatch):
+    """Il worker sincrono materializza gli item e marca status=done."""
+    import app.services.capitolato_storage as cs
+    from app.models.models import DeliveryTemplate
+    from app.routers.delivery_items import _run_item_extraction_bg
+
+    c, session = client_admin_extract
+    monkeypatch.setattr(cs, "resolve_capitolato_source",
+                        lambda t: (b"%PDF fake", "x.pdf"))
+    tpl = _create_template(session, source_document_path="data/capitolato_uploads/x.pdf")
+
+    _run_item_extraction_bg(tpl.id, user_id=None, tenant_id=1)
+    session.expire_all()
+    fresh = session.query(DeliveryTemplate).get(tpl.id)
+    assert fresh.items_extraction_status == "done"
+    assert "aggiunti" in (fresh.items_extraction_msg or "")
+
+
+def test_ai_extract_409_when_already_running(client_admin_extract, monkeypatch):
+    import app.services.capitolato_storage as cs
+    c, session = client_admin_extract
+    monkeypatch.setattr(cs, "resolve_capitolato_source",
+                        lambda t: (b"%PDF fake", "x.pdf"))
+    tpl = _create_template(session, source_document_path="data/capitolato_uploads/x.pdf")
+    tpl.items_extraction_status = "running"
+    session.commit()
+    r = c.post(f"/delivery-templates/api/{tpl.id}/items/ai-extract")
+    assert r.status_code == 409, r.text
 
 
 # ── 404 when no source available ────────────────────────────────────────────
+
+def test_bulk_delete_items(client_admin_extract):
+    """α.172.235: bulk-delete soft-delete in blocco, ignora id non validi."""
+    from app.models.models import DeliveryItem, DeliveryTemplate
+    c, session = client_admin_extract
+    tpl = _create_template(session)
+    ids = []
+    for n in ("A", "B", "C"):
+        it = DeliveryItem(tenant_id=1, delivery_template_id=tpl.id, name=f"Item {n}",
+                          is_active=True)
+        session.add(it); session.flush(); ids.append(it.id)
+    session.commit()
+    csv = f"{ids[0]},{ids[1]},99999"  # 99999 inesistente
+    r = c.post("/delivery-items/api/bulk-delete", data={"ids": csv})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["deleted"] == 2
+    assert body["requested"] == 3
+    session.expire_all()
+    assert session.query(DeliveryItem).get(ids[0]).is_active is False
+    assert session.query(DeliveryItem).get(ids[2]).is_active is True  # non toccato
+
+
+def test_bulk_delete_400_no_ids(client_admin_extract):
+    c, _ = client_admin_extract
+    r = c.post("/delivery-items/api/bulk-delete", data={"ids": ""})
+    assert r.status_code == 400
+
 
 def test_ai_extract_404_no_source(client_admin_extract, monkeypatch):
     """Endpoint returns 404 when resolve_capitolato_source returns None."""

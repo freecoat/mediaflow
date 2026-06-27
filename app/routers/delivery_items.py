@@ -472,6 +472,26 @@ async def delete_item(iid: int, db: Session = Depends(get_db)):
     return {"ok": True, "id": iid}
 
 
+@router.post("/delivery-items/api/bulk-delete", dependencies=[RequireEdit])
+async def bulk_delete_items(request: Request, db: Session = Depends(get_db)):
+    """Soft-delete in blocco. Body Form `ids` = CSV di id (es. "3,7,12").
+    Idempotente: id non trovati o di altri tenant vengono ignorati."""
+    form = await request.form()
+    raw = (form.get("ids") or "").strip()
+    ids = [int(x) for x in raw.split(",") if x.strip().isdigit()]
+    if not ids:
+        raise HTTPException(400, "Nessun id valido fornito.")
+    rows = db.query(DeliveryItem).filter(
+        DeliveryItem.id.in_(ids),
+        DeliveryItem.tenant_id == current_tenant_id(),
+        DeliveryItem.is_active == True,  # noqa: E712
+    ).all()
+    for it in rows:
+        it.is_active = False
+    db.commit()
+    return {"ok": True, "deleted": len(rows), "requested": len(ids)}
+
+
 # ── Validazione cross-tier α.172.121 (Tier 3 Bundle B) ────────
 
 @router.get("/delivery-items/api/{iid}/validate")
@@ -1157,48 +1177,131 @@ async def import_taxonomy(request: Request, db: Session = Depends(get_db)):
 
 
 # ── AI extract (re-parse capitolato → materialize items) ────
+# v3.5.0-alpha.172.235 — estrazione in BACKGROUND: il parse+materialize (1-7 min,
+# 2 chiamate AI) gira in un thread con sessione propria, così l'endpoint risponde
+# subito (202) e non va in timeout sul tunnel. Il template tiene lo stato
+# (idle/running/done/failed) che il frontend polla per mostrare il badge.
+
+def _run_item_extraction_bg(tid: int, user_id: Optional[int], tenant_id: int):
+    """Worker thread: parse_delivery_items_v2 + materialize, con sessione propria.
+    Aggiorna items_extraction_status/msg/at sul template. Non solleva (logga)."""
+    from app.database import SessionLocal
+    from app.context import set_tenant_id, reset_tenant_id
+    from app.services.capitolato_storage import resolve_capitolato_source
+    from app.services.ai_provider import pick_parse_provider
+    from app.services.deliverables_parser import extract_text_from_file
+    from app.services.delivery_items_parser import parse_delivery_items_v2, materialize_items
+
+    token = set_tenant_id(tenant_id)
+    db = SessionLocal()
+    try:
+        tpl = db.query(DeliveryTemplate).filter(
+            DeliveryTemplate.id == tid,
+            DeliveryTemplate.tenant_id == tenant_id,
+        ).first()
+        if not tpl:
+            return
+        try:
+            src = resolve_capitolato_source(tpl)
+            if src is None:
+                raise RuntimeError("Nessun documento sorgente disponibile.")
+            content, fname = src
+            if not content:
+                raise RuntimeError("Capitolato vuoto.")
+            picked = pick_parse_provider(user_id, db)
+            if not picked:
+                raise RuntimeError("AI provider non configurato.")
+            provider = picked[0]
+            text = extract_text_from_file(content, fname)
+            if not text or len(text.strip()) < 20:
+                raise RuntimeError("Estrazione testo fallita (PDF image-only?).")
+            parsed = parse_delivery_items_v2(text, db, tenant_id=tenant_id, provider=provider)
+            if not parsed:
+                diag = getattr(provider, "last_extract_diag", None) or {}
+                raise RuntimeError(f"Parser AI fallito: {diag.get('error') or 'nessun dettaglio'}")
+            saved, skipped = materialize_items(db, tid, parsed, tenant_id=tenant_id)
+            n_extracted = len(parsed.get("items") or [])
+            tpl.items_extraction_status = "done"
+            tpl.items_extraction_msg = (
+                f"{saved} aggiunti, {skipped} saltati (estratti {n_extracted})"
+            )
+            tpl.items_extraction_at = now_utc()
+            db.commit()
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Estrazione item background fallita (tid=%s)", tid)
+            db.rollback()
+            tpl = db.query(DeliveryTemplate).filter(
+                DeliveryTemplate.id == tid, DeliveryTemplate.tenant_id == tenant_id,
+            ).first()
+            if tpl:
+                tpl.items_extraction_status = "failed"
+                tpl.items_extraction_msg = str(e)[:500]
+                tpl.items_extraction_at = now_utc()
+                db.commit()
+    finally:
+        db.close()
+        reset_tenant_id(token)
+
+
+def _extraction_status_dict(tpl: DeliveryTemplate) -> dict:
+    return {
+        "tid": tpl.id,
+        "status": tpl.items_extraction_status or "idle",
+        "msg": tpl.items_extraction_msg,
+        "at": tpl.items_extraction_at.isoformat() if tpl.items_extraction_at else None,
+    }
+
 
 @router.post("/delivery-templates/api/{tid}/items/ai-extract", dependencies=[RequireEdit])
 async def ai_extract_items(tid: int, request: Request, db: Session = Depends(get_db)):
-    """Esegue parse_delivery_items_v2 sul source_document del template + materialize.
-    Idempotente per (name, template). Ritorna count saved/skipped."""
+    """Avvia l'estrazione item in BACKGROUND. Pre-check sincroni (404/503),
+    poi spawn thread e ritorna subito status=running (202).
+    Il frontend polla GET .../items/extract-status fino a done|failed."""
+    import threading
+    from app.services.capitolato_storage import resolve_capitolato_source
+    from app.services.ai_provider import pick_parse_provider
+
+    tenant_id = current_tenant_id()
+    tpl = db.query(DeliveryTemplate).filter(
+        DeliveryTemplate.id == tid,
+        DeliveryTemplate.tenant_id == tenant_id,
+    ).first()
+    if not tpl:
+        raise HTTPException(404, "DeliveryTemplate non trovato")
+    if tpl.items_extraction_status == "running":
+        raise HTTPException(409, "Estrazione già in corso per questo template.")
+    # pre-check sincroni rapidi: sorgente + provider configurati
+    if resolve_capitolato_source(tpl) is None:
+        raise HTTPException(404, "Nessun documento sorgente disponibile (caricato o nel corpus).")
+    user = current_user_optional(request)
+    if not pick_parse_provider(user.id if user else None, db):
+        raise HTTPException(503, "AI provider non configurato.")
+
+    tpl.items_extraction_status = "running"
+    tpl.items_extraction_msg = None
+    tpl.items_extraction_at = now_utc()
+    db.commit()
+
+    t = threading.Thread(
+        target=_run_item_extraction_bg,
+        args=(tid, user.id if user else None, tenant_id),
+        daemon=True,
+    )
+    t.start()
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=202, content={"ok": True, "status": "running", "tid": tid})
+
+
+@router.get("/delivery-templates/api/{tid}/items/extract-status")
+async def ai_extract_status(tid: int, db: Session = Depends(get_db)):
+    """Stato corrente dell'estrazione item (per polling badge)."""
     tpl = db.query(DeliveryTemplate).filter(
         DeliveryTemplate.id == tid,
         DeliveryTemplate.tenant_id == current_tenant_id(),
     ).first()
     if not tpl:
         raise HTTPException(404, "DeliveryTemplate non trovato")
-    from app.services.capitolato_storage import resolve_capitolato_source
-    from app.services.ai_provider import pick_parse_provider
-    from app.services.deliverables_parser import extract_text_from_file
-    from app.services.delivery_items_parser import parse_delivery_items_v2, materialize_items
-    src = resolve_capitolato_source(tpl)
-    if src is None:
-        raise HTTPException(404, "Nessun documento sorgente disponibile (caricato o nel corpus).")
-    content, fname = src
-    user = current_user_optional(request)
-    picked = pick_parse_provider(user.id if user else None, db)
-    if not picked:
-        raise HTTPException(503, "AI provider non configurato.")
-    provider = picked[0]
-    if not content:
-        raise HTTPException(400, "Capitolato vuoto.")
-    text = extract_text_from_file(content, fname)
-    if not text or len(text.strip()) < 20:
-        raise HTTPException(400, "Estrazione testo fallita (PDF image-only?).")
-    parsed = parse_delivery_items_v2(text, db, tenant_id=current_tenant_id(), provider=provider)
-    if not parsed:
-        diag = getattr(provider, "last_extract_diag", None) or {}
-        raise HTTPException(503, f"Parser AI failed. Diag: {diag.get('error') or 'no detail'}")
-    saved, skipped = materialize_items(db, tid, parsed, tenant_id=current_tenant_id())
-    return {
-        "ok": True,
-        "items_extracted": len(parsed.get("items") or []),
-        "saved": saved,
-        "skipped": skipped,
-        "pass1_categories": parsed.get("pass1_categories") or [],
-        "parse_meta": parsed.get("parse_meta"),
-    }
+    return _extraction_status_dict(tpl)
 
 
 # ── AudioConfigPreset (v3.5.0-alpha.172.127) ──────────────────

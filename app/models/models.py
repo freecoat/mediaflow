@@ -794,6 +794,12 @@ class DeliveryTemplate(Base):
     ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # v3.5.0-alpha.172.235 — estrazione item AI in background.
+    # status: None/'idle' | 'running' | 'done' | 'failed'. msg = ultimo esito/errore.
+    items_extraction_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    items_extraction_msg: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    items_extraction_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
