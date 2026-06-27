@@ -80,6 +80,9 @@ def upcoming_actions(db, tenant_id, *, owner_id=None, days=30):
                                      Activity.is_active == True,  # noqa: E712
                                      Activity.next_action_date.isnot(None),
                                      Activity.next_action_date <= horizon))
+    if owner_id:
+        act = (act.join(Acquisition, Activity.acquisition_id == Acquisition.id)
+                  .filter(Acquisition.owner_user_id == owner_id))
     for a in act.all():
         out.append({"kind": "activity", "id": a.id, "acquisition_id": a.acquisition_id,
                     "title": a.subject, "date": a.next_action_date.isoformat()})
