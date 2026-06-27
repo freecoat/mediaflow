@@ -747,6 +747,8 @@ def _h_propose_project_metadata(db: Session, data: dict) -> dict:
 def _h_web_search(db: Session, data: dict) -> dict:
     """Ricerca web read-only via Tavily, restituisce snippet testuali."""
     from app.services.web_search import tavily_search
+    from app.models.models import Tenant
+    from app.context import current_tenant_id
     query = (data.get("query") or "").strip()
     if not query:
         raise ValueError("Manca 'query'")
@@ -758,7 +760,11 @@ def _h_web_search(db: Session, data: dict) -> dict:
                          "questo tenant (egress cloud bloccato). Riattiva da "
                          "Impostazioni → Sicurezza per usare la ricerca web."}
     # α.172.146 — depth basic (più rapido per copilot) + timeout bound.
-    results = tavily_search(query, max_results=5, search_depth="basic", timeout=15)
+    # Task 2: web_search usa include_domains dalle fonti tenant configurate.
+    t = db.query(Tenant).filter(Tenant.id == current_tenant_id()).first() if db is not None else None
+    domains = (t.web_sources if t and t.web_sources else None)
+    results = tavily_search(query, max_results=5, search_depth="basic", timeout=15,
+                            include_domains=domains)
     if results is None:
         return {"query": query, "results": None,
                 "error": "Ricerca web non disponibile (Tavily non configurato o timeout). "
