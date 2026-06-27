@@ -795,11 +795,11 @@ async function kdmEditLinkSave() {
   var label = document.getElementById('kdm-edit-link-label').value.trim();
   if (label) fd.append('label', label); else fd.append('label', '0');
   var prefillTitle = document.getElementById('kdm-edit-link-prefill-title').value.trim();
-  if (prefillTitle) fd.append('prefill_title', prefillTitle);
+  fd.append('prefill_title', prefillTitle || '0');
   var dur = document.getElementById('kdm-edit-link-duration').value;
-  if (dur) fd.append('duration_days', dur);
+  fd.append('duration_days', dur || '0');
   var proj = document.getElementById('kdm-edit-link-project').value;
-  if (proj) fd.append('project_id', proj);
+  fd.append('project_id', proj || '0');
   try {
     await api('PUT', '/kdm/api/links/' + id, fd);
     closeModal('kdm-modal-link-edit');
@@ -862,7 +862,7 @@ async function kdmLoadFacilities() {
     '<button class="btn btn-secondary btn-sm" onclick="kdmOpenNewFacility()" data-i18n="kdm.btn.add_facility">+ Cinema</button>' +
   '</div>' +
   '<table class="table"><thead><tr>' +
-    '<th style="width:32px;"><input type="checkbox" onchange="kdmFacilityToggleSelectAll(this.checked)"></th>' +
+    '<th style="width:32px;"><input type="checkbox" title="' + mfT('kdm.facility.select_all') + '" onchange="kdmFacilityToggleSelectAll(this.checked)"></th>' +
     '<th data-i18n="kdm.col.fac_name">Nome</th>' +
     '<th data-i18n="kdm.col.fac_kind">Tipo</th>' +
     '<th data-i18n="kdm.col.fac_city">Città</th>' +

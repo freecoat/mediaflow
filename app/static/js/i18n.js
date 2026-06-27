@@ -672,7 +672,6 @@ window.MF_I18N = {
   'kdm.prefill_title':     {it: 'Titolo film (opzionale)',   en: 'Film title (optional)',     fr: 'Titre du film (optionnel)', de: 'Filmtitel (optional)',     es: 'Título película (opcional)'},
   'kdm.link_desc':         {it: 'Genera link pubblico per richiesta cliente:', en: 'Generate public link for client request:', fr: 'Générer un lien public pour la demande client :', de: 'Öffentlichen Link für Kundenanfrage erzeugen:', es: 'Generar enlace público para solicitud de cliente:'},
   'kdm.btn.gen_link':      {it: 'Genera link & copia',       en: 'Generate link & copy',     fr: 'Générer lien & copier',   de: 'Link erzeugen & kopieren',  es: 'Generar enlace y copiar'},
-  'kdm.btn.show_links':    {it: 'Link attivi',               en: 'Active links',             fr: 'Liens actifs',            de: 'Aktive Links',              es: 'Enlaces activos'},
   'kdm.col.actions':       {it: 'Azioni',                    en: 'Actions',                  fr: 'Actions',                 de: 'Aktionen',                  es: 'Acciones'},
   'kdm.action.transition': {it: 'Stato→',                    en: 'Status→',                  fr: 'Statut→',                 de: 'Status→',                   es: 'Estado→'},
   'kdm.action.delete':     {it: 'Elimina',                   en: 'Delete',                   fr: 'Supprimer',               de: 'Löschen',                   es: 'Eliminar'},

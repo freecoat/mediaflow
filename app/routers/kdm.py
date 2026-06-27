@@ -1003,11 +1003,18 @@ async def list_links(request: Request, db: Session = Depends(get_db)):
     proj_ids = {l.project_id for l in rows if l.project_id}
     proj_names, proj_client = {}, {}
     if proj_ids:
-        projs = db.query(Project).filter(Project.id.in_(proj_ids)).all()
+        # Fix 3: tenant-scope Project and Client lookups
+        projs = db.query(Project).filter(
+            Project.id.in_(proj_ids),
+            Project.tenant_id == current_tenant_id(),
+        ).all()
         client_ids = {p.client_id for p in projs if p.client_id}
         client_names = {}
         if client_ids:
-            for cl in db.query(Client).filter(Client.id.in_(client_ids)).all():
+            for cl in db.query(Client).filter(
+                Client.id.in_(client_ids),
+                Client.tenant_id == current_tenant_id(),
+            ).all():
                 client_names[cl.id] = cl.name
         for p in projs:
             proj_names[p.id] = p.title
@@ -1061,23 +1068,44 @@ async def edit_link(
         raise HTTPException(404, "Link non trovato")
     if not lnk.is_active:
         raise HTTPException(400, "Link revocato: non modificabile")
+    # Fix 2: decode '0' sentinel for label (empty-multipart convention)
     if label is not None:
-        lnk.label = label.strip() or None
+        if label == '0':
+            lnk.label = None
+        else:
+            lnk.label = label.strip() or None
+    # Fix 1 (security): validate project_id tenant ownership; '0'/0 = clear
     if project_id is not None:
-        lnk.project_id = project_id or None
+        if project_id == 0:
+            lnk.project_id = None
+        else:
+            from app.models import Project
+            p = db.get(Project, project_id)
+            if not p or p.tenant_id != current_tenant_id():
+                raise HTTPException(404, "Progetto non trovato")
+            lnk.project_id = project_id
+    # Fix 2: decode '0'/0 sentinel for duration_days
     if duration_days is not None:
-        lnk.duration_days = duration_days or None
-        lnk.expires_at = (now_utc() + timedelta(days=duration_days)) if duration_days else None
+        if duration_days == 0:
+            lnk.duration_days = None
+            lnk.expires_at = None
+        else:
+            lnk.duration_days = duration_days
+            lnk.expires_at = now_utc() + timedelta(days=duration_days)
     prefill = dict(lnk.prefill_json or {})
     for key, val in (("requested_title", prefill_title),
                      ("requested_cpl_uuid", prefill_cpl_uuid),
                      ("notes", prefill_notes)):
         if val is not None:
-            v = val.strip()
-            if v:
-                prefill[key] = v
-            else:
+            # Fix 2: decode '0' sentinel to clear the key
+            if val == '0':
                 prefill.pop(key, None)
+            else:
+                v = val.strip()
+                if v:
+                    prefill[key] = v
+                else:
+                    prefill.pop(key, None)
     lnk.prefill_json = prefill or None
     db.commit(); db.refresh(lnk)
     return {"ok": True, "id": lnk.id, "label": lnk.label, "project_id": lnk.project_id,

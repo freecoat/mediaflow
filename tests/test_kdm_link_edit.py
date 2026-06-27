@@ -59,3 +59,24 @@ def test_edit_revoked_link_blocked(client):
 def test_edit_unknown_link_404(client):
     c, _ = client
     assert c.put("/kdm/api/links/999", data={"label": "X"}).status_code == 404
+
+
+def test_edit_link_rejects_cross_tenant_project(client):
+    """PUT with a project_id from a different tenant must return 404."""
+    c, s = client
+    # Add tenant 2 data: separate tenant, client and project
+    s.add(Tenant(id=2, name="OtherTenant", slug="other", is_active=True)); s.flush()
+    s.add(Client(id=2, tenant_id=2, name="OtherClient")); s.flush()
+    s.add(Project(id=2, tenant_id=2, code="P2", title="Film2", client_id=2)); s.commit()
+    r = c.put("/kdm/api/links/1", data={"project_id": "2"})
+    assert r.status_code == 404, r.text
+
+
+def test_edit_link_clear_sentinel_clears_label(client):
+    """PUT with label='0' must clear the label to None."""
+    c, s = client
+    r = c.put("/kdm/api/links/1", data={"label": "0"})
+    assert r.status_code == 200, r.text
+    s.expire_all()
+    lnk = s.get(KdmRequestLink, 1)
+    assert lnk.label is None
