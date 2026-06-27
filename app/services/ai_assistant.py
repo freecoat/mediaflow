@@ -4446,6 +4446,10 @@ def _h_propose_contact(db: Session, data: dict) -> dict:
 @ai_capability("propose_acquisition_stage")
 def _h_propose_acquisition_stage(db: Session, data: dict) -> dict:
     aid = data.get("acquisition_id")
+    if not aid:
+        raise ValueError("Manca 'acquisition_id'")
+    if not data.get("stage"):
+        raise ValueError("Manca 'stage'")
     acq = db.query(Acquisition).filter(Acquisition.id == aid,
                                        Acquisition.tenant_id == current_tenant_id()).first()
     if not acq:

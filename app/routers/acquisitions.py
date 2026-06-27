@@ -283,7 +283,8 @@ async def add_activity(aid: int, request: Request, type: str = Form("note"),
                        next_action_date: Optional[str] = Form(None),
                        db: Session = Depends(get_db)):
     acq = db.query(Acquisition).filter(Acquisition.id == aid,
-                                       Acquisition.tenant_id == current_tenant_id()).first()
+                                       Acquisition.tenant_id == current_tenant_id(),
+                                       Acquisition.is_active == True).first()  # noqa: E712
     if not acq:
         raise HTTPException(404, "Acquisizione non trovata")
     try:

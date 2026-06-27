@@ -43,3 +43,16 @@ def test_propose_activity_and_stage(db):
     db.commit()
     db.refresh(acq)
     assert acq.stage == AcquisitionStage.quoting
+
+
+def test_propose_acquisition_stage_missing_args(db):
+    """Fix 3: propose_acquisition_stage solleva ValueError se mancano campi obbligatori."""
+    import pytest
+    import app.services.ai_assistant  # noqa: F401
+    h = get_handler("propose_acquisition_stage")
+    # Nessun argomento → manca acquisition_id
+    with pytest.raises(ValueError, match="acquisition_id"):
+        h(db, {})
+    # acquisition_id presente ma manca stage
+    with pytest.raises(ValueError, match="stage"):
+        h(db, {"acquisition_id": 1})

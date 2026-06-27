@@ -1,6 +1,11 @@
 # tests/test_contacts_api.py
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from fastapi.testclient import TestClient
 from tests.test_acquisitions_api import client  # riusa fixture (role manager ha edit_clients? aggiungi)
-from app.models.models import Client
+from app.models.models import Base, User, Role, Tenant, UserRole, Client
 
 
 def _ensure_client_perms(s):
@@ -44,3 +49,27 @@ def test_view_clients_permission_allows_contacts_api(client):
     r = c.get("/clients/api/1/contacts")
     assert r.status_code == 200, r.text
     assert "items" in r.json()
+
+
+def test_view_clients_only_cannot_reach_client_mutators(client):
+    """Utente con view_clients (senza view_finance) NON può creare/aggiornare clienti.
+
+    Fix 1 (security): il middleware apre SOLO /clients/api/<id>/contacts per
+    chi ha view_clients. Tutti gli altri /clients/api/* restano dietro la finance gate.
+    """
+    c, s = client
+    # Aggiunge solo view_clients — NO view_finance, NO edit_clients
+    role = s.query(__import__("app.models.models", fromlist=["Role"]).Role).first()
+    if "view_clients" not in (role.permissions or []):
+        role.permissions = (role.permissions or []) + ["view_clients"]
+    s.commit()
+    # POST /clients/api (create client) → bloccato dal middleware → 403
+    r = c.post("/clients/api", data={"name": "Hacker Client"})
+    assert r.status_code == 403, (
+        f"POST /clients/api doveva essere 403, ottenuto {r.status_code}: {r.text}"
+    )
+    # PUT /clients/api/1 (update client) → bloccato dal middleware → 403
+    r2 = c.put("/clients/api/1", data={"name": "Hacked Name"})
+    assert r2.status_code == 403, (
+        f"PUT /clients/api/1 doveva essere 403, ottenuto {r2.status_code}: {r2.text}"
+    )

@@ -42,3 +42,16 @@ def test_add_activity_invalid_type_422(client):
     r = c.post(f"/acquisitions/api/{aid}/activities",
                data={"type": "invalid", "subject": "test"})
     assert r.status_code == 422, r.text
+
+
+def test_add_activity_to_deleted_acquisition_404(client):
+    """Aggiungere un'attività a una trattativa soft-deleted deve restituire 404 (Fix 4)."""
+    c, _ = client
+    aid = c.post("/acquisitions/api", data={"title": "ToSoftDelete", "client_id": "1",
+                 "stage": "lead", "estimated_value": "0"}).json()["id"]
+    assert c.delete(f"/acquisitions/api/{aid}").status_code == 200
+    r = c.post(f"/acquisitions/api/{aid}/activities",
+               data={"type": "note", "subject": "attività orfana"})
+    assert r.status_code == 404, (
+        f"Attività su trattativa eliminata doveva restituire 404, ottenuto {r.status_code}: {r.text}"
+    )

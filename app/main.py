@@ -2704,6 +2704,9 @@ async def tenant_resolver(request: Request, call_next):
 _FINANCE_BLOCKED_PREFIXES = ("/quotes", "/cost-report", "/finance", "/pricelist", "/clients")
 _NON_ELEVATED_BLOCKED_PREFIXES = ("/resources",)  # anagrafica risorse globale
 _ADMIN_ONLY_PREFIXES = ("/departments", "/settings/api/working-hours", "/settings/api/ai")
+# Solo i sottopath /contacts sono accessibili a chi ha view_clients (senza view_finance).
+# Tutti gli altri /clients/api/* (create/update/delete/enrich) restano dietro la finance gate.
+_CONTACTS_PATH_RE = _re_mod.compile(r"^/clients/api/\d+/contacts$")
 
 
 def _is_forbidden_for_role(path: str, user) -> bool:
@@ -2715,7 +2718,7 @@ def _is_forbidden_for_role(path: str, user) -> bool:
                 # Solo /clients/api/* è accessibile con view_clients granulare
                 # (es. endpoint contatti). Le pagine HTML /clients e /clients/{id}
                 # restano dietro view_finance.
-                if pref == "/clients" and path.startswith("/clients/api/") and has_permission(user, "view_clients"):
+                if pref == "/clients" and _CONTACTS_PATH_RE.match(path) and has_permission(user, "view_clients"):
                     continue
                 return True
     # Staff/viewer: niente anagrafica risorse globale
