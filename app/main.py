@@ -31,6 +31,7 @@ from app.routers import (
     storage_admin,  # v3.5.0-alpha.172.211 (F1) — Admin storage: volumi/agent/job/proposte
     kdm as kdm_router,  # v3.5.0-alpha.172.226 — KDM/DKDM request tracking
     kdm_public,  # Task 18 — Form pubblico no-auth KDM/DKDM (token capability)
+    acquisitions,  # feat/acquisizioni-fase1 — Pipeline commerciale CRUD + summary + agenda
 )
 
 
@@ -2807,6 +2808,7 @@ app.include_router(ingest_deliverables_router.router)
 from app.routers.delivery_variants import router as delivery_variants_router
 app.include_router(delivery_variants_router)
 app.include_router(mobile_router.router)  # v3.5.0-alpha.172.158 — PWA companion staff /m
+app.include_router(acquisitions.router)  # feat/acquisizioni-fase1 — Pipeline commerciale
 
 
 @app.get("/", response_class=HTMLResponse)

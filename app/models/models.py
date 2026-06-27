@@ -8,6 +8,7 @@ from app.services.clock import now_utc
 import enum
 import json
 from datetime import datetime, date, time
+from decimal import Decimal
 from typing import Optional, List, Any
 from sqlalchemy import (
     String, Integer, Float, Boolean, Text, Date, DateTime, Time, JSON,
@@ -1334,6 +1335,7 @@ class Client(Base):
     quotes: Mapped[List["Quote"]] = relationship(back_populates="client")
     invoices: Mapped[List["Invoice"]] = relationship(back_populates="client")
     works: Mapped[List["ClientWork"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+    acquisitions: Mapped[List["Acquisition"]] = relationship(foreign_keys="Acquisition.client_id", viewonly=True)
 
 
 # ── FILMOGRAFIA / PORTFOLIO CLIENTE (v3.5.0-alpha.25) ────────
@@ -4777,7 +4779,7 @@ class Acquisition(Base):
     prospect_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
     stage: Mapped[AcquisitionStage] = mapped_column(SAEnum(AcquisitionStage), default=AcquisitionStage.lead, index=True)
-    estimated_value: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    estimated_value: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0)
     win_probability_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     expected_close_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
