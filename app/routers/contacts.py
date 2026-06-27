@@ -54,8 +54,9 @@ def _sync_primary(db: Session, contact: Contact) -> None:
         cl.contact_email = contact.email
         cl.contact_phone = contact.phone
         cl.contact_role = contact.role
-    # un solo primario per cliente
+    # un solo primario per cliente (con tenant guard)
     others = db.query(Contact).filter(
+        Contact.tenant_id == current_tenant_id(),
         Contact.client_id == contact.client_id,
         Contact.id != contact.id,
         Contact.is_primary == True,  # noqa: E712
@@ -66,6 +67,12 @@ def _sync_primary(db: Session, contact: Contact) -> None:
 
 @router.get("/clients/api/{cid}/contacts", dependencies=[RequireView])
 async def list_contacts(cid: int, db: Session = Depends(get_db)):
+    cl = db.query(Client).filter(
+        Client.id == cid,
+        Client.tenant_id == current_tenant_id(),
+    ).first()
+    if not cl:
+        raise HTTPException(404, "Cliente non trovato")
     rows = (
         db.query(Contact)
         .filter(

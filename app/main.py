@@ -2711,9 +2711,10 @@ def _is_forbidden_for_role(path: str, user) -> bool:
     if not can_view_finance(user):
         for pref in _FINANCE_BLOCKED_PREFIXES:
             if path == pref or path.startswith(pref + "/"):
-                # /clients/* è accessibile anche con view_clients granulare
-                # (es. contatti e anagrafica clienti senza permesso finance completo)
-                if pref == "/clients" and has_permission(user, "view_clients"):
+                # Solo /clients/api/* è accessibile con view_clients granulare
+                # (es. endpoint contatti). Le pagine HTML /clients e /clients/{id}
+                # restano dietro view_finance.
+                if pref == "/clients" and path.startswith("/clients/api/") and has_permission(user, "view_clients"):
                     continue
                 return True
     # Staff/viewer: niente anagrafica risorse globale
