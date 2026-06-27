@@ -8,6 +8,7 @@ from typing import Optional
 from decimal import Decimal, InvalidOperation
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Form
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session, selectinload
 from app.database import get_db
 from app.context import current_tenant_id
@@ -25,6 +26,13 @@ from app.services.acquisition_service import (
 router = APIRouter(tags=["acquisitions"])
 RequireView = Depends(requires_permission("view_acquisitions"))
 RequireManage = Depends(requires_permission("manage_acquisitions"))
+
+
+@router.get("/acquisitions", response_class=HTMLResponse, dependencies=[RequireView])
+async def acquisitions_page(request: Request):
+    from app.main import templates
+    return templates.TemplateResponse("pages/acquisitions.html",
+                                      {"request": request, "active_page": "acquisitions"})
 
 
 def _acq_dict(acq: Acquisition) -> dict:
