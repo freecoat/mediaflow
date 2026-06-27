@@ -1246,7 +1246,11 @@ TOOLS: list[dict] = [
         "category": "mutation",
         "description": "Aggiorna i campi di un cliente ESISTENTE (client_id PK numerico). Usa propose_client per crearne uno nuovo. Aggiorna SOLO i campi forniti.",
         "input_schema": {"type": "object", "properties": {
-            "client_id":     {"type": "integer"},
+            "client_id":     {"type": "integer", "description": "PK numerico del cliente ESISTENTE da aggiornare. Usa il contesto clienti — non inventarlo."},
+            "name":          {"type": "string", "description": "Nuova ragione sociale — cambiala SOLO se l'utente chiede esplicitamente di rinominare il cliente."},
+            "legal_form":    {"type": "string"},
+            "company_size":  {"type": "string"},
+            "founded_year":  {"type": "integer"},
             "vat_number":    {"type": "string"}, "tax_code":      {"type": "string"},
             "pec":           {"type": "string"}, "sdi_code":      {"type": "string"},
             "address":       {"type": "string"}, "city":          {"type": "string"},

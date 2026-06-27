@@ -24,7 +24,7 @@ def test_update_client_only_changes_given_fields(db):
     h = get_handler("update_client")
     out = h(db, {"client_id": 1, "vat_number": "IT01234567890", "website": "luckyred.it"})
     db.commit()
-    c = db.query(Client).get(1)
+    c = db.get(Client, 1)
     assert c.vat_number == "IT01234567890"
     assert c.website == "luckyred.it"
     assert c.city == "Roma"  # invariato
@@ -40,3 +40,12 @@ def test_update_client_missing_id_raises(db):
 def test_update_client_unknown_client_raises(db):
     with pytest.raises(ValueError):
         get_handler("update_client")(db, {"client_id": 999, "city": "Milano"})
+
+
+def test_update_client_skips_empty_string(db):
+    h = get_handler("update_client")
+    out = h(db, {"client_id": 1, "city": ""})
+    db.commit()
+    c = db.get(Client, 1)
+    assert c.city == "Roma"  # invariato — stringa vuota ignorata
+    assert "city" not in out["changed_fields"]
