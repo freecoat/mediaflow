@@ -691,6 +691,31 @@ async def delete_facility(fid: int, request: Request, db: Session = Depends(get_
     return {"ok": True}
 
 
+@router.post("/api/facilities/bulk-delete")
+async def bulk_delete_facilities(request: Request, db: Session = Depends(get_db),
+                                 ids: Optional[str] = Form(None)):
+    _require_kdm(request, db)
+    parsed = _parse_ids(ids)
+    if not parsed:
+        raise HTTPException(400, "Nessun id valido")
+    deleted = servers_deleted = 0
+    for fid in parsed:
+        f = db.get(CinemaFacility, fid)
+        if not f or f.tenant_id != current_tenant_id() or not f.is_active:
+            continue
+        f.is_active = False
+        deleted += 1
+        for srv in db.query(CinemaServer).filter(
+                CinemaServer.facility_id == fid,
+                CinemaServer.tenant_id == current_tenant_id(),
+                CinemaServer.is_active == True):  # noqa: E712
+            srv.is_active = False
+            servers_deleted += 1
+    db.commit()
+    return {"ok": True, "deleted": deleted, "servers_deleted": servers_deleted,
+            "requested": len(parsed)}
+
+
 @router.get("/api/servers")
 async def list_servers(
     request: Request,
@@ -968,39 +993,45 @@ async def create_link(
 @router.get("/api/links")
 async def list_links(request: Request, db: Session = Depends(get_db)):
     from app.services.clock import now_utc
-    from app.models import Project
+    from app.models import Project, Client
     _require_kdm(request, db)
-    rows = (
-        db.query(KdmRequestLink)
-        .filter(
-            KdmRequestLink.tenant_id == current_tenant_id(),
-            KdmRequestLink.is_active == True,  # noqa: E712
-        )
-        .order_by(KdmRequestLink.created_at.desc())
-        .all()
-    )
+    rows = (db.query(KdmRequestLink)
+            .filter(KdmRequestLink.tenant_id == current_tenant_id())
+            .order_by(KdmRequestLink.created_at.desc()).all())
     base = _public_base(request)
     now = now_utc()
-    # Mappa progetto per nome (evita N query)
-    proj_ids = {lnk.project_id for lnk in rows if lnk.project_id}
-    proj_names = {}
+    proj_ids = {l.project_id for l in rows if l.project_id}
+    proj_names, proj_client = {}, {}
     if proj_ids:
-        for p in db.query(Project).filter(Project.id.in_(proj_ids)).all():
+        # Fix 3: tenant-scope Project and Client lookups
+        projs = db.query(Project).filter(
+            Project.id.in_(proj_ids),
+            Project.tenant_id == current_tenant_id(),
+        ).all()
+        client_ids = {p.client_id for p in projs if p.client_id}
+        client_names = {}
+        if client_ids:
+            for cl in db.query(Client).filter(
+                Client.id.in_(client_ids),
+                Client.tenant_id == current_tenant_id(),
+            ).all():
+                client_names[cl.id] = cl.name
+        for p in projs:
             proj_names[p.id] = p.title
+            proj_client[p.id] = client_names.get(p.client_id)
     out = []
     for lnk in rows:
         exp = lnk.expires_at
-        is_expired = bool(exp and exp < now)
         out.append({
-            "id": lnk.id,
-            "token": lnk.token,
-            "label": lnk.label,
-            "project_id": lnk.project_id,
-            "project_name": proj_names.get(lnk.project_id),
+            "id": lnk.id, "token": lnk.token, "label": lnk.label,
+            "project_id": lnk.project_id, "project_name": proj_names.get(lnk.project_id),
+            "client_name": proj_client.get(lnk.project_id),
+            "requested_title": (lnk.prefill_json or {}).get("requested_title"),
             "duration_days": lnk.duration_days,
             "created_at": lnk.created_at.isoformat() if lnk.created_at else None,
             "expires_at": exp.isoformat() if exp else None,
-            "is_expired": is_expired,
+            "is_expired": bool(exp and exp < now),
+            "revoked": not lnk.is_active,
             "url": f"{base}/public/kdm/{lnk.token}",
         })
     return out
@@ -1015,6 +1046,70 @@ async def revoke_link(lid: int, request: Request, db: Session = Depends(get_db))
     lnk.is_active = False
     db.commit()
     return {"ok": True}
+
+
+@router.put("/api/links/{lid}")
+async def edit_link(
+    lid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    label: Optional[str] = Form(None),
+    project_id: Optional[int] = Form(None),
+    duration_days: Optional[int] = Form(None),
+    prefill_title: Optional[str] = Form(None),
+    prefill_cpl_uuid: Optional[str] = Form(None),
+    prefill_notes: Optional[str] = Form(None),
+):
+    from app.services.clock import now_utc
+    from datetime import timedelta
+    _require_kdm(request, db)
+    lnk = db.get(KdmRequestLink, lid)
+    if not lnk or lnk.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Link non trovato")
+    if not lnk.is_active:
+        raise HTTPException(400, "Link revocato: non modificabile")
+    # Fix 2: decode '0' sentinel for label (empty-multipart convention)
+    if label is not None:
+        if label == '0':
+            lnk.label = None
+        else:
+            lnk.label = label.strip() or None
+    # Fix 1 (security): validate project_id tenant ownership; '0'/0 = clear
+    if project_id is not None:
+        if project_id == 0:
+            lnk.project_id = None
+        else:
+            from app.models import Project
+            p = db.get(Project, project_id)
+            if not p or p.tenant_id != current_tenant_id():
+                raise HTTPException(404, "Progetto non trovato")
+            lnk.project_id = project_id
+    # Fix 2: decode '0'/0 sentinel for duration_days
+    if duration_days is not None:
+        if duration_days == 0:
+            lnk.duration_days = None
+            lnk.expires_at = None
+        else:
+            lnk.duration_days = duration_days
+            lnk.expires_at = now_utc() + timedelta(days=duration_days)
+    prefill = dict(lnk.prefill_json or {})
+    for key, val in (("requested_title", prefill_title),
+                     ("requested_cpl_uuid", prefill_cpl_uuid),
+                     ("notes", prefill_notes)):
+        if val is not None:
+            # Fix 2: decode '0' sentinel to clear the key
+            if val == '0':
+                prefill.pop(key, None)
+            else:
+                v = val.strip()
+                if v:
+                    prefill[key] = v
+                else:
+                    prefill.pop(key, None)
+    lnk.prefill_json = prefill or None
+    db.commit(); db.refresh(lnk)
+    return {"ok": True, "id": lnk.id, "label": lnk.label, "project_id": lnk.project_id,
+            "expires_at": lnk.expires_at.isoformat() if lnk.expires_at else None}
 
 
 @router.post("/api/links/bulk-revoke")

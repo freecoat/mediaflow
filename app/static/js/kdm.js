@@ -87,6 +87,7 @@ function kdmSwitchTab(name) {
   else if (name === 'archive') kdmLoadArchive();
   else if (name === 'facilities') kdmLoadFacilities();
   else if (name === 'cpl') kdmLoadCpl();
+  else if (name === 'links') kdmLoadLinks();
 }
 
 // ── Status ordering ──────────────────────────────────────────────────────────
@@ -582,55 +583,152 @@ async function kdmGenerateLink() {
   }
 }
 
-// ── Tab: Links panel (nella tab Richieste) ───────────────────────────────────
+// ── Tab: Link (tab dedicata) ─────────────────────────────────────────────────
 
 var _kdmLinks = [];
+var _kdmLinkSel = {};
 
 async function kdmLoadLinks() {
   var container = document.getElementById('kdm-links-list');
   if (!container) return;
+  container.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;">Caricamento...</div>';
   try {
     _kdmLinks = await api('GET', '/kdm/api/links');
   } catch (e) {
     _kdmLinks = [];
+    container.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;color:#ef4444;">Errore caricamento link</div>';
+    return;
   }
   _kdmLinkSel = {};
-  if (!_kdmLinks.length) {
-    container.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;" data-i18n="kdm.link.none">Nessun link attivo.</div>';
+
+  // Popola filtro progetto (distinti, ordine alfabetico)
+  var pjSel = document.getElementById('kdm-link-f-project');
+  if (pjSel) {
+    var seenPj = {};
+    var pjOpts = [];
+    _kdmLinks.forEach(function(l) {
+      if (l.project_id && !seenPj[l.project_id]) {
+        seenPj[l.project_id] = true;
+        pjOpts.push({value: String(l.project_id), label: l.project_name || ('#' + l.project_id)});
+      }
+    });
+    pjOpts.sort(function(a, b) { return a.label.localeCompare(b.label, undefined, {sensitivity: 'base'}); });
+    var pjAll = '<option value="">' + escapeHtml(mfT('kdm.link.filter.project_all')) + '</option>';
+    pjSel.innerHTML = pjAll + pjOpts.map(function(o) {
+      return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>';
+    }).join('');
+  }
+
+  // Popola filtro cliente (distinti, ordine alfabetico)
+  var clSel = document.getElementById('kdm-link-f-client');
+  if (clSel) {
+    var seenCl = {};
+    var clOpts = [];
+    _kdmLinks.forEach(function(l) {
+      if (l.client_name && !seenCl[l.client_name]) {
+        seenCl[l.client_name] = true;
+        clOpts.push({value: l.client_name, label: l.client_name});
+      }
+    });
+    clOpts.sort(function(a, b) { return a.label.localeCompare(b.label, undefined, {sensitivity: 'base'}); });
+    var clAll = '<option value="">' + escapeHtml(mfT('kdm.link.filter.client_all')) + '</option>';
+    clSel.innerHTML = clAll + clOpts.map(function(o) {
+      return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>';
+    }).join('');
+  }
+
+  kdmRenderLinks();
+}
+
+function kdmFilteredLinks() {
+  var st = (document.getElementById('kdm-link-f-status') || {}).value || 'active';
+  var pj = (document.getElementById('kdm-link-f-project') || {}).value || '';
+  var cl = (document.getElementById('kdm-link-f-client') || {}).value || '';
+  var q = ((document.getElementById('kdm-link-f-q') || {}).value || '').toLowerCase().trim();
+  return _kdmLinks.filter(function(l) {
+    if (st === 'active' && (l.revoked || l.is_expired)) return false;
+    if (st === 'expired' && !(l.is_expired && !l.revoked)) return false;
+    if (st === 'revoked' && !l.revoked) return false;
+    if (pj && String(l.project_id || '') !== pj) return false;
+    if (cl && (l.client_name || '') !== cl) return false;
+    if (q) {
+      var hay = ((l.label || '') + ' ' + (l.requested_title || '')).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function kdmRenderLinks() {
+  var container = document.getElementById('kdm-links-list');
+  if (!container) return;
+  var rows = kdmFilteredLinks();
+  kdmUpdateLinkBulkToolbar();
+  if (!rows.length) {
+    var emptyKey = _kdmLinks.length ? 'kdm.empty.filtered' : 'kdm.link.none';
+    var emptyTxt = _kdmLinks.length ? 'Nessun risultato per i filtri.' : 'Nessun link attivo.';
+    container.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;" data-i18n="' + emptyKey + '">' + emptyTxt + '</div>';
     if (window.applyI18n) applyI18n();
     return;
   }
-  var head = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
-    '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmBulkRevokeLinks()" data-i18n="kdm.link.revoke_selected">Revoca selezionati</button>' +
-    '<span class="text-sm text-muted" id="kdm-link-sel-count"></span></div>';
-  var rows = _kdmLinks.map(function(l) {
+  var header = '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:2px solid var(--border);font-size:11px;font-weight:600;color:var(--text3);">' +
+    '<input type="checkbox" id="kdm-link-select-all-cb" title="' + escapeHtml(mfT('kdm.link.select_all')) + '" onchange="kdmLinkToggleSelectAll(this.checked)">' +
+    '<div style="flex:1;min-width:0;" data-i18n="kdm.link.select_all">Seleziona tutti</div>' +
+  '</div>';
+  var html = rows.map(function(l) {
     var when = l.created_at ? escapeHtml(l.created_at.slice(0, 10)) : '—';
     var exp = l.expires_at ? escapeHtml(l.expires_at.slice(0, 10)) : mfT('kdm.link.no_expiry');
     var expStyle = l.is_expired ? 'color:#ef4444;font-weight:600;' : '';
+    var revokedStyle = l.revoked ? 'opacity:0.55;' : '';
     var dur = l.duration_days ? (l.duration_days + ' gg') : '—';
     var name = escapeHtml(l.label || mfT('kdm.link.unnamed'));
     var proj = l.project_name ? ('<span class="text-muted"> · ' + escapeHtml(l.project_name) + '</span>') : '';
-    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);">' +
-      '<input type="checkbox" value="' + l.id + '" onchange="kdmLinkToggle(' + l.id + ',this.checked)">' +
+    var client = l.client_name ? ('<span class="text-muted"> · ' + escapeHtml(l.client_name) + '</span>') : '';
+    var statusBadge = l.revoked
+      ? ' <span style="color:#ef4444;font-size:11px;font-weight:600;" data-i18n="kdm.link.filter.revoked">Revocato</span>'
+      : (l.is_expired ? ' <span style="color:#f59e0b;font-size:11px;font-weight:600;" data-i18n="kdm.link.filter.expired">Scaduto</span>' : '');
+    var reqTitle = l.requested_title ? ('<div class="text-sm text-muted">' + escapeHtml(l.requested_title) + '</div>') : '';
+    var editBtn = !l.revoked
+      ? '<button class="btn btn-ghost btn-sm" onclick="kdmEditLink(' + l.id + ')" title="' + escapeHtml(mfT('kdm.link.edit')) + '" data-i18n-attr="title">✎</button>'
+      : '<button class="btn btn-ghost btn-sm" disabled style="opacity:0.3;">✎</button>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);' + revokedStyle + '">' +
+      '<input type="checkbox" value="' + l.id + '" onchange="kdmLinkToggle(' + l.id + ',this.checked)"' + (_kdmLinkSel[l.id] ? ' checked' : '') + '>' +
       '<div style="flex:1;min-width:0;">' +
-        '<div class="text-sm"><strong>' + name + '</strong>' + proj + (l.is_expired ? ' <span style="color:#ef4444;" data-i18n="kdm.link.expired">(scaduto)</span>' : '') + '</div>' +
+        '<div class="text-sm"><strong>' + name + '</strong>' + proj + client + statusBadge + '</div>' +
+        reqTitle +
         '<div class="text-sm mono text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(l.url) + '</div>' +
         '<div class="text-sm text-muted">📅 ' + when + ' · ⏳ ' + escapeHtml(dur) + ' · <span style="' + expStyle + '">⛔ ' + exp + '</span></div>' +
       '</div>' +
       '<button class="btn btn-ghost btn-sm" onclick="kdmCopyLink(' + l.id + ')" data-i18n="kdm.link.copy">Copia</button>' +
+      editBtn +
       '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmRevokeLink(' + l.id + ')" data-i18n="kdm.link.revoke">Revoca</button>' +
     '</div>';
   }).join('');
-  container.innerHTML = head + rows;  // eslint-disable-line
+  container.innerHTML = header + html;  // eslint-disable-line
   if (window.applyI18n) applyI18n();
 }
 
-var _kdmLinkSel = {};
 function kdmLinkToggle(id, on) {
   if (on) _kdmLinkSel[id] = true; else delete _kdmLinkSel[id];
-  var c = document.getElementById('kdm-link-sel-count');
+  kdmUpdateLinkBulkToolbar();
+}
+
+function kdmLinkToggleSelectAll(checked) {
+  var rows = kdmFilteredLinks();
+  _kdmLinkSel = {};
+  if (checked) rows.forEach(function(l) { _kdmLinkSel[l.id] = true; });
+  document.querySelectorAll('#kdm-links-list input[type="checkbox"]').forEach(function(c) {
+    c.checked = checked;
+  });
+  kdmUpdateLinkBulkToolbar();
+}
+
+function kdmUpdateLinkBulkToolbar() {
   var n = Object.keys(_kdmLinkSel).length;
-  if (c) c.textContent = n ? (n + ' ' + mfT('kdm.bulk.selected')) : '';
+  var bar = document.getElementById('kdm-link-bulk-toolbar');
+  var cnt = document.getElementById('kdm-link-sel-count');
+  if (cnt) cnt.textContent = n ? (n + ' ' + mfT('kdm.bulk.selected')) : '';
+  if (bar) bar.style.display = n ? 'flex' : 'none';
 }
 
 async function kdmBulkRevokeLinks() {
@@ -672,9 +770,73 @@ async function kdmRevokeLink(id) {
   }
 }
 
+function kdmEditLink(id) {
+  var l = (_kdmLinks || []).find(function(x) { return x.id === id; });
+  if (!l || l.revoked) return;
+  document.getElementById('kdm-edit-link-id').value = l.id;
+  document.getElementById('kdm-edit-link-label').value = l.label || '';
+  document.getElementById('kdm-edit-link-prefill-title').value = l.requested_title || '';
+  document.getElementById('kdm-edit-link-duration').value = l.duration_days ? String(l.duration_days) : '';
+  // Copia opzioni progetto dal select genera-link (già popolato da kdmLoadProjectsForLink)
+  var srcSel = document.getElementById('kdm-link-project');
+  var dstSel = document.getElementById('kdm-edit-link-project');
+  if (srcSel && dstSel) {
+    dstSel.innerHTML = srcSel.innerHTML;
+    dstSel.value = l.project_id ? String(l.project_id) : '';
+  }
+  openModal('kdm-modal-link-edit');
+  if (window.applyI18n) applyI18n();
+}
+
+async function kdmEditLinkSave() {
+  var id = document.getElementById('kdm-edit-link-id').value;
+  if (!id) return;
+  var fd = new FormData();
+  var label = document.getElementById('kdm-edit-link-label').value.trim();
+  if (label) fd.append('label', label); else fd.append('label', '0');
+  var prefillTitle = document.getElementById('kdm-edit-link-prefill-title').value.trim();
+  fd.append('prefill_title', prefillTitle || '0');
+  var dur = document.getElementById('kdm-edit-link-duration').value;
+  fd.append('duration_days', dur || '0');
+  var proj = document.getElementById('kdm-edit-link-project').value;
+  fd.append('project_id', proj || '0');
+  try {
+    await api('PUT', '/kdm/api/links/' + id, fd);
+    closeModal('kdm-modal-link-edit');
+    toast(mfT('kdm.toast.saved'), 'success');
+    await kdmLoadLinks();
+  } catch (e) {
+    toast('Errore: ' + (e.message || ''), 'error');
+  }
+}
+
 // ── Tab: Cinema/Server ───────────────────────────────────────────────────────
 
 var _kdmFacilities = [];
+var _kdmFacilitySel = {};
+
+function kdmFacilityToggle(id, on) { if (on) _kdmFacilitySel[id] = 1; else delete _kdmFacilitySel[id]; kdmFacilityBulkBar(); }
+function kdmFacilityToggleSelectAll(on) {
+  document.querySelectorAll('.kdm-fac-check').forEach(function(cb) { cb.checked = on; var id = parseInt(cb.value, 10); if (on) _kdmFacilitySel[id] = 1; else delete _kdmFacilitySel[id]; });
+  kdmFacilityBulkBar();
+}
+function kdmFacilityBulkBar() {
+  var n = Object.keys(_kdmFacilitySel).length;
+  var bar = document.getElementById('kdm-fac-bulk');
+  if (bar) { bar.style.display = n ? 'flex' : 'none'; var lbl = document.getElementById('kdm-fac-bulk-n'); if (lbl) lbl.textContent = mfT('kdm.facility.n_selected').replace('{n}', n); }
+}
+async function kdmFacilityBulkDelete() {
+  var ids = Object.keys(_kdmFacilitySel);
+  if (!ids.length) return;
+  if (!confirm(mfT('kdm.facility.confirm_bulk').replace('{n}', ids.length))) return;
+  try {
+    var fd = new FormData(); fd.append('ids', ids.join(','));
+    var r = await api('POST', '/kdm/api/facilities/bulk-delete', fd);
+    _kdmFacilitySel = {};
+    toast(mfT('kdm.facility.deleted_n').replace('{n}', r.deleted).replace('{m}', r.servers_deleted), 'success');
+    kdmLoadFacilities();
+  } catch (e) { toast('Errore: ' + (e.message || ''), 'error'); }
+}
 
 async function kdmLoadFacilities() {
   var pane = document.getElementById('kdm-tab-facilities');
@@ -691,10 +853,16 @@ async function kdmLoadFacilities() {
     if (window.applyI18n) applyI18n();
     return;
   }
-  var html = '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">' +
+  _kdmFacilitySel = {};
+  var html = '<div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-bottom:10px;">' +
+    '<div id="kdm-fac-bulk" style="display:none;align-items:center;gap:10px;padding:6px 12px;background:var(--bg2);border-radius:6px;margin-right:auto;">' +
+      '<span class="text-sm" id="kdm-fac-bulk-n"></span>' +
+      '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="kdmFacilityBulkDelete()" data-i18n="kdm.facility.delete_selected">Elimina selezionati</button>' +
+    '</div>' +
     '<button class="btn btn-secondary btn-sm" onclick="kdmOpenNewFacility()" data-i18n="kdm.btn.add_facility">+ Cinema</button>' +
   '</div>' +
   '<table class="table"><thead><tr>' +
+    '<th style="width:32px;"><input type="checkbox" title="' + mfT('kdm.facility.select_all') + '" onchange="kdmFacilityToggleSelectAll(this.checked)"></th>' +
     '<th data-i18n="kdm.col.fac_name">Nome</th>' +
     '<th data-i18n="kdm.col.fac_kind">Tipo</th>' +
     '<th data-i18n="kdm.col.fac_city">Città</th>' +
@@ -703,6 +871,7 @@ async function kdmLoadFacilities() {
   '</tr></thead><tbody>' +
   _kdmFacilities.map(function(f) {
     return '<tr>' +
+      '<td onclick="event.stopPropagation();"><input type="checkbox" class="kdm-fac-check" value="' + f.id + '" onchange="kdmFacilityToggle(' + f.id + ',this.checked)"></td>' +
       '<td><strong>' + escapeHtml(f.name) + '</strong></td>' +
       '<td class="text-sm text-muted">' + escapeHtml(f.kind || '—') + '</td>' +
       '<td class="text-sm">' + escapeHtml(f.city || '—') + '</td>' +

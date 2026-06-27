@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.238 — KDM: tab Link, link editabili, filtri, multiselect cinema (27 giu 2026)
+
+5 miglioramenti UI alla pagina KDM (`/kdm`). Subagent-driven TDD (6 task).
+
+- **Tab "🔗 Link" dedicata**: la barra genera-link + la lista link si spostano dalla tab Richieste (che resta con sole richieste) a una tab propria.
+- **Link editabili**: nuovo `PUT /kdm/api/links/{id}` (label, progetto, scadenza, prefill) + bottone "✎ Modifica" con modal. Link revocati non modificabili.
+- **Filtri link**: stato (attivo/scaduto/revocato/tutti) · progetto · cliente (derivato dal progetto) · ricerca testo. `GET /api/links` ora include i link revocati con flag `revoked` + `client_name`/`requested_title`.
+- **Seleziona-tutti link**: checkbox header che spunta i link filtrati visibili e pilota la "Revoca selezionati" esistente.
+- **Multiselect Cinema/Server**: checkbox per-riga + select-all + "Elimina selezionati" → nuovo `POST /kdm/api/facilities/bulk-delete` (soft-delete cinema + server in cascata, con conferma).
+- **1011 test** (+9). Smoke browser verde: tab Link separata, edit PUT, filtri, select-all, cinema multiselect, 0 chiavi i18n grezze. Fix test-pollution (fixture KDM → monkeypatch). Spec+plan in `docs/superpowers/`.
+
 ## v3.5.0-alpha.172.237 — Acquisizioni Fase 2: estrazione email + incrocio web (27 giu 2026)
 
 Fase 2 del modulo Acquisizioni: il commerciale incolla una conversazione email nel copilot e l'AI propone (confermabili) le informazioni estratte; più uno step web esplicito ristretto a fonti configurabili. Tutto nel copilot esistente, niente pagina nuova. Subagent-driven TDD (8 task).

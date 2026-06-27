@@ -351,8 +351,9 @@ def test_bulk_revoke_links(client_admin):
     r = client_admin.post("/kdm/api/links/bulk-revoke", data={"ids": f"{a},{b}"})
     assert r.status_code == 200, r.text
     assert r.json()["revoked"] == 2
-    remaining = [l["id"] for l in client_admin.get("/kdm/api/links").json()]
-    assert a not in remaining and b not in remaining
+    by_id = {l["id"]: l for l in client_admin.get("/kdm/api/links").json()}
+    assert a in by_id and by_id[a]["revoked"] is True
+    assert b in by_id and by_id[b]["revoked"] is True
 
 
 def test_cpl_linked_requests(client_admin):
@@ -591,11 +592,12 @@ def test_revoke_public_link(client_admin):
     assert r2.status_code == 200, r2.text
     assert r2.json()["ok"] is True
 
-    # Non deve più apparire nella lista
+    # Deve ancora apparire nella lista ma con revoked=True (nuovo contratto)
     r3 = client_admin.get("/kdm/api/links")
     assert r3.status_code == 200, r3.text
-    ids = [l["id"] for l in r3.json()]
-    assert link_id not in ids
+    by_id = {l["id"]: l for l in r3.json()}
+    assert link_id in by_id
+    assert by_id[link_id]["revoked"] is True
 
 
 def test_revoke_nonexistent_link(client_admin):
@@ -609,26 +611,28 @@ def test_revoke_nonexistent_link(client_admin):
 # ---------------------------------------------------------------------------
 
 def test_kdm_page_html_authenticated(client_admin):
-    """GET /kdm con client autenticato → 200 e HTML con i 3 tab + script kdm.js."""
+    """GET /kdm con client autenticato → 200 e HTML con i 4 tab + script kdm.js."""
     r = client_admin.get("/kdm")
     assert r.status_code == 200, r.text
     html = r.text
-    # 3 tab markers
+    # 4 tab markers
     assert 'data-tab="requests"' in html, "tab requests mancante"
     assert 'data-tab="facilities"' in html, "tab facilities mancante"
     assert 'data-tab="cpl"' in html, "tab cpl mancante"
+    assert 'data-tab="links"' in html, "tab links mancante"
     # script kdm.js caricato
     assert '/static/js/kdm.js' in html, "script kdm.js mancante"
 
 
 def test_kdm_page_contains_tab_panes(client_admin):
-    """GET /kdm: HTML contiene i pane delle 3 tab con id attesi."""
+    """GET /kdm: HTML contiene i pane delle 4 tab con id attesi."""
     r = client_admin.get("/kdm")
     assert r.status_code == 200, r.text
     html = r.text
     assert 'id="kdm-tab-requests"' in html
     assert 'id="kdm-tab-facilities"' in html
     assert 'id="kdm-tab-cpl"' in html
+    assert 'id="kdm-tab-links"' in html
 
 
 def test_kdm_page_has_step1_redesign_elements(client_admin):
