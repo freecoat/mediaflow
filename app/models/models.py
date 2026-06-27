@@ -11,7 +11,8 @@ from datetime import datetime, date, time
 from typing import Optional, List, Any
 from sqlalchemy import (
     String, Integer, Float, Boolean, Text, Date, DateTime, Time, JSON,
-    ForeignKey, Enum as SAEnum, UniqueConstraint, Index
+    ForeignKey, Enum as SAEnum, UniqueConstraint, Index,
+    Table, Column, Numeric
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from app.database import Base
@@ -171,6 +172,17 @@ class PhantomStatus(str, enum.Enum):
 class ProjectStatus(str, enum.Enum):
     prospect = "prospect"; quoting = "quoting"; active = "active"
     completed = "completed"; archived = "archived"
+
+class AcquisitionStage(str, enum.Enum):
+    lead = "lead"; qualified = "qualified"; quoting = "quoting"
+    negotiation = "negotiation"; won = "won"; lost = "lost"
+
+class ActivityType(str, enum.Enum):
+    email = "email"; call = "call"; meeting = "meeting"
+    note = "note"; task = "task"
+
+class ActivityDirection(str, enum.Enum):
+    inbound = "inbound"; outbound = "outbound"
 
 class JobStatus(str, enum.Enum):
     draft = "draft"; quoting = "quoting"; approved = "approved"
@@ -4745,3 +4757,84 @@ class KdmRequestCertificate(Base):
     cert_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     serial: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+# ── ACQUISIZIONI / CRM ────────────────────────────────────────────────────────
+
+acquisition_departments = Table(
+    "acquisition_departments", Base.metadata,
+    Column("acquisition_id", ForeignKey("acquisitions.id", ondelete="CASCADE"), primary_key=True),
+    Column("department_id", ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class Acquisition(Base):
+    __tablename__ = "acquisitions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    prospect_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    stage: Mapped[AcquisitionStage] = mapped_column(SAEnum(AcquisitionStage), default=AcquisitionStage.lead, index=True)
+    estimated_value: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
+    win_probability_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    expected_close_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    next_action: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    next_action_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    lost_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+
+    client: Mapped[Optional["Client"]] = relationship(foreign_keys=[client_id])
+    project: Mapped[Optional["Project"]] = relationship(foreign_keys=[project_id])
+    owner: Mapped[Optional["User"]] = relationship(foreign_keys=[owner_user_id])
+    departments: Mapped[List["Department"]] = relationship(secondary=acquisition_departments)
+    activities: Mapped[List["Activity"]] = relationship(
+        back_populates="acquisition", cascade="all, delete-orphan",
+        primaryjoin="Acquisition.id == Activity.acquisition_id")
+
+
+class Contact(Base):
+    __tablename__ = "contacts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    role: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_extracted: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    acquisition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("acquisitions.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True, index=True)
+    type: Mapped[ActivityType] = mapped_column(SAEnum(ActivityType), default=ActivityType.note)
+    direction: Mapped[Optional[ActivityDirection]] = mapped_column(SAEnum(ActivityDirection), nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, index=True)
+    subject: Mapped[str] = mapped_column(String(255))
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    next_action_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    ai_extracted: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_source: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    acquisition: Mapped[Optional["Acquisition"]] = relationship(
+        back_populates="activities", foreign_keys=[acquisition_id])
