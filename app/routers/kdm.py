@@ -1017,6 +1017,49 @@ async def revoke_link(lid: int, request: Request, db: Session = Depends(get_db))
     return {"ok": True}
 
 
+@router.put("/api/links/{lid}")
+async def edit_link(
+    lid: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    label: Optional[str] = Form(None),
+    project_id: Optional[int] = Form(None),
+    duration_days: Optional[int] = Form(None),
+    prefill_title: Optional[str] = Form(None),
+    prefill_cpl_uuid: Optional[str] = Form(None),
+    prefill_notes: Optional[str] = Form(None),
+):
+    from app.services.clock import now_utc
+    from datetime import timedelta
+    _require_kdm(request, db)
+    lnk = db.get(KdmRequestLink, lid)
+    if not lnk or lnk.tenant_id != current_tenant_id():
+        raise HTTPException(404, "Link non trovato")
+    if not lnk.is_active:
+        raise HTTPException(400, "Link revocato: non modificabile")
+    if label is not None:
+        lnk.label = label.strip() or None
+    if project_id is not None:
+        lnk.project_id = project_id or None
+    if duration_days is not None:
+        lnk.duration_days = duration_days or None
+        lnk.expires_at = (now_utc() + timedelta(days=duration_days)) if duration_days else None
+    prefill = dict(lnk.prefill_json or {})
+    for key, val in (("requested_title", prefill_title),
+                     ("requested_cpl_uuid", prefill_cpl_uuid),
+                     ("notes", prefill_notes)):
+        if val is not None:
+            v = val.strip()
+            if v:
+                prefill[key] = v
+            else:
+                prefill.pop(key, None)
+    lnk.prefill_json = prefill or None
+    db.commit(); db.refresh(lnk)
+    return {"ok": True, "id": lnk.id, "label": lnk.label, "project_id": lnk.project_id,
+            "expires_at": lnk.expires_at.isoformat() if lnk.expires_at else None}
+
+
 @router.post("/api/links/bulk-revoke")
 async def bulk_revoke_links(
     request: Request,
