@@ -1193,6 +1193,10 @@ def _auto_migrate_columns():
             print("[auto-migrate] tenants.naming_conventions mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE tenants ADD COLUMN naming_conventions TEXT NULL"))
+        if "web_sources" not in tcols:
+            print("[auto-migrate] tenants.web_sources mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE tenants ADD COLUMN web_sources JSON NULL"))
     if "delivery_items" in insp_nc.get_table_names():
         dicols = {c["name"] for c in insp_nc.get_columns("delivery_items")}
         if "naming_convention" not in dicols:
