@@ -1166,6 +1166,57 @@ TOOLS: list[dict] = [
         },
         "handler": "propose_cinema_server",
     },
+    # ── v3.5.0 Task 11 — Capability AI Acquisizioni / CRM ──────────
+    {
+        "name": "propose_acquisition",
+        "category": "mutation",
+        "description": "Crea una trattativa di acquisizione (lead→commessa). Usa client_id PK numerico o prospect_name se il cliente non esiste ancora.",
+        "input_schema": {"type": "object", "properties": {
+            "title": {"type": "string"},
+            "client_id": {"type": "integer"},
+            "prospect_name": {"type": "string"},
+            "stage": {"type": "string", "enum": ["lead", "qualified", "quoting", "negotiation", "won", "lost"]},
+            "estimated_value": {"type": "number"},
+            "next_action": {"type": "string"},
+        }, "required": ["title"]},
+        "handler": "propose_acquisition",
+    },
+    {
+        "name": "propose_activity",
+        "category": "mutation",
+        "description": "Registra una comunicazione/attività su una trattativa (email/call/meeting/note/task).",
+        "input_schema": {"type": "object", "properties": {
+            "acquisition_id": {"type": "integer"},
+            "client_id": {"type": "integer"},
+            "type": {"type": "string", "enum": ["email", "call", "meeting", "note", "task"]},
+            "subject": {"type": "string"},
+            "body": {"type": "string"},
+        }, "required": ["subject"]},
+        "handler": "propose_activity",
+    },
+    {
+        "name": "propose_contact",
+        "category": "mutation",
+        "description": "Aggiunge un contatto (persona) a un cliente esistente (client_id PK numerico).",
+        "input_schema": {"type": "object", "properties": {
+            "client_id": {"type": "integer"},
+            "name": {"type": "string"},
+            "role": {"type": "string"},
+            "email": {"type": "string"},
+            "phone": {"type": "string"},
+        }, "required": ["client_id", "name"]},
+        "handler": "propose_contact",
+    },
+    {
+        "name": "propose_acquisition_stage",
+        "category": "mutation",
+        "description": "Avanza/cambia lo stadio di una trattativa esistente (acquisition_id PK numerico).",
+        "input_schema": {"type": "object", "properties": {
+            "acquisition_id": {"type": "integer"},
+            "stage": {"type": "string", "enum": ["lead", "qualified", "quoting", "negotiation", "won", "lost"]},
+        }, "required": ["acquisition_id", "stage"]},
+        "handler": "propose_acquisition_stage",
+    },
     {
         "name": "propose_kdm_request",
         "category": "mutation",
