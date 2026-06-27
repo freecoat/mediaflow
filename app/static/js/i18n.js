@@ -179,10 +179,11 @@ window.MF_I18N = {
   'projects.col.start':      {it: 'Inizio',            en: 'Start',             fr: 'Début',            de: 'Beginn'},
   'projects.col.end':        {it: 'Fine',              en: 'End',               fr: 'Fin',              de: 'Ende'},
   'projects.col.budget':     {it: 'Budget',            en: 'Budget',            fr: 'Budget',           de: 'Budget'},
-  'projects.status.active':  {it: 'Attivo',            en: 'Active',            fr: 'Actif',            de: 'Aktiv'},
-  'projects.status.on_hold': {it: 'In pausa',          en: 'On hold',           fr: 'En pause',         de: 'Pausiert'},
-  'projects.status.completed': {it: 'Completato',      en: 'Completed',         fr: 'Terminé',          de: 'Abgeschlossen'},
-  'projects.status.cancelled': {it: 'Annullato',       en: 'Cancelled',         fr: 'Annulé',           de: 'Abgebrochen'},
+  'projects.status.prospect':  {it: 'Prospect',         en: 'Prospect',          fr: 'Prospect',         de: 'Interessent',      es: 'Prospecto'},
+  'projects.status.quoting':   {it: 'In quotazione',   en: 'Quoting',           fr: 'En devis',         de: 'Angebot',          es: 'Cotizando'},
+  'projects.status.active':    {it: 'Attivo',          en: 'Active',            fr: 'Actif',            de: 'Aktiv',            es: 'Activo'},
+  'projects.status.completed': {it: 'Completato',      en: 'Completed',         fr: 'Terminé',          de: 'Abgeschlossen',    es: 'Completado'},
+  'projects.status.archived':  {it: 'Archiviato',      en: 'Archived',          fr: 'Archivé',          de: 'Archiviert',       es: 'Archivado'},
   'projects.empty':          {it: 'Nessun progetto. Crea il primo.', en: 'No projects. Create the first.', fr: 'Aucun projet. Créer le premier.', de: 'Keine Projekte. Erstelle das erste.'},
 
   // ── Quotes page ───────────────────────────────────
