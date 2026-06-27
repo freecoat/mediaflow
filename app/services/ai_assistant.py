@@ -76,6 +76,17 @@ from app.services.ai_capability_registry import (
     get_handlers as _registry_get_handlers,
     get_action_types as _registry_get_action_types,
 )
+# ── Email extraction guidance ────────────────────────────────
+EMAIL_EXTRACTION_GUIDANCE = """\
+ESTRAZIONE DA EMAIL (Acquisizioni):
+Quando l'utente incolla una conversazione email, estrai le informazioni rilevanti e proponi in UN turno il sottoinsieme pertinente di azioni, collegandole al contesto corrente (trattativa/cliente/progetto se presente):
+- propose_activity: registra la comunicazione (type="email", direction inbound/outbound inferita, subject sintetico, body = testo email rilevante, next_action_date se c'è una scadenza).
+- propose_contact: se la firma/testo rivela una persona nuova (nome, ruolo, email, telefono).
+- update_client: se l'email rivela dati del cliente ESISTENTE (P.IVA, sede, sito, PEC, referente). NON inventare dati assenti.
+- propose_acquisition_stage: se l'intento implica un avanzamento (es. brief ricevuto→qualified, discussione prezzo→negotiation) + next_action.
+Non cercare sul web automaticamente: se utile, suggerisci all'utente il pulsante "Cerca sul web".
+Regola: proponi solo ciò che è effettivamente nell'email; non inventare recapiti o P.IVA."""
+
 # ── Chat principale ─────────────────────────────────────────
 
 def build_system_prompt(db: Session, *, use_tools: bool,
@@ -93,10 +104,12 @@ def build_system_prompt(db: Session, *, use_tools: bool,
         from app.services.ai_tools import ASSISTANT_SYSTEM_PROMPT_TOOLS as base
     else:
         base = ASSISTANT_SYSTEM_PROMPT
-    context = build_context(db, project_id, quote_id, job_id, page=page)
+    context = build_context(db, project_id, quote_id, job_id, page=page) if db is not None else ""
     if context:
-        return base + f"\n\n━━━ CONTESTO ATTUALE ━━━\n{context}"
-    return base
+        result = base + f"\n\n━━━ CONTESTO ATTUALE ━━━\n{context}"
+    else:
+        result = base
+    return result + "\n\n" + EMAIL_EXTRACTION_GUIDANCE
 
 
 def chat_with_assistant(db: Session,
