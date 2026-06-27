@@ -17,6 +17,7 @@ from app.models.models import (
 from app.services.rbac import requires_permission
 from app.services.acquisition_service import (
     weighted_value, effective_probability, pipeline_summary, upcoming_actions,
+    apply_stage_change, convert_to_project,
 )
 
 router = APIRouter(tags=["acquisitions"])
@@ -199,6 +200,35 @@ async def update_acquisition(aid: int, title: Optional[str] = Form(None),
     if department_ids is not None: _set_departments(db, acq, department_ids)
     db.commit(); db.refresh(acq)
     return _acq_dict(acq)
+
+
+@router.post("/acquisitions/api/{aid}/stage", dependencies=[RequireManage])
+async def change_stage(aid: int, stage: str = Form(...), db: Session = Depends(get_db)):
+    acq = (db.query(Acquisition)
+           .options(selectinload(Acquisition.departments), selectinload(Acquisition.client))
+           .filter(Acquisition.id == aid, Acquisition.tenant_id == current_tenant_id(),
+                   Acquisition.is_active == True).first())  # noqa: E712
+    if not acq:
+        raise HTTPException(404, "Acquisizione non trovata")
+    apply_stage_change(db, acq, AcquisitionStage(stage))
+    db.refresh(acq)
+    return _acq_dict(acq)
+
+
+@router.post("/acquisitions/api/{aid}/convert", dependencies=[RequireManage])
+async def convert(aid: int, code: str = Form(...), title: Optional[str] = Form(None),
+                  db: Session = Depends(get_db)):
+    acq = (db.query(Acquisition)
+           .options(selectinload(Acquisition.departments), selectinload(Acquisition.client))
+           .filter(Acquisition.id == aid, Acquisition.tenant_id == current_tenant_id(),
+                   Acquisition.is_active == True).first())  # noqa: E712
+    if not acq:
+        raise HTTPException(404, "Acquisizione non trovata")
+    p = convert_to_project(db, acq, code=code.strip(), title=title)
+    db.refresh(acq)
+    out = _acq_dict(acq)
+    out["project_id"] = p.id
+    return out
 
 
 @router.delete("/acquisitions/api/{aid}", dependencies=[RequireManage])
