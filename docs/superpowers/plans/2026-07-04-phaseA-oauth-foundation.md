@@ -74,12 +74,22 @@ In `app/services/oauth_providers.py`, sostituisci il blocco `PROVIDERS["google"]
             "openid email profile "
             "https://www.googleapis.com/auth/gmail.send "
             "https://www.googleapis.com/auth/drive.file "
-            "https://www.googleapis.com/auth/calendar"
+            "https://www.googleapis.com/auth/calendar.app.created "
+            "https://www.googleapis.com/auth/calendar.readonly"
         ),
         "client_id_env": "GOOGLE_OAUTH_CLIENT_ID",
         "client_secret_env": "GOOGLE_OAUTH_CLIENT_SECRET",
         "label": "Google (Calendar + Drive)",
     },
+```
+
+> **Least-privilege (security review 2026-07-04):** NON usare lo scope pieno
+> `.../auth/calendar`. Usa `calendar.app.created` (crea/gestisce solo il
+> calendario "Claqo" creato dall'app — stessa postura di `drive.file`) +
+> `calendar.readonly` (lettura del primario per l'overlay conflitti in Fase C).
+> Il push/pull della Fase C deve stare dentro questi due scope.
+
+```
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
