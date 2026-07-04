@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -42,6 +42,8 @@ async def oauth_status(request: Request, db: Session = Depends(get_db)):
             "account_email": token.account_email if token else None,
             "expires_at": token.expires_at.isoformat() if token and token.expires_at else None,
             "scopes": token.scopes if token else None,
+            "auto_sync_calendar": bool(token.auto_sync_calendar) if token else False,
+            "claqo_calendar_id": token.claqo_calendar_id if token else None,
         }
     return out
 
@@ -136,3 +138,21 @@ async def oauth_disconnect(provider: str, request: Request, db: Session = Depend
     ok = oauth.revoke_token(db, user.id, provider)
     db.commit()
     return {"ok": ok, "provider": provider}
+
+
+@router.post("/{provider}/sync-toggle")
+async def oauth_sync_toggle(provider: str, request: Request,
+                            enabled: bool = Form(...),
+                            db: Session = Depends(get_db)):
+    """Accende/spegne il push automatico calendario per il provider collegato."""
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401, "Autenticazione richiesta")
+    if provider not in oauth.PROVIDERS:
+        raise HTTPException(404, "Provider sconosciuto")
+    token = oauth.get_token(db, user.id, provider)
+    if not token:
+        raise HTTPException(404, "Account non collegato")
+    token.auto_sync_calendar = bool(enabled)
+    db.commit()
+    return {"ok": True, "auto_sync_calendar": token.auto_sync_calendar}
