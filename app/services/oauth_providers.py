@@ -1,7 +1,7 @@
 """OAuth 2 Authorization Code flow — v3.5.0-alpha.152.
 
 Provider supportati:
-- google (Gmail + Drive)
+- google (Gmail + Drive + Calendar)
 - microsoft (Outlook + OneDrive)
 
 Env vars necessarie (`.env`):
@@ -10,7 +10,7 @@ Env vars necessarie (`.env`):
 - OAUTH_REDIRECT_BASE_URL (default http://localhost:8000)
 
 Scope di default:
-- google: openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar
+- google: openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.readonly
 - microsoft: openid email profile offline_access User.Read Mail.Send Files.ReadWrite
 
 Refresh token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
@@ -46,7 +46,8 @@ PROVIDERS = {
             "openid email profile "
             "https://www.googleapis.com/auth/gmail.send "
             "https://www.googleapis.com/auth/drive.file "
-            "https://www.googleapis.com/auth/calendar"
+            "https://www.googleapis.com/auth/calendar.app.created "
+            "https://www.googleapis.com/auth/calendar.readonly"
         ),
         "client_id_env": "GOOGLE_OAUTH_CLIENT_ID",
         "client_secret_env": "GOOGLE_OAUTH_CLIENT_SECRET",
