@@ -108,7 +108,11 @@ def verify_oauth_state(state: str) -> Optional[dict]:
         return None
     if int(data.get("e", 0)) < int(now_utc().timestamp()):
         return None
-    return {"user_id": data["u"], "provider": data["p"]}
+    uid = data.get("u")
+    prov = data.get("p")
+    if uid is None or prov is None:
+        return None
+    return {"user_id": uid, "provider": prov}
 
 
 def is_configured(provider: str) -> bool:

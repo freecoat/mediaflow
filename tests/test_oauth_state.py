@@ -22,3 +22,12 @@ def test_expired_state_rejected():
 def test_garbage_state_rejected():
     assert oauth.verify_oauth_state("not-a-real-state") is None
     assert oauth.verify_oauth_state("") is None
+
+
+def test_valid_signature_missing_keys_returns_none():
+    import json, base64, hmac, hashlib
+    from app.services.clock import now_utc
+    payload = json.dumps({"e": int(now_utc().timestamp()) + 600}, separators=(",", ":")).encode()
+    b64 = base64.urlsafe_b64encode(payload).rstrip(b"=").decode()
+    sig = hmac.new(oauth._state_secret(), b64.encode(), hashlib.sha256).hexdigest()
+    assert oauth.verify_oauth_state(f"{b64}.{sig}") is None
