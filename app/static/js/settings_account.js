@@ -30,12 +30,13 @@ async function loadAccountSettings() {
       actions =
         '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px;">' +
         '<input type="checkbox" ' + (p.auto_sync_calendar ? 'checked' : '') +
-        ' onchange="toggleAccountSync(\'' + pid + '\', this.checked)"> ' +
+        ' onchange="toggleAccountSync(\'' + escapeHtml(pid) + '\', this.checked)"> ' +
         '<span data-i18n="settings.account.autoSync">Sync calendario automatico</span></label>' +
-        '<button class="btn btn-danger btn-sm" onclick="disconnectAccount(\'' + pid + '\')" ' +
+        '<button class="btn btn-danger btn-sm" onclick="disconnectAccount(\'' + escapeHtml(pid) + '\')" ' +
         'data-i18n="settings.account.disconnect">Scollega</button>';
     } else {
-      const disabled = p.configured ? '' : 'disabled title="client_id non configurato"';
+      const notCfgTitle = window.mfT ? mfT('settings.account.notConfigured') : 'client_id non configurato';
+      const disabled = p.configured ? '' : 'disabled title="' + escapeHtml(notCfgTitle) + '"';
       actions = '<a class="btn btn-secondary btn-sm" ' + disabled +
         ' href="/auth/oauth/' + escapeHtml(pid) + '/start" ' +
         'data-i18n="settings.account.connect">Collega</a>';
@@ -46,24 +47,25 @@ async function loadAccountSettings() {
     card.innerHTML =
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
       '<strong style="font-size:14px;">' + escapeHtml(p.label || pid) + '</strong>' +
-      (connected ? '<span class="badge badge-active" style="font-size:11px;">Connesso</span>' : '') +
+      (connected ? '<span class="badge badge-active" style="font-size:11px;" data-i18n="settings.account.connected">Connesso</span>' : '') +
       '</div>' +
       emailLine +
       '<div>' + actions + '</div>';
     box.appendChild(card);
   }
   if (Object.keys(providers).length === 0) {
-    box.innerHTML = '<p class="text-sm text-muted">Nessun provider OAuth configurato.</p>';
+    box.innerHTML = '<p class="text-sm text-muted" data-i18n="settings.account.noProviders">Nessun provider OAuth configurato.</p>';
   }
   if (window.applyI18n) window.applyI18n(box);
 }
 
 async function disconnectAccount(pid) {
-  if (!confirm('Scollegare questo account?')) return;
+  const msg = window.mfT ? mfT('settings.account.confirmDisconnect') : 'Scollegare questo account?';
+  if (!confirm(msg)) return;
   try {
     const r = await fetch('/auth/oauth/' + pid + '/disconnect', {method: 'POST'});
     if (!r.ok) throw new Error('status ' + r.status);
-    if (window.toast) toast('Account scollegato', 'success');
+    if (window.toast) toast(mfT ? mfT('settings.account.disconnected') : 'Account scollegato', 'success');
   } catch (e) {
     if (window.toast) toast('Errore: ' + String(e), 'error');
   }
@@ -76,7 +78,7 @@ async function toggleAccountSync(pid, enabled) {
     fd.append('enabled', enabled ? 'true' : 'false');
     const r = await fetch('/auth/oauth/' + pid + '/sync-toggle', {method: 'POST', body: fd});
     if (!r.ok) throw new Error('status ' + r.status);
-    if (window.toast) toast('Preferenza sync aggiornata', 'success');
+    if (window.toast) toast(window.mfT ? mfT('settings.account.syncUpdated') : 'Preferenza sync aggiornata', 'success');
   } catch (e) {
     if (window.toast) toast('Errore: ' + String(e), 'error');
     loadAccountSettings(); // ripristina stato
