@@ -559,6 +559,14 @@ window.MF_I18N = {
   'settings.web_sources.saved':         {it: 'Fonti web aggiornate',                               en: 'Web sources updated',                    fr: 'Sources web mises à jour',           de: 'Web-Quellen aktualisiert',                   es: 'Fuentes web actualizadas'},
   'settings.web_sources.placeholder':   {it: 'filmitalia.org\nimdb.com\nmymovies.it',              en: 'imdb.com\nfilmitalia.org\nmymovies.it',  fr: 'imdb.com\nfilmitalia.org',           de: 'imdb.com\nfilmitalia.org',                   es: 'imdb.com\nfilmitalia.org'},
 
+  // ── Settings › Account linking (Fase A OAuth) ──────────────────────────────────────────────────────
+  'settings.account.title':     {it: 'Account collegati',          en: 'Linked accounts',       fr: 'Comptes liés',        de: 'Verknüpfte Konten',  es: 'Cuentas vinculadas'},
+  'settings.account.connect':   {it: 'Collega',                    en: 'Connect',               fr: 'Connecter',           de: 'Verbinden',          es: 'Conectar'},
+  'settings.account.disconnect':{it: 'Scollega',                   en: 'Disconnect',            fr: 'Déconnecter',         de: 'Trennen',            es: 'Desconectar'},
+  'settings.account.notLinked': {it: 'Non collegato',              en: 'Not linked',            fr: 'Non lié',             de: 'Nicht verknüpft',    es: 'No vinculada'},
+  'settings.account.autoSync':  {it: 'Sync calendario automatico', en: 'Auto calendar sync',    fr: 'Sync agenda auto',    de: 'Auto-Kalender-Sync', es: 'Sinc. calendario auto'},
+  'settings.account.comingSoon':{it: 'Prossimamente',              en: 'Coming soon',           fr: 'Bientôt',             de: 'Demnächst',          es: 'Próximamente'},
+
   // Copilot (drawer AI)
   'copilot.placeholder_booking':        {it: 'Crea un booking per … (descrivi job/risorsa/quando)', en: 'Create a booking for … (describe job/resource/when)', fr: 'Créer un booking pour … (décrire job/ressource/quand)', de: 'Booking erstellen für … (Job/Ressource/Wann)', es: 'Crear un booking para … (describe job/recurso/cuándo)'},
   'copilot.placeholder_pricelist':      {it: 'Aggiungi voce listino: color grading 4K HDR, €1500/giorno', en: 'Add price item: color grading 4K HDR, €1500/day', fr: 'Ajouter article: étalonnage 4K HDR, 1500 €/jour', de: 'Preisposten hinzufügen: Color Grading 4K HDR, 1500 €/Tag', es: 'Añadir artículo: color grading 4K HDR, 1500 €/día'},
