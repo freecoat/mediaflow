@@ -10,7 +10,7 @@ Env vars necessarie (`.env`):
 - OAUTH_REDIRECT_BASE_URL (default http://localhost:8000)
 
 Scope di default:
-- google: openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file
+- google: openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar
 - microsoft: openid email profile offline_access User.Read Mail.Send Files.ReadWrite
 
 Refresh token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
@@ -45,11 +45,12 @@ PROVIDERS = {
         "scopes": (
             "openid email profile "
             "https://www.googleapis.com/auth/gmail.send "
-            "https://www.googleapis.com/auth/drive.file"
+            "https://www.googleapis.com/auth/drive.file "
+            "https://www.googleapis.com/auth/calendar"
         ),
         "client_id_env": "GOOGLE_OAUTH_CLIENT_ID",
         "client_secret_env": "GOOGLE_OAUTH_CLIENT_SECRET",
-        "label": "Google (Gmail + Drive)",
+        "label": "Google (Calendar + Drive)",
     },
     "microsoft": {
         "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
