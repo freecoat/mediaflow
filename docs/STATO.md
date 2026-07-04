@@ -8,14 +8,23 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.238** — 27 giugno 2026 — KDM: tab Link, link editabili, filtri, multiselect cinema
+**v3.5.0-alpha.172.239** — 5 luglio 2026 — Fase A OAuth foundation: account linking Google
+
+### α.172.239 ✅ (Fase A OAuth foundation — 5 lug, subagent-driven 7 task TDD, ramo feat/oauth-calendar-phaseA)
+- **Scopes least-privilege**: `calendar.app.created` + `calendar.readonly` + `drive.file`. Nessun accesso full-calendar o full-drive.
+- **Token refresh automatico** (`get_valid_access_token`): controlla scadenza, chiama Google token endpoint, salva nuovo `access_token` + `expires_at`. Nessun token in log.
+- **CSRF state HMAC-signed**: `make_oauth_state` / `verify_oauth_state` con `hmac.compare_digest`; redirect fisso a `OAUTH_REDIRECT_BASE_URL`.
+- **Colonne `UserOAuthToken`**: `auto_sync_calendar` (bool, default False) + `claqo_calendar_id` (str opzionale). Migrazione `scripts/migrate_oauth_sync_columns.py` + auto-migrate al boot.
+- **UI tab "Account"** in `/settings`: card Google (connect/disconnect, badge scopes, toggle sync, campo calendario), card Microsoft "Prossimamente". i18n 5 lingue.
+- **Config env**: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE_URL` documentati in `.env.example`.
+- **1013+ test**, 0 fallimenti. Smoke browser: tab Account wired, connect/disconnect, toggle, 0 chiavi grezze.
+
+**Prossimo step**: Fase B — `CalendarEvent` + FullCalendar (integrazione vera: lettura eventi Google → visualizzazione in Claqo, creazione eventi da planning). Backlog KDM: generazione vera file KDM (Dolby/OpenDCP), upload come Asset, download sicuro cinema. Acquisizioni Fase 3 (calendario) si sovrappone con Fase B OAuth.
 
 ### α.172.238 ✅ (KDM UI — 27 giu, subagent-driven 6 task TDD, ramo feat/kdm-ui)
 - **5 modifiche pagina `/kdm`**: (1) tab "🔗 Link" dedicata (link separati dalle richieste); (2) link editabili (`PUT /api/links/{id}` + modal ✎); (3) filtri link (stato/progetto/cliente/ricerca; `GET /api/links` include revocati + `revoked`/`client_name`/`requested_title`); (4) select-all link; (5) multiselect Cinema/Server + `POST /api/facilities/bulk-delete` (soft-delete cinema+server cascata).
 - **Nota**: filtro link "cliente" derivato dal progetto (Project non ha campo emittente/broadcaster → emittente fuori scope). Single `delete_facility` resta senza cascata server (solo il bulk cascata).
 - **1011 test** (+9). Smoke browser verde (tab Link, edit, filtri, select-all, cinema multiselect, 0 chiavi grezze). Fix test-pollution fixture KDM (monkeypatch). Spec: `docs/superpowers/specs/2026-06-27-kdm-ui-improvements-design.md`, plan: `.../plans/2026-06-27-kdm-ui-improvements.md`.
-
-**Prossimo / IN CORSO**: merge `feat/kdm-ui` → main dopo review finale + smoke Matteo. Backlog KDM: generazione vera file KDM (Dolby/OpenDCP), upload KDM come Asset, download sicuro cinema. Acquisizioni Fase 3 (calendario) ancora aperta.
 
 ### α.172.237 ✅ (storico sotto)
 **v3.5.0-alpha.172.237** — 27 giugno 2026 — Acquisizioni Fase 2: estrazione email + incrocio web
