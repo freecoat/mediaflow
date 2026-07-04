@@ -234,3 +234,57 @@ def revoke_token(db: Session, user_id: int, provider: str) -> bool:
 
 def list_tokens(db: Session, user_id: int) -> list[UserOAuthToken]:
     return db.query(UserOAuthToken).filter(UserOAuthToken.user_id == user_id).all()
+
+
+# ── Refresh automatico access token ──────────────────────────────────
+
+_REFRESH_SKEW_SECONDS = 120
+
+
+def refresh_access_token(provider: str, refresh_token: str) -> dict:
+    """Rinnova l'access token usando il refresh token. Ritorna il token response."""
+    cfg = PROVIDERS.get(provider)
+    if not cfg:
+        raise ValueError(f"Provider sconosciuto: {provider}")
+    data = {
+        "client_id": os.getenv(cfg["client_id_env"], ""),
+        "client_secret": os.getenv(cfg["client_secret_env"], ""),
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }
+    return _http_post(cfg["token_url"], data)
+
+
+def get_valid_access_token(db: Session, user_id: int, provider: str) -> Optional[str]:
+    """Ritorna un access token valido, rinnovandolo se scaduto/in scadenza.
+
+    Aggiorna la riga token in DB (access_token, expires_at) SENZA commit:
+    il chiamante è responsabile del commit. Ritorna None se non collegato
+    o se il refresh fallisce.
+    """
+    row = get_token(db, user_id, provider)
+    if not row or not row.access_token:
+        return None
+    # token ancora valido oltre la soglia di skew?
+    if row.expires_at and row.expires_at > now_utc() + timedelta(seconds=_REFRESH_SKEW_SECONDS):
+        return row.access_token
+    # serve refresh
+    rt = decrypt_refresh_token(row.refresh_token_enc) if row.refresh_token_enc else None
+    if not rt:
+        log.warning(f"get_valid_access_token: nessun refresh_token per user {user_id}/{provider}")
+        return row.access_token  # best effort: potrebbe essere ancora valido
+    try:
+        resp = refresh_access_token(provider, rt)
+    except Exception as e:
+        log.error(f"refresh_access_token failed user {user_id}/{provider}: {e}")
+        return None
+    new_access = resp.get("access_token")
+    if not new_access:
+        log.error(f"refresh_access_token: risposta senza access_token user {user_id}/{provider}")
+        return None
+    row.access_token = new_access
+    row.expires_at = now_utc() + timedelta(seconds=int(resp.get("expires_in", 3600)))
+    if resp.get("refresh_token"):  # Google talvolta ri-emette
+        row.refresh_token_enc = encrypt_refresh_token(resp["refresh_token"])
+    row.updated_at = now_utc()
+    return new_access
