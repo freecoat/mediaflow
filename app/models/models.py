@@ -2866,6 +2866,9 @@ class UserOAuthToken(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     scopes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     account_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Fase A (2026-07-04) — preferenze sync calendario (usate in Fase C)
+    auto_sync_calendar: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    claqo_calendar_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     __table_args__ = (
