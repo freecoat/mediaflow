@@ -18,6 +18,9 @@ Refresh token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
 from __future__ import annotations
 from app.services.clock import now_utc
 
+import base64
+import hashlib
+import hmac
 import os
 import json
 import logging
@@ -30,6 +33,7 @@ from typing import Optional
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import UserOAuthToken
 
 log = logging.getLogger(__name__)
@@ -74,6 +78,37 @@ def _redirect_base_url() -> str:
 
 def redirect_uri(provider: str) -> str:
     return f"{_redirect_base_url()}/auth/oauth/{provider}/callback"
+
+
+def _state_secret() -> bytes:
+    return (settings.secret_key or "").encode()
+
+
+def make_oauth_state(user_id: int, provider: str, ttl_seconds: int = 600) -> str:
+    """State CSRF firmato HMAC, stateless. Formato: b64url(payload).hexsig"""
+    exp = int(now_utc().timestamp()) + ttl_seconds
+    payload = json.dumps({"u": user_id, "p": provider, "e": exp}, separators=(",", ":")).encode()
+    b64 = base64.urlsafe_b64encode(payload).rstrip(b"=").decode()
+    sig = hmac.new(_state_secret(), b64.encode(), hashlib.sha256).hexdigest()
+    return f"{b64}.{sig}"
+
+
+def verify_oauth_state(state: str) -> Optional[dict]:
+    """Verifica firma + scadenza. Ritorna {'user_id','provider'} o None."""
+    if not state or "." not in state:
+        return None
+    b64, _, sig = state.partition(".")
+    expected = hmac.new(_state_secret(), b64.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return None
+    try:
+        padded = b64 + "=" * (-len(b64) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+    except Exception:
+        return None
+    if int(data.get("e", 0)) < int(now_utc().timestamp()):
+        return None
+    return {"user_id": data["u"], "provider": data["p"]}
 
 
 def is_configured(provider: str) -> bool:

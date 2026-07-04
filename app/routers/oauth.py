@@ -11,7 +11,6 @@ Endpoint:
 from __future__ import annotations
 
 import logging
-import secrets
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -25,10 +24,6 @@ from app.services.rbac import current_user_optional
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/oauth", tags=["oauth"])
 
-
-# State CSRF: salva in session (semplice via cookie firmato). Per ora memoria
-# locale in-process per dev. Production: Redis o DB.
-_state_store: dict[str, dict] = {}
 
 
 @router.get("/status")
@@ -65,8 +60,7 @@ async def oauth_start(provider: str, request: Request, db: Session = Depends(get
             f"Provider {provider} non configurato (manca {oauth.PROVIDERS[provider]['client_id_env']} "
             f"o {oauth.PROVIDERS[provider]['client_secret_env']} in .env). "
             "Contatta amministratore.")
-    state = secrets.token_urlsafe(32)
-    _state_store[state] = {"user_id": user.id, "provider": provider}
+    state = oauth.make_oauth_state(user.id, provider)
     return RedirectResponse(oauth.authorization_url(provider, state))
 
 
@@ -86,12 +80,12 @@ async def oauth_callback(
         )
     if not code or not state:
         raise HTTPException(400, "Missing code/state")
-    if state not in _state_store:
-        raise HTTPException(400, "Invalid state (CSRF)")
-    s = _state_store.pop(state)
-    if s["provider"] != provider:
+    parsed = oauth.verify_oauth_state(state)
+    if not parsed:
+        raise HTTPException(400, "Invalid or expired state (CSRF)")
+    if parsed["provider"] != provider:
         raise HTTPException(400, "Provider mismatch")
-    user_id = s["user_id"]
+    user_id = parsed["user_id"]
 
     # Scambio code → token
     try:
