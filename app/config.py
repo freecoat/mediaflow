@@ -1,7 +1,35 @@
 """Claqo v3 — configurazione con AI e Web Search."""
+import os
 from pydantic_settings import BaseSettings
 from pathlib import Path
 from typing import Optional
+
+
+def _load_dotenv_into_environ(path: str = ".env") -> None:
+    """Carica .env in os.environ (senza dipendenza python-dotenv).
+
+    pydantic BaseSettings legge .env solo per popolare l'oggetto Settings,
+    NON esporta in os.environ. Ma diversi moduli leggono la config via
+    os.getenv (es. oauth_providers: GOOGLE_OAUTH_CLIENT_ID/SECRET,
+    OAUTH_REDIRECT_BASE_URL; crypto: AI_KEY_ENCRYPTION_KEY). Senza questo
+    bridge quei valori risultano assenti anche se presenti in .env.
+    Non sovrascrive variabili già impostate nell'ambiente reale.
+    """
+    p = Path(path)
+    if not p.exists():
+        return
+    for raw in p.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+_load_dotenv_into_environ()
 
 
 class Settings(BaseSettings):

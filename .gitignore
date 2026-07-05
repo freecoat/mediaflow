@@ -45,3 +45,6 @@ graphify-out/
 
 # superpowers brainstorm visual companion (mockup HTML + state)
 .superpowers/
+
+# Google OAuth client secret (mai committare)
+docs/google_api/
