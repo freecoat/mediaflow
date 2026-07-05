@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.239** — 5 luglio 2026 — Fase A OAuth foundation: account linking Google
+**v3.5.0-alpha.172.240** — 5 luglio 2026 — Fase B Calendario: CalendarEvent + FullCalendar
+
+### α.172.240 ✅ (Fase B Calendario — 5 lug, ramo feat/calendar-phaseB, 6 task TDD)
+- **Entità `CalendarEvent`** (tabella `calendar_events`, tenant-scoped, soft-delete) + link nullable trattativa/progetto/attività/cliente + colonne sync pronte per Fase C. Migrazione `scripts/migrate_calendar_events.py` + voce strumenti.
+- **Pagina `/calendar`** FullCalendar 6 (mese/settimana/giorno/agenda), click-crea, drag→PUT, filtro Team/Solo miei, nav + i18n 5 lingue.
+- **Router CRUD** Form-based `/calendar/api/events`, permessi `view_calendar`/`manage_calendar`, marcatori derivati read-only (scadenze trattative + next action attività).
+- **Tab "Appuntamenti"** nel detail-panel `/acquisitions` (lista + crea precompilato). Link riunione linkificato solo schema http(s) (anti-XSS `javascript:`, flag security review).
+- **Capability AI `propose_calendar_event`**.
+- **Fix regressione α.236**: snapshot `_ACTION_HANDLERS` + sync `VALID_ACTION_TYPES` spostati in fondo al modulo `ai_assistant.py`; prima presi a metà file → i 4 handler acquisizioni (`propose_acquisition/activity/contact/acquisition_stage`) erano registrati nel `_REGISTRY` ma ASSENTI dallo snapshot → dispatch `apply_action` falliva ("Tipo azione non supportato") + invisibili al parser markdown Ollama/Perplexity. Ora inclusi.
+- Test: `test_calendar_*` (model/permissions/api/page/tab/capability). Suite completa da rilanciare a fine giro.
+
+**Prossimo step**: Fase C — sync Google bidirezionale (`google_calendar.py`, push su calendario "Claqo", overlay eventi Google in `/calendar`, accende `auto_sync_calendar` già presente in `UserOAuthToken`). Poi Fase D documenti. Merge `feat/calendar-phaseB` → main dopo smoke Matteo. Nota Matteo: prereq OAuth client Google Cloud per Fase C.
 
 ### α.172.239 ✅ (Fase A OAuth foundation — 5 lug, subagent-driven 7 task TDD, ramo feat/oauth-calendar-phaseA)
 - **Scopes least-privilege**: `calendar.app.created` + `calendar.readonly` + `drive.file`. Nessun accesso full-calendar o full-drive.

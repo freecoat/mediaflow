@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.240 — Fase B Calendario: CalendarEvent + FullCalendar (5 lug 2026)
+
+Calendario Claqo nativo, funzionante anche senza account Google collegato.
+
+- **Entità `CalendarEvent`** (tabella `calendar_events`, tenant-scoped, soft-delete) con link espliciti nullable a trattativa/progetto/attività/cliente + colonne sync pronte per Fase C. Migrazione idempotente `scripts/migrate_calendar_events.py` + voce `strumenti`.
+- **Pagina `/calendar`** con FullCalendar 6 (mese/settimana/giorno/agenda), click-crea, drag→PUT. Filtro `Team`/`Solo miei`. Nav item + i18n 5 lingue.
+- **Router CRUD** Form-based `/calendar/api/events` con permessi RBAC `view_calendar`/`manage_calendar`. Marcatori derivati read-only (scadenze trattative `expected_close_date` + next action attività).
+- **Tab "Appuntamenti"** nel detail-panel `/acquisitions` (lista eventi collegati + crea precompilato). Link riunione linkificato solo se schema `http(s)` (anti-XSS `javascript:`).
+- **Capability AI `propose_calendar_event`** nel registry.
+- **Fix regressione α.236**: lo snapshot `_ACTION_HANDLERS` (+ sync `VALID_ACTION_TYPES`) era preso a metà modulo, escludendo gli handler definiti dopo (`propose_acquisition/activity/contact/acquisition_stage` → dispatch fallito a runtime + invisibili al parser markdown Ollama/Perplexity). Spostato in fondo al modulo: ora include tutte le capability.
+
 ## v3.5.0-alpha.172.239 — Fase A OAuth foundation: account linking Google (5 lug 2026)
 
 Fase A completa: collegamento account Google (Calendar + Drive) con token refresh automatico, CSRF firmato HMAC e UI tab Account. Subagent-driven TDD (7 task). Ramo `feat/oauth-calendar-phaseA`.

@@ -4453,7 +4453,11 @@ def _h_propose_kdm_request(db: Session, data: dict) -> dict:
 # call site `_ACTION_HANDLERS.get(...)`/`_ACTION_HANDLERS[...]`.
 # Idem VALID_ACTION_TYPES nel modulo `ai_legacy_parser`: viene rimpiazzato
 # in fondo (vedi `_sync_legacy_parser_action_types()`).
-_ACTION_HANDLERS = _registry_get_handlers()
+# α.172.240: snapshot `_ACTION_HANDLERS` + sync spostati in FONDO al modulo
+# (vedi EOF) — prima erano qui e NON includevano gli handler definiti sotto
+# (propose_acquisition/activity/contact/acquisition_stage → dispatch fallito
+# a runtime; propose_calendar_event). `_ACTION_HANDLERS` è usato solo
+# lazily dentro `apply_action`, quindi lo snapshot tardivo è sicuro.
 
 
 def _sync_legacy_parser_action_types() -> None:
@@ -4471,9 +4475,6 @@ def _sync_legacy_parser_action_types() -> None:
     # `from ai_legacy_parser import VALID_ACTION_TYPES` continua a vederlo).
     _legacy.VALID_ACTION_TYPES.clear()
     _legacy.VALID_ACTION_TYPES.update(actual)
-
-
-_sync_legacy_parser_action_types()
 
 
 # ── Capability AI Acquisizioni (Task 11) ──────────────────────
@@ -4541,6 +4542,32 @@ def _h_propose_acquisition_stage(db: Session, data: dict) -> dict:
             "message": f"Trattativa avanzata a stadio {acq.stage.value}."}
 
 
+# ── Capability AI Calendario (Fase B) ─────────────────────────
+
+@ai_capability("propose_calendar_event")
+def _h_propose_calendar_event(db: Session, data: dict) -> dict:
+    from datetime import datetime
+    from app.models.models import CalendarEvent
+    title = (data.get("title") or "").strip()
+    if not title:
+        raise ValueError("Manca 'title'")
+
+    def _dt(s):
+        if not s:
+            raise ValueError("Manca start_at/end_at")
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+
+    ev = CalendarEvent(
+        tenant_id=current_tenant_id(), title=title,
+        start_at=_dt(data.get("start_at")), end_at=_dt(data.get("end_at")),
+        acquisition_id=data.get("acquisition_id"), project_id=data.get("project_id"),
+        client_id=data.get("client_id"),
+        location=(data.get("location") or None), meeting_url=(data.get("meeting_url") or None))
+    db.add(ev); db.flush()
+    return {"created": True, "calendar_event_id": ev.id,
+            "message": f"Appuntamento '{title}' proposto."}
+
+
 # ── Review quotazione (legacy, immutato funzionalmente) ──────
 
 REVIEW_SYSTEM_PROMPT = """Sei un senior producer di postproduzione. Analizza una quotazione e dai 3-5 osservazioni concrete sul suo contenuto.
@@ -4572,3 +4599,12 @@ def review_quote(db: Session, quote_id: int, user_id: Optional[int] = None) -> O
     except Exception as e:
         logger.error(f"Quote review failed: {e}")
         return None
+
+
+# ── Snapshot registry (DOPO tutti i @ai_capability del modulo) ──────
+# α.172.240: derivato in fondo così include TUTTI gli handler, anche quelli
+# definiti dopo la posizione storica dello snapshot. `_ACTION_HANDLERS` è
+# consumato solo lazily da `apply_action`; `VALID_ACTION_TYPES` legacy viene
+# sincronizzato con il set completo per il path markdown (Ollama/Perplexity).
+_ACTION_HANDLERS = _registry_get_handlers()
+_sync_legacy_parser_action_types()
