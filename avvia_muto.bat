@@ -8,17 +8,23 @@ REM ═════════════════════════�
 title MediaFlow (muto)
 cd /d "%~dp0"
 
-REM Controllo Python
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
+REM Controllo Python (preferisce "py", evita lo stub Microsoft Store)
+set "PY="
+py -3 --version >nul 2>&1 && set "PY=py -3"
+if not defined PY (
+    python --version >nul 2>&1 && set "PY=python"
+)
+if not defined PY (
     echo [ERRORE] Python non trovato nel PATH.
+    echo (Se e' installato, potrebbe essere l'alias Microsoft Store: disattivalo
+    echo  in Impostazioni ^> App ^> Alias di esecuzione app.)
     pause & exit /b 1
 )
 
 REM Crea venv se mancante
 if not exist ".venv\" (
     echo [setup] Creo ambiente virtuale...
-    python -m venv .venv
+    %PY% -m venv .venv
     if %errorlevel% neq 0 ( echo [ERRORE] venv KO & pause & exit /b 1 )
 )
 

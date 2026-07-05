@@ -18,24 +18,30 @@ echo  Piattaforma gestione risorse, pianificazione, finanza e DAM
 echo  ─────────────────────────────────────────────────────────────
 echo.
 
-REM Controlla Python
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
+REM Controlla Python (preferisce il launcher "py", evita lo stub Microsoft Store)
+set "PY="
+py -3 --version >nul 2>&1 && set "PY=py -3"
+if not defined PY (
+    python --version >nul 2>&1 && set "PY=python"
+)
+if not defined PY (
     echo [ERRORE] Python non trovato.
     echo Scaricalo da: https://www.python.org/downloads/
     echo Assicurati di spuntare "Add Python to PATH" durante l'installazione.
+    echo (Se Python e' gia' installato, potrebbe essere l'alias Microsoft Store:
+    echo  disattivalo in Impostazioni ^> App ^> Alias di esecuzione app.)
     pause
     exit /b 1
 )
 
-for /f "tokens=2" %%v in ('python --version 2^>^&1') do set PYVER=%%v
-echo [OK] Python %PYVER% trovato
+for /f "tokens=2" %%v in ('%PY% --version 2^>^&1') do set PYVER=%%v
+echo [OK] Python %PYVER% trovato (%PY%)
 
 REM Crea venv se non esiste
 if not exist ".venv\" (
     echo.
     echo [1/3] Creazione ambiente virtuale...
-    python -m venv .venv
+    %PY% -m venv .venv
     if %errorlevel% neq 0 (
         echo [ERRORE] Impossibile creare l'ambiente virtuale
         pause & exit /b 1
