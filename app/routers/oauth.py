@@ -10,6 +10,7 @@ Endpoint:
 """
 from __future__ import annotations
 
+import html
 import logging
 from typing import Optional
 
@@ -77,7 +78,7 @@ async def oauth_callback(
     """Callback OAuth: scambia code per token + salva."""
     if error:
         return HTMLResponse(
-            f"<h1>OAuth error</h1><p>{error}</p><a href='/settings'>← Torna a impostazioni</a>",
+            f"<h1>OAuth error</h1><p>{html.escape(error)}</p><a href='/settings'>← Torna a impostazioni</a>",
             status_code=400,
         )
     if not code or not state:
@@ -95,12 +96,12 @@ async def oauth_callback(
     except Exception as e:
         log.exception(f"exchange_code_for_token failed: {e}")
         return HTMLResponse(
-            f"<h1>OAuth exchange failed</h1><p>{e}</p><a href='/settings'>← Torna</a>",
+            f"<h1>OAuth exchange failed</h1><p>{html.escape(str(e))}</p><a href='/settings'>← Torna</a>",
             status_code=502,
         )
     if "access_token" not in token_response:
         return HTMLResponse(
-            f"<h1>OAuth error</h1><pre>{token_response}</pre><a href='/settings'>← Torna</a>",
+            f"<h1>OAuth error</h1><pre>{html.escape(str(token_response))}</pre><a href='/settings'>← Torna</a>",
             status_code=400,
         )
 
@@ -120,7 +121,7 @@ async def oauth_callback(
         <html><head><meta charset="utf-8"><title>OAuth OK</title></head>
         <body style="font-family:system-ui; padding:40px; text-align:center;">
           <h1>✓ {oauth.PROVIDERS[provider]['label']} collegato</h1>
-          <p>Account: <b>{account_email or '(non rilevato)'}</b></p>
+          <p>Account: <b>{html.escape(str(account_email or '(non rilevato)'))}</b></p>
           <p><a href="/settings">← Torna a impostazioni</a></p>
           <script>setTimeout(() => window.location.href = '/settings', 2000);</script>
         </body></html>

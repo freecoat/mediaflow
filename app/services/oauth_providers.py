@@ -24,7 +24,6 @@ import hmac
 import os
 import json
 import logging
-import secrets
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta

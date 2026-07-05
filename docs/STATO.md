@@ -14,8 +14,8 @@
 - **Scopes least-privilege**: `calendar.app.created` + `calendar.readonly` + `drive.file`. Nessun accesso full-calendar o full-drive.
 - **Token refresh automatico** (`get_valid_access_token`): controlla scadenza, chiama Google token endpoint, salva nuovo `access_token` + `expires_at`. Nessun token in log.
 - **CSRF state HMAC-signed**: `make_oauth_state` / `verify_oauth_state` con `hmac.compare_digest`; redirect fisso a `OAUTH_REDIRECT_BASE_URL`.
-- **Colonne `UserOAuthToken`**: `auto_sync_calendar` (bool, default False) + `claqo_calendar_id` (str opzionale). Migrazione `scripts/migrate_oauth_sync_columns.py` + auto-migrate al boot.
-- **UI tab "Account"** in `/settings`: card Google (connect/disconnect, badge scopes, toggle sync, campo calendario), card Microsoft "Prossimamente". i18n 5 lingue.
+- **Colonne `UserOAuthToken`**: `auto_sync_calendar` (bool, default False) + `claqo_calendar_id` (str opzionale, scaffolding Fase C). Migrazione `scripts/migrate_oauth_calendar.py` + auto-migrate al boot.
+- **UI tab "Account"** in `/settings`: card Google (connect/disconnect, badge scopes, toggle sync; `claqo_calendar_id` = scaffolding Fase C, nessuna UI), card Microsoft "Prossimamente". i18n 5 lingue.
 - **Config env**: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE_URL` documentati in `.env.example`.
 - **1013+ test**, 0 fallimenti. Smoke browser: tab Account wired, connect/disconnect, toggle, 0 chiavi grezze.
 
