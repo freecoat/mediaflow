@@ -990,6 +990,20 @@ window.MF_I18N = {
   'acq.confirm.lost':               {it: 'Segnare la trattativa come Persa?', en: 'Mark deal as Lost?', fr: 'Marquer l\'affaire comme Perdue ?', de: 'Deal als Verloren markieren?', es: '¿Marcar el trato como Perdido?'},
   'acq.empty.kanban':               {it: 'Nessuna trattativa',     en: 'No deals',                fr: 'Aucune affaire',          de: 'Keine Deals',               es: 'Sin tratos'},
   'acq.empty.table':                {it: 'Nessuna trattativa. Crea la prima con “+ Nuova trattativa”.', en: 'No deals. Create the first with “+ New deal”.', fr: 'Aucune affaire. Créer la première avec « + Nouvelle affaire ».', de: 'Keine Deals. Ersten Deal mit „+ Neue Akquisition” erstellen.', es: 'Sin tratos. Crear el primero con “+ Nueva negociación”.'},
+
+  // ── Calendario (Fase B) ───────────────────────────
+  'nav.calendar':      {it: 'Calendario',   en: 'Calendar',     fr: 'Calendrier',   de: 'Kalender',      es: 'Calendario'},
+  'cal.title':         {it: 'Calendario',   en: 'Calendar',     fr: 'Calendrier',   de: 'Kalender',      es: 'Calendario'},
+  'cal.new':           {it: 'Nuovo appuntamento', en: 'New appointment', fr: 'Nouveau rendez-vous', de: 'Neuer Termin', es: 'Nueva cita'},
+  'cal.filter.mine':   {it: 'Solo miei',    en: 'Mine only',    fr: 'Les miens',    de: 'Nur meine',     es: 'Solo mios'},
+  'cal.filter.team':   {it: 'Team',         en: 'Team',         fr: 'Equipe',       de: 'Team',          es: 'Equipo'},
+  'cal.event.title':   {it: 'Titolo',       en: 'Title',        fr: 'Titre',        de: 'Titel',         es: 'Titulo'},
+  'cal.event.start':   {it: 'Inizio',       en: 'Start',        fr: 'Debut',        de: 'Beginn',        es: 'Inicio'},
+  'cal.event.end':     {it: 'Fine',         en: 'End',          fr: 'Fin',          de: 'Ende',          es: 'Fin'},
+  'cal.event.location':{it: 'Luogo',        en: 'Location',     fr: 'Lieu',         de: 'Ort',           es: 'Lugar'},
+  'cal.event.link':    {it: 'Link riunione',en: 'Meeting link', fr: 'Lien reunion', de: 'Meeting-Link',  es: 'Enlace reunion'},
+  'cal.event.save':    {it: 'Salva',        en: 'Save',         fr: 'Enregistrer',  de: 'Speichern',     es: 'Guardar'},
+  'cal.event.delete':  {it: 'Elimina',      en: 'Delete',       fr: 'Supprimer',    de: 'Loschen',       es: 'Eliminar'},
 };
 
 /**
