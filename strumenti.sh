@@ -48,11 +48,12 @@ while true; do
     echo "  [l] Migra database esistente (Booking esecutivo: priorità+stato+overtime) [v3.4.32]"
     echo "  [m] Cleanup orfani lifecycle Quote/Job/Booking [v3.4.36]"
     echo "  [p] Migra OAuth calendario (Fase A) [v3.5.0-alpha.172]"
+    echo "  [q] Migra calendario (Fase B) [v3.5.0-alpha.172]"
     echo "  [t] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, t): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, t): " scelta
 
     case $scelta in
         1)
@@ -301,6 +302,16 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_oauth_calendar.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        q|Q)
+            echo ""
+            echo "Migrazione calendario (Fase B): crea la tabella calendar_events."
+            echo "Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_calendar_events.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;
