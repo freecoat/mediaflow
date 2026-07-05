@@ -56,8 +56,9 @@ Programma unico, 4 fasi indipendenti, ognuna con proprio bump versione + commit 
 
 **Obiettivo:** collegare/scollegare l'account Google per-utente, con scope calendario + documenti, refresh automatico, e CSRF sicuro.
 
-- **Scope Google** ampliati in `oauth_providers.PROVIDERS`:
-  - aggiungo `https://www.googleapis.com/auth/calendar` (gestione eventi + creazione calendario secondario)
+- **Scope Google** ampliati in `oauth_providers.PROVIDERS` (least-privilege, security review 2026-07-04 — NO scope pieno `calendar`):
+  - `https://www.googleapis.com/auth/calendar.app.created` (crea/gestisce solo il calendario "Claqo" creato dall'app — stessa postura di `drive.file`; copre push Fase C)
+  - `https://www.googleapis.com/auth/calendar.readonly` (lettura del primario per overlay/conflitti Fase C)
   - mantengo `https://www.googleapis.com/auth/drive.file` (documenti creati/aperti dall'app + Picker)
   - mantengo `openid email profile`.
   - Cambio scope ⇒ re-consent utente. Il token porta `scopes`; alla connessione si richiede `access_type=offline` + `prompt=consent` per garantire il refresh token.

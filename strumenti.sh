@@ -47,11 +47,12 @@ while true; do
     echo "  [k] Migra database esistente (permessi extra per-utente) [v3.4.25]"
     echo "  [l] Migra database esistente (Booking esecutivo: priorità+stato+overtime) [v3.4.32]"
     echo "  [m] Cleanup orfani lifecycle Quote/Job/Booking [v3.4.36]"
+    echo "  [p] Migra OAuth calendario (Fase A) [v3.5.0-alpha.172]"
     echo "  [t] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, t): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, t): " scelta
 
     case $scelta in
         1)
@@ -290,6 +291,16 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/reset_business_data.py --yes
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        p|P)
+            echo ""
+            echo "Migrazione OAuth calendario (Fase A): aggiunge auto_sync_calendar"
+            echo "e claqo_calendar_id su user_oauth_tokens. Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_oauth_calendar.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

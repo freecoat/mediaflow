@@ -1,5 +1,17 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.239 — Fase A OAuth foundation: account linking Google (5 lug 2026)
+
+Fase A completa: collegamento account Google (Calendar + Drive) con token refresh automatico, CSRF firmato HMAC e UI tab Account. Subagent-driven TDD (7 task). Ramo `feat/oauth-calendar-phaseA`.
+
+- **Scopes least-privilege**: `calendar.app.created` + `calendar.readonly` (lettura eventi) + `drive.file` (file creati dall'app). Nessun accesso full-calendar o full-drive.
+- **Token refresh automatico** (`get_valid_access_token`): controlla scadenza, chiama Google token endpoint se necessario, salva il nuovo `access_token` + `expires_at` su `UserOAuthToken`. Nessun token in log.
+- **CSRF state HMAC-signed**: `make_oauth_state` / `verify_oauth_state` con `hmac.compare_digest`; parametro `provider` e `user_id` nel payload; redirect fisso a `OAUTH_REDIRECT_BASE_URL`.
+- **Colonne `UserOAuthToken`**: `auto_sync_calendar` (bool, default False) + `claqo_calendar_id` (str opzionale, scaffolding Fase C). Migrazione `scripts/migrate_oauth_calendar.py` + auto-migrate al boot.
+- **UI tab "Account"** in `/settings`: card Google con bottone Connetti/Disconnetti, badge scopes attivi, toggle "Sincronizza automaticamente" (`claqo_calendar_id` = scaffolding Fase C, nessuna UI), card Microsoft "Prossimamente". i18n 5 lingue.
+- **Config env**: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE_URL` documentati in `.env.example` (letti via `os.getenv` in `oauth_providers.py`, non esposti in `config.py`).
+- **Test**: 1013+ verde. Smoke browser: tab Account visibile, connect/disconnect Google wired, toggle auto-sync, 0 chiavi i18n grezze.
+
 ## v3.5.0-alpha.172.238 — KDM: tab Link, link editabili, filtri, multiselect cinema (27 giu 2026)
 
 5 miglioramenti UI alla pagina KDM (`/kdm`). Subagent-driven TDD (6 task).

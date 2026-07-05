@@ -10,11 +10,11 @@ Endpoint:
 """
 from __future__ import annotations
 
+import html
 import logging
-import secrets
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
@@ -25,10 +25,6 @@ from app.services.rbac import current_user_optional
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/oauth", tags=["oauth"])
 
-
-# State CSRF: salva in session (semplice via cookie firmato). Per ora memoria
-# locale in-process per dev. Production: Redis o DB.
-_state_store: dict[str, dict] = {}
 
 
 @router.get("/status")
@@ -47,6 +43,8 @@ async def oauth_status(request: Request, db: Session = Depends(get_db)):
             "account_email": token.account_email if token else None,
             "expires_at": token.expires_at.isoformat() if token and token.expires_at else None,
             "scopes": token.scopes if token else None,
+            "auto_sync_calendar": bool(token.auto_sync_calendar) if token else False,
+            "claqo_calendar_id": token.claqo_calendar_id if token else None,
         }
     return out
 
@@ -65,8 +63,7 @@ async def oauth_start(provider: str, request: Request, db: Session = Depends(get
             f"Provider {provider} non configurato (manca {oauth.PROVIDERS[provider]['client_id_env']} "
             f"o {oauth.PROVIDERS[provider]['client_secret_env']} in .env). "
             "Contatta amministratore.")
-    state = secrets.token_urlsafe(32)
-    _state_store[state] = {"user_id": user.id, "provider": provider}
+    state = oauth.make_oauth_state(user.id, provider)
     return RedirectResponse(oauth.authorization_url(provider, state))
 
 
@@ -81,17 +78,17 @@ async def oauth_callback(
     """Callback OAuth: scambia code per token + salva."""
     if error:
         return HTMLResponse(
-            f"<h1>OAuth error</h1><p>{error}</p><a href='/settings'>← Torna a impostazioni</a>",
+            f"<h1>OAuth error</h1><p>{html.escape(error)}</p><a href='/settings'>← Torna a impostazioni</a>",
             status_code=400,
         )
     if not code or not state:
         raise HTTPException(400, "Missing code/state")
-    if state not in _state_store:
-        raise HTTPException(400, "Invalid state (CSRF)")
-    s = _state_store.pop(state)
-    if s["provider"] != provider:
+    parsed = oauth.verify_oauth_state(state)
+    if not parsed:
+        raise HTTPException(400, "Invalid or expired state (CSRF)")
+    if parsed["provider"] != provider:
         raise HTTPException(400, "Provider mismatch")
-    user_id = s["user_id"]
+    user_id = parsed["user_id"]
 
     # Scambio code → token
     try:
@@ -99,12 +96,12 @@ async def oauth_callback(
     except Exception as e:
         log.exception(f"exchange_code_for_token failed: {e}")
         return HTMLResponse(
-            f"<h1>OAuth exchange failed</h1><p>{e}</p><a href='/settings'>← Torna</a>",
+            f"<h1>OAuth exchange failed</h1><p>{html.escape(str(e))}</p><a href='/settings'>← Torna</a>",
             status_code=502,
         )
     if "access_token" not in token_response:
         return HTMLResponse(
-            f"<h1>OAuth error</h1><pre>{token_response}</pre><a href='/settings'>← Torna</a>",
+            f"<h1>OAuth error</h1><pre>{html.escape(str(token_response))}</pre><a href='/settings'>← Torna</a>",
             status_code=400,
         )
 
@@ -124,7 +121,7 @@ async def oauth_callback(
         <html><head><meta charset="utf-8"><title>OAuth OK</title></head>
         <body style="font-family:system-ui; padding:40px; text-align:center;">
           <h1>✓ {oauth.PROVIDERS[provider]['label']} collegato</h1>
-          <p>Account: <b>{account_email or '(non rilevato)'}</b></p>
+          <p>Account: <b>{html.escape(str(account_email or '(non rilevato)'))}</b></p>
           <p><a href="/settings">← Torna a impostazioni</a></p>
           <script>setTimeout(() => window.location.href = '/settings', 2000);</script>
         </body></html>
@@ -142,3 +139,21 @@ async def oauth_disconnect(provider: str, request: Request, db: Session = Depend
     ok = oauth.revoke_token(db, user.id, provider)
     db.commit()
     return {"ok": ok, "provider": provider}
+
+
+@router.post("/{provider}/sync-toggle")
+async def oauth_sync_toggle(provider: str, request: Request,
+                            enabled: bool = Form(...),
+                            db: Session = Depends(get_db)):
+    """Accende/spegne il push automatico calendario per il provider collegato."""
+    user = current_user_optional(request)
+    if not user:
+        raise HTTPException(401, "Autenticazione richiesta")
+    if provider not in oauth.PROVIDERS:
+        raise HTTPException(404, "Provider sconosciuto")
+    token = oauth.get_token(db, user.id, provider)
+    if not token:
+        raise HTTPException(404, "Account non collegato")
+    token.auto_sync_calendar = bool(enabled)
+    db.commit()
+    return {"ok": True, "auto_sync_calendar": token.auto_sync_calendar}

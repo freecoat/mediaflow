@@ -1275,6 +1275,19 @@ def _auto_migrate_columns():
     # ── F4 (2026-06-11) — AssetMembership.asset_id nullable (membership orfane) ──
     _rebuild_asset_memberships_nullable(engine)
 
+    # Fase A (2026-07-04) — colonne sync calendario su user_oauth_tokens
+    if "user_oauth_tokens" in insp.get_table_names():
+        oc = {c["name"] for c in insp.get_columns("user_oauth_tokens")}
+        oauth_alters = [
+            ("auto_sync_calendar", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("claqo_calendar_id", "VARCHAR(255) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in oauth_alters:
+                if col not in oc:
+                    print(f"[auto-migrate] user_oauth_tokens.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE user_oauth_tokens ADD COLUMN {col} {ddl}"))
+
 
 def _rebuild_asset_memberships_nullable(engine=None):
     """F4 (2026-06-11) — Rende AssetMembership.asset_id nullable per supportare
@@ -2378,7 +2391,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.238", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.239", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")

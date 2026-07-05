@@ -555,6 +555,17 @@
         <button class="btn btn-primary btn-sm" onclick="changePassword()">Cambia password</button>
       </div>
       {% endif %}
+
+      <!-- ── Account collegati OAuth (Fase A) ───────────────────────── -->
+      <div class="card mt-4">
+        <div class="card-title mb-3" data-i18n="settings.account.title">Account collegati</div>
+        <p class="text-sm text-muted mb-3" data-i18n="settings.account.desc">
+          Collega un account Google per abilitare la sincronizzazione automatica del calendario e l'integrazione email.
+        </p>
+        <div id="account-cards">
+          <p class="text-sm text-muted" data-i18n="common.loading">Caricamento…</p>
+        </div>
+      </div>
     </div>
 
     <!-- ── Pannello MFA TOTP (v3.5.0-alpha.70.4) ────────────────── -->
@@ -2405,6 +2416,7 @@ window.showPane = function(name) {
   if (name === 'mfa') mfaLoadStatus();
   if (name === 'techsheet') tsoInit();
   if (name === 'security') lockdownLoad();
+  if (name === 'account' && typeof loadAccountSettings === 'function') loadAccountSettings();
 };
 
 // ── Content Lockdown (TPN) v3.5.0-alpha.172.195 ─────────────
@@ -2756,4 +2768,5 @@ async function tsoAIDeepSearch() {
   }
 }
 </script>
+<script src="/static/js/settings_account.js?v={{ app_version }}"></script>
 {% endblock %}
