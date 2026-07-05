@@ -829,10 +829,11 @@ async function acqDetLoadCalendarEvents(aid) {
       const el = document.createElement('div');
       el.className = 'acq-activity-item';
       const when = ev.start ? new Date(ev.start).toLocaleString() : '';
+      const safeUrl = (ev.meeting_url && /^https?:\/\//i.test(ev.meeting_url)) ? ev.meeting_url : null;
       el.innerHTML = '<strong>' + escapeHtml(ev.title || '') + '</strong>' +
         (when ? '<span style="color:var(--text3);font-size:11px;margin-left:4px;">' + escapeHtml(when) + '</span>' : '') +
         (ev.location ? '<div style="color:var(--text3);margin-top:3px;">' + escapeHtml(ev.location) + '</div>' : '') +
-        (ev.meeting_url ? '<div style="font-size:11px;"><a href="' + escapeHtml(ev.meeting_url) + '" target="_blank" rel="noopener">' + escapeHtml(ev.meeting_url) + '</a></div>' : '');
+        (safeUrl ? '<div style="font-size:11px;"><a href="' + escapeHtml(safeUrl) + '" target="_blank" rel="noopener">' + escapeHtml(safeUrl) + '</a></div>' : '');
       list.appendChild(el);
     });
   } catch(e) {}
