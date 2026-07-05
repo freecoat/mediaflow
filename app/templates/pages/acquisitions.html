@@ -254,6 +254,7 @@
       <button class="acq-det-tab active" data-tab="activities" onclick="acqDetTab(this,'activities')" data-i18n="acq.detail.tab.activities">Attività</button>
       <button class="acq-det-tab" data-tab="contacts" onclick="acqDetTab(this,'contacts')" data-i18n="acq.detail.tab.contacts">Contatti</button>
       <button class="acq-det-tab" data-tab="quotes" onclick="acqDetTab(this,'quotes')" data-i18n="acq.detail.tab.quotes">Quotazioni</button>
+      <button class="acq-det-tab" data-tab="calendar" onclick="acqDetTab(this,'calendar')" data-i18n="acq.detail.tab.calendar">Appuntamenti</button>
     </div>
 
     {# Activities tab #}
@@ -331,6 +332,12 @@
     {# Quotes tab #}
     <div class="acq-det-content" id="det-tab-quotes">
       <div id="det-quotes-list"></div>
+    </div>
+
+    {# Calendar tab (Fase B) #}
+    <div class="acq-det-content" id="det-tab-calendar">
+      <div id="det-calendar-list"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="acqNewAppointment()" data-i18n="cal.new">Nuovo appuntamento</button>
     </div>
 
     {# Actions #}
@@ -805,6 +812,45 @@ function acqDetTab(btn, tab) {
   document.querySelectorAll('.acq-det-content').forEach(c => c.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('det-tab-' + tab).classList.add('active');
+  if (tab === 'calendar' && _acqCurrentId) acqDetLoadCalendarEvents(_acqCurrentId);
+}
+
+async function acqDetLoadCalendarEvents(aid) {
+  try {
+    const r = await api('GET', '/calendar/api/events?acquisition_id=' + aid);
+    const list = document.getElementById('det-calendar-list');
+    const items = (r && r.events) || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.noAppointments">' + mfT('acq.detail.noAppointments','Nessun appuntamento.') + '</div>';
+      return;
+    }
+    list.innerHTML = '';
+    items.forEach(ev => {
+      const el = document.createElement('div');
+      el.className = 'acq-activity-item';
+      const when = ev.start ? new Date(ev.start).toLocaleString() : '';
+      el.innerHTML = '<strong>' + escapeHtml(ev.title || '') + '</strong>' +
+        (when ? '<span style="color:var(--text3);font-size:11px;margin-left:4px;">' + escapeHtml(when) + '</span>' : '') +
+        (ev.location ? '<div style="color:var(--text3);margin-top:3px;">' + escapeHtml(ev.location) + '</div>' : '') +
+        (ev.meeting_url ? '<div style="font-size:11px;"><a href="' + escapeHtml(ev.meeting_url) + '" target="_blank" rel="noopener">' + escapeHtml(ev.meeting_url) + '</a></div>' : '');
+      list.appendChild(el);
+    });
+  } catch(e) {}
+}
+
+async function acqNewAppointment() {
+  if (!_acqCurrentId) return;
+  const title = prompt(mfT('cal.event.title', 'Titolo'));
+  if (!title) return;
+  const start = new Date().toISOString().slice(0, 16);
+  const fd = new FormData();
+  fd.append('title', title);
+  fd.append('start_at', start);
+  fd.append('end_at', start);
+  fd.append('acquisition_id', _acqCurrentId);
+  const r = await fetch('/calendar/api/events', { method: 'POST', body: fd });
+  if (r.ok) acqDetLoadCalendarEvents(_acqCurrentId);
+  else if (window.toast) toast(mfT('common.error', 'Errore'), 'error');
 }
 
 async function acqDetLoadActivities(aid) {

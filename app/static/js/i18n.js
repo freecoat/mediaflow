@@ -921,6 +921,8 @@ window.MF_I18N = {
   'acq.detail.tab.activities':      {it: 'Attività',               en: 'Activities',              fr: 'Activités',               de: 'Aktivitäten',               es: 'Actividades'},
   'acq.detail.tab.contacts':        {it: 'Contatti',               en: 'Contacts',                fr: 'Contacts',                de: 'Kontakte',                  es: 'Contactos'},
   'acq.detail.tab.quotes':          {it: 'Quotazioni',             en: 'Quotes',                  fr: 'Devis',                   de: 'Angebote',                  es: 'Cotizaciones'},
+  'acq.detail.tab.calendar':        {it: 'Appuntamenti',           en: 'Appointments',            fr: 'Rendez-vous',             de: 'Termine',                   es: 'Citas'},
+  'acq.detail.noAppointments':      {it: 'Nessun appuntamento.',   en: 'No appointments.',        fr: 'Aucun rendez-vous.',      de: 'Keine Termine.',            es: 'Sin citas.'},
   'acq.detail.no_activities':       {it: 'Nessuna attività.',      en: 'No activities.',          fr: 'Aucune activité.',        de: 'Keine Aktivitäten.',        es: 'Sin actividades.'},
   'acq.detail.no_contacts':         {it: 'Nessun contatto.',       en: 'No contacts.',            fr: 'Aucun contact.',          de: 'Keine Kontakte.',           es: 'Sin contactos.'},
   'acq.detail.no_quotes':           {it: 'Nessuna quotazione collegata.', en: 'No linked quotes.', fr: 'Aucun devis lié.',       de: 'Keine verknüpften Angebote.', es: 'Sin cotizaciones vinculadas.'},
