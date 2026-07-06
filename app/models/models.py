@@ -185,6 +185,11 @@ class ActivityType(str, enum.Enum):
 class ActivityDirection(str, enum.Enum):
     inbound = "inbound"; outbound = "outbound"
 
+class CalendarEventStatus(str, enum.Enum):
+    confirmed = "confirmed"
+    tentative = "tentative"
+    cancelled = "cancelled"
+
 class JobStatus(str, enum.Enum):
     draft = "draft"; quoting = "quoting"; approved = "approved"
     active = "active"; on_hold = "on_hold"; completed = "completed"
@@ -4845,3 +4850,59 @@ class Activity(Base):
 
     acquisition: Mapped[Optional["Acquisition"]] = relationship(
         back_populates="activities", foreign_keys=[acquisition_id])
+
+
+class CalendarEvent(Base):
+    __tablename__ = "calendar_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    start_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    end_at: Mapped[datetime] = mapped_column(DateTime)
+    all_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    meeting_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    status: Mapped[CalendarEventStatus] = mapped_column(
+        SAEnum(CalendarEventStatus), default=CalendarEventStatus.confirmed)
+    owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    # Link espliciti nullable (pattern codebase: integrità FK + tenant filter)
+    acquisition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("acquisitions.id"), nullable=True, index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    activity_id: Mapped[Optional[int]] = mapped_column(ForeignKey("activities.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    attendees: Mapped[list] = mapped_column(JSON, default=list)
+    # Sync (usati in Fase C) — introdotti ora per non ri-migrare
+    source: Mapped[str] = mapped_column(String(20), default="claqo", nullable=False)  # claqo|google
+    external_calendar_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    external_event_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    sync_state: Mapped[str] = mapped_column(String(20), default="local", nullable=False)  # local|synced|pending_push|error
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    sync_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+
+
+class DocumentLink(Base):
+    """Riferimento a un file Google Drive collegato a un'entità (Fase D).
+    Nessuno storage locale: si salva solo metadata + link. Tenant-scoped, soft-delete."""
+    __tablename__ = "document_links"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    provider: Mapped[str] = mapped_column(String(20), default="google", nullable=False)
+    external_file_id: Mapped[str] = mapped_column(String(255), index=True)
+    name: Mapped[str] = mapped_column(String(500))
+    mime_type: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    web_url: Mapped[str] = mapped_column(String(1000))
+    icon_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    owner_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Link espliciti nullable (almeno uno valorizzato — validato nel router)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    acquisition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("acquisitions.id"), nullable=True, index=True)
+    activity_id: Mapped[Optional[int]] = mapped_column(ForeignKey("activities.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    added_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

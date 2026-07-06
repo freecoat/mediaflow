@@ -29,11 +29,13 @@ echo  [K] Migra database esistente (permessi extra per-utente) [v3.4.25]
 echo  [L] Migra database esistente (Booking esecutivo: priorita+stato+overtime) [v3.4.32]
 echo  [M] Cleanup orfani lifecycle Quote/Job/Booking [v3.4.36]
 echo  [P] Migra OAuth calendario (Fase A) [v3.5.0-alpha.172]
+echo  [Q] Migra calendario (Fase B) [v3.5.0-alpha.172]
+echo  [R] Migra Fase D - documenti Drive [v3.5.0-alpha.172]
 echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]
 echo  [A] Apri cartella upload
 echo  [0] Esci
 echo.
-set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, T): "
+set /p scelta="Scegli un'opzione (0-9, A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, T): "
 
 if "%scelta%"=="1" goto avvia
 if "%scelta%"=="2" goto reset_db
@@ -59,6 +61,8 @@ if /i "%scelta%"=="M" goto migrate_lifecycle_cleanup
 if /i "%scelta%"=="N" goto migrate_quote_versioning
 if /i "%scelta%"=="O" goto reset_business_data
 if /i "%scelta%"=="P" goto migrate_oauth_calendar
+if /i "%scelta%"=="Q" goto migrate_calendar_events
+if /i "%scelta%"=="R" goto migrate_documents
 if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
@@ -374,6 +378,30 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_oauth_calendar.py
+)
+pause & goto menu
+
+:migrate_calendar_events
+echo.
+echo Migrazione calendario (Fase B): crea la tabella calendar_events.
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_calendar_events.py
+)
+pause & goto menu
+
+:migrate_documents
+echo.
+echo Migrazione Fase D: crea la tabella document_links (documenti Drive collegati).
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_documents.py
 )
 pause & goto menu
 

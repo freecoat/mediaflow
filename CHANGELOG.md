@@ -1,5 +1,42 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.243 — Fase D Calendario/Account: documenti Drive collegati (6 lug 2026)
+
+- **DocumentLink** (`document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo un riferimento (metadata + link), nessuno storage locale.
+- **Due modi di aggancio**: incolla-link (sempre attivo → parse URL Drive + fetch metadata `drive.file` best-effort) e **Google Picker** (bottone "Scegli da Drive" visibile solo se `GOOGLE_PICKER_API_KEY` configurato + utente Google connesso).
+- **Servizio** `app/services/google_drive.py` (urllib, `_drive_request` mockabile) + **router** `app/routers/documents.py` (link/list/delete/picker-config, RBAC runtime per `linked_type`, tenant-scope). Sezione **📎 Documenti** nel detail di progetto e nel tab dedicato di acquisition.
+- **Best-effort**: `drive.file` vede solo file creati/aperti dall'app → incolla-link di file mai toccati → metadata `None` → fallback name; il Picker aggira (l'atto di scegliere concede l'accesso). Nessun refresh token verso il client (solo access_token effimero per il Picker).
+- Migrazione `scripts/migrate_documents.py` (tabella creata anche da `create_all` al boot) + voce strumenti. i18n 5 lingue (`doc.*`). Config `GOOGLE_PICKER_API_KEY` in `.env.example`. **Chiude il programma A/B/C/D** (account linking + calendario + documenti).
+
+## v3.5.0-alpha.172.242 — Fase C Calendario: sync Google bidirezionale (6 lug 2026)
+
+- **Push per-utente** degli appuntamenti Claqo verso un calendario secondario "Claqo" nell'account Google dell'utente (`calendar.app.created`): create/edit/delete si riflettono su Google.
+- **Overlay read-only** degli eventi Google esistenti dentro `/calendar` (`calendar.readonly`, esclude il calendario Claqo), con checkbox "Mostra Google".
+- **Autosync** on-save se `auto_sync_calendar` ON + bottone **"Sincronizza"** (push/delete di tutto il pending). Badge ⟲ sugli eventi sincronizzati.
+- `app/services/google_calendar.py` (client API, urllib, mockabile) + `app/services/calendar_sync.py` (orchestrazione). Endpoint `POST /calendar/api/sync`, `GET /calendar/api/google-overlay`. Best-effort: nessuna chiamata Google blocca il CRUD locale o il render.
+- **Fix best-effort** (smoke browser): con token Google memorizzato ma revocato + calendario "Claqo" non ancora creato, `ensure_claqo_calendar` chiamava l'API fuori dal try di `push_event` → `HTTPError 403` propagata → `500` su `/calendar/api/sync`. Ora la creazione calendario è guardata (403/rete → `None`, mai propaga); l'evento resta pending e `sync` conta `failed`. +3 test di regressione.
+- Nessuna migrazione DB (colonne sync già presenti). Testato con mock; live appena l'utente configura l'OAuth client Google Cloud.
+
+## v3.5.0-alpha.172.241 — Fase B.1 Calendario: editing eventi + leggibilità (6 lug 2026)
+
+Rifinitura UX del calendario (feedback Matteo: sovrapposizioni, orari invisibili, no editing).
+
+- **Modal evento condiviso** (`event_modal.js`): crea/modifica/elimina appuntamenti (titolo, inizio/fine, tutto-il-giorno, luogo, link riunione, stato, collegamenti). Unica fonte di verità per la scrittura eventi, usato sia in `/calendar` sia nel tab Appuntamenti acquisizioni.
+- **Calendario vista settimana** default (griglia oraria 07–22, indicatore ora, formato 24h): risolve accavallamenti e orari illeggibili. Selezione intervallo/click giorno → nuovo evento; click su evento → modifica; drag/resize → aggiorna orari (PUT).
+- **Tab Appuntamenti acquisizioni** leggibile: riga con titolo, fascia oraria, luogo, badge stato, link (solo http(s)), pulsanti ✎/🗑. Niente più `prompt()`.
+- i18n 5 lingue. Nessuna modifica backend (il router Task 3 α.240 già espone GET/POST/PUT/DELETE).
+
+## v3.5.0-alpha.172.240 — Fase B Calendario: CalendarEvent + FullCalendar (5 lug 2026)
+
+Calendario Claqo nativo, funzionante anche senza account Google collegato.
+
+- **Entità `CalendarEvent`** (tabella `calendar_events`, tenant-scoped, soft-delete) con link espliciti nullable a trattativa/progetto/attività/cliente + colonne sync pronte per Fase C. Migrazione idempotente `scripts/migrate_calendar_events.py` + voce `strumenti`.
+- **Pagina `/calendar`** con FullCalendar 6 (mese/settimana/giorno/agenda), click-crea, drag→PUT. Filtro `Team`/`Solo miei`. Nav item + i18n 5 lingue.
+- **Router CRUD** Form-based `/calendar/api/events` con permessi RBAC `view_calendar`/`manage_calendar`. Marcatori derivati read-only (scadenze trattative `expected_close_date` + next action attività).
+- **Tab "Appuntamenti"** nel detail-panel `/acquisitions` (lista eventi collegati + crea precompilato). Link riunione linkificato solo se schema `http(s)` (anti-XSS `javascript:`).
+- **Capability AI `propose_calendar_event`** nel registry.
+- **Fix regressione α.236**: lo snapshot `_ACTION_HANDLERS` (+ sync `VALID_ACTION_TYPES`) era preso a metà modulo, escludendo gli handler definiti dopo (`propose_acquisition/activity/contact/acquisition_stage` → dispatch fallito a runtime + invisibili al parser markdown Ollama/Perplexity). Spostato in fondo al modulo: ora include tutte le capability.
+
 ## v3.5.0-alpha.172.239 — Fase A OAuth foundation: account linking Google (5 lug 2026)
 
 Fase A completa: collegamento account Google (Calendar + Drive) con token refresh automatico, CSRF firmato HMAC e UI tab Account. Subagent-driven TDD (7 task). Ramo `feat/oauth-calendar-phaseA`.

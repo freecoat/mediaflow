@@ -254,6 +254,8 @@
       <button class="acq-det-tab active" data-tab="activities" onclick="acqDetTab(this,'activities')" data-i18n="acq.detail.tab.activities">Attività</button>
       <button class="acq-det-tab" data-tab="contacts" onclick="acqDetTab(this,'contacts')" data-i18n="acq.detail.tab.contacts">Contatti</button>
       <button class="acq-det-tab" data-tab="quotes" onclick="acqDetTab(this,'quotes')" data-i18n="acq.detail.tab.quotes">Quotazioni</button>
+      <button class="acq-det-tab" data-tab="calendar" onclick="acqDetTab(this,'calendar')" data-i18n="acq.detail.tab.calendar">Appuntamenti</button>
+      <button class="acq-det-tab" data-tab="documents" onclick="acqDetTab(this,'documents')" data-i18n="doc.section">Documenti</button>
     </div>
 
     {# Activities tab #}
@@ -331,6 +333,22 @@
     {# Quotes tab #}
     <div class="acq-det-content" id="det-tab-quotes">
       <div id="det-quotes-list"></div>
+    </div>
+
+    {# Calendar tab (Fase B) #}
+    <div class="acq-det-content" id="det-tab-calendar">
+      <div id="det-calendar-list"></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="acqNewAppointment()" data-i18n="cal.new">Nuovo appuntamento</button>
+    </div>
+
+    {# 📎 Documenti collegati (Fase D) #}
+    <div class="acq-det-content" id="det-tab-documents">
+      <div id="doc-list-acquisition" class="doc-list mb-3"></div>
+      <div class="doc-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="url" id="doc-url-acquisition" class="form-input" style="flex:1;min-width:180px;" data-i18n-attr="placeholder" data-i18n="doc.urlPlaceholder" placeholder="Incolla link Google Drive…">
+        <button class="btn btn-secondary btn-sm" id="acq-doc-add" data-i18n="doc.addByUrl">Aggiungi da link</button>
+        <button class="btn btn-secondary btn-sm" id="doc-pick-acquisition" style="display:none" data-i18n="doc.pick">Scegli da Drive</button>
+      </div>
     </div>
 
     {# Actions #}
@@ -458,6 +476,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/event_modal.js?v={{ app_version }}"></script>
+<script src="/static/js/documents.js?v={{ app_version }}"></script>
 <script>
 /* ────────────────────────────────────────────────────────────────────────
    Acquisizioni — JS
@@ -789,6 +809,11 @@ async function acqOpenDetail(aid) {
 
     // show/hide convert button
     document.getElementById('det-btn-convert').style.display = a.project_id ? 'none' : '';
+
+    // 📎 Documenti collegati (Fase D)
+    document.getElementById('acq-doc-add').onclick = function () { mfDocAddByUrl('acquisition', aid); };
+    document.getElementById('doc-pick-acquisition').onclick = function () { mfDocPicker('acquisition', aid); };
+    mfDocInit('acquisition', aid);
   } catch(e) {
     toast(mfT('toast.error_loading','Errore caricamento'), 'error');
   }
@@ -805,6 +830,82 @@ function acqDetTab(btn, tab) {
   document.querySelectorAll('.acq-det-content').forEach(c => c.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('det-tab-' + tab).classList.add('active');
+  if (tab === 'calendar' && _acqCurrentId) acqDetLoadCalendarEvents(_acqCurrentId);
+  if (tab === 'documents' && _acqCurrentId) mfDocList('acquisition', _acqCurrentId);
+}
+
+function _apptStatusBadge(status) {
+  const map = {
+    confirmed: { c: '#4ade80', k: 'cal.event.status.confirmed' },
+    tentative: { c: '#fbbf24', k: 'cal.event.status.tentative' },
+    cancelled: { c: '#ef4444', k: 'cal.event.status.cancelled' }
+  };
+  const m = map[status] || map.confirmed;
+  return '<span style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid ' + m.c +
+         ';color:' + m.c + ';margin-left:6px;">' + escapeHtml(mfT(m.k)) + '</span>';
+}
+
+function _apptWhen(ev) {
+  if (!ev.start) return '';
+  const s = new Date(ev.start);
+  if (ev.all_day) return s.toLocaleDateString() + ' · ' + mfT('acq.appt.allDayLabel');
+  let out = s.toLocaleDateString() + ' ' + s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (ev.end) {
+    const e = new Date(ev.end);
+    out += '–' + e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return out;
+}
+
+async function acqDetLoadCalendarEvents(aid) {
+  try {
+    const r = await api('GET', '/calendar/api/events?acquisition_id=' + aid);
+    const list = document.getElementById('det-calendar-list');
+    const items = (r && r.events) || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.noAppointments">' + mfT('acq.detail.noAppointments') + '</div>';
+      return;
+    }
+    list.innerHTML = '';
+    items.forEach(ev => {
+      const el = document.createElement('div');
+      el.className = 'acq-activity-item';
+      el.style.display = 'flex';
+      el.style.justifyContent = 'space-between';
+      el.style.alignItems = 'flex-start';
+      el.style.gap = '8px';
+      const safeUrl = (ev.meeting_url && /^https?:\/\//i.test(ev.meeting_url)) ? ev.meeting_url : null;
+      const left =
+        '<div>' +
+        '<div><strong>' + escapeHtml(ev.title || '') + '</strong>' + _apptStatusBadge(ev.status) + '</div>' +
+        '<div style="color:var(--text3);font-size:11px;margin-top:2px;">' + escapeHtml(_apptWhen(ev)) + '</div>' +
+        (ev.location ? '<div style="color:var(--text3);font-size:11px;">' + escapeHtml(ev.location) + '</div>' : '') +
+        (safeUrl ? '<div style="font-size:11px;"><a href="' + escapeHtml(safeUrl) + '" target="_blank" rel="noopener">' + escapeHtml(safeUrl) + '</a></div>' : '') +
+        '</div>';
+      const right =
+        '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+        '<button class="btn btn-ghost btn-icon btn-sm" type="button" title="' + escapeHtml(mfT('cal.event.edit')) + '" data-appt-edit="' + ev.id + '">✎</button>' +
+        '<button class="btn btn-ghost btn-icon btn-sm" type="button" style="color:#ef4444;" title="' + escapeHtml(mfT('cal.event.delete')) + '" data-appt-del="' + ev.id + '">🗑</button>' +
+        '</div>';
+      el.innerHTML = left + right;
+      el.querySelector('[data-appt-edit]').addEventListener('click', function () {
+        window.openEventModal({ event: ev, prefill: { acquisition_id: aid }, onSaved: () => acqDetLoadCalendarEvents(aid) });
+      });
+      el.querySelector('[data-appt-del]').addEventListener('click', function () {
+        if (!confirm(mfT('cal.event.deleteConfirm'))) return;
+        fetch('/calendar/api/events/' + ev.id, { method: 'DELETE' }).then(function (resp) {
+          if (resp.ok) acqDetLoadCalendarEvents(aid);
+          else if (window.toast) toast(mfT('common.error'), 'error');
+        });
+      });
+      list.appendChild(el);
+    });
+  } catch(e) {}
+}
+
+function acqNewAppointment() {
+  if (!_acqCurrentId) return;
+  window.openEventModal({ prefill: { acquisition_id: _acqCurrentId }, onSaved: () => acqDetLoadCalendarEvents(_acqCurrentId) });
 }
 
 async function acqDetLoadActivities(aid) {

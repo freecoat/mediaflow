@@ -8,7 +8,49 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.239** — 5 luglio 2026 — Fase A OAuth foundation: account linking Google
+**v3.5.0-alpha.172.243** — 6 luglio 2026 — Fase D Calendario/Account: documenti Drive collegati
+
+### α.172.243 ✅ (Fase D — documenti Drive — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
+- **`DocumentLink`** (tabella `document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo riferimento (metadata + link), nessuno storage locale. Link nullable a project/acquisition/activity/client.
+- **Due modi di aggancio**: incolla-link (sempre attivo → `parse_drive_file_id` + `fetch_file_metadata` `drive.file` best-effort) + **Google Picker** (bottone "Scegli da Drive" visibile solo se `GOOGLE_PICKER_API_KEY` + utente Google connesso).
+- **Servizi/router**: `app/services/google_drive.py` (urllib, unico `_drive_request` mockabile) + `app/routers/documents.py` (`POST /documents/api/link`, `GET /documents/api/list`, `DELETE /documents/api/link/{id}`, `GET /documents/api/picker-config`; RBAC runtime per `linked_type` — project→view/edit_projects, acquisition→view/manage_acquisitions; tenant-scope via `scoped`/`fetch_or_404`).
+- **Frontend** `documents.js` (`mfDocInit/List/AddByUrl/Picker/Remove`, handler rimozione delegato bindato una-tantum via `_mfDocClickBound`). Sezione 📎 in `project_detail.html` + tab "Documenti" dedicato in `acquisitions.html` (reload lista su switch tab).
+- **Best-effort**: `drive.file` vede solo file creati/aperti dall'app → incolla-link di file mai toccati → metadata `None` → fallback name "Documento Drive"; il Picker aggira. `web_url` aperto solo se schema http(s), `rel="noopener noreferrer"`. Nessun refresh token al client (solo access_token effimero per il Picker).
+- Migrazione `scripts/migrate_documents.py` (tabella creata anche da `create_all` al boot) + voce strumenti `[R]`/`[r]`. i18n 5 lingue (`doc.*`). Config `GOOGLE_PICKER_API_KEY` in `.env.example`. **Chiude il programma A/B/C/D**.
+- Test: `test_document_link_model` + `test_google_drive` (9) + `test_documents_api` (8+RBAC) + `test_documents_page` (4).
+
+**Prossimo step**: **merge `feat/calendar-phaseB` → main + push** dopo smoke Matteo (prereq: OAuth client Google Cloud reale + eventuale `GOOGLE_PICKER_API_KEY` per il Picker). Programma A/B/C/D chiuso. Ramo `feat/calendar-phaseB` NON pushato (contiene B + B.1 + C + D).
+
+### α.172.242 ✅ (Fase C — sync Google — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
+- **Push per-utente** appuntamenti Claqo → calendario secondario "Claqo" su Google (`calendar.app.created`): create/edit/delete si riflettono su Google. `external_event_id` salvato, badge ⟲.
+- **Overlay read-only** eventi Google esistenti in `/calendar` (`calendar.readonly`, esclude calendario Claqo), checkbox "Mostra Google". Non editabili (eventClick/drag ignorati).
+- **Autosync** on-save se `auto_sync_calendar` ON (usa `ev.owner_user_id`) + bottone **"Sincronizza"** → push/delete di tutto il pending (`local/pending_push/error` push; `is_active=False` con external_id delete).
+- **Servizi**: `app/services/google_calendar.py` (client urllib, unico `_google_request` mockabile: ensure/push/delete/list) + `app/services/calendar_sync.py` (orchestrazione). Router: `POST /calendar/api/sync`, `GET /calendar/api/google-overlay`, `_serialize_event` con `sync_state`+`external_event_id`.
+- **Best-effort**: nessuna chiamata Google blocca CRUD locale o render (overlay/errore → lista vuota, mai 500). Nessuna migrazione DB (colonne sync già da Fase A/B). i18n 5 lingue (`cal.sync.*`, `cal.showGoogle`, `cal.google.readonly`, `cal.synced`).
+- **Fix smoke browser**: token Google admin memorizzato ma revocato + calendario Claqo non creato → `ensure_claqo_calendar` chiamava l'API fuori dal try di `push_event` → 403 propagata → **500** su `/calendar/api/sync`. I test mock non lo beccavano (pre-settavano sempre `claqo_calendar_id`). Ora creazione calendario guardata (403/rete → None). +3 test regressione. Smoke: sync 200 `{pushed:0,deleted:0,failed:1}`, overlay 200 `[]`, create 200 `local`, 0 errori console.
+- Test: `test_google_calendar` (12) + `test_calendar_sync` (4) + `test_calendar_sync_api` (5) + `test_calendar_sync_page` (2). 60 test calendar/google/oauth verdi. Live appena l'utente configura OAuth client Google Cloud.
+
+**Prossimo step**: **merge `feat/calendar-phaseB` → main + push** dopo smoke Matteo (prereq: OAuth client Google Cloud reale per test live). Poi Fase D documenti (Drive `drive.file`) oppure rifinitura sync (conflitti/webhook push). Ramo `feat/calendar-phaseB` NON pushato (contiene B + B.1 + C).
+
+### α.172.241 ✅ (Fase B.1 — 6 lug, ramo feat/calendar-phaseB, 4 task; spec+plan 2026-07-06)
+- **Modal evento condiviso** `event_modal.js` (crea/modifica/elimina: titolo, inizio/fine, tutto-il-giorno, luogo, link, stato, collegamenti). Unica fonte di verità scrittura eventi, usato in `/calendar` + tab acquisizioni.
+- **Calendario vista settimana** default (griglia 07–22, now-indicator, 24h): risolve accavallamenti + orari illeggibili. Select/dateClick→nuovo; eventClick→modifica; drag/resize→PUT orari.
+- **Tab Appuntamenti acquisizioni** leggibile: titolo, fascia oraria, luogo, badge stato, link http(s), ✎/🗑. Niente più prompt.
+- i18n 5 lingue (`cal.event.*`). Nessuna modifica backend. Test `test_calendar_editing.py`.
+- **Nota launcher**: aggiunto `start.bat` (doppio clic, usa `.venv` diretto — bypassa `py`/pip/seed). Il vecchio `avvia.bat` restava su `pause` quando `python`=stub Store.
+
+**Prossimo step**: Fase C — sync Google bidirezionale (`google_calendar.py`, push su calendario "Claqo", overlay eventi Google in `/calendar`, accende `auto_sync_calendar` di `UserOAuthToken`). Merge `feat/calendar-phaseB` → main dopo smoke Matteo. Prereq: OAuth client Google Cloud.
+
+### α.172.240 ✅ (Fase B Calendario — 5 lug, ramo feat/calendar-phaseB, 6 task TDD)
+- **Entità `CalendarEvent`** (tabella `calendar_events`, tenant-scoped, soft-delete) + link nullable trattativa/progetto/attività/cliente + colonne sync pronte per Fase C. Migrazione `scripts/migrate_calendar_events.py` + voce strumenti.
+- **Pagina `/calendar`** FullCalendar 6 (mese/settimana/giorno/agenda), click-crea, drag→PUT, filtro Team/Solo miei, nav + i18n 5 lingue.
+- **Router CRUD** Form-based `/calendar/api/events`, permessi `view_calendar`/`manage_calendar`, marcatori derivati read-only (scadenze trattative + next action attività).
+- **Tab "Appuntamenti"** nel detail-panel `/acquisitions` (lista + crea precompilato). Link riunione linkificato solo schema http(s) (anti-XSS `javascript:`, flag security review).
+- **Capability AI `propose_calendar_event`**.
+- **Fix regressione α.236**: snapshot `_ACTION_HANDLERS` + sync `VALID_ACTION_TYPES` spostati in fondo al modulo `ai_assistant.py`; prima presi a metà file → i 4 handler acquisizioni (`propose_acquisition/activity/contact/acquisition_stage`) erano registrati nel `_REGISTRY` ma ASSENTI dallo snapshot → dispatch `apply_action` falliva ("Tipo azione non supportato") + invisibili al parser markdown Ollama/Perplexity. Ora inclusi.
+- Test: `test_calendar_*` (model/permissions/api/page/tab/capability). Suite completa da rilanciare a fine giro.
+
+**Prossimo step**: Fase C — sync Google bidirezionale (`google_calendar.py`, push su calendario "Claqo", overlay eventi Google in `/calendar`, accende `auto_sync_calendar` già presente in `UserOAuthToken`). Poi Fase D documenti. Merge `feat/calendar-phaseB` → main dopo smoke Matteo. Nota Matteo: prereq OAuth client Google Cloud per Fase C.
 
 ### α.172.239 ✅ (Fase A OAuth foundation — 5 lug, subagent-driven 7 task TDD, ramo feat/oauth-calendar-phaseA)
 - **Scopes least-privilege**: `calendar.app.created` + `calendar.readonly` + `drive.file`. Nessun accesso full-calendar o full-drive.

@@ -1195,6 +1195,24 @@ TOOLS: list[dict] = [
         "handler": "propose_activity",
     },
     {
+        "name": "propose_calendar_event",
+        "category": "mutation",
+        "description": ("Propone un appuntamento in calendario (riunione/call). "
+                        "start_at/end_at in ISO 8601. Collega opzionalmente a una "
+                        "trattativa (acquisition_id), progetto (project_id) o cliente (client_id)."),
+        "input_schema": {"type": "object", "properties": {
+            "title": {"type": "string"},
+            "start_at": {"type": "string", "description": "ISO 8601, es. 2026-07-15T10:00:00"},
+            "end_at": {"type": "string", "description": "ISO 8601"},
+            "acquisition_id": {"type": "integer"},
+            "project_id": {"type": "integer"},
+            "client_id": {"type": "integer"},
+            "location": {"type": "string"},
+            "meeting_url": {"type": "string"},
+        }, "required": ["title", "start_at", "end_at"]},
+        "handler": "propose_calendar_event",
+    },
+    {
         "name": "propose_contact",
         "category": "mutation",
         "description": "Aggiunge un contatto (persona) a un cliente esistente (client_id PK numerico).",

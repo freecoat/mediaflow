@@ -36,6 +36,17 @@
   <div id="p-desc-block" class="text-sm text-muted mt-3" style="display:none;border-top:1px solid var(--border);padding-top:10px;"></div>
 </div>
 
+<!-- 📎 Documenti collegati (Fase D) -->
+<section class="card mb-4" id="doc-section-project">
+  <div class="card-title mb-3">📎 <span data-i18n="doc.section">Documenti</span></div>
+  <div id="doc-list-project" class="doc-list mb-3"></div>
+  <div class="doc-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <input type="url" id="doc-url-project" class="form-input" style="flex:1;min-width:220px;" data-i18n-attr="placeholder" data-i18n="doc.urlPlaceholder" placeholder="Incolla link Google Drive…">
+    <button class="btn btn-secondary btn-sm" onclick="mfDocAddByUrl('project', PROJECT_ID)" data-i18n="doc.addByUrl">Aggiungi da link</button>
+    <button class="btn btn-secondary btn-sm" id="doc-pick-project" style="display:none" onclick="mfDocPicker('project', PROJECT_ID)" data-i18n="doc.pick">Scegli da Drive</button>
+  </div>
+</section>
+
 <!-- Tabs -->
 {% set _can_finance = can_view_finance(request.state.current_user) %}
 <div class="tabs">
@@ -701,6 +712,7 @@
   .rs-drop.sortable-drag-over { border-color: var(--indigo); background: var(--indigo-bg); }
   .rs-no-jobs { text-align:center; padding:30px 16px; color:var(--text2); font-size:13px; background:var(--bg2); border:1px dashed var(--border); border-radius:var(--radius); }
 </style>
+<script src="/static/js/documents.js?v={{ app_version }}"></script>
 <script>
 const PROJECT_ID = {{ project_id }};
 let currentProject = null;
@@ -1300,6 +1312,7 @@ async function saveProject() {
 
 document.getElementById('nq-date').value = new Date().toISOString().slice(0,10);
 loadProject();
+mfDocInit('project', PROJECT_ID);
 
 // ── Scheda tecnica (v3.4.31) ─────────────────────────────────
 let tsState = null;

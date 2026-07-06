@@ -1,0 +1,37 @@
+{# app/templates/pages/calendar.html #}
+{% extends "base.html" %}
+{% block title %}Calendario · Claqo{% endblock %}
+{% block head %}
+{# FullCalendar 6 (standard bundle) inietta il proprio CSS via JS: nessun index.global.min.css nel pacchetto npm. #}
+<style>
+  #calendar-root { max-width: 1100px; margin: 0 auto; }
+  .cal-toolbar { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  .cal-marker { border:1px dashed var(--accent, #6272f5); opacity:.7; }
+  .cal-google { opacity:.55; border:1px solid var(--text3, #888) !important; }
+  .fc-event.cal-synced .fc-event-title::after { content:' ⟲'; font-size:10px; opacity:.8; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 data-i18n="cal.title">Calendario</h1>
+</div>
+<div class="cal-toolbar">
+  <select id="cal-scope" class="input">
+    <option value="team" data-i18n="cal.filter.team">Team</option>
+    <option value="mine" data-i18n="cal.filter.mine">Solo miei</option>
+  </select>
+  <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+    <input type="checkbox" id="cal-show-google" checked> <span data-i18n="cal.showGoogle">Mostra Google</span>
+  </label>
+  <button class="btn btn-secondary" onclick="calSyncNow()" data-i18n="cal.sync.now">Sincronizza</button>
+  <button class="btn btn-primary" onclick="calNewEvent()" data-i18n="cal.new">Nuovo appuntamento</button>
+</div>
+<div id="calendar-root"></div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"
+        integrity="sha384-B1OFx8Gy9GjPu8UbUyXbGQpzll9ubAUQ9agInFJ8NnD7nYG1u/CLR+Sqr5yifl4q"
+        crossorigin="anonymous"></script>
+<script src="/static/js/event_modal.js?v={{ app_version }}"></script>
+<script src="/static/js/calendar_page.js?v={{ app_version }}"></script>
+{% endblock %}
