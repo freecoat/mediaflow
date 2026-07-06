@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.240** — 5 luglio 2026 — Fase B Calendario: CalendarEvent + FullCalendar
+**v3.5.0-alpha.172.241** — 6 luglio 2026 — Fase B.1 Calendario: editing eventi + leggibilità
+
+### α.172.241 ✅ (Fase B.1 — 6 lug, ramo feat/calendar-phaseB, 4 task; spec+plan 2026-07-06)
+- **Modal evento condiviso** `event_modal.js` (crea/modifica/elimina: titolo, inizio/fine, tutto-il-giorno, luogo, link, stato, collegamenti). Unica fonte di verità scrittura eventi, usato in `/calendar` + tab acquisizioni.
+- **Calendario vista settimana** default (griglia 07–22, now-indicator, 24h): risolve accavallamenti + orari illeggibili. Select/dateClick→nuovo; eventClick→modifica; drag/resize→PUT orari.
+- **Tab Appuntamenti acquisizioni** leggibile: titolo, fascia oraria, luogo, badge stato, link http(s), ✎/🗑. Niente più prompt.
+- i18n 5 lingue (`cal.event.*`). Nessuna modifica backend. Test `test_calendar_editing.py`.
+- **Nota launcher**: aggiunto `start.bat` (doppio clic, usa `.venv` diretto — bypassa `py`/pip/seed). Il vecchio `avvia.bat` restava su `pause` quando `python`=stub Store.
+
+**Prossimo step**: Fase C — sync Google bidirezionale (`google_calendar.py`, push su calendario "Claqo", overlay eventi Google in `/calendar`, accende `auto_sync_calendar` di `UserOAuthToken`). Merge `feat/calendar-phaseB` → main dopo smoke Matteo. Prereq: OAuth client Google Cloud.
 
 ### α.172.240 ✅ (Fase B Calendario — 5 lug, ramo feat/calendar-phaseB, 6 task TDD)
 - **Entità `CalendarEvent`** (tabella `calendar_events`, tenant-scoped, soft-delete) + link nullable trattativa/progetto/attività/cliente + colonne sync pronte per Fase C. Migrazione `scripts/migrate_calendar_events.py` + voce strumenti.

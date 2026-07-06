@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.241 — Fase B.1 Calendario: editing eventi + leggibilità (6 lug 2026)
+
+Rifinitura UX del calendario (feedback Matteo: sovrapposizioni, orari invisibili, no editing).
+
+- **Modal evento condiviso** (`event_modal.js`): crea/modifica/elimina appuntamenti (titolo, inizio/fine, tutto-il-giorno, luogo, link riunione, stato, collegamenti). Unica fonte di verità per la scrittura eventi, usato sia in `/calendar` sia nel tab Appuntamenti acquisizioni.
+- **Calendario vista settimana** default (griglia oraria 07–22, indicatore ora, formato 24h): risolve accavallamenti e orari illeggibili. Selezione intervallo/click giorno → nuovo evento; click su evento → modifica; drag/resize → aggiorna orari (PUT).
+- **Tab Appuntamenti acquisizioni** leggibile: riga con titolo, fascia oraria, luogo, badge stato, link (solo http(s)), pulsanti ✎/🗑. Niente più `prompt()`.
+- i18n 5 lingue. Nessuna modifica backend (il router Task 3 α.240 già espone GET/POST/PUT/DELETE).
+
 ## v3.5.0-alpha.172.240 — Fase B Calendario: CalendarEvent + FullCalendar (5 lug 2026)
 
 Calendario Claqo nativo, funzionante anche senza account Google collegato.
