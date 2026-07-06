@@ -4883,3 +4883,26 @@ class CalendarEvent(Base):
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+
+
+class DocumentLink(Base):
+    """Riferimento a un file Google Drive collegato a un'entità (Fase D).
+    Nessuno storage locale: si salva solo metadata + link. Tenant-scoped, soft-delete."""
+    __tablename__ = "document_links"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    provider: Mapped[str] = mapped_column(String(20), default="google", nullable=False)
+    external_file_id: Mapped[str] = mapped_column(String(255), index=True)
+    name: Mapped[str] = mapped_column(String(500))
+    mime_type: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    web_url: Mapped[str] = mapped_column(String(1000))
+    icon_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    owner_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # Link espliciti nullable (almeno uno valorizzato — validato nel router)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    acquisition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("acquisitions.id"), nullable=True, index=True)
+    activity_id: Mapped[Optional[int]] = mapped_column(ForeignKey("activities.id"), nullable=True, index=True)
+    client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    added_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
