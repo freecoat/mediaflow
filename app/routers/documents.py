@@ -140,6 +140,7 @@ async def picker_config(request: Request, db: Session = Depends(get_db)):
     if not user or not api_key:
         return {"enabled": False}
     token = get_valid_access_token(db, user.id, "google")
+    db.commit()  # get_valid_access_token può rinnovare il token: persiste il refresh (pattern calendar_sync.py)
     if not token:
         return {"enabled": False}
     client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
