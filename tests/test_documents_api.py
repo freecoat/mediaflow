@@ -118,3 +118,55 @@ def test_picker_config_disabled_without_key(client, monkeypatch):
     r = c.get("/documents/api/picker-config")
     assert r.status_code == 200
     assert r.json()["enabled"] is False
+
+
+# ── RBAC negative-path (403) ─────────────────────────────────────
+# Ruolo `viewer` (preset PRESET_PERMISSIONS in app/services/rbac.py) NON ha
+# `edit_projects` né `view_acquisitions`/`manage_acquisitions` — ma HA
+# `view_projects` (ogni preset built-in ce l'ha, quindi non esiste un ruolo
+# "senza view_projects" per testare la 403 sulla list di tipo project).
+# Per la 403 sulla list usiamo quindi linked_type=acquisition (stesso branch
+# di codice in list_documents(), solo perm_view diverso: view_acquisitions).
+import app.main as main_mod
+
+
+def _viewer_client(s):
+    """Crea un secondo utente (ruolo viewer, privilegi minimi) nella STESSA
+    sessione di test e ritorna un TestClient autenticato come lui, riusando
+    l'app già patchata dalla fixture `client` (stesso pattern JWT-cookie)."""
+    viewer = User(id=2, tenant_id=1, email="viewer@t.local", full_name="Viewer",
+                  hashed_password="x", role=UserRole.viewer, is_active=True)
+    s.add(viewer)
+    s.commit()
+    tok = create_access_token({"sub": "viewer@t.local", "tid": 1})
+    return TestClient(main_mod.app, headers={"Cookie": f"access_token={tok}"})
+
+
+def test_link_denied_without_manage(client):
+    c, s = client
+    vc = _viewer_client(s)
+    r = vc.post("/documents/api/link", data={"linked_type": "project", "linked_id": "1",
+                "file_id": "V1", "name": "Doc", "web_url": "https://drive.google.com/file/d/V1/view"})
+    assert r.status_code == 403
+
+
+def test_delete_denied_without_manage(client):
+    c, s = client
+    lid = c.post("/documents/api/link", data={"linked_type": "project", "linked_id": "1",
+                 "file_id": "V2", "name": "D", "web_url": "https://drive.google.com/file/d/V2/view"}).json()["id"]
+    vc = _viewer_client(s)
+    r = vc.delete(f"/documents/api/link/{lid}")
+    assert r.status_code == 403
+    # non soft-cancellato: resta visibile nella list (admin ha view_projects)
+    r2 = c.get("/documents/api/list", params={"linked_type": "project", "linked_id": "1"})
+    assert any(d["id"] == lid for d in r2.json()["documents"])
+
+
+def test_list_denied_without_view(client):
+    # viewer manca di view_acquisitions/manage_acquisitions (a differenza di
+    # view_projects, presente in TUTTI i preset built-in) → usiamo
+    # linked_type=acquisition per esercitare il ramo 403 dell'endpoint list.
+    c, s = client
+    vc = _viewer_client(s)
+    r = vc.get("/documents/api/list", params={"linked_type": "acquisition", "linked_id": "1"})
+    assert r.status_code == 403
