@@ -15,9 +15,10 @@ async function calFetchEvents(info, success, failure) {
     const data = await r.json();
     const evs = (data.events || []).map(e => ({
       id: e.id, title: e.title, start: e.start, end: e.end, allDay: e.all_day,
+      classNames: e.external_event_id ? ['cal-synced'] : [],
       extendedProps: {
         source: e.source, description: e.description, location: e.location,
-        meeting_url: e.meeting_url, status: e.status,
+        meeting_url: e.meeting_url, status: e.status, sync_state: e.sync_state,
         acquisition_id: e.acquisition_id, client_id: e.client_id, project_id: e.project_id
       }
     }));
@@ -25,6 +26,21 @@ async function calFetchEvents(info, success, failure) {
       title: '• ' + m.title, start: m.date, allDay: true, display: 'background',
       classNames: ['cal-marker'], editable: false, extendedProps: { marker: m.kind }
     }));
+    // Overlay Google read-only (best-effort, non blocca il calendario)
+    const showG = document.getElementById('cal-show-google');
+    if (showG && showG.checked) {
+      try {
+        const gr = await fetch('/calendar/api/google-overlay?start=' +
+          encodeURIComponent(info.startStr) + '&end=' + encodeURIComponent(info.endStr));
+        if (gr.ok) {
+          const gd = await gr.json();
+          (gd.events || []).forEach(g => evs.push({
+            title: g.title, start: g.start, end: g.end, allDay: g.all_day,
+            editable: false, classNames: ['cal-google'], extendedProps: { google: true }
+          }));
+        }
+      } catch (e) { /* overlay best-effort */ }
+    }
     success(evs);
   } catch (e) { failure(e); }
 }
@@ -45,6 +61,22 @@ function _fcEventToObj(fc) {
 
 function calNewEvent(prefill) {
   window.openEventModal({ prefill: prefill || {}, onSaved: () => _cal && _cal.refetchEvents() });
+}
+
+async function calSyncNow() {
+  try {
+    const r = await fetch('/calendar/api/sync', { method: 'POST' });
+    const d = await r.json();
+    if (r.ok && window.toast) {
+      toast(mfT('cal.sync.done') + ': ' + (d.pushed || 0) + '↑ ' + (d.deleted || 0) + '✕' +
+            (d.failed ? ' · ' + d.failed + ' ' + mfT('cal.sync.error') : ''), d.failed ? 'error' : 'success');
+    } else if (!r.ok && window.toast) {
+      toast(mfT('cal.sync.error'), 'error');
+    }
+  } catch (e) {
+    if (window.toast) toast(mfT('cal.sync.error'), 'error');
+  }
+  if (_cal) _cal.refetchEvents();
 }
 
 function _calPutTimes(info) {
@@ -75,7 +107,7 @@ document.addEventListener('DOMContentLoaded', function () {
     eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
     events: calFetchEvents,
     eventClick: function (info) {
-      if (info.event.extendedProps.marker) return;
+      if (info.event.extendedProps.marker || info.event.extendedProps.google) return;
       info.jsEvent.preventDefault();
       window.openEventModal({ event: _fcEventToObj(info.event), onSaved: () => _cal.refetchEvents() });
     },
@@ -101,4 +133,6 @@ document.addEventListener('DOMContentLoaded', function () {
   _cal.render();
   const sc = document.getElementById('cal-scope');
   if (sc) sc.addEventListener('change', () => _cal.refetchEvents());
+  const shg = document.getElementById('cal-show-google');
+  if (shg) shg.addEventListener('change', () => _cal.refetchEvents());
 });

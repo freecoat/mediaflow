@@ -1020,6 +1020,12 @@ window.MF_I18N = {
   'cal.event.err.title': {it: 'Titolo obbligatorio', en: 'Title required', fr: 'Titre obligatoire', de: 'Titel erforderlich', es: 'Titulo obligatorio'},
   'cal.event.err.range': {it: 'La fine precede l\'inizio', en: 'End is before start', fr: 'La fin precede le debut', de: 'Ende liegt vor Beginn', es: 'El fin precede al inicio'},
   'acq.appt.allDayLabel': {it: 'Tutto il giorno', en: 'All day', fr: 'Toute la journee', de: 'Ganztags', es: 'Todo el dia'},
+  'cal.sync.now':      {it: 'Sincronizza', en: 'Sync', fr: 'Synchroniser', de: 'Synchronisieren', es: 'Sincronizar'},
+  'cal.sync.done':     {it: 'Sincronizzato', en: 'Synced', fr: 'Synchronise', de: 'Synchronisiert', es: 'Sincronizado'},
+  'cal.sync.error':    {it: 'Errore sincronizzazione', en: 'Sync error', fr: 'Erreur de synchronisation', de: 'Sync-Fehler', es: 'Error de sincronizacion'},
+  'cal.showGoogle':    {it: 'Mostra Google', en: 'Show Google', fr: 'Afficher Google', de: 'Google anzeigen', es: 'Mostrar Google'},
+  'cal.google.readonly': {it: 'Evento Google (sola lettura)', en: 'Google event (read-only)', fr: 'Evenement Google (lecture seule)', de: 'Google-Termin (schreibgeschutzt)', es: 'Evento de Google (solo lectura)'},
+  'cal.synced':        {it: 'Sincronizzato con Google', en: 'Synced with Google', fr: 'Synchronise avec Google', de: 'Mit Google synchronisiert', es: 'Sincronizado con Google'},
 };
 
 /**
