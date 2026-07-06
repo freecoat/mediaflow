@@ -32,10 +32,24 @@ _PATTERNS = [
 def parse_drive_file_id(url: str) -> Optional[str]:
     if not url:
         return None
-    for pat in _PATTERNS:
-        m = pat.search(url)
-        if m:
-            return m.group(1)
+
+    # Path-based patterns (drive.google.com/file/d/ID, docs.google.com/document/d/ID, etc.)
+    path_pattern = _PATTERNS[0]
+    m = path_pattern.search(url)
+    if m:
+        return m.group(1)
+
+    # Query-string pattern (?id=ID, &id=ID) — only for Google Drive/Docs hosts
+    try:
+        netloc = urllib.parse.urlparse(url).netloc
+        if netloc.endswith("google.com"):
+            id_pattern = _PATTERNS[1]
+            m = id_pattern.search(url)
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+
     return None
 
 

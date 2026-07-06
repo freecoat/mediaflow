@@ -49,6 +49,14 @@ def test_parse_non_drive_url_none():
     assert gd.parse_drive_file_id("https://example.com/foo") is None
 
 
+def test_parse_non_drive_url_with_id_none():
+    assert gd.parse_drive_file_id("https://example.com/foo?id=999") is None
+
+
+def test_parse_non_drive_bare_none():
+    assert gd.parse_drive_file_id("https://tracker.example.com/t?id=abc&x=1") is None
+
+
 def test_fetch_metadata_ok(monkeypatch):
     s = _session(); _connect(s)
     monkeypatch.setattr(gd, "_drive_request", lambda m, u, t, params=None: {
