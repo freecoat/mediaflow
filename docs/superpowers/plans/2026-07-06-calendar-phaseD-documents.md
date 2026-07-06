@@ -517,15 +517,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.context import current_tenant_id
 from app.models.models import DocumentLink, Project, Acquisition
 from app.services.rbac import has_permission, current_user, current_user_optional
 from app.services.tenant_guard import scoped, fetch_or_404
 from app.services import google_drive
-from app.services.oauth_providers import get_valid_access_token, get_token
+from app.services.oauth_providers import get_valid_access_token
 
 router = APIRouter(tags=["documents"])
 
-CURRENT_TENANT = 1
+# NB: tenant dal contesto (current_tenant_id()), come calendar.py/acquisitions.py.
+# scoped()/fetch_or_404() applicano il filtro tenant internamente — NON passare
+# un tenant_id come kwarg (fetch_or_404 non lo accetta).
 
 # linked_type → (modello, perm_view, perm_manage)
 _ENTITY = {
@@ -568,8 +571,8 @@ async def link_document(request: Request, db: Session = Depends(get_db),
     model, _pv, perm_manage = _resolve_entity(linked_type)
     if not has_permission(user, perm_manage):
         raise HTTPException(403, "Permesso negato")
-    # entità esiste + tenant-scoped
-    fetch_or_404(db, model, linked_id, tenant_id=CURRENT_TENANT)
+    # entità esiste + tenant-scoped (fetch_or_404 usa current_tenant_id() internamente)
+    fetch_or_404(db, model, linked_id)
 
     fid = (file_id or "").strip()
     d_name = (name or "").strip()
@@ -598,7 +601,7 @@ async def link_document(request: Request, db: Session = Depends(get_db),
     if not d_web:
         d_web = "https://drive.google.com/file/d/" + fid + "/view"
 
-    doc = DocumentLink(tenant_id=CURRENT_TENANT, provider="google", external_file_id=fid,
+    doc = DocumentLink(tenant_id=current_tenant_id(), provider="google", external_file_id=fid,
                        name=d_name, mime_type=d_mime, web_url=d_web, icon_url=d_icon,
                        owner_email=d_owner, added_by=user.id)
     setattr(doc, f"{linked_type}_id", linked_id)
@@ -623,7 +626,7 @@ async def list_documents(request: Request, linked_type: str, linked_id: int,
 @router.delete("/documents/api/link/{doc_id}")
 async def delete_document(doc_id: int, request: Request, db: Session = Depends(get_db)):
     user = current_user(request)
-    doc = fetch_or_404(db, DocumentLink, doc_id, tenant_id=CURRENT_TENANT)
+    doc = fetch_or_404(db, DocumentLink, doc_id)
     linked_type = ("project" if doc.project_id else "acquisition" if doc.acquisition_id
                    else "project")
     _model, _pv, perm_manage = _resolve_entity(linked_type)
@@ -988,7 +991,7 @@ git commit -F <msgfile>
 - Router: `linked_type` ∈ {`project`,`acquisition`}; `_ENTITY` mappa a `(model, perm_view, perm_manage)` = (`Project`,`view_projects`,`edit_projects`) / (`Acquisition`,`view_acquisitions`,`manage_acquisitions`) — perm verificati esistenti in `rbac.py`.
 - `_serialize_doc` chiavi coerenti con `documents.js` (`name,web_url,icon_url,owner_email,id`).
 - Funzioni JS globali `mfDocInit/mfDocList/mfDocAddByUrl/mfDocPicker/mfDocRemove` coerenti Task 4 (impl+test+embed).
-- `has_permission(user, perm)`, `current_user(request)`, `fetch_or_404(db, model, id, tenant_id=)`, `scoped(query, model)` — firme verificate nel codebase.
+- `has_permission(user, perm)`, `current_user(request)`, `fetch_or_404(db, model, obj_id, *, error=)` (tenant dal contesto, NO kwarg tenant_id), `scoped(query, model)`, `current_tenant_id()` — firme verificate nel codebase.
 
 ## Note
 
