@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.243 — Fase D Calendario/Account: documenti Drive collegati (6 lug 2026)
+
+- **DocumentLink** (`document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo un riferimento (metadata + link), nessuno storage locale.
+- **Due modi di aggancio**: incolla-link (sempre attivo → parse URL Drive + fetch metadata `drive.file` best-effort) e **Google Picker** (bottone "Scegli da Drive" visibile solo se `GOOGLE_PICKER_API_KEY` configurato + utente Google connesso).
+- **Servizio** `app/services/google_drive.py` (urllib, `_drive_request` mockabile) + **router** `app/routers/documents.py` (link/list/delete/picker-config, RBAC runtime per `linked_type`, tenant-scope). Sezione **📎 Documenti** nel detail di progetto e nel tab dedicato di acquisition.
+- **Best-effort**: `drive.file` vede solo file creati/aperti dall'app → incolla-link di file mai toccati → metadata `None` → fallback name; il Picker aggira (l'atto di scegliere concede l'accesso). Nessun refresh token verso il client (solo access_token effimero per il Picker).
+- Migrazione `scripts/migrate_documents.py` (tabella creata anche da `create_all` al boot) + voce strumenti. i18n 5 lingue (`doc.*`). Config `GOOGLE_PICKER_API_KEY` in `.env.example`. **Chiude il programma A/B/C/D** (account linking + calendario + documenti).
+
 ## v3.5.0-alpha.172.242 — Fase C Calendario: sync Google bidirezionale (6 lug 2026)
 
 - **Push per-utente** degli appuntamenti Claqo verso un calendario secondario "Claqo" nell'account Google dell'utente (`calendar.app.created`): create/edit/delete si riflettono su Google.

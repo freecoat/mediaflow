@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.242** — 6 luglio 2026 — Fase C Calendario: sync Google bidirezionale
+**v3.5.0-alpha.172.243** — 6 luglio 2026 — Fase D Calendario/Account: documenti Drive collegati
+
+### α.172.243 ✅ (Fase D — documenti Drive — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
+- **`DocumentLink`** (tabella `document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo riferimento (metadata + link), nessuno storage locale. Link nullable a project/acquisition/activity/client.
+- **Due modi di aggancio**: incolla-link (sempre attivo → `parse_drive_file_id` + `fetch_file_metadata` `drive.file` best-effort) + **Google Picker** (bottone "Scegli da Drive" visibile solo se `GOOGLE_PICKER_API_KEY` + utente Google connesso).
+- **Servizi/router**: `app/services/google_drive.py` (urllib, unico `_drive_request` mockabile) + `app/routers/documents.py` (`POST /documents/api/link`, `GET /documents/api/list`, `DELETE /documents/api/link/{id}`, `GET /documents/api/picker-config`; RBAC runtime per `linked_type` — project→view/edit_projects, acquisition→view/manage_acquisitions; tenant-scope via `scoped`/`fetch_or_404`).
+- **Frontend** `documents.js` (`mfDocInit/List/AddByUrl/Picker/Remove`, handler rimozione delegato bindato una-tantum via `_mfDocClickBound`). Sezione 📎 in `project_detail.html` + tab "Documenti" dedicato in `acquisitions.html` (reload lista su switch tab).
+- **Best-effort**: `drive.file` vede solo file creati/aperti dall'app → incolla-link di file mai toccati → metadata `None` → fallback name "Documento Drive"; il Picker aggira. `web_url` aperto solo se schema http(s), `rel="noopener noreferrer"`. Nessun refresh token al client (solo access_token effimero per il Picker).
+- Migrazione `scripts/migrate_documents.py` (tabella creata anche da `create_all` al boot) + voce strumenti `[R]`/`[r]`. i18n 5 lingue (`doc.*`). Config `GOOGLE_PICKER_API_KEY` in `.env.example`. **Chiude il programma A/B/C/D**.
+- Test: `test_document_link_model` + `test_google_drive` (9) + `test_documents_api` (8+RBAC) + `test_documents_page` (4).
+
+**Prossimo step**: **merge `feat/calendar-phaseB` → main + push** dopo smoke Matteo (prereq: OAuth client Google Cloud reale + eventuale `GOOGLE_PICKER_API_KEY` per il Picker). Programma A/B/C/D chiuso. Ramo `feat/calendar-phaseB` NON pushato (contiene B + B.1 + C + D).
 
 ### α.172.242 ✅ (Fase C — sync Google — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
 - **Push per-utente** appuntamenti Claqo → calendario secondario "Claqo" su Google (`calendar.app.created`): create/edit/delete si riflettono su Google. `external_event_id` salvato, badge ⟲.
