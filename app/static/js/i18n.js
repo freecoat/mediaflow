@@ -1026,6 +1026,17 @@ window.MF_I18N = {
   'cal.showGoogle':    {it: 'Mostra Google', en: 'Show Google', fr: 'Afficher Google', de: 'Google anzeigen', es: 'Mostrar Google'},
   'cal.google.readonly': {it: 'Evento Google (sola lettura)', en: 'Google event (read-only)', fr: 'Evenement Google (lecture seule)', de: 'Google-Termin (schreibgeschutzt)', es: 'Evento de Google (solo lectura)'},
   'cal.synced':        {it: 'Sincronizzato con Google', en: 'Synced with Google', fr: 'Synchronise avec Google', de: 'Mit Google synchronisiert', es: 'Sincronizado con Google'},
+
+  // ── Documenti Drive collegati (Fase D) ────────────
+  'doc.section':       {it: 'Documenti', en: 'Documents', fr: 'Documents', de: 'Dokumente', es: 'Documentos'},
+  'doc.addByUrl':      {it: 'Aggiungi da link', en: 'Add by link', fr: 'Ajouter par lien', de: 'Per Link hinzufugen', es: 'Anadir por enlace'},
+  'doc.urlPlaceholder': {it: 'Incolla link Google Drive...', en: 'Paste Google Drive link...', fr: 'Collez le lien Google Drive...', de: 'Google-Drive-Link einfugen...', es: 'Pega el enlace de Google Drive...'},
+  'doc.pick':          {it: 'Scegli da Drive', en: 'Pick from Drive', fr: 'Choisir depuis Drive', de: 'Aus Drive wahlen', es: 'Elegir de Drive'},
+  'doc.empty':         {it: 'Nessun documento collegato', en: 'No linked documents', fr: 'Aucun document lie', de: 'Keine verknupften Dokumente', es: 'Ningun documento vinculado'},
+  'doc.remove':        {it: 'Rimuovi', en: 'Remove', fr: 'Retirer', de: 'Entfernen', es: 'Quitar'},
+  'doc.added':         {it: 'Documento collegato', en: 'Document linked', fr: 'Document lie', de: 'Dokument verknupft', es: 'Documento vinculado'},
+  'doc.error':         {it: 'Errore documento', en: 'Document error', fr: 'Erreur document', de: 'Dokumentfehler', es: 'Error de documento'},
+  'doc.invalidUrl':    {it: 'Link Drive non valido', en: 'Invalid Drive link', fr: 'Lien Drive invalide', de: 'Ungultiger Drive-Link', es: 'Enlace de Drive no valido'},
 };
 
 /**

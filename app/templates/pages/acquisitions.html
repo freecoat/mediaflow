@@ -255,6 +255,7 @@
       <button class="acq-det-tab" data-tab="contacts" onclick="acqDetTab(this,'contacts')" data-i18n="acq.detail.tab.contacts">Contatti</button>
       <button class="acq-det-tab" data-tab="quotes" onclick="acqDetTab(this,'quotes')" data-i18n="acq.detail.tab.quotes">Quotazioni</button>
       <button class="acq-det-tab" data-tab="calendar" onclick="acqDetTab(this,'calendar')" data-i18n="acq.detail.tab.calendar">Appuntamenti</button>
+      <button class="acq-det-tab" data-tab="documents" onclick="acqDetTab(this,'documents')" data-i18n="doc.section">Documenti</button>
     </div>
 
     {# Activities tab #}
@@ -338,6 +339,16 @@
     <div class="acq-det-content" id="det-tab-calendar">
       <div id="det-calendar-list"></div>
       <button class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="acqNewAppointment()" data-i18n="cal.new">Nuovo appuntamento</button>
+    </div>
+
+    {# 📎 Documenti collegati (Fase D) #}
+    <div class="acq-det-content" id="det-tab-documents">
+      <div id="doc-list-acquisition" class="doc-list mb-3"></div>
+      <div class="doc-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="url" id="doc-url-acquisition" class="form-input" style="flex:1;min-width:180px;" data-i18n-attr="placeholder" data-i18n="doc.urlPlaceholder" placeholder="Incolla link Google Drive…">
+        <button class="btn btn-secondary btn-sm" id="acq-doc-add" data-i18n="doc.addByUrl">Aggiungi da link</button>
+        <button class="btn btn-secondary btn-sm" id="doc-pick-acquisition" style="display:none" data-i18n="doc.pick">Scegli da Drive</button>
+      </div>
     </div>
 
     {# Actions #}
@@ -466,6 +477,7 @@
 
 {% block scripts %}
 <script src="/static/js/event_modal.js?v={{ app_version }}"></script>
+<script src="/static/js/documents.js?v={{ app_version }}"></script>
 <script>
 /* ────────────────────────────────────────────────────────────────────────
    Acquisizioni — JS
@@ -797,6 +809,11 @@ async function acqOpenDetail(aid) {
 
     // show/hide convert button
     document.getElementById('det-btn-convert').style.display = a.project_id ? 'none' : '';
+
+    // 📎 Documenti collegati (Fase D)
+    document.getElementById('acq-doc-add').onclick = function () { mfDocAddByUrl('acquisition', aid); };
+    document.getElementById('doc-pick-acquisition').onclick = function () { mfDocPicker('acquisition', aid); };
+    mfDocInit('acquisition', aid);
   } catch(e) {
     toast(mfT('toast.error_loading','Errore caricamento'), 'error');
   }
@@ -814,6 +831,7 @@ function acqDetTab(btn, tab) {
   btn.classList.add('active');
   document.getElementById('det-tab-' + tab).classList.add('active');
   if (tab === 'calendar' && _acqCurrentId) acqDetLoadCalendarEvents(_acqCurrentId);
+  if (tab === 'documents' && _acqCurrentId) mfDocList('acquisition', _acqCurrentId);
 }
 
 function _apptStatusBadge(status) {
