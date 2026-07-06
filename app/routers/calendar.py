@@ -18,6 +18,7 @@ from app.models.models import (
     CalendarEvent, CalendarEventStatus, Activity, Acquisition,
 )
 from app.services.rbac import requires_permission, current_user_optional
+from app.services.calendar_sync import maybe_autosync_event, sync_user_pending
 
 router = APIRouter(tags=["calendar"])
 
@@ -45,6 +46,7 @@ def _serialize_event(ev: CalendarEvent) -> dict:
         "acquisition_id": ev.acquisition_id, "project_id": ev.project_id,
         "activity_id": ev.activity_id, "client_id": ev.client_id,
         "attendees": ev.attendees or [], "source": ev.source,
+        "sync_state": ev.sync_state, "external_event_id": ev.external_event_id,
     }
 
 
@@ -170,6 +172,8 @@ async def create_event(
                   acquisition_id=acquisition_id, project_id=project_id,
                   activity_id=activity_id, client_id=client_id)
     db.add(ev); db.commit(); db.refresh(ev)
+    maybe_autosync_event(db, ev.owner_user_id, ev)
+    db.commit(); db.refresh(ev)
     return _serialize_event(ev)
 
 
@@ -199,6 +203,8 @@ async def update_event(
                   acquisition_id=acquisition_id, project_id=project_id,
                   activity_id=activity_id, client_id=client_id)
     db.commit(); db.refresh(ev)
+    maybe_autosync_event(db, ev.owner_user_id, ev)
+    db.commit(); db.refresh(ev)
     return _serialize_event(ev)
 
 
@@ -211,4 +217,27 @@ async def delete_event(event_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Appuntamento non trovato")
     ev.is_active = False
     db.commit()
+    maybe_autosync_event(db, ev.owner_user_id, ev, deleted=True)
+    db.commit()
     return {"ok": True}
+
+
+@router.post("/calendar/api/sync", dependencies=[RequireManage])
+async def sync_now(request: Request, db: Session = Depends(get_db)):
+    u = current_user_optional(request)
+    if not u:
+        raise HTTPException(401, "Non autenticato")
+    return sync_user_pending(db, u.id)
+
+
+@router.get("/calendar/api/google-overlay", dependencies=[RequireView])
+async def google_overlay(start: Optional[str] = None, end: Optional[str] = None,
+                         request: Request = None, db: Session = Depends(get_db)):
+    u = current_user_optional(request)
+    if not u or not start or not end:
+        return {"events": []}
+    from app.services import google_calendar
+    try:
+        return {"events": google_calendar.list_google_events(db, u.id, start, end)}
+    except Exception:
+        return {"events": []}
