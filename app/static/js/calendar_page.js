@@ -1,4 +1,4 @@
-// app/static/js/calendar_page.js — Fase B FullCalendar wiring
+// app/static/js/calendar_page.js — Fase B.1: vista settimana + editing via modal condiviso
 let _cal = null;
 
 function calScope() {
@@ -15,8 +15,11 @@ async function calFetchEvents(info, success, failure) {
     const data = await r.json();
     const evs = (data.events || []).map(e => ({
       id: e.id, title: e.title, start: e.start, end: e.end, allDay: e.all_day,
-      extendedProps: { source: e.source, location: e.location, meeting_url: e.meeting_url,
-                       acquisition_id: e.acquisition_id, client_id: e.client_id }
+      extendedProps: {
+        source: e.source, description: e.description, location: e.location,
+        meeting_url: e.meeting_url, status: e.status,
+        acquisition_id: e.acquisition_id, client_id: e.client_id, project_id: e.project_id
+      }
     }));
     (data.markers || []).forEach(m => evs.push({
       title: '• ' + m.title, start: m.date, allDay: true, display: 'background',
@@ -26,27 +29,31 @@ async function calFetchEvents(info, success, failure) {
   } catch (e) { failure(e); }
 }
 
-async function calSaveEvent(fd, id) {
-  const method = id ? 'PUT' : 'POST';
-  const url = '/calendar/api/events' + (id ? '/' + id : '');
-  const r = await fetch(url, { method, body: fd });
-  if (!r.ok) { if (window.toast) toast('Errore salvataggio', 'error'); return null; }
-  return r.json();
+// Rimappa un evento FullCalendar → oggetto compatibile con openEventModal.
+function _fcEventToObj(fc) {
+  const p = fc.extendedProps || {};
+  return {
+    id: fc.id, title: fc.title, all_day: fc.allDay,
+    start: fc.start ? fc.start.toISOString() : null,
+    end: fc.end ? fc.end.toISOString() : null,
+    location: p.location || '', meeting_url: p.meeting_url || '',
+    status: p.status || 'confirmed', description: p.description || '',
+    acquisition_id: p.acquisition_id || null, client_id: p.client_id || null,
+    project_id: p.project_id || null
+  };
 }
 
 function calNewEvent(prefill) {
-  prefill = prefill || {};
-  const title = prompt(window.mfT ? mfT('cal.event.title') : 'Titolo');
-  if (!title) return;
-  const start = prefill.start || new Date().toISOString().slice(0, 16);
-  const end = prefill.end || start;
+  window.openEventModal({ prefill: prefill || {}, onSaved: () => _cal && _cal.refetchEvents() });
+}
+
+function _calPutTimes(info) {
+  if (info.event.extendedProps.marker) { info.revert(); return; }
   const fd = new FormData();
-  fd.append('title', title);
-  fd.append('start_at', start);
-  fd.append('end_at', end);
-  if (prefill.acquisition_id) fd.append('acquisition_id', prefill.acquisition_id);
-  if (prefill.client_id) fd.append('client_id', prefill.client_id);
-  calSaveEvent(fd, null).then(() => _cal && _cal.refetchEvents());
+  fd.append('start_at', info.event.start.toISOString());
+  if (info.event.end) fd.append('end_at', info.event.end.toISOString());
+  fetch('/calendar/api/events/' + info.event.id, { method: 'PUT', body: fd })
+    .then(r => { if (!r.ok) { info.revert(); if (window.toast) toast(mfT('common.error'), 'error'); } });
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -54,19 +61,42 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!root || typeof FullCalendar === 'undefined') return;
   const lang = (window.MF_CURRENT_LANG || localStorage.getItem('mf_lang') || 'it');
   _cal = new FullCalendar.Calendar(root, {
-    initialView: 'dayGridMonth',
+    initialView: 'timeGridWeek',
     locale: lang,
     headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
     editable: true,
+    selectable: true,
+    nowIndicator: true,
+    allDaySlot: true,
+    slotMinTime: '07:00:00',
+    slotMaxTime: '22:00:00',
+    slotDuration: '00:30:00',
+    expandRows: true,
+    eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
     events: calFetchEvents,
-    dateClick: function (info) { calNewEvent({ start: info.dateStr + 'T09:00', end: info.dateStr + 'T10:00' }); },
-    eventDrop: function (info) {
-      if (info.event.extendedProps.marker) { info.revert(); return; }
-      const fd = new FormData();
-      fd.append('start_at', info.event.start.toISOString());
-      if (info.event.end) fd.append('end_at', info.event.end.toISOString());
-      calSaveEvent(fd, info.event.id);
+    eventClick: function (info) {
+      if (info.event.extendedProps.marker) return;
+      info.jsEvent.preventDefault();
+      window.openEventModal({ event: _fcEventToObj(info.event), onSaved: () => _cal.refetchEvents() });
     },
+    select: function (info) {
+      window.openEventModal({
+        prefill: { start: info.startStr, end: info.endStr },
+        onSaved: () => _cal.refetchEvents()
+      });
+      _cal.unselect();
+    },
+    dateClick: function (info) {
+      window.openEventModal({
+        prefill: {
+          start: info.dateStr + (info.allDay ? '' : 'T09:00'),
+          end: info.dateStr + (info.allDay ? '' : 'T10:00')
+        },
+        onSaved: () => _cal.refetchEvents()
+      });
+    },
+    eventDrop: _calPutTimes,
+    eventResize: _calPutTimes,
   });
   _cal.render();
   const sc = document.getElementById('cal-scope');
