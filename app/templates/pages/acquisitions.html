@@ -465,6 +465,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/js/event_modal.js?v={{ app_version }}"></script>
 <script>
 /* ────────────────────────────────────────────────────────────────────────
    Acquisizioni — JS
@@ -815,43 +816,78 @@ function acqDetTab(btn, tab) {
   if (tab === 'calendar' && _acqCurrentId) acqDetLoadCalendarEvents(_acqCurrentId);
 }
 
+function _apptStatusBadge(status) {
+  const map = {
+    confirmed: { c: '#4ade80', k: 'cal.event.status.confirmed' },
+    tentative: { c: '#fbbf24', k: 'cal.event.status.tentative' },
+    cancelled: { c: '#ef4444', k: 'cal.event.status.cancelled' }
+  };
+  const m = map[status] || map.confirmed;
+  return '<span style="font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid ' + m.c +
+         ';color:' + m.c + ';margin-left:6px;">' + escapeHtml(mfT(m.k)) + '</span>';
+}
+
+function _apptWhen(ev) {
+  if (!ev.start) return '';
+  const s = new Date(ev.start);
+  if (ev.all_day) return s.toLocaleDateString() + ' · ' + mfT('acq.appt.allDayLabel');
+  let out = s.toLocaleDateString() + ' ' + s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (ev.end) {
+    const e = new Date(ev.end);
+    out += '–' + e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return out;
+}
+
 async function acqDetLoadCalendarEvents(aid) {
   try {
     const r = await api('GET', '/calendar/api/events?acquisition_id=' + aid);
     const list = document.getElementById('det-calendar-list');
     const items = (r && r.events) || [];
     if (!items.length) {
-      list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.noAppointments">' + mfT('acq.detail.noAppointments','Nessun appuntamento.') + '</div>';
+      list.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 0;" data-i18n="acq.detail.noAppointments">' + mfT('acq.detail.noAppointments') + '</div>';
       return;
     }
     list.innerHTML = '';
     items.forEach(ev => {
       const el = document.createElement('div');
       el.className = 'acq-activity-item';
-      const when = ev.start ? new Date(ev.start).toLocaleString() : '';
+      el.style.display = 'flex';
+      el.style.justifyContent = 'space-between';
+      el.style.alignItems = 'flex-start';
+      el.style.gap = '8px';
       const safeUrl = (ev.meeting_url && /^https?:\/\//i.test(ev.meeting_url)) ? ev.meeting_url : null;
-      el.innerHTML = '<strong>' + escapeHtml(ev.title || '') + '</strong>' +
-        (when ? '<span style="color:var(--text3);font-size:11px;margin-left:4px;">' + escapeHtml(when) + '</span>' : '') +
-        (ev.location ? '<div style="color:var(--text3);margin-top:3px;">' + escapeHtml(ev.location) + '</div>' : '') +
-        (safeUrl ? '<div style="font-size:11px;"><a href="' + escapeHtml(safeUrl) + '" target="_blank" rel="noopener">' + escapeHtml(safeUrl) + '</a></div>' : '');
+      const left =
+        '<div>' +
+        '<div><strong>' + escapeHtml(ev.title || '') + '</strong>' + _apptStatusBadge(ev.status) + '</div>' +
+        '<div style="color:var(--text3);font-size:11px;margin-top:2px;">' + escapeHtml(_apptWhen(ev)) + '</div>' +
+        (ev.location ? '<div style="color:var(--text3);font-size:11px;">' + escapeHtml(ev.location) + '</div>' : '') +
+        (safeUrl ? '<div style="font-size:11px;"><a href="' + escapeHtml(safeUrl) + '" target="_blank" rel="noopener">' + escapeHtml(safeUrl) + '</a></div>' : '') +
+        '</div>';
+      const right =
+        '<div style="display:flex;gap:4px;flex-shrink:0;">' +
+        '<button class="btn btn-ghost btn-icon btn-sm" type="button" title="' + escapeHtml(mfT('cal.event.edit')) + '" data-appt-edit="' + ev.id + '">✎</button>' +
+        '<button class="btn btn-ghost btn-icon btn-sm" type="button" style="color:#ef4444;" title="' + escapeHtml(mfT('cal.event.delete')) + '" data-appt-del="' + ev.id + '">🗑</button>' +
+        '</div>';
+      el.innerHTML = left + right;
+      el.querySelector('[data-appt-edit]').addEventListener('click', function () {
+        window.openEventModal({ event: ev, prefill: { acquisition_id: aid }, onSaved: () => acqDetLoadCalendarEvents(aid) });
+      });
+      el.querySelector('[data-appt-del]').addEventListener('click', function () {
+        if (!confirm(mfT('cal.event.deleteConfirm'))) return;
+        fetch('/calendar/api/events/' + ev.id, { method: 'DELETE' }).then(function (resp) {
+          if (resp.ok) acqDetLoadCalendarEvents(aid);
+          else if (window.toast) toast(mfT('common.error'), 'error');
+        });
+      });
       list.appendChild(el);
     });
   } catch(e) {}
 }
 
-async function acqNewAppointment() {
+function acqNewAppointment() {
   if (!_acqCurrentId) return;
-  const title = prompt(mfT('cal.event.title', 'Titolo'));
-  if (!title) return;
-  const start = new Date().toISOString().slice(0, 16);
-  const fd = new FormData();
-  fd.append('title', title);
-  fd.append('start_at', start);
-  fd.append('end_at', start);
-  fd.append('acquisition_id', _acqCurrentId);
-  const r = await fetch('/calendar/api/events', { method: 'POST', body: fd });
-  if (r.ok) acqDetLoadCalendarEvents(_acqCurrentId);
-  else if (window.toast) toast(mfT('common.error', 'Errore'), 'error');
+  window.openEventModal({ prefill: { acquisition_id: _acqCurrentId }, onSaved: () => acqDetLoadCalendarEvents(_acqCurrentId) });
 }
 
 async function acqDetLoadActivities(aid) {
