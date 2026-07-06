@@ -34,6 +34,7 @@ from app.routers import (
     acquisitions,  # feat/acquisizioni-fase1 — Pipeline commerciale CRUD + summary + agenda
     contacts,  # feat/acquisizioni-fase1 Task 10 — Contatti multipli per cliente
     calendar as calendar_router,  # feat/calendar-phaseB Task 3 — CRUD eventi + marcatori
+    documents as documents_router,  # feat/calendar-phaseB Fase D Task 3 — documenti Drive collegati
 )
 
 
@@ -2839,6 +2840,7 @@ app.include_router(mobile_router.router)  # v3.5.0-alpha.172.158 — PWA compani
 app.include_router(acquisitions.router)  # feat/acquisizioni-fase1 — Pipeline commerciale
 app.include_router(contacts.router)  # feat/acquisizioni-fase1 Task 10 — Contatti cliente
 app.include_router(calendar_router.router)  # feat/calendar-phaseB Task 3 — CRUD eventi + marcatori
+app.include_router(documents_router.router)  # Fase D — documenti Drive collegati
 
 
 @app.get("/", response_class=HTMLResponse)
