@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.242 — Fase C Calendario: sync Google bidirezionale (6 lug 2026)
+
+- **Push per-utente** degli appuntamenti Claqo verso un calendario secondario "Claqo" nell'account Google dell'utente (`calendar.app.created`): create/edit/delete si riflettono su Google.
+- **Overlay read-only** degli eventi Google esistenti dentro `/calendar` (`calendar.readonly`, esclude il calendario Claqo), con checkbox "Mostra Google".
+- **Autosync** on-save se `auto_sync_calendar` ON + bottone **"Sincronizza"** (push/delete di tutto il pending). Badge ⟲ sugli eventi sincronizzati.
+- `app/services/google_calendar.py` (client API, urllib, mockabile) + `app/services/calendar_sync.py` (orchestrazione). Endpoint `POST /calendar/api/sync`, `GET /calendar/api/google-overlay`. Best-effort: nessuna chiamata Google blocca il CRUD locale o il render.
+- **Fix best-effort** (smoke browser): con token Google memorizzato ma revocato + calendario "Claqo" non ancora creato, `ensure_claqo_calendar` chiamava l'API fuori dal try di `push_event` → `HTTPError 403` propagata → `500` su `/calendar/api/sync`. Ora la creazione calendario è guardata (403/rete → `None`, mai propaga); l'evento resta pending e `sync` conta `failed`. +3 test di regressione.
+- Nessuna migrazione DB (colonne sync già presenti). Testato con mock; live appena l'utente configura l'OAuth client Google Cloud.
+
 ## v3.5.0-alpha.172.241 — Fase B.1 Calendario: editing eventi + leggibilità (6 lug 2026)
 
 Rifinitura UX del calendario (feedback Matteo: sovrapposizioni, orari invisibili, no editing).

@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.241** — 6 luglio 2026 — Fase B.1 Calendario: editing eventi + leggibilità
+**v3.5.0-alpha.172.242** — 6 luglio 2026 — Fase C Calendario: sync Google bidirezionale
+
+### α.172.242 ✅ (Fase C — sync Google — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
+- **Push per-utente** appuntamenti Claqo → calendario secondario "Claqo" su Google (`calendar.app.created`): create/edit/delete si riflettono su Google. `external_event_id` salvato, badge ⟲.
+- **Overlay read-only** eventi Google esistenti in `/calendar` (`calendar.readonly`, esclude calendario Claqo), checkbox "Mostra Google". Non editabili (eventClick/drag ignorati).
+- **Autosync** on-save se `auto_sync_calendar` ON (usa `ev.owner_user_id`) + bottone **"Sincronizza"** → push/delete di tutto il pending (`local/pending_push/error` push; `is_active=False` con external_id delete).
+- **Servizi**: `app/services/google_calendar.py` (client urllib, unico `_google_request` mockabile: ensure/push/delete/list) + `app/services/calendar_sync.py` (orchestrazione). Router: `POST /calendar/api/sync`, `GET /calendar/api/google-overlay`, `_serialize_event` con `sync_state`+`external_event_id`.
+- **Best-effort**: nessuna chiamata Google blocca CRUD locale o render (overlay/errore → lista vuota, mai 500). Nessuna migrazione DB (colonne sync già da Fase A/B). i18n 5 lingue (`cal.sync.*`, `cal.showGoogle`, `cal.google.readonly`, `cal.synced`).
+- **Fix smoke browser**: token Google admin memorizzato ma revocato + calendario Claqo non creato → `ensure_claqo_calendar` chiamava l'API fuori dal try di `push_event` → 403 propagata → **500** su `/calendar/api/sync`. I test mock non lo beccavano (pre-settavano sempre `claqo_calendar_id`). Ora creazione calendario guardata (403/rete → None). +3 test regressione. Smoke: sync 200 `{pushed:0,deleted:0,failed:1}`, overlay 200 `[]`, create 200 `local`, 0 errori console.
+- Test: `test_google_calendar` (12) + `test_calendar_sync` (4) + `test_calendar_sync_api` (5) + `test_calendar_sync_page` (2). 60 test calendar/google/oauth verdi. Live appena l'utente configura OAuth client Google Cloud.
+
+**Prossimo step**: **merge `feat/calendar-phaseB` → main + push** dopo smoke Matteo (prereq: OAuth client Google Cloud reale per test live). Poi Fase D documenti (Drive `drive.file`) oppure rifinitura sync (conflitti/webhook push). Ramo `feat/calendar-phaseB` NON pushato (contiene B + B.1 + C).
 
 ### α.172.241 ✅ (Fase B.1 — 6 lug, ramo feat/calendar-phaseB, 4 task; spec+plan 2026-07-06)
 - **Modal evento condiviso** `event_modal.js` (crea/modifica/elimina: titolo, inizio/fine, tutto-il-giorno, luogo, link, stato, collegamenti). Unica fonte di verità scrittura eventi, usato in `/calendar` + tab acquisizioni.
