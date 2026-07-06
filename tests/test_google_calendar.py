@@ -89,6 +89,27 @@ def test_push_error_sets_error_state(monkeypatch):
     assert ev.sync_error
 
 
+def test_ensure_returns_none_on_api_error(monkeypatch):
+    # Token presente ma claqo_calendar_id NULL → ensure crea il calendario via API.
+    # Se l'API fallisce (token revocato/scaduto → 403), best-effort: None, mai raise.
+    s = _session(); _connect(s)  # cal_id=None
+    def boom(*a, **k): raise RuntimeError("HTTP 403: Forbidden")
+    monkeypatch.setattr(gc, "_google_request", boom)
+    assert gc.ensure_claqo_calendar(s, 1) is None
+
+
+def test_push_no_raise_when_ensure_fails(monkeypatch):
+    # Regressione: prima ensure_claqo_calendar (fuori dal try di push_event)
+    # propagava la HTTPError → 500 su /calendar/api/sync. Ora push_event ritorna
+    # False senza sollevare.
+    s = _session(); _connect(s)  # cal_id=None → ensure chiama l'API
+    ev = _ev(s)
+    def boom(*a, **k): raise RuntimeError("HTTP 403: Forbidden")
+    monkeypatch.setattr(gc, "_google_request", boom)
+    assert gc.push_event(s, 1, ev) is False
+    assert ev.sync_state != "synced"
+
+
 def test_delete_noop_without_external_id():
     s = _session(); _connect(s, cal_id="cal1")
     ev = _ev(s)

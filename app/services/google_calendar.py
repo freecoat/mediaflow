@@ -52,8 +52,12 @@ def ensure_claqo_calendar(db: Session, user_id: int) -> Optional[str]:
     token = get_valid_access_token(db, user_id, "google")
     if not token:
         return None
-    res = _google_request("POST", _API_BASE + "/calendars", token,
-                          body={"summary": CLAQO_CALENDAR_SUMMARY})
+    try:  # best-effort: token revocato/scaduto (403) o rete → None, mai propagare
+        res = _google_request("POST", _API_BASE + "/calendars", token,
+                              body={"summary": CLAQO_CALENDAR_SUMMARY})
+    except Exception as e:
+        log.warning(f"ensure_claqo_calendar fallita user={user_id}: {e}")
+        return None
     cal_id = (res or {}).get("id")
     if cal_id:
         row.claqo_calendar_id = cal_id
