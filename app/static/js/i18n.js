@@ -1006,6 +1006,20 @@ window.MF_I18N = {
   'cal.event.link':    {it: 'Link riunione',en: 'Meeting link', fr: 'Lien reunion', de: 'Meeting-Link',  es: 'Enlace reunion'},
   'cal.event.save':    {it: 'Salva',        en: 'Save',         fr: 'Enregistrer',  de: 'Speichern',     es: 'Guardar'},
   'cal.event.delete':  {it: 'Elimina',      en: 'Delete',       fr: 'Supprimer',    de: 'Loschen',       es: 'Eliminar'},
+  'cal.event.new':     {it: 'Nuovo appuntamento', en: 'New appointment', fr: 'Nouveau rendez-vous', de: 'Neuer Termin', es: 'Nueva cita'},
+  'cal.event.edit':    {it: 'Modifica appuntamento', en: 'Edit appointment', fr: 'Modifier le rendez-vous', de: 'Termin bearbeiten', es: 'Editar cita'},
+  'cal.event.allday':  {it: 'Tutto il giorno', en: 'All day', fr: 'Toute la journee', de: 'Ganztags', es: 'Todo el dia'},
+  'cal.event.status':  {it: 'Stato', en: 'Status', fr: 'Statut', de: 'Status', es: 'Estado'},
+  'cal.event.status.confirmed': {it: 'Confermato', en: 'Confirmed', fr: 'Confirme', de: 'Bestatigt', es: 'Confirmado'},
+  'cal.event.status.tentative': {it: 'Provvisorio', en: 'Tentative', fr: 'Provisoire', de: 'Vorlaufig', es: 'Provisional'},
+  'cal.event.status.cancelled': {it: 'Annullato', en: 'Cancelled', fr: 'Annule', de: 'Abgesagt', es: 'Cancelado'},
+  'cal.event.cancel':  {it: 'Annulla', en: 'Cancel', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar'},
+  'cal.event.deleteConfirm': {it: 'Eliminare questo appuntamento?', en: 'Delete this appointment?', fr: 'Supprimer ce rendez-vous ?', de: 'Diesen Termin loschen?', es: 'Eliminar esta cita?'},
+  'cal.event.linkedTo': {it: 'Collegato a', en: 'Linked to', fr: 'Lie a', de: 'Verknupft mit', es: 'Vinculado a'},
+  'cal.event.saved':   {it: 'Appuntamento salvato', en: 'Appointment saved', fr: 'Rendez-vous enregistre', de: 'Termin gespeichert', es: 'Cita guardada'},
+  'cal.event.err.title': {it: 'Titolo obbligatorio', en: 'Title required', fr: 'Titre obligatoire', de: 'Titel erforderlich', es: 'Titulo obligatorio'},
+  'cal.event.err.range': {it: 'La fine precede l\'inizio', en: 'End is before start', fr: 'La fin precede le debut', de: 'Ende liegt vor Beginn', es: 'El fin precede al inicio'},
+  'acq.appt.allDayLabel': {it: 'Tutto il giorno', en: 'All day', fr: 'Toute la journee', de: 'Ganztags', es: 'Todo el dia'},
 };
 
 /**
