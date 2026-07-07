@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mail-layout" style="display:grid;grid-template-columns:200px 320px 1fr;gap:12px;height:calc(100vh - 120px);">
+  <aside class="mail-nav">
+    <button class="btn btn-primary btn-block" onclick="mfMailCompose()" data-i18n="mail.compose">Scrivi</button>
+    <div id="mail-labels" class="mail-labels" style="display:flex;flex-direction:column;gap:4px;margin-top:12px;"></div>
+  </aside>
+  <section class="mail-list" style="display:flex;flex-direction:column;gap:8px;overflow:auto;">
+    <input id="mail-search" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.search"
+           placeholder="Cerca nella posta…" onkeydown="if(event.key==='Enter')mfMailLoadThreads(true)">
+    <div id="mail-thread-list" class="mail-thread-list" style="display:flex;flex-direction:column;gap:2px;"></div>
+  </section>
+  <section id="mail-reading" class="mail-reading" style="overflow:auto;"></section>
+</div>
+
+<div id="mail-compose" class="modal-overlay hidden">
+  <div class="modal" style="display:flex;flex-direction:column;gap:8px;min-width:min(560px,90vw);">
+    <input name="to" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.to" placeholder="A">
+    <input name="cc" class="form-input" placeholder="Cc">
+    <input name="bcc" class="form-input" placeholder="Bcc">
+    <input name="subject" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.subject" placeholder="Oggetto">
+    <textarea name="body" class="form-input" rows="10"></textarea>
+    <input type="hidden" name="thread_id"><input type="hidden" name="in_reply_to"><input type="hidden" name="references">
+    <input type="file" name="attachments" multiple>
+    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-primary" onclick="mfMailSend()" data-i18n="mail.send">Invia</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('mail-compose').classList.add('hidden')">✕</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/mail.js?v={{ app_version }}"></script>
+<script>document.addEventListener('DOMContentLoaded', function(){ mfMailInit(); });</script>
+{% endblock %}

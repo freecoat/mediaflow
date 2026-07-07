@@ -34,6 +34,14 @@ async function loadAccountSettings() {
         '<span data-i18n="settings.account.autoSync">Sync calendario automatico</span></label>' +
         '<button class="btn btn-danger btn-sm" onclick="disconnectAccount(\'' + escapeHtml(pid) + '\')" ' +
         'data-i18n="settings.account.disconnect">Scollega</button>';
+      // Opt-in email (Gmail): richiede scope gmail.readonly+compose in aggiunta.
+      if (pid === 'google') {
+        const hasMail = (p.scopes || '').indexOf('gmail.readonly') !== -1;
+        actions += hasMail
+          ? ' <span class="badge badge-active" style="font-size:11px;">Email ✓</span>'
+          : ' <a class="btn btn-secondary btn-sm" href="/auth/oauth/google/start?scopes=email" ' +
+            'data-i18n="mail.connect">Collega Gmail</a>';
+      }
     } else {
       const notCfgTitle = window.mfT ? mfT('settings.account.notConfigured') : 'client_id non configurato';
       const disabled = p.configured ? '' : 'disabled title="' + escapeHtml(notCfgTitle) + '"';
