@@ -2528,6 +2528,7 @@ _MOBILE_REDIR_EXEMPT = (
     "/m", "/static", "/auth", "/api", "/uploads", "/portal", "/health",
     "/favicon", "/docs", "/openapi", "/redoc", "/public",
     "/prefer-desktop", "/prefer-mobile", "/sw.js", "/manifest",
+    "/mail", "/acquisitions",  # v.246 — isole desktop-responsive raggiungibili da telefono
 )
 
 
