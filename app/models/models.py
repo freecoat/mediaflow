@@ -4906,3 +4906,22 @@ class DocumentLink(Base):
     added_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class EmailLink(Base):
+    """Riferimento a un thread Gmail agganciato a una trattativa (Client email F2).
+    Nessuno storage del corpo: solo metadata + thread_id. Tenant-scoped, soft-delete."""
+    __tablename__ = "email_links"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    provider: Mapped[str] = mapped_column(String(20), default="google", nullable=False)
+    thread_id: Mapped[str] = mapped_column(String(255), index=True)
+    message_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    from_addr: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email_date: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    acquisition_id: Mapped[int] = mapped_column(ForeignKey("acquisitions.id"), index=True)
+    added_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

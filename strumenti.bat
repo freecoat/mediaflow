@@ -31,6 +31,7 @@ echo  [M] Cleanup orfani lifecycle Quote/Job/Booking [v3.4.36]
 echo  [P] Migra OAuth calendario (Fase A) [v3.5.0-alpha.172]
 echo  [Q] Migra calendario (Fase B) [v3.5.0-alpha.172]
 echo  [R] Migra Fase D - documenti Drive [v3.5.0-alpha.172]
+echo  [S] Migra Client email F2 - email_links [v3.5.0-alpha.172]
 echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]
 echo  [A] Apri cartella upload
 echo  [0] Esci
@@ -63,6 +64,7 @@ if /i "%scelta%"=="O" goto reset_business_data
 if /i "%scelta%"=="P" goto migrate_oauth_calendar
 if /i "%scelta%"=="Q" goto migrate_calendar_events
 if /i "%scelta%"=="R" goto migrate_documents
+if /i "%scelta%"=="S" goto migrate_email_links
 if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
@@ -402,6 +404,18 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_documents.py
+)
+pause & goto menu
+
+:migrate_email_links
+echo.
+echo Migrazione Client email F2: crea la tabella email_links (thread agganciati a trattative).
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_email_links.py
 )
 pause & goto menu
 
