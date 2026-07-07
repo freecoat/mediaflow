@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import urllib.parse
 import urllib.request
 from email.message import EmailMessage
@@ -31,6 +32,22 @@ def _b64url_decode(data: str) -> str:
         return base64.urlsafe_b64decode(padded.encode()).decode("utf-8", "replace")
     except Exception:
         return ""
+
+
+def parse_gmail_thread_id(url: str) -> Optional[str]:
+    """Estrae il thread id da un URL Gmail. None se non riconosciuto/non-Gmail.
+    Gestisce #inbox/ID, #label/Nome/ID, #search/query/ID e ?th=ID."""
+    if not url or "mail.google.com" not in url:
+        return None
+    m = re.search(r"[?&]th=([A-Za-z0-9_-]+)", url)
+    if m:
+        return m.group(1)
+    frag = url.split("#", 1)[1] if "#" in url else ""
+    if frag:
+        seg = frag.rstrip("/").split("/")[-1]
+        if re.fullmatch(r"[A-Za-z0-9_-]{8,}", seg):
+            return seg
+    return None
 
 
 def _gmail_request(method: str, path: str, token: str, params=None, body=None) -> dict:
