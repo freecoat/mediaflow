@@ -256,6 +256,7 @@
       <button class="acq-det-tab" data-tab="quotes" onclick="acqDetTab(this,'quotes')" data-i18n="acq.detail.tab.quotes">Quotazioni</button>
       <button class="acq-det-tab" data-tab="calendar" onclick="acqDetTab(this,'calendar')" data-i18n="acq.detail.tab.calendar">Appuntamenti</button>
       <button class="acq-det-tab" data-tab="documents" onclick="acqDetTab(this,'documents')" data-i18n="doc.section">Documenti</button>
+      <button class="acq-det-tab" data-tab="email" onclick="acqDetTab(this,'email')" data-i18n="email.tab">Email</button>
     </div>
 
     {# Activities tab #}
@@ -349,6 +350,20 @@
         <button class="btn btn-secondary btn-sm" id="acq-doc-add" data-i18n="doc.addByUrl">Aggiungi da link</button>
         <button class="btn btn-secondary btn-sm" id="doc-pick-acquisition" style="display:none" data-i18n="doc.pick">Scegli da Drive</button>
       </div>
+    </div>
+
+    {# 📧 Email agganciate (Client email F2) #}
+    <div class="acq-det-content" id="det-tab-email">
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <input id="em-search" class="form-input" style="flex:1;" data-i18n-attr="placeholder" data-i18n="email.search" placeholder="Cerca email del cliente…">
+        <button class="btn btn-secondary btn-sm" id="em-search-btn" data-i18n="email.search">Cerca</button>
+      </div>
+      <div id="em-results" class="mb-2"></div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input id="em-url" class="form-input" style="flex:1;" data-i18n-attr="placeholder" data-i18n="email.urlPlaceholder" placeholder="Incolla link Gmail…">
+        <button class="btn btn-secondary btn-sm" id="em-url-btn" data-i18n="email.pinUrl">Aggancia da link</button>
+      </div>
+      <div id="em-list"></div>
     </div>
 
     {# Actions #}
@@ -478,6 +493,7 @@
 {% block scripts %}
 <script src="/static/js/event_modal.js?v={{ app_version }}"></script>
 <script src="/static/js/documents.js?v={{ app_version }}"></script>
+<script src="/static/js/email_links.js?v={{ app_version }}"></script>
 <script>
 /* ────────────────────────────────────────────────────────────────────────
    Acquisizioni — JS
@@ -814,6 +830,11 @@ async function acqOpenDetail(aid) {
     document.getElementById('acq-doc-add').onclick = function () { mfDocAddByUrl('acquisition', aid); };
     document.getElementById('doc-pick-acquisition').onclick = function () { mfDocPicker('acquisition', aid); };
     mfDocInit('acquisition', aid);
+
+    // 📧 Email agganciate (Client email F2)
+    document.getElementById('em-search-btn').onclick = function () { mfEmailSearch(aid); };
+    document.getElementById('em-url-btn').onclick = function () { mfEmailPinUrl(aid); };
+    document.getElementById('em-search').value = '';
   } catch(e) {
     toast(mfT('toast.error_loading','Errore caricamento'), 'error');
   }
@@ -832,6 +853,7 @@ function acqDetTab(btn, tab) {
   document.getElementById('det-tab-' + tab).classList.add('active');
   if (tab === 'calendar' && _acqCurrentId) acqDetLoadCalendarEvents(_acqCurrentId);
   if (tab === 'documents' && _acqCurrentId) mfDocList('acquisition', _acqCurrentId);
+  if (tab === 'email' && _acqCurrentId) mfEmailInit(_acqCurrentId);
 }
 
 function _apptStatusBadge(status) {
