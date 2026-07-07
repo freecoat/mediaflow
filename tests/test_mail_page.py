@@ -29,3 +29,20 @@ def test_sidebar_has_mail():
     html = pathlib.Path("app/templates/base.html").read_text(encoding="utf-8")
     assert '/mail' in html
     assert 'data-i18n="nav.mail"' in html
+
+
+def test_mail_layout_uses_classes_not_inline_grid():
+    html = pathlib.Path("app/templates/pages/mail.html").read_text(encoding="utf-8")
+    assert "grid-template-columns:200px 320px 1fr" not in html.replace(" ", "")
+    assert 'data-mail-view' in html or 'mailMobileView' in html
+    assert 'id="mail-mobile-bar"' in html
+
+
+def test_mail_js_has_mobile_view():
+    src = pathlib.Path("app/static/js/mail.js").read_text(encoding="utf-8")
+    assert "mailMobileView" in src
+
+
+def test_mail_has_responsive_style_block():
+    html = pathlib.Path("app/templates/pages/mail.html").read_text(encoding="utf-8")
+    assert "@media" in html and "max-width" in html

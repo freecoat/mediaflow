@@ -62,6 +62,7 @@ function _mailRenderBody(html) {
 }
 
 async function mfMailOpenThread(threadId) {
+  mailMobileView('read');
   const box = document.getElementById('mail-reading');
   if (!box) return;
   try {
@@ -123,7 +124,7 @@ async function mfMailSend() {
 document.addEventListener('click', function (ev) {
   const t = ev.target;
   const lab = t.closest && t.closest('[data-label]');
-  if (lab) { ev.preventDefault(); _mailLabel = lab.getAttribute('data-label'); mfMailLoadThreads(true); return; }
+  if (lab) { ev.preventDefault(); _mailLabel = lab.getAttribute('data-label'); mailMobileView('list'); mfMailLoadThreads(true); return; }
   const row = t.closest && t.closest('[data-thread]');
   if (row && row.classList.contains('mail-thread-row')) { mfMailOpenThread(row.getAttribute('data-thread')); return; }
   const rep = t.closest && t.closest('[data-mail-reply]');
@@ -171,4 +172,14 @@ async function mfMailAssign(threadId) {
     if (r.ok) { if (window.toast) toast(mfT('email.assignOk'), 'success'); }
     else { if (window.toast) toast(mfT('email.error'), 'error'); }
   } catch (err) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+function mailMobileView(view) {
+  const layout = document.querySelector('.mail-layout');
+  if (!layout) return;
+  layout.setAttribute('data-mail-view', view);
+  const back = document.getElementById('mail-mb-back');
+  const labelsBtn = document.getElementById('mail-mb-labels');
+  if (back) back.style.display = (view === 'read') ? 'inline-flex' : 'none';
+  if (labelsBtn) labelsBtn.style.display = (view === 'read') ? 'none' : 'inline-flex';
 }

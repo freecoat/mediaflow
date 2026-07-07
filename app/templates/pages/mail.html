@@ -1,16 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="mail-layout" style="display:grid;grid-template-columns:200px 320px 1fr;gap:12px;height:calc(100vh - 120px);">
+<div id="mail-mobile-bar" class="mail-mobile-bar">
+  <button class="btn btn-secondary btn-sm" id="mail-mb-labels" onclick="mailMobileView('labels')">☰ Etichette</button>
+  <button class="btn btn-secondary btn-sm" id="mail-mb-back" onclick="mailMobileView('list')">← Indietro</button>
+</div>
+<div class="mail-layout" data-mail-view="list">
   <aside class="mail-nav">
     <button class="btn btn-primary btn-block" onclick="mfMailCompose()" data-i18n="mail.compose">Scrivi</button>
-    <div id="mail-labels" class="mail-labels" style="display:flex;flex-direction:column;gap:4px;margin-top:12px;"></div>
+    <div id="mail-labels" class="mail-labels"></div>
   </aside>
-  <section class="mail-list" style="display:flex;flex-direction:column;gap:8px;overflow:auto;">
+  <section class="mail-list">
     <input id="mail-search" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.search"
            placeholder="Cerca nella posta…" onkeydown="if(event.key==='Enter')mfMailLoadThreads(true)">
-    <div id="mail-thread-list" class="mail-thread-list" style="display:flex;flex-direction:column;gap:2px;"></div>
+    <div id="mail-thread-list" class="mail-thread-list"></div>
   </section>
-  <section id="mail-reading" class="mail-reading" style="overflow:auto;"></section>
+  <section id="mail-reading" class="mail-reading"></section>
 </div>
 
 <div id="mail-compose" class="modal-overlay hidden">
@@ -29,6 +33,27 @@
   </div>
 </div>
 
+<style>
+  .mail-layout { display: grid; grid-template-columns: 200px 320px 1fr; gap: 12px; height: calc(100vh - 120px); }
+  .mail-nav { display: flex; flex-direction: column; }
+  .mail-labels { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+  .mail-list { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+  .mail-thread-list { display: flex; flex-direction: column; gap: 2px; }
+  .mail-reading { overflow: auto; }
+  .mail-mobile-bar { display: none; gap: 6px; margin-bottom: 8px; }
+  #mail-mb-back { display: none; }
+  @media (max-width: 768px) {
+    .mail-mobile-bar { display: flex; }
+    .mail-layout { grid-template-columns: 1fr; height: calc(100dvh - 150px); }
+    .mail-layout[data-mail-view="list"] .mail-nav,
+    .mail-layout[data-mail-view="list"] .mail-reading { display: none; }
+    .mail-layout[data-mail-view="read"] .mail-nav,
+    .mail-layout[data-mail-view="read"] .mail-list { display: none; }
+    .mail-layout[data-mail-view="labels"] .mail-list,
+    .mail-layout[data-mail-view="labels"] .mail-reading { display: none; }
+    #mail-compose .modal { position: fixed; inset: 0; min-width: 0 !important; max-width: none; width: 100vw; height: 100dvh; border-radius: 0; overflow: auto; }
+  }
+</style>
 <script src="/static/js/mail.js?v={{ app_version }}"></script>
 <script>document.addEventListener('DOMContentLoaded', function(){ mfMailInit(); });</script>
 {% endblock %}
