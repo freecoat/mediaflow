@@ -36,6 +36,7 @@ from app.routers import (
     calendar as calendar_router,  # feat/calendar-phaseB Task 3 — CRUD eventi + marcatori
     documents as documents_router,  # feat/calendar-phaseB Fase D Task 3 — documenti Drive collegati
     mail as mail_router,  # feat/mail-client-phase1 — /mail webmail standalone
+    email_links as email_links_router,  # feat/mail-client-phase2 — email agganciate CRM
 )
 
 
@@ -2843,6 +2844,7 @@ app.include_router(contacts.router)  # feat/acquisizioni-fase1 Task 10 — Conta
 app.include_router(calendar_router.router)  # feat/calendar-phaseB Task 3 — CRUD eventi + marcatori
 app.include_router(documents_router.router)  # Fase D — documenti Drive collegati
 app.include_router(mail_router.router)  # Client email Sotto-fase 1 — /mail
+app.include_router(email_links_router.router)  # Client email F2 — email agganciate
 
 
 @app.get("/", response_class=HTMLResponse)
