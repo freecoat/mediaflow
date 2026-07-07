@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.244** — 7 luglio 2026 — Client email Sotto-fase 1: /mail webmail standalone
+**v3.5.0-alpha.172.245** — 7 luglio 2026 — Client email Sotto-fase 2: integrazione CRM (trattativa)
+
+### α.172.245 ✅ (Client email Sotto-fase 2 — CRM trattativa — 7 lug, ramo feat/mail-client-phase2, 6 task TDD; spec+plan 2026-07-07)
+- **`EmailLink`** (tabella `email_links`, tenant-scoped, soft-delete, pattern `DocumentLink`): aggancia thread Gmail alle **trattative** (`acquisition_id`) salvando solo metadata + `thread_id`, nessuno storage corpo. Migrazione `scripts/migrate_email_links.py` + voce strumenti (tabella creata anche da `create_all` al boot).
+- **`gmail.parse_gmail_thread_id(url)`**: estrae thread id da URL Gmail (`#inbox/ID`, `#label/Nome/ID`, `#search/q/ID`, `?th=ID`); non-Gmail/senza id → `None`.
+- **Router** `app/routers/email_links.py`: `POST /acquisitions/api/{aid}/emails/link` (pin da `thread_id` o `url`, metadata best-effort dal primo messaggio via `get_thread`, fallback subject "Email"), `GET /acquisitions/api/{aid}/emails`, `DELETE /email-links/{id}` (soft). RBAC acquisitions (`view`/`manage`), tenant-scope. Il pin logga un'**`Activity(type=email, direction=inbound)`** automatica in timeline trattativa.
+- **Tab "Email"** nel detail `/acquisitions` (`email_links.js`): ricerca Gmail nel tab (`/mail/api/threads`) + incolla-link → **Aggancia**; lista pinnati con **anteprima** (iframe `sandbox=""`, immagini remote bloccate), **Estrai con AI** (inietta corpo nel copilot → riusa estrazione Acquisizioni Fase 2, nessun backend AI nuovo), 🗑.
+- **"Assegna a trattativa"** dal client `/mail` (pannello lettura): picker trattative (`/acquisitions/api/list`) → pin. i18n 5 lingue (`email.*`).
+- Test nuovi: `test_email_link_model` (2), `test_gmail_parse_thread` (6), `test_email_links_api` (6), `test_email_links_page` (3), `test_mail_assign` (2).
+
+**Prossimo step**: smoke Matteo (tab Email trattativa: incolla link Gmail → Aggancia → lista + Activity "email"; anteprima; 🗑. `/mail` degrada a CTA senza opt-in Gmail). Poi **Client email Sotto-fase 3** (auto-flow: auto-associazione per indirizzo mittente, AI senza pin manuale, notifiche). Ramo `feat/mail-client-phase2` NON pushato.
 
 ### α.172.244 ✅ (Client email Sotto-fase 1 — /mail — 7 lug, ramo feat/mail-client-phase1, 7 task TDD; spec+plan 2026-07-07)
 - **Pagina `/mail`** = client webmail su Gmail a 3 pannelli (nav label | lista thread | lettura) + compose modal. Lettura: lista/ricerca thread (query Gmail passthrough), vista conversazione, nav label (Inbox/Inviati/Bozze + label utente), scarica allegati. Compose: Nuovo/Rispondi/Rispondi-a-tutti/Inoltra + allegati (multipart) + bozze; invio via Gmail API.

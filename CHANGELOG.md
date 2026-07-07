@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.245 — Client email Sotto-fase 2: integrazione CRM (trattativa) (7 lug 2026)
+
+- **`EmailLink`** (`email_links`, tenant-scoped, soft-delete): aggancia thread Gmail alle **trattative** salvando solo metadata + `thread_id`.
+- **Tab "Email"** nel detail trattativa `/acquisitions`: ricerca Gmail nel tab + incolla-link → **Pin**; lista pinnati con **anteprima** (iframe sandbox), **Estrai con AI**, 🗑. Il pin logga un'**Activity(type=email)** automatica in timeline.
+- **"Assegna a trattativa"** dal client `/mail` (pannello lettura) → picker trattative → pin.
+- **Estrai con AI** = iniezione nel copilot (riusa l'estrazione email di Acquisizioni Fase 2 → `propose_activity/contact/update_client/acquisition_stage`), nessun backend AI nuovo.
+- Router `app/routers/email_links.py` (pin/list/delete, RBAC acquisitions, tenant-scope) + `gmail.parse_gmail_thread_id`. Migrazione `scripts/migrate_email_links.py` + voce strumenti. i18n 5 lingue (`email.*`). Seconda delle 3 sotto-fasi Client email.
+
 ## v3.5.0-alpha.172.244 — Client email Sotto-fase 1: /mail webmail standalone (7 lug 2026)
 
 - **Pagina `/mail`**: client webmail su Gmail — lista/ricerca thread, vista conversazione, nav label, scarica allegati; compose Nuovo/Rispondi/Rispondi-a-tutti/Inoltra + allegati + bozze; invio via Gmail API.
