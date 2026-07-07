@@ -81,6 +81,7 @@ async function mfMailOpenThread(threadId) {
         '<div class="mail-msg-actions">' +
         '<button class="btn btn-sm" data-mail-reply="' + escapeHtml(m.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.reply') + '</button> ' +
         '<button class="btn btn-sm" data-mail-forward="' + escapeHtml(m.id) + '">' + mfT('mail.forward') + '</button>' +
+        '<button class="btn btn-sm" data-mail-assign="' + escapeHtml(threadId) + '">' + mfT('email.assign') + '</button>' +
         '</div></div>';
     }).join('') || '<div class="muted">' + mfT('mail.empty') + '</div>';
     // memorizza l'ultimo thread per reply/forward
@@ -147,4 +148,27 @@ document.addEventListener('click', function (ev) {
     if (frame) frame.setAttribute('srcdoc', frame.getAttribute('srcdoc').replace(/data-blocked-src=/gi, 'src='));
     return;
   }
+  const asg = t.closest && t.closest('[data-mail-assign]');
+  if (asg) { mfMailAssign(asg.getAttribute('data-mail-assign')); return; }
 });
+
+async function mfMailAssign(threadId) {
+  try {
+    const d = await (await fetch('/acquisitions/api/list')).json();
+    const raw = (d.acquisitions || d.items || d || []);
+    const list = Array.isArray(raw) ? raw : (raw.acquisitions || []);
+    if (!list.length) { if (window.toast) toast(mfT('email.empty'), 'error'); return; }
+    const label = list.map(function (a, i) {
+      return (i + 1) + '. ' + (a.prospect_name || a.title || ('#' + a.id));
+    }).join('\n');
+    const pick = prompt(mfT('email.assign') + '\n' + label);
+    if (!pick) return;
+    const acq = list[parseInt(pick, 10) - 1];
+    if (!acq) return;
+    const fd = new FormData();
+    fd.append('thread_id', threadId);
+    const r = await fetch('/acquisitions/api/' + acq.id + '/emails/link', {method: 'POST', body: fd});
+    if (r.ok) { if (window.toast) toast(mfT('email.assignOk'), 'success'); }
+    else { if (window.toast) toast(mfT('email.error'), 'error'); }
+  } catch (err) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
