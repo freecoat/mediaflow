@@ -103,6 +103,13 @@ def test_dashboard_still_redirected_for_mobile_ua(monkeypatch):
         main_mod.app.dependency_overrides.pop(get_db, None)
 
 
+def test_drawer_has_commerciale_links():
+    html = open("app/templates/mobile/base_mobile.html", encoding="utf-8").read()
+    assert 'href="/mail"' in html
+    assert 'href="/acquisitions"' in html
+    assert "Commerciale" in html
+
+
 def test_base_has_sidebar_backdrop():
     html = open("app/templates/base.html", encoding="utf-8").read()
     assert 'id="mf-sidebar-backdrop"' in html
