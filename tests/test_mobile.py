@@ -101,3 +101,14 @@ def test_dashboard_still_redirected_for_mobile_ua(monkeypatch):
         assert r.status_code == 302 and r.headers.get("location", "").startswith("/m")
     finally:
         main_mod.app.dependency_overrides.pop(get_db, None)
+
+
+def test_base_has_sidebar_backdrop():
+    html = open("app/templates/base.html", encoding="utf-8").read()
+    assert 'id="mf-sidebar-backdrop"' in html
+
+
+def test_global_toggle_is_viewport_aware():
+    js = open("app/static/js/global.js", encoding="utf-8").read()
+    assert "mfCloseSidebarMobile" in js
+    assert "max-width:768px" in js.replace(" ", "")
