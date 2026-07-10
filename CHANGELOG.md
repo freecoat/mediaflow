@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.244 — Client email Sotto-fase 1: /mail webmail standalone (7 lug 2026)
+
+- **Pagina `/mail`**: client webmail su Gmail — lista/ricerca thread, vista conversazione, nav label, scarica allegati; compose Nuovo/Rispondi/Rispondi-a-tutti/Inoltra + allegati + bozze; invio via Gmail API.
+- **Opt-in Gmail incrementale**: scope `gmail.readonly` + `gmail.compose` richiesti solo su azione esplicita (`/auth/oauth/google/start?scopes=email`, `include_granted_scopes=true`), NON nel bundle di default. Spento di default, bottone "Collega Gmail" in `/settings → Account`.
+- **Servizio** `app/services/gmail.py` (urllib, `_gmail_request` mockabile, MIME via `email.message` stdlib) + **router** `app/routers/mail.py` (proxy stateless, nessuna tabella/migrazione, per-utente).
+- **Sicurezza**: corpo email in iframe `sandbox=""` (no script), immagini remote bloccate di default con toggle "Mostra immagini", conferma invio, allegati come download, nessun token al client.
+- Best-effort: chiamate Gmail fallite → risposta vuota, mai 500. i18n 5 lingue (`mail.*`). Prima delle 3 sotto-fasi Client email (2 = integrazione CRM tab/pin/AI/Activity, 3 = auto-flow).
+
 ## v3.5.0-alpha.172.243 — Fase D Calendario/Account: documenti Drive collegati (6 lug 2026)
 
 - **DocumentLink** (`document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo un riferimento (metadata + link), nessuno storage locale.

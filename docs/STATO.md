@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.243** — 6 luglio 2026 — Fase D Calendario/Account: documenti Drive collegati
+**v3.5.0-alpha.172.244** — 7 luglio 2026 — Client email Sotto-fase 1: /mail webmail standalone
+
+### α.172.244 ✅ (Client email Sotto-fase 1 — /mail — 7 lug, ramo feat/mail-client-phase1, 7 task TDD; spec+plan 2026-07-07)
+- **Pagina `/mail`** = client webmail su Gmail a 3 pannelli (nav label | lista thread | lettura) + compose modal. Lettura: lista/ricerca thread (query Gmail passthrough), vista conversazione, nav label (Inbox/Inviati/Bozze + label utente), scarica allegati. Compose: Nuovo/Rispondi/Rispondi-a-tutti/Inoltra + allegati (multipart) + bozze; invio via Gmail API.
+- **Opt-in Gmail incrementale**: scope `gmail.readonly` + `gmail.compose` richiesti SOLO su azione esplicita (`GET /auth/oauth/google/start?scopes=email` con `include_granted_scopes=true`), NON nel bundle OAuth di default. Spento di default; bottone "Collega Gmail" nella card Google di `/settings → Account`. `UserOAuthToken.scopes` = fonte di verità (`/mail/api/status` verifica `gmail.readonly`).
+- **Service** `app/services/gmail.py` (urllib, unico `_gmail_request` mockabile; MIME via `email.message.EmailMessage` stdlib; base64url): `list_threads`/`get_thread` (normalizza MIME html/text/allegati)/`list_labels`/`send_message`/`save_draft`/`list_drafts`/`delete_draft`/`get_attachment`. Best-effort: token assente/401/403/rete → vuoto/None, mai eccezione.
+- **Router** `app/routers/mail.py` (proxy STATELESS, nessuna tabella/migrazione, per-utente non tenant-scoped): `/mail` page + `/mail/api/{status,threads,thread/{id},labels,attachment/{msg}/{att},send,draft,drafts,draft/{id}}`.
+- **Sicurezza**: corpo email in iframe `sandbox=""` (no script) via `srcdoc`; immagini remote bloccate di default (`src`→`data-blocked-src`, toggle "Mostra immagini"); conferma invio; allegati `Content-Disposition: attachment`; nessun token al client. Valori interpolati via `escapeHtml`.
+- 30 test nuovi (`test_oauth_gmail_optin` 3, `test_gmail_read` 5, `test_gmail_send` 6, `test_mail_api_read` 7, `test_mail_api_send` 5, `test_mail_page` 4). i18n 5 lingue (`nav.mail`+`mail.*`). Voce sidebar Email. **Trappola risolta**: i test router devono usare JWT cookie reale + monkeypatch `database.engine`/`SessionLocal` (il middleware `auth_guard` risolve l'utente PRIMA del router — override `current_user` non basta; pattern di `test_documents_api`).
+
+**Prossimo step**: smoke Matteo (`/mail` degrada a CTA "Collega Gmail" senza opt-in; live richiede Gmail API abilitata su Google Cloud + opt-in email). Poi **Client email Sotto-fase 2** (integrazione CRM: tab Email nel detail cliente/trattativa, pin `EmailLink` pattern DocumentLink, "Estrai con AI" riusa estrazione Acquisizioni Fase 2 → `propose_activity/contact/update_client`, log `Activity`). Ramo `feat/mail-client-phase1` NON pushato. Nota: `feat/calendar-phaseB` (A/B/C/D) già MERGED su main (a3b2893), non pushato.
 
 ### α.172.243 ✅ (Fase D — documenti Drive — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
 - **`DocumentLink`** (tabella `document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo riferimento (metadata + link), nessuno storage locale. Link nullable a project/acquisition/activity/client.

@@ -50,8 +50,10 @@ async def oauth_status(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/{provider}/start")
-async def oauth_start(provider: str, request: Request, db: Session = Depends(get_db)):
-    """Inizio flow OAuth: genera state CSRF + redirect a auth URL."""
+async def oauth_start(provider: str, request: Request, scopes: Optional[str] = None,
+                      db: Session = Depends(get_db)):
+    """Inizio flow OAuth: genera state CSRF + redirect a auth URL.
+    `scopes=email` richiede in aggiunta gli scope Gmail (opt-in incrementale)."""
     user = current_user_optional(request)
     if not user:
         raise HTTPException(401, "Autenticazione richiesta")
@@ -63,8 +65,9 @@ async def oauth_start(provider: str, request: Request, db: Session = Depends(get
             f"Provider {provider} non configurato (manca {oauth.PROVIDERS[provider]['client_id_env']} "
             f"o {oauth.PROVIDERS[provider]['client_secret_env']} in .env). "
             "Contatta amministratore.")
+    extra = oauth.GMAIL_SCOPES if (provider == "google" and scopes == "email") else None
     state = oauth.make_oauth_state(user.id, provider)
-    return RedirectResponse(oauth.authorization_url(provider, state))
+    return RedirectResponse(oauth.authorization_url(provider, state, extra_scopes=extra))
 
 
 @router.get("/{provider}/callback")
