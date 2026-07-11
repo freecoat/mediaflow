@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.246 — Mobile responsive Sotto-fase A: email + trattative (7 lug 2026)
+
+- **Client email `/mail` e pipeline `/acquisitions` raggiungibili e usabili da smartphone**: esentate dal redirect mobile (isole desktop-responsive), linkate dal drawer `/m` (gruppo "Commerciale").
+- **Shell desktop responsive** (`base.html`/`main.css`, ≤768px): sidebar off-canvas con backdrop, `mfToggleSidebar()` viewport-aware, topbar compatta + safe-area. Fondamenta riusabili per le prossime sotto-fasi mobile.
+- **`/mail` colonna singola**: vista-stato Etichette/Lista/Lettura (`mailMobileView`), barra "☰ Etichette"/"← Indietro", compose full-screen. Riusa le API `/mail/api/*`.
+- **`/acquisitions` touch**: dettaglio trattativa full-screen, tab (incl. **Email** F2) scrollabili, kanban con scroll-snap. Porta su mobile la pipeline CRM completa.
+- Nessun modello/endpoint/migrazione nuovi. Prima delle sotto-fasi mobile (B = calendario/documenti).
+
 ## v3.5.0-alpha.172.245 — Client email Sotto-fase 2: integrazione CRM (trattativa) (7 lug 2026)
 
 - **`EmailLink`** (`email_links`, tenant-scoped, soft-delete): aggancia thread Gmail alle **trattative** salvando solo metadata + `thread_id`.

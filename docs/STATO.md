@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.245** — 7 luglio 2026 — Client email Sotto-fase 2: integrazione CRM (trattativa)
+**v3.5.0-alpha.172.246** — 7 luglio 2026 — Mobile responsive Sotto-fase A: email + trattative
+
+### α.172.246 ✅ (Mobile responsive Sotto-fase A — email + trattative — 7 lug, ramo feat/mobile-responsive-email, 6 task TDD; spec+plan 2026-07-07)
+- **`/mail` e `/acquisitions` raggiungibili da smartphone**: esentate dal redirect mobile (`_MOBILE_REDIR_EXEMPT` in main.py) → isole desktop-responsive; linkate dal drawer `/m` (gruppo "Commerciale": Email + Trattative).
+- **Shell desktop responsive** (`base.html`+`main.css`, `@media ≤768px`): sidebar off-canvas (`position:fixed`+`translateX`), backdrop `#mf-sidebar-backdrop`, `mfToggleSidebar()` viewport-aware (mobile→`.open`, desktop→`.collapsed`), `mfCloseSidebarMobile()`, topbar compatta + safe-area. Fondamenta riusabili per le prossime sotto-fasi.
+- **`/mail` colonna singola** (`mail.html`+`mail.js`): stili inline spostati in `<style>` (per override responsive); attributo `data-mail-view` ∈ {list,read,labels} + `mailMobileView(view)`; barra mobile "☰ Etichette"/"← Indietro"; compose full-screen. Apertura thread→`read`, click etichetta→`list`.
+- **`/acquisitions` touch** (`@media ≤768px`): dettaglio trattativa full-screen overlay, tab (incl. Email F2) `overflow-x` scrollabili, kanban `scroll-snap` (colonne 78vw). Porta l'intera pipeline CRM su mobile (bonus "anche manager").
+- Nessun modello/endpoint/migrazione nuovi. Test: `test_mobile` (esenzione redirect UA mobile + backdrop + drawer), `test_mail_page` (vista-stato), `test_acquisitions_page` (media query).
+
+**Prossimo step**: smoke Matteo su telefono reale, poi **Sotto-fase mobile B** (Calendario `/calendar` + Documenti Drive responsive). Ramo `feat/mobile-responsive-email` NON pushato (parte da feat/mail-client-phase2 = F2 non ancora mergiato).
 
 ### α.172.245 ✅ (Client email Sotto-fase 2 — CRM trattativa — 7 lug, ramo feat/mail-client-phase2, 6 task TDD; spec+plan 2026-07-07)
 - **`EmailLink`** (tabella `email_links`, tenant-scoped, soft-delete, pattern `DocumentLink`): aggancia thread Gmail alle **trattative** (`acquisition_id`) salvando solo metadata + `thread_id`, nessuno storage corpo. Migrazione `scripts/migrate_email_links.py` + voce strumenti (tabella creata anche da `create_all` al boot).
