@@ -1,0 +1,2173 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Main
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Records
+          - link "Clients" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clients
+          - link "Projects" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Projects
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operations
+          - link "Planning" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Planning
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Work hours" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Work hours
+        - generic [ref=e55]:
+          - generic [ref=e56]: Quotes
+          - link "Price List" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Price List
+          - link "Quotes" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotes
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finance
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "SAL — Avanzamento" [ref=e76] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=e78]
+            - generic [ref=e81]: SAL — Avanzamento
+          - link "Invoicing" [ref=e82] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e84]
+            - generic [ref=e86]: Invoicing
+          - link "Cashflow & Forecast" [ref=e87] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e89]
+            - generic [ref=e92]: Cashflow & Forecast
+          - link "YoY Reports + Export" [ref=e93] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e95]
+            - generic [ref=e98]: YoY Reports + Export
+          - link "Suppliers" [ref=e99] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e101]
+            - generic [ref=e104]: Suppliers
+          - link "Overhead costs" [ref=e105] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e107]
+            - generic [ref=e110]: Overhead costs
+        - generic [ref=e111]:
+          - generic [ref=e112]: Media
+          - link "Asset Library" [ref=e113] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e115]
+            - generic [ref=e117]: Asset Library
+          - link "Filesystem scan" [ref=e118] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e120]
+            - generic [ref=e124]: Filesystem scan
+          - link "Asset In/Out" [ref=e125] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e127]
+            - generic [ref=e132]: Asset In/Out
+          - link "Physical Assets" [ref=e133] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e135]
+            - generic [ref=e137]: Physical Assets
+          - link "Delivery Specs" [ref=e138] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e140]
+            - generic [ref=e145]: Delivery Specs
+          - link "Import → Quote" [ref=e146] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e148]
+            - generic [ref=e151]: Import → Quote
+          - link "Storage" [ref=e152] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=e154]
+            - generic [ref=e158]: Storage
+          - link "KDM/DKDM" [ref=e159] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=e161]
+            - generic [ref=e164]: KDM/DKDM
+        - generic [ref=e165]:
+          - generic [ref=e166]: Platform
+          - link "Tenants" [ref=e167] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e169]
+            - generic [ref=e173]: Tenants
+        - generic [ref=e174]:
+          - generic [ref=e175]: Configuration
+          - link "Departments" [ref=e176] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e178]
+            - generic [ref=e182]: Departments
+          - link "Settings" [ref=e183] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e185]
+            - generic [ref=e188]: Settings
+        - generic [ref=e189]:
+          - generic [ref=e190]: Help
+          - link "Manual" [ref=e191] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e193]
+            - generic [ref=e195]: Manual
+        - generic [ref=e196]:
+          - generic [ref=e197]: Administration
+          - link "Users" [ref=e198] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e200]
+            - generic [ref=e203]: Users
+          - link "Roles & Permissions" [ref=e204] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e206]
+            - generic [ref=e209]: Roles & Permissions
+          - link "Trash" [ref=e210] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e212]
+            - generic [ref=e215]: Trash
+          - link "Audit log" [ref=e216] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e218]
+            - generic [ref=e221]: Audit log
+      - link "Logout" [ref=e223] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e225]
+        - generic [ref=e228]: Logout
+    - generic [ref=e229]:
+      - banner [ref=e230]:
+        - generic [ref=e231]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e232] [cursor=pointer]:
+            - img [ref=e233]
+          - generic [ref=e236]: Richieste KDM/DKDM
+        - generic [ref=e237]:
+          - button "+ New request" [ref=e238] [cursor=pointer]:
+            - text: +
+            - generic [ref=e239]: New request
+          - button "Open theme palette" [ref=e241] [cursor=pointer]:
+            - img [ref=e243]
+          - button "Ingrandisci visualizzazione" [ref=e250] [cursor=pointer]:
+            - img [ref=e252]
+          - button "🇬🇧" [ref=e256] [cursor=pointer]:
+            - generic [ref=e257]: 🇬🇧
+          - button "8" [ref=e258] [cursor=pointer]:
+            - img [ref=e260]
+            - generic [ref=e263]: "8"
+          - generic "admin@mediaflow.it" [ref=e264]:
+            - generic [ref=e265]: Admin MediaFlow
+            - generic [ref=e266]: admin
+            - link "Logout" [ref=e267] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e268]
+      - main [ref=e271]:
+        - generic [ref=e273]:
+          - button "Requests" [ref=e274] [cursor=pointer]
+          - button "Cinemas/Servers" [ref=e275] [cursor=pointer]
+          - button "DCP CPLs" [ref=e276] [cursor=pointer]
+        - generic [ref=e278]:
+          - generic [ref=e279]:
+            - img [ref=e280]
+            - generic [ref=e283]: "Generate public link for client request:"
+            - textbox "Titolo pre-compilato (opzionale)" [ref=e284]
+            - button "Generate link & copy" [ref=e285] [cursor=pointer]
+            - button "Active links" [ref=e286] [cursor=pointer]
+          - generic [ref=e287]:
+            - generic [ref=e288]:
+              - generic [ref=e289]: Search
+              - textbox "title, CPL…" [ref=e290]
+            - generic [ref=e291]:
+              - generic [ref=e292]: Status
+              - combobox [ref=e293] [cursor=pointer]:
+                - option "All" [selected]
+                - option "Ricevuta"
+                - option "Abbinata"
+                - option "Chiavi..."
+                - option "Generata"
+                - option "Consegnata"
+                - option "Confermata"
+                - option "Rejected"
+                - option "Expired"
+            - generic [ref=e294]:
+              - generic [ref=e295]: Type
+              - combobox [ref=e296] [cursor=pointer]:
+                - option "All" [selected]
+                - option "KDM"
+                - option "DKDM"
+            - button "Reset" [ref=e298] [cursor=pointer]
+          - table [ref=e300]:
+            - rowgroup [ref=e301]:
+              - row "Status Type Film/CPL Window Match Actions" [ref=e302]:
+                - columnheader "Status" [ref=e303]
+                - columnheader "Type" [ref=e304]
+                - columnheader "Film/CPL" [ref=e305]
+                - columnheader "Window" [ref=e306]
+                - columnheader "Match" [ref=e307]
+                - columnheader "Actions" [ref=e308]
+                - columnheader [ref=e309]
+            - rowgroup [ref=e310]:
+              - row "Ricevuta KDM BANNER_TEST_c1fa762046c4 ⚠ Open ✕" [ref=e311] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e312]:
+                  - generic [ref=e313]: Ricevuta
+                - cell "KDM" [ref=e314]:
+                  - generic [ref=e315]: KDM
+                - cell "BANNER_TEST_c1fa762046c4" [ref=e316]
+                - cell [ref=e317]
+                - cell "⚠" [ref=e318]
+                - cell "Open" [ref=e319]:
+                  - button "Open" [ref=e320]
+                - cell "✕" [ref=e321]:
+                  - button "✕" [ref=e322]
+              - row "Ricevuta KDM BOGUS_TYPE_0101e1338cf1 ⚠ Open ✕" [ref=e323] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e324]:
+                  - generic [ref=e325]: Ricevuta
+                - cell "KDM" [ref=e326]:
+                  - generic [ref=e327]: KDM
+                - cell "BOGUS_TYPE_0101e1338cf1" [ref=e328]
+                - cell [ref=e329]
+                - cell "⚠" [ref=e330]
+                - cell "Open" [ref=e331]:
+                  - button "Open" [ref=e332]
+                - cell "✕" [ref=e333]:
+                  - button "✕" [ref=e334]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e335] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e336]:
+                  - generic [ref=e337]: Ricevuta
+                - cell "KDM" [ref=e338]:
+                  - generic [ref=e339]: KDM
+                - cell "QUEER_FTR" [ref=e340]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e341]
+                - cell "⚠" [ref=e342]
+                - cell "Open" [ref=e343]:
+                  - button "Open" [ref=e344]
+                - cell "✕" [ref=e345]:
+                  - button "✕" [ref=e346]
+              - row "Ricevuta KDM BANNER_TEST_8970982ef9c2 ⚠ Open ✕" [ref=e347] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e348]:
+                  - generic [ref=e349]: Ricevuta
+                - cell "KDM" [ref=e350]:
+                  - generic [ref=e351]: KDM
+                - cell "BANNER_TEST_8970982ef9c2" [ref=e352]
+                - cell [ref=e353]
+                - cell "⚠" [ref=e354]
+                - cell "Open" [ref=e355]:
+                  - button "Open" [ref=e356]
+                - cell "✕" [ref=e357]:
+                  - button "✕" [ref=e358]
+              - row "Ricevuta KDM BOGUS_TYPE_8b1453218df5 ⚠ Open ✕" [ref=e359] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e360]:
+                  - generic [ref=e361]: Ricevuta
+                - cell "KDM" [ref=e362]:
+                  - generic [ref=e363]: KDM
+                - cell "BOGUS_TYPE_8b1453218df5" [ref=e364]
+                - cell [ref=e365]
+                - cell "⚠" [ref=e366]
+                - cell "Open" [ref=e367]:
+                  - button "Open" [ref=e368]
+                - cell "✕" [ref=e369]:
+                  - button "✕" [ref=e370]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e371] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e372]:
+                  - generic [ref=e373]: Ricevuta
+                - cell "KDM" [ref=e374]:
+                  - generic [ref=e375]: KDM
+                - cell "QUEER_FTR" [ref=e376]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e377]
+                - cell "⚠" [ref=e378]
+                - cell "Open" [ref=e379]:
+                  - button "Open" [ref=e380]
+                - cell "✕" [ref=e381]:
+                  - button "✕" [ref=e382]
+              - row "Ricevuta KDM BANNER_TEST_35e701889d35 ⚠ Open ✕" [ref=e383] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e384]:
+                  - generic [ref=e385]: Ricevuta
+                - cell "KDM" [ref=e386]:
+                  - generic [ref=e387]: KDM
+                - cell "BANNER_TEST_35e701889d35" [ref=e388]
+                - cell [ref=e389]
+                - cell "⚠" [ref=e390]
+                - cell "Open" [ref=e391]:
+                  - button "Open" [ref=e392]
+                - cell "✕" [ref=e393]:
+                  - button "✕" [ref=e394]
+              - row "Ricevuta KDM BOGUS_TYPE_55ac367467a2 ⚠ Open ✕" [ref=e395] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e396]:
+                  - generic [ref=e397]: Ricevuta
+                - cell "KDM" [ref=e398]:
+                  - generic [ref=e399]: KDM
+                - cell "BOGUS_TYPE_55ac367467a2" [ref=e400]
+                - cell [ref=e401]
+                - cell "⚠" [ref=e402]
+                - cell "Open" [ref=e403]:
+                  - button "Open" [ref=e404]
+                - cell "✕" [ref=e405]:
+                  - button "✕" [ref=e406]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e407] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e408]:
+                  - generic [ref=e409]: Ricevuta
+                - cell "KDM" [ref=e410]:
+                  - generic [ref=e411]: KDM
+                - cell "QUEER_FTR" [ref=e412]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e413]
+                - cell "⚠" [ref=e414]
+                - cell "Open" [ref=e415]:
+                  - button "Open" [ref=e416]
+                - cell "✕" [ref=e417]:
+                  - button "✕" [ref=e418]
+              - row "Ricevuta KDM BANNER_TEST_baf8b7646060 ⚠ Open ✕" [ref=e419] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e420]:
+                  - generic [ref=e421]: Ricevuta
+                - cell "KDM" [ref=e422]:
+                  - generic [ref=e423]: KDM
+                - cell "BANNER_TEST_baf8b7646060" [ref=e424]
+                - cell [ref=e425]
+                - cell "⚠" [ref=e426]
+                - cell "Open" [ref=e427]:
+                  - button "Open" [ref=e428]
+                - cell "✕" [ref=e429]:
+                  - button "✕" [ref=e430]
+              - row "Ricevuta KDM BOGUS_TYPE_1ea454223665 ⚠ Open ✕" [ref=e431] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e432]:
+                  - generic [ref=e433]: Ricevuta
+                - cell "KDM" [ref=e434]:
+                  - generic [ref=e435]: KDM
+                - cell "BOGUS_TYPE_1ea454223665" [ref=e436]
+                - cell [ref=e437]
+                - cell "⚠" [ref=e438]
+                - cell "Open" [ref=e439]:
+                  - button "Open" [ref=e440]
+                - cell "✕" [ref=e441]:
+                  - button "✕" [ref=e442]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e443] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e444]:
+                  - generic [ref=e445]: Ricevuta
+                - cell "KDM" [ref=e446]:
+                  - generic [ref=e447]: KDM
+                - cell "QUEER_FTR" [ref=e448]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e449]
+                - cell "⚠" [ref=e450]
+                - cell "Open" [ref=e451]:
+                  - button "Open" [ref=e452]
+                - cell "✕" [ref=e453]:
+                  - button "✕" [ref=e454]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e455] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e456]:
+                  - generic [ref=e457]: Ricevuta
+                - cell "KDM" [ref=e458]:
+                  - generic [ref=e459]: KDM
+                - cell "—" [ref=e460]
+                - cell [ref=e461]
+                - cell "⚠" [ref=e462]
+                - cell "Open" [ref=e463]:
+                  - button "Open" [ref=e464]
+                - cell "✕" [ref=e465]:
+                  - button "✕" [ref=e466]
+              - row "Ricevuta KDM BANNER_TEST_49a85667aae7 ⚠ Open ✕" [ref=e467] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e468]:
+                  - generic [ref=e469]: Ricevuta
+                - cell "KDM" [ref=e470]:
+                  - generic [ref=e471]: KDM
+                - cell "BANNER_TEST_49a85667aae7" [ref=e472]
+                - cell [ref=e473]
+                - cell "⚠" [ref=e474]
+                - cell "Open" [ref=e475]:
+                  - button "Open" [ref=e476]
+                - cell "✕" [ref=e477]:
+                  - button "✕" [ref=e478]
+              - row "Ricevuta KDM BOGUS_TYPE_3a6e02a7c012 ⚠ Open ✕" [ref=e479] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e480]:
+                  - generic [ref=e481]: Ricevuta
+                - cell "KDM" [ref=e482]:
+                  - generic [ref=e483]: KDM
+                - cell "BOGUS_TYPE_3a6e02a7c012" [ref=e484]
+                - cell [ref=e485]
+                - cell "⚠" [ref=e486]
+                - cell "Open" [ref=e487]:
+                  - button "Open" [ref=e488]
+                - cell "✕" [ref=e489]:
+                  - button "✕" [ref=e490]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e491] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e492]:
+                  - generic [ref=e493]: Ricevuta
+                - cell "KDM" [ref=e494]:
+                  - generic [ref=e495]: KDM
+                - cell "QUEER_FTR" [ref=e496]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e497]
+                - cell "⚠" [ref=e498]
+                - cell "Open" [ref=e499]:
+                  - button "Open" [ref=e500]
+                - cell "✕" [ref=e501]:
+                  - button "✕" [ref=e502]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e503] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e504]:
+                  - generic [ref=e505]: Ricevuta
+                - cell "KDM" [ref=e506]:
+                  - generic [ref=e507]: KDM
+                - cell "—" [ref=e508]
+                - cell [ref=e509]
+                - cell "⚠" [ref=e510]
+                - cell "Open" [ref=e511]:
+                  - button "Open" [ref=e512]
+                - cell "✕" [ref=e513]:
+                  - button "✕" [ref=e514]
+              - row "Ricevuta KDM BANNER_TEST_4f9018daa594 ⚠ Open ✕" [ref=e515] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e516]:
+                  - generic [ref=e517]: Ricevuta
+                - cell "KDM" [ref=e518]:
+                  - generic [ref=e519]: KDM
+                - cell "BANNER_TEST_4f9018daa594" [ref=e520]
+                - cell [ref=e521]
+                - cell "⚠" [ref=e522]
+                - cell "Open" [ref=e523]:
+                  - button "Open" [ref=e524]
+                - cell "✕" [ref=e525]:
+                  - button "✕" [ref=e526]
+              - row "Ricevuta KDM BOGUS_TYPE_bf9c8740d93d ⚠ Open ✕" [ref=e527] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e528]:
+                  - generic [ref=e529]: Ricevuta
+                - cell "KDM" [ref=e530]:
+                  - generic [ref=e531]: KDM
+                - cell "BOGUS_TYPE_bf9c8740d93d" [ref=e532]
+                - cell [ref=e533]
+                - cell "⚠" [ref=e534]
+                - cell "Open" [ref=e535]:
+                  - button "Open" [ref=e536]
+                - cell "✕" [ref=e537]:
+                  - button "✕" [ref=e538]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e539] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e540]:
+                  - generic [ref=e541]: Ricevuta
+                - cell "KDM" [ref=e542]:
+                  - generic [ref=e543]: KDM
+                - cell "QUEER_FTR" [ref=e544]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e545]
+                - cell "⚠" [ref=e546]
+                - cell "Open" [ref=e547]:
+                  - button "Open" [ref=e548]
+                - cell "✕" [ref=e549]:
+                  - button "✕" [ref=e550]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e551] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e552]:
+                  - generic [ref=e553]: Ricevuta
+                - cell "KDM" [ref=e554]:
+                  - generic [ref=e555]: KDM
+                - cell "—" [ref=e556]
+                - cell [ref=e557]
+                - cell "⚠" [ref=e558]
+                - cell "Open" [ref=e559]:
+                  - button "Open" [ref=e560]
+                - cell "✕" [ref=e561]:
+                  - button "✕" [ref=e562]
+              - row "Ricevuta KDM BANNER_TEST_797bd9e40323 ⚠ Open ✕" [ref=e563] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e564]:
+                  - generic [ref=e565]: Ricevuta
+                - cell "KDM" [ref=e566]:
+                  - generic [ref=e567]: KDM
+                - cell "BANNER_TEST_797bd9e40323" [ref=e568]
+                - cell [ref=e569]
+                - cell "⚠" [ref=e570]
+                - cell "Open" [ref=e571]:
+                  - button "Open" [ref=e572]
+                - cell "✕" [ref=e573]:
+                  - button "✕" [ref=e574]
+              - row "Ricevuta KDM BOGUS_TYPE_17c503e295b4 ⚠ Open ✕" [ref=e575] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e576]:
+                  - generic [ref=e577]: Ricevuta
+                - cell "KDM" [ref=e578]:
+                  - generic [ref=e579]: KDM
+                - cell "BOGUS_TYPE_17c503e295b4" [ref=e580]
+                - cell [ref=e581]
+                - cell "⚠" [ref=e582]
+                - cell "Open" [ref=e583]:
+                  - button "Open" [ref=e584]
+                - cell "✕" [ref=e585]:
+                  - button "✕" [ref=e586]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e587] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e588]:
+                  - generic [ref=e589]: Ricevuta
+                - cell "KDM" [ref=e590]:
+                  - generic [ref=e591]: KDM
+                - cell "QUEER_FTR" [ref=e592]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e593]
+                - cell "⚠" [ref=e594]
+                - cell "Open" [ref=e595]:
+                  - button "Open" [ref=e596]
+                - cell "✕" [ref=e597]:
+                  - button "✕" [ref=e598]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e599] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e600]:
+                  - generic [ref=e601]: Ricevuta
+                - cell "KDM" [ref=e602]:
+                  - generic [ref=e603]: KDM
+                - cell "—" [ref=e604]
+                - cell [ref=e605]
+                - cell "⚠" [ref=e606]
+                - cell "Open" [ref=e607]:
+                  - button "Open" [ref=e608]
+                - cell "✕" [ref=e609]:
+                  - button "✕" [ref=e610]
+              - row "Ricevuta KDM BANNER_TEST_785dcacca46b ⚠ Open ✕" [ref=e611] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e612]:
+                  - generic [ref=e613]: Ricevuta
+                - cell "KDM" [ref=e614]:
+                  - generic [ref=e615]: KDM
+                - cell "BANNER_TEST_785dcacca46b" [ref=e616]
+                - cell [ref=e617]
+                - cell "⚠" [ref=e618]
+                - cell "Open" [ref=e619]:
+                  - button "Open" [ref=e620]
+                - cell "✕" [ref=e621]:
+                  - button "✕" [ref=e622]
+              - row "Ricevuta KDM BOGUS_TYPE_bc7b1d1554b0 ⚠ Open ✕" [ref=e623] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e624]:
+                  - generic [ref=e625]: Ricevuta
+                - cell "KDM" [ref=e626]:
+                  - generic [ref=e627]: KDM
+                - cell "BOGUS_TYPE_bc7b1d1554b0" [ref=e628]
+                - cell [ref=e629]
+                - cell "⚠" [ref=e630]
+                - cell "Open" [ref=e631]:
+                  - button "Open" [ref=e632]
+                - cell "✕" [ref=e633]:
+                  - button "✕" [ref=e634]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e635] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e636]:
+                  - generic [ref=e637]: Ricevuta
+                - cell "KDM" [ref=e638]:
+                  - generic [ref=e639]: KDM
+                - cell "QUEER_FTR" [ref=e640]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e641]
+                - cell "⚠" [ref=e642]
+                - cell "Open" [ref=e643]:
+                  - button "Open" [ref=e644]
+                - cell "✕" [ref=e645]:
+                  - button "✕" [ref=e646]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e647] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e648]:
+                  - generic [ref=e649]: Ricevuta
+                - cell "KDM" [ref=e650]:
+                  - generic [ref=e651]: KDM
+                - cell "—" [ref=e652]
+                - cell [ref=e653]
+                - cell "⚠" [ref=e654]
+                - cell "Open" [ref=e655]:
+                  - button "Open" [ref=e656]
+                - cell "✕" [ref=e657]:
+                  - button "✕" [ref=e658]
+              - row "Ricevuta KDM BANNER_TEST_26032df828de ⚠ Open ✕" [ref=e659] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e660]:
+                  - generic [ref=e661]: Ricevuta
+                - cell "KDM" [ref=e662]:
+                  - generic [ref=e663]: KDM
+                - cell "BANNER_TEST_26032df828de" [ref=e664]
+                - cell [ref=e665]
+                - cell "⚠" [ref=e666]
+                - cell "Open" [ref=e667]:
+                  - button "Open" [ref=e668]
+                - cell "✕" [ref=e669]:
+                  - button "✕" [ref=e670]
+              - row "Ricevuta KDM BOGUS_TYPE_76a1e0befa93 ⚠ Open ✕" [ref=e671] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e672]:
+                  - generic [ref=e673]: Ricevuta
+                - cell "KDM" [ref=e674]:
+                  - generic [ref=e675]: KDM
+                - cell "BOGUS_TYPE_76a1e0befa93" [ref=e676]
+                - cell [ref=e677]
+                - cell "⚠" [ref=e678]
+                - cell "Open" [ref=e679]:
+                  - button "Open" [ref=e680]
+                - cell "✕" [ref=e681]:
+                  - button "✕" [ref=e682]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e683] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e684]:
+                  - generic [ref=e685]: Ricevuta
+                - cell "KDM" [ref=e686]:
+                  - generic [ref=e687]: KDM
+                - cell "QUEER_FTR" [ref=e688]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e689]
+                - cell "⚠" [ref=e690]
+                - cell "Open" [ref=e691]:
+                  - button "Open" [ref=e692]
+                - cell "✕" [ref=e693]:
+                  - button "✕" [ref=e694]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e695] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e696]:
+                  - generic [ref=e697]: Ricevuta
+                - cell "KDM" [ref=e698]:
+                  - generic [ref=e699]: KDM
+                - cell "—" [ref=e700]
+                - cell [ref=e701]
+                - cell "⚠" [ref=e702]
+                - cell "Open" [ref=e703]:
+                  - button "Open" [ref=e704]
+                - cell "✕" [ref=e705]:
+                  - button "✕" [ref=e706]
+              - row "Ricevuta KDM BANNER_TEST_f694ec842cab ⚠ Open ✕" [ref=e707] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e708]:
+                  - generic [ref=e709]: Ricevuta
+                - cell "KDM" [ref=e710]:
+                  - generic [ref=e711]: KDM
+                - cell "BANNER_TEST_f694ec842cab" [ref=e712]
+                - cell [ref=e713]
+                - cell "⚠" [ref=e714]
+                - cell "Open" [ref=e715]:
+                  - button "Open" [ref=e716]
+                - cell "✕" [ref=e717]:
+                  - button "✕" [ref=e718]
+              - row "Ricevuta KDM BOGUS_TYPE_45ccbe51a7ce ⚠ Open ✕" [ref=e719] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e720]:
+                  - generic [ref=e721]: Ricevuta
+                - cell "KDM" [ref=e722]:
+                  - generic [ref=e723]: KDM
+                - cell "BOGUS_TYPE_45ccbe51a7ce" [ref=e724]
+                - cell [ref=e725]
+                - cell "⚠" [ref=e726]
+                - cell "Open" [ref=e727]:
+                  - button "Open" [ref=e728]
+                - cell "✕" [ref=e729]:
+                  - button "✕" [ref=e730]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e731] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e732]:
+                  - generic [ref=e733]: Ricevuta
+                - cell "KDM" [ref=e734]:
+                  - generic [ref=e735]: KDM
+                - cell "QUEER_FTR" [ref=e736]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e737]
+                - cell "⚠" [ref=e738]
+                - cell "Open" [ref=e739]:
+                  - button "Open" [ref=e740]
+                - cell "✕" [ref=e741]:
+                  - button "✕" [ref=e742]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e743] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e744]:
+                  - generic [ref=e745]: Ricevuta
+                - cell "KDM" [ref=e746]:
+                  - generic [ref=e747]: KDM
+                - cell "—" [ref=e748]
+                - cell [ref=e749]
+                - cell "⚠" [ref=e750]
+                - cell "Open" [ref=e751]:
+                  - button "Open" [ref=e752]
+                - cell "✕" [ref=e753]:
+                  - button "✕" [ref=e754]
+              - row "Ricevuta KDM BANNER_TEST_6d7727a1b3a7 ⚠ Open ✕" [ref=e755] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e756]:
+                  - generic [ref=e757]: Ricevuta
+                - cell "KDM" [ref=e758]:
+                  - generic [ref=e759]: KDM
+                - cell "BANNER_TEST_6d7727a1b3a7" [ref=e760]
+                - cell [ref=e761]
+                - cell "⚠" [ref=e762]
+                - cell "Open" [ref=e763]:
+                  - button "Open" [ref=e764]
+                - cell "✕" [ref=e765]:
+                  - button "✕" [ref=e766]
+              - row "Ricevuta KDM BOGUS_TYPE_151c68d77c75 ⚠ Open ✕" [ref=e767] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e768]:
+                  - generic [ref=e769]: Ricevuta
+                - cell "KDM" [ref=e770]:
+                  - generic [ref=e771]: KDM
+                - cell "BOGUS_TYPE_151c68d77c75" [ref=e772]
+                - cell [ref=e773]
+                - cell "⚠" [ref=e774]
+                - cell "Open" [ref=e775]:
+                  - button "Open" [ref=e776]
+                - cell "✕" [ref=e777]:
+                  - button "✕" [ref=e778]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e779] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e780]:
+                  - generic [ref=e781]: Ricevuta
+                - cell "KDM" [ref=e782]:
+                  - generic [ref=e783]: KDM
+                - cell "QUEER_FTR" [ref=e784]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e785]
+                - cell "⚠" [ref=e786]
+                - cell "Open" [ref=e787]:
+                  - button "Open" [ref=e788]
+                - cell "✕" [ref=e789]:
+                  - button "✕" [ref=e790]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e791] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e792]:
+                  - generic [ref=e793]: Ricevuta
+                - cell "KDM" [ref=e794]:
+                  - generic [ref=e795]: KDM
+                - cell "—" [ref=e796]
+                - cell [ref=e797]
+                - cell "⚠" [ref=e798]
+                - cell "Open" [ref=e799]:
+                  - button "Open" [ref=e800]
+                - cell "✕" [ref=e801]:
+                  - button "✕" [ref=e802]
+              - row "Ricevuta KDM BANNER_TEST_3da2596bcbdd ⚠ Open ✕" [ref=e803] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e804]:
+                  - generic [ref=e805]: Ricevuta
+                - cell "KDM" [ref=e806]:
+                  - generic [ref=e807]: KDM
+                - cell "BANNER_TEST_3da2596bcbdd" [ref=e808]
+                - cell [ref=e809]
+                - cell "⚠" [ref=e810]
+                - cell "Open" [ref=e811]:
+                  - button "Open" [ref=e812]
+                - cell "✕" [ref=e813]:
+                  - button "✕" [ref=e814]
+              - row "Ricevuta KDM BOGUS_TYPE_86fa8874e9fe ⚠ Open ✕" [ref=e815] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e816]:
+                  - generic [ref=e817]: Ricevuta
+                - cell "KDM" [ref=e818]:
+                  - generic [ref=e819]: KDM
+                - cell "BOGUS_TYPE_86fa8874e9fe" [ref=e820]
+                - cell [ref=e821]
+                - cell "⚠" [ref=e822]
+                - cell "Open" [ref=e823]:
+                  - button "Open" [ref=e824]
+                - cell "✕" [ref=e825]:
+                  - button "✕" [ref=e826]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e827] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e828]:
+                  - generic [ref=e829]: Ricevuta
+                - cell "KDM" [ref=e830]:
+                  - generic [ref=e831]: KDM
+                - cell "QUEER_FTR" [ref=e832]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e833]
+                - cell "⚠" [ref=e834]
+                - cell "Open" [ref=e835]:
+                  - button "Open" [ref=e836]
+                - cell "✕" [ref=e837]:
+                  - button "✕" [ref=e838]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e839] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e840]:
+                  - generic [ref=e841]: Ricevuta
+                - cell "KDM" [ref=e842]:
+                  - generic [ref=e843]: KDM
+                - cell "—" [ref=e844]
+                - cell [ref=e845]
+                - cell "⚠" [ref=e846]
+                - cell "Open" [ref=e847]:
+                  - button "Open" [ref=e848]
+                - cell "✕" [ref=e849]:
+                  - button "✕" [ref=e850]
+              - row "Ricevuta KDM BANNER_TEST_52ade043ebed ⚠ Open ✕" [ref=e851] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e852]:
+                  - generic [ref=e853]: Ricevuta
+                - cell "KDM" [ref=e854]:
+                  - generic [ref=e855]: KDM
+                - cell "BANNER_TEST_52ade043ebed" [ref=e856]
+                - cell [ref=e857]
+                - cell "⚠" [ref=e858]
+                - cell "Open" [ref=e859]:
+                  - button "Open" [ref=e860]
+                - cell "✕" [ref=e861]:
+                  - button "✕" [ref=e862]
+              - row "Ricevuta KDM BOGUS_TYPE_b99e3f9b4835 ⚠ Open ✕" [ref=e863] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e864]:
+                  - generic [ref=e865]: Ricevuta
+                - cell "KDM" [ref=e866]:
+                  - generic [ref=e867]: KDM
+                - cell "BOGUS_TYPE_b99e3f9b4835" [ref=e868]
+                - cell [ref=e869]
+                - cell "⚠" [ref=e870]
+                - cell "Open" [ref=e871]:
+                  - button "Open" [ref=e872]
+                - cell "✕" [ref=e873]:
+                  - button "✕" [ref=e874]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e875] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e876]:
+                  - generic [ref=e877]: Ricevuta
+                - cell "KDM" [ref=e878]:
+                  - generic [ref=e879]: KDM
+                - cell "QUEER_FTR" [ref=e880]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e881]
+                - cell "⚠" [ref=e882]
+                - cell "Open" [ref=e883]:
+                  - button "Open" [ref=e884]
+                - cell "✕" [ref=e885]:
+                  - button "✕" [ref=e886]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e887] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e888]:
+                  - generic [ref=e889]: Ricevuta
+                - cell "KDM" [ref=e890]:
+                  - generic [ref=e891]: KDM
+                - cell "—" [ref=e892]
+                - cell [ref=e893]
+                - cell "⚠" [ref=e894]
+                - cell "Open" [ref=e895]:
+                  - button "Open" [ref=e896]
+                - cell "✕" [ref=e897]:
+                  - button "✕" [ref=e898]
+              - row "Ricevuta KDM BANNER_TEST_8e671942c7ad ⚠ Open ✕" [ref=e899] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e900]:
+                  - generic [ref=e901]: Ricevuta
+                - cell "KDM" [ref=e902]:
+                  - generic [ref=e903]: KDM
+                - cell "BANNER_TEST_8e671942c7ad" [ref=e904]
+                - cell [ref=e905]
+                - cell "⚠" [ref=e906]
+                - cell "Open" [ref=e907]:
+                  - button "Open" [ref=e908]
+                - cell "✕" [ref=e909]:
+                  - button "✕" [ref=e910]
+              - row "Ricevuta KDM BOGUS_TYPE_1ba2efb930e6 ⚠ Open ✕" [ref=e911] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e912]:
+                  - generic [ref=e913]: Ricevuta
+                - cell "KDM" [ref=e914]:
+                  - generic [ref=e915]: KDM
+                - cell "BOGUS_TYPE_1ba2efb930e6" [ref=e916]
+                - cell [ref=e917]
+                - cell "⚠" [ref=e918]
+                - cell "Open" [ref=e919]:
+                  - button "Open" [ref=e920]
+                - cell "✕" [ref=e921]:
+                  - button "✕" [ref=e922]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e923] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e924]:
+                  - generic [ref=e925]: Ricevuta
+                - cell "KDM" [ref=e926]:
+                  - generic [ref=e927]: KDM
+                - cell "QUEER_FTR" [ref=e928]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e929]
+                - cell "⚠" [ref=e930]
+                - cell "Open" [ref=e931]:
+                  - button "Open" [ref=e932]
+                - cell "✕" [ref=e933]:
+                  - button "✕" [ref=e934]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e935] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e936]:
+                  - generic [ref=e937]: Ricevuta
+                - cell "KDM" [ref=e938]:
+                  - generic [ref=e939]: KDM
+                - cell "—" [ref=e940]
+                - cell [ref=e941]
+                - cell "⚠" [ref=e942]
+                - cell "Open" [ref=e943]:
+                  - button "Open" [ref=e944]
+                - cell "✕" [ref=e945]:
+                  - button "✕" [ref=e946]
+              - row "Ricevuta KDM BANNER_TEST_7737c80c0431 ⚠ Open ✕" [ref=e947] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e948]:
+                  - generic [ref=e949]: Ricevuta
+                - cell "KDM" [ref=e950]:
+                  - generic [ref=e951]: KDM
+                - cell "BANNER_TEST_7737c80c0431" [ref=e952]
+                - cell [ref=e953]
+                - cell "⚠" [ref=e954]
+                - cell "Open" [ref=e955]:
+                  - button "Open" [ref=e956]
+                - cell "✕" [ref=e957]:
+                  - button "✕" [ref=e958]
+              - row "Ricevuta KDM BOGUS_TYPE_3dfd89d08d67 ⚠ Open ✕" [ref=e959] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e960]:
+                  - generic [ref=e961]: Ricevuta
+                - cell "KDM" [ref=e962]:
+                  - generic [ref=e963]: KDM
+                - cell "BOGUS_TYPE_3dfd89d08d67" [ref=e964]
+                - cell [ref=e965]
+                - cell "⚠" [ref=e966]
+                - cell "Open" [ref=e967]:
+                  - button "Open" [ref=e968]
+                - cell "✕" [ref=e969]:
+                  - button "✕" [ref=e970]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e971] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e972]:
+                  - generic [ref=e973]: Ricevuta
+                - cell "KDM" [ref=e974]:
+                  - generic [ref=e975]: KDM
+                - cell "QUEER_FTR" [ref=e976]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e977]
+                - cell "⚠" [ref=e978]
+                - cell "Open" [ref=e979]:
+                  - button "Open" [ref=e980]
+                - cell "✕" [ref=e981]:
+                  - button "✕" [ref=e982]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e983] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e984]:
+                  - generic [ref=e985]: Ricevuta
+                - cell "KDM" [ref=e986]:
+                  - generic [ref=e987]: KDM
+                - cell "—" [ref=e988]
+                - cell [ref=e989]
+                - cell "⚠" [ref=e990]
+                - cell "Open" [ref=e991]:
+                  - button "Open" [ref=e992]
+                - cell "✕" [ref=e993]:
+                  - button "✕" [ref=e994]
+              - row "Ricevuta KDM BANNER_TEST_931d8c4441d9 ⚠ Open ✕" [ref=e995] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e996]:
+                  - generic [ref=e997]: Ricevuta
+                - cell "KDM" [ref=e998]:
+                  - generic [ref=e999]: KDM
+                - cell "BANNER_TEST_931d8c4441d9" [ref=e1000]
+                - cell [ref=e1001]
+                - cell "⚠" [ref=e1002]
+                - cell "Open" [ref=e1003]:
+                  - button "Open" [ref=e1004]
+                - cell "✕" [ref=e1005]:
+                  - button "✕" [ref=e1006]
+              - row "Ricevuta KDM BOGUS_TYPE_3113efc29538 ⚠ Open ✕" [ref=e1007] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1008]:
+                  - generic [ref=e1009]: Ricevuta
+                - cell "KDM" [ref=e1010]:
+                  - generic [ref=e1011]: KDM
+                - cell "BOGUS_TYPE_3113efc29538" [ref=e1012]
+                - cell [ref=e1013]
+                - cell "⚠" [ref=e1014]
+                - cell "Open" [ref=e1015]:
+                  - button "Open" [ref=e1016]
+                - cell "✕" [ref=e1017]:
+                  - button "✕" [ref=e1018]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1019] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1020]:
+                  - generic [ref=e1021]: Ricevuta
+                - cell "KDM" [ref=e1022]:
+                  - generic [ref=e1023]: KDM
+                - cell "QUEER_FTR" [ref=e1024]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1025]
+                - cell "⚠" [ref=e1026]
+                - cell "Open" [ref=e1027]:
+                  - button "Open" [ref=e1028]
+                - cell "✕" [ref=e1029]:
+                  - button "✕" [ref=e1030]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1031] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1032]:
+                  - generic [ref=e1033]: Ricevuta
+                - cell "KDM" [ref=e1034]:
+                  - generic [ref=e1035]: KDM
+                - cell "—" [ref=e1036]
+                - cell [ref=e1037]
+                - cell "⚠" [ref=e1038]
+                - cell "Open" [ref=e1039]:
+                  - button "Open" [ref=e1040]
+                - cell "✕" [ref=e1041]:
+                  - button "✕" [ref=e1042]
+              - row "Ricevuta KDM BANNER_TEST_35d75d17e65d ⚠ Open ✕" [ref=e1043] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1044]:
+                  - generic [ref=e1045]: Ricevuta
+                - cell "KDM" [ref=e1046]:
+                  - generic [ref=e1047]: KDM
+                - cell "BANNER_TEST_35d75d17e65d" [ref=e1048]
+                - cell [ref=e1049]
+                - cell "⚠" [ref=e1050]
+                - cell "Open" [ref=e1051]:
+                  - button "Open" [ref=e1052]
+                - cell "✕" [ref=e1053]:
+                  - button "✕" [ref=e1054]
+              - row "Ricevuta KDM BOGUS_TYPE_1be8140f39eb ⚠ Open ✕" [ref=e1055] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1056]:
+                  - generic [ref=e1057]: Ricevuta
+                - cell "KDM" [ref=e1058]:
+                  - generic [ref=e1059]: KDM
+                - cell "BOGUS_TYPE_1be8140f39eb" [ref=e1060]
+                - cell [ref=e1061]
+                - cell "⚠" [ref=e1062]
+                - cell "Open" [ref=e1063]:
+                  - button "Open" [ref=e1064]
+                - cell "✕" [ref=e1065]:
+                  - button "✕" [ref=e1066]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1067] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1068]:
+                  - generic [ref=e1069]: Ricevuta
+                - cell "KDM" [ref=e1070]:
+                  - generic [ref=e1071]: KDM
+                - cell "QUEER_FTR" [ref=e1072]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1073]
+                - cell "⚠" [ref=e1074]
+                - cell "Open" [ref=e1075]:
+                  - button "Open" [ref=e1076]
+                - cell "✕" [ref=e1077]:
+                  - button "✕" [ref=e1078]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1079] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1080]:
+                  - generic [ref=e1081]: Ricevuta
+                - cell "KDM" [ref=e1082]:
+                  - generic [ref=e1083]: KDM
+                - cell "—" [ref=e1084]
+                - cell [ref=e1085]
+                - cell "⚠" [ref=e1086]
+                - cell "Open" [ref=e1087]:
+                  - button "Open" [ref=e1088]
+                - cell "✕" [ref=e1089]:
+                  - button "✕" [ref=e1090]
+              - row "Ricevuta KDM BANNER_TEST_2cfaf575b9aa ⚠ Open ✕" [ref=e1091] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1092]:
+                  - generic [ref=e1093]: Ricevuta
+                - cell "KDM" [ref=e1094]:
+                  - generic [ref=e1095]: KDM
+                - cell "BANNER_TEST_2cfaf575b9aa" [ref=e1096]
+                - cell [ref=e1097]
+                - cell "⚠" [ref=e1098]
+                - cell "Open" [ref=e1099]:
+                  - button "Open" [ref=e1100]
+                - cell "✕" [ref=e1101]:
+                  - button "✕" [ref=e1102]
+              - row "Ricevuta KDM BOGUS_TYPE_788fa7f5cb94 ⚠ Open ✕" [ref=e1103] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1104]:
+                  - generic [ref=e1105]: Ricevuta
+                - cell "KDM" [ref=e1106]:
+                  - generic [ref=e1107]: KDM
+                - cell "BOGUS_TYPE_788fa7f5cb94" [ref=e1108]
+                - cell [ref=e1109]
+                - cell "⚠" [ref=e1110]
+                - cell "Open" [ref=e1111]:
+                  - button "Open" [ref=e1112]
+                - cell "✕" [ref=e1113]:
+                  - button "✕" [ref=e1114]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1115] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1116]:
+                  - generic [ref=e1117]: Ricevuta
+                - cell "KDM" [ref=e1118]:
+                  - generic [ref=e1119]: KDM
+                - cell "QUEER_FTR" [ref=e1120]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1121]
+                - cell "⚠" [ref=e1122]
+                - cell "Open" [ref=e1123]:
+                  - button "Open" [ref=e1124]
+                - cell "✕" [ref=e1125]:
+                  - button "✕" [ref=e1126]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1127] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1128]:
+                  - generic [ref=e1129]: Ricevuta
+                - cell "KDM" [ref=e1130]:
+                  - generic [ref=e1131]: KDM
+                - cell "—" [ref=e1132]
+                - cell [ref=e1133]
+                - cell "⚠" [ref=e1134]
+                - cell "Open" [ref=e1135]:
+                  - button "Open" [ref=e1136]
+                - cell "✕" [ref=e1137]:
+                  - button "✕" [ref=e1138]
+              - row "Ricevuta KDM BANNER_TEST_37afaf5ff590 ⚠ Open ✕" [ref=e1139] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1140]:
+                  - generic [ref=e1141]: Ricevuta
+                - cell "KDM" [ref=e1142]:
+                  - generic [ref=e1143]: KDM
+                - cell "BANNER_TEST_37afaf5ff590" [ref=e1144]
+                - cell [ref=e1145]
+                - cell "⚠" [ref=e1146]
+                - cell "Open" [ref=e1147]:
+                  - button "Open" [ref=e1148]
+                - cell "✕" [ref=e1149]:
+                  - button "✕" [ref=e1150]
+              - row "Ricevuta KDM BOGUS_TYPE_3ee079bf96b1 ⚠ Open ✕" [ref=e1151] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1152]:
+                  - generic [ref=e1153]: Ricevuta
+                - cell "KDM" [ref=e1154]:
+                  - generic [ref=e1155]: KDM
+                - cell "BOGUS_TYPE_3ee079bf96b1" [ref=e1156]
+                - cell [ref=e1157]
+                - cell "⚠" [ref=e1158]
+                - cell "Open" [ref=e1159]:
+                  - button "Open" [ref=e1160]
+                - cell "✕" [ref=e1161]:
+                  - button "✕" [ref=e1162]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1163] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1164]:
+                  - generic [ref=e1165]: Ricevuta
+                - cell "KDM" [ref=e1166]:
+                  - generic [ref=e1167]: KDM
+                - cell "QUEER_FTR" [ref=e1168]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1169]
+                - cell "⚠" [ref=e1170]
+                - cell "Open" [ref=e1171]:
+                  - button "Open" [ref=e1172]
+                - cell "✕" [ref=e1173]:
+                  - button "✕" [ref=e1174]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1175] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1176]:
+                  - generic [ref=e1177]: Ricevuta
+                - cell "KDM" [ref=e1178]:
+                  - generic [ref=e1179]: KDM
+                - cell "—" [ref=e1180]
+                - cell [ref=e1181]
+                - cell "⚠" [ref=e1182]
+                - cell "Open" [ref=e1183]:
+                  - button "Open" [ref=e1184]
+                - cell "✕" [ref=e1185]:
+                  - button "✕" [ref=e1186]
+              - row "Ricevuta KDM BANNER_TEST_31ad36c0bafe ⚠ Open ✕" [ref=e1187] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1188]:
+                  - generic [ref=e1189]: Ricevuta
+                - cell "KDM" [ref=e1190]:
+                  - generic [ref=e1191]: KDM
+                - cell "BANNER_TEST_31ad36c0bafe" [ref=e1192]
+                - cell [ref=e1193]
+                - cell "⚠" [ref=e1194]
+                - cell "Open" [ref=e1195]:
+                  - button "Open" [ref=e1196]
+                - cell "✕" [ref=e1197]:
+                  - button "✕" [ref=e1198]
+              - row "Ricevuta KDM BOGUS_TYPE_2ca04f6a7abf ⚠ Open ✕" [ref=e1199] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1200]:
+                  - generic [ref=e1201]: Ricevuta
+                - cell "KDM" [ref=e1202]:
+                  - generic [ref=e1203]: KDM
+                - cell "BOGUS_TYPE_2ca04f6a7abf" [ref=e1204]
+                - cell [ref=e1205]
+                - cell "⚠" [ref=e1206]
+                - cell "Open" [ref=e1207]:
+                  - button "Open" [ref=e1208]
+                - cell "✕" [ref=e1209]:
+                  - button "✕" [ref=e1210]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1211] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1212]:
+                  - generic [ref=e1213]: Ricevuta
+                - cell "KDM" [ref=e1214]:
+                  - generic [ref=e1215]: KDM
+                - cell "QUEER_FTR" [ref=e1216]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1217]
+                - cell "⚠" [ref=e1218]
+                - cell "Open" [ref=e1219]:
+                  - button "Open" [ref=e1220]
+                - cell "✕" [ref=e1221]:
+                  - button "✕" [ref=e1222]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1223] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1224]:
+                  - generic [ref=e1225]: Ricevuta
+                - cell "KDM" [ref=e1226]:
+                  - generic [ref=e1227]: KDM
+                - cell "—" [ref=e1228]
+                - cell [ref=e1229]
+                - cell "⚠" [ref=e1230]
+                - cell "Open" [ref=e1231]:
+                  - button "Open" [ref=e1232]
+                - cell "✕" [ref=e1233]:
+                  - button "✕" [ref=e1234]
+              - row "Ricevuta KDM BANNER_TEST_d4158b992682 ⚠ Open ✕" [ref=e1235] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1236]:
+                  - generic [ref=e1237]: Ricevuta
+                - cell "KDM" [ref=e1238]:
+                  - generic [ref=e1239]: KDM
+                - cell "BANNER_TEST_d4158b992682" [ref=e1240]
+                - cell [ref=e1241]
+                - cell "⚠" [ref=e1242]
+                - cell "Open" [ref=e1243]:
+                  - button "Open" [ref=e1244]
+                - cell "✕" [ref=e1245]:
+                  - button "✕" [ref=e1246]
+              - row "Ricevuta KDM BOGUS_TYPE_836a6d665d53 ⚠ Open ✕" [ref=e1247] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1248]:
+                  - generic [ref=e1249]: Ricevuta
+                - cell "KDM" [ref=e1250]:
+                  - generic [ref=e1251]: KDM
+                - cell "BOGUS_TYPE_836a6d665d53" [ref=e1252]
+                - cell [ref=e1253]
+                - cell "⚠" [ref=e1254]
+                - cell "Open" [ref=e1255]:
+                  - button "Open" [ref=e1256]
+                - cell "✕" [ref=e1257]:
+                  - button "✕" [ref=e1258]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1259] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1260]:
+                  - generic [ref=e1261]: Ricevuta
+                - cell "KDM" [ref=e1262]:
+                  - generic [ref=e1263]: KDM
+                - cell "QUEER_FTR" [ref=e1264]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1265]
+                - cell "⚠" [ref=e1266]
+                - cell "Open" [ref=e1267]:
+                  - button "Open" [ref=e1268]
+                - cell "✕" [ref=e1269]:
+                  - button "✕" [ref=e1270]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1271] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1272]:
+                  - generic [ref=e1273]: Ricevuta
+                - cell "KDM" [ref=e1274]:
+                  - generic [ref=e1275]: KDM
+                - cell "—" [ref=e1276]
+                - cell [ref=e1277]
+                - cell "⚠" [ref=e1278]
+                - cell "Open" [ref=e1279]:
+                  - button "Open" [ref=e1280]
+                - cell "✕" [ref=e1281]:
+                  - button "✕" [ref=e1282]
+              - row "Ricevuta KDM BANNER_TEST_f1493aca269d ⚠ Open ✕" [ref=e1283] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1284]:
+                  - generic [ref=e1285]: Ricevuta
+                - cell "KDM" [ref=e1286]:
+                  - generic [ref=e1287]: KDM
+                - cell "BANNER_TEST_f1493aca269d" [ref=e1288]
+                - cell [ref=e1289]
+                - cell "⚠" [ref=e1290]
+                - cell "Open" [ref=e1291]:
+                  - button "Open" [ref=e1292]
+                - cell "✕" [ref=e1293]:
+                  - button "✕" [ref=e1294]
+              - row "Ricevuta KDM BOGUS_TYPE_3194c9937dff ⚠ Open ✕" [ref=e1295] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1296]:
+                  - generic [ref=e1297]: Ricevuta
+                - cell "KDM" [ref=e1298]:
+                  - generic [ref=e1299]: KDM
+                - cell "BOGUS_TYPE_3194c9937dff" [ref=e1300]
+                - cell [ref=e1301]
+                - cell "⚠" [ref=e1302]
+                - cell "Open" [ref=e1303]:
+                  - button "Open" [ref=e1304]
+                - cell "✕" [ref=e1305]:
+                  - button "✕" [ref=e1306]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1307] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1308]:
+                  - generic [ref=e1309]: Ricevuta
+                - cell "KDM" [ref=e1310]:
+                  - generic [ref=e1311]: KDM
+                - cell "QUEER_FTR" [ref=e1312]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1313]
+                - cell "⚠" [ref=e1314]
+                - cell "Open" [ref=e1315]:
+                  - button "Open" [ref=e1316]
+                - cell "✕" [ref=e1317]:
+                  - button "✕" [ref=e1318]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1319] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1320]:
+                  - generic [ref=e1321]: Ricevuta
+                - cell "KDM" [ref=e1322]:
+                  - generic [ref=e1323]: KDM
+                - cell "—" [ref=e1324]
+                - cell [ref=e1325]
+                - cell "⚠" [ref=e1326]
+                - cell "Open" [ref=e1327]:
+                  - button "Open" [ref=e1328]
+                - cell "✕" [ref=e1329]:
+                  - button "✕" [ref=e1330]
+              - row "Ricevuta KDM BANNER_TEST_ab8ac0b956d3 ⚠ Open ✕" [ref=e1331] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1332]:
+                  - generic [ref=e1333]: Ricevuta
+                - cell "KDM" [ref=e1334]:
+                  - generic [ref=e1335]: KDM
+                - cell "BANNER_TEST_ab8ac0b956d3" [ref=e1336]
+                - cell [ref=e1337]
+                - cell "⚠" [ref=e1338]
+                - cell "Open" [ref=e1339]:
+                  - button "Open" [ref=e1340]
+                - cell "✕" [ref=e1341]:
+                  - button "✕" [ref=e1342]
+              - row "Ricevuta KDM BOGUS_TYPE_8f372c9e7266 ⚠ Open ✕" [ref=e1343] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1344]:
+                  - generic [ref=e1345]: Ricevuta
+                - cell "KDM" [ref=e1346]:
+                  - generic [ref=e1347]: KDM
+                - cell "BOGUS_TYPE_8f372c9e7266" [ref=e1348]
+                - cell [ref=e1349]
+                - cell "⚠" [ref=e1350]
+                - cell "Open" [ref=e1351]:
+                  - button "Open" [ref=e1352]
+                - cell "✕" [ref=e1353]:
+                  - button "✕" [ref=e1354]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1355] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1356]:
+                  - generic [ref=e1357]: Ricevuta
+                - cell "KDM" [ref=e1358]:
+                  - generic [ref=e1359]: KDM
+                - cell "QUEER_FTR" [ref=e1360]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1361]
+                - cell "⚠" [ref=e1362]
+                - cell "Open" [ref=e1363]:
+                  - button "Open" [ref=e1364]
+                - cell "✕" [ref=e1365]:
+                  - button "✕" [ref=e1366]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1367] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1368]:
+                  - generic [ref=e1369]: Ricevuta
+                - cell "KDM" [ref=e1370]:
+                  - generic [ref=e1371]: KDM
+                - cell "—" [ref=e1372]
+                - cell [ref=e1373]
+                - cell "⚠" [ref=e1374]
+                - cell "Open" [ref=e1375]:
+                  - button "Open" [ref=e1376]
+                - cell "✕" [ref=e1377]:
+                  - button "✕" [ref=e1378]
+              - row "Ricevuta KDM BANNER_TEST_038062dc37a1 ⚠ Open ✕" [ref=e1379] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1380]:
+                  - generic [ref=e1381]: Ricevuta
+                - cell "KDM" [ref=e1382]:
+                  - generic [ref=e1383]: KDM
+                - cell "BANNER_TEST_038062dc37a1" [ref=e1384]
+                - cell [ref=e1385]
+                - cell "⚠" [ref=e1386]
+                - cell "Open" [ref=e1387]:
+                  - button "Open" [ref=e1388]
+                - cell "✕" [ref=e1389]:
+                  - button "✕" [ref=e1390]
+              - row "Ricevuta KDM BOGUS_TYPE_729d8c538f64 ⚠ Open ✕" [ref=e1391] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1392]:
+                  - generic [ref=e1393]: Ricevuta
+                - cell "KDM" [ref=e1394]:
+                  - generic [ref=e1395]: KDM
+                - cell "BOGUS_TYPE_729d8c538f64" [ref=e1396]
+                - cell [ref=e1397]
+                - cell "⚠" [ref=e1398]
+                - cell "Open" [ref=e1399]:
+                  - button "Open" [ref=e1400]
+                - cell "✕" [ref=e1401]:
+                  - button "✕" [ref=e1402]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1403] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1404]:
+                  - generic [ref=e1405]: Ricevuta
+                - cell "KDM" [ref=e1406]:
+                  - generic [ref=e1407]: KDM
+                - cell "QUEER_FTR" [ref=e1408]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1409]
+                - cell "⚠" [ref=e1410]
+                - cell "Open" [ref=e1411]:
+                  - button "Open" [ref=e1412]
+                - cell "✕" [ref=e1413]:
+                  - button "✕" [ref=e1414]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1415] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1416]:
+                  - generic [ref=e1417]: Ricevuta
+                - cell "KDM" [ref=e1418]:
+                  - generic [ref=e1419]: KDM
+                - cell "—" [ref=e1420]
+                - cell [ref=e1421]
+                - cell "⚠" [ref=e1422]
+                - cell "Open" [ref=e1423]:
+                  - button "Open" [ref=e1424]
+                - cell "✕" [ref=e1425]:
+                  - button "✕" [ref=e1426]
+              - row "Ricevuta KDM BANNER_TEST_c2aa93ab7282 ⚠ Open ✕" [ref=e1427] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1428]:
+                  - generic [ref=e1429]: Ricevuta
+                - cell "KDM" [ref=e1430]:
+                  - generic [ref=e1431]: KDM
+                - cell "BANNER_TEST_c2aa93ab7282" [ref=e1432]
+                - cell [ref=e1433]
+                - cell "⚠" [ref=e1434]
+                - cell "Open" [ref=e1435]:
+                  - button "Open" [ref=e1436]
+                - cell "✕" [ref=e1437]:
+                  - button "✕" [ref=e1438]
+              - row "Ricevuta KDM BOGUS_TYPE_131c54261671 ⚠ Open ✕" [ref=e1439] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1440]:
+                  - generic [ref=e1441]: Ricevuta
+                - cell "KDM" [ref=e1442]:
+                  - generic [ref=e1443]: KDM
+                - cell "BOGUS_TYPE_131c54261671" [ref=e1444]
+                - cell [ref=e1445]
+                - cell "⚠" [ref=e1446]
+                - cell "Open" [ref=e1447]:
+                  - button "Open" [ref=e1448]
+                - cell "✕" [ref=e1449]:
+                  - button "✕" [ref=e1450]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1451] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1452]:
+                  - generic [ref=e1453]: Ricevuta
+                - cell "KDM" [ref=e1454]:
+                  - generic [ref=e1455]: KDM
+                - cell "QUEER_FTR" [ref=e1456]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1457]
+                - cell "⚠" [ref=e1458]
+                - cell "Open" [ref=e1459]:
+                  - button "Open" [ref=e1460]
+                - cell "✕" [ref=e1461]:
+                  - button "✕" [ref=e1462]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1463] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1464]:
+                  - generic [ref=e1465]: Ricevuta
+                - cell "KDM" [ref=e1466]:
+                  - generic [ref=e1467]: KDM
+                - cell "—" [ref=e1468]
+                - cell [ref=e1469]
+                - cell "⚠" [ref=e1470]
+                - cell "Open" [ref=e1471]:
+                  - button "Open" [ref=e1472]
+                - cell "✕" [ref=e1473]:
+                  - button "✕" [ref=e1474]
+              - row "Ricevuta KDM BANNER_TEST_0370c45394de ⚠ Open ✕" [ref=e1475] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1476]:
+                  - generic [ref=e1477]: Ricevuta
+                - cell "KDM" [ref=e1478]:
+                  - generic [ref=e1479]: KDM
+                - cell "BANNER_TEST_0370c45394de" [ref=e1480]
+                - cell [ref=e1481]
+                - cell "⚠" [ref=e1482]
+                - cell "Open" [ref=e1483]:
+                  - button "Open" [ref=e1484]
+                - cell "✕" [ref=e1485]:
+                  - button "✕" [ref=e1486]
+              - row "Ricevuta KDM BOGUS_TYPE_e7bb2d774899 ⚠ Open ✕" [ref=e1487] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1488]:
+                  - generic [ref=e1489]: Ricevuta
+                - cell "KDM" [ref=e1490]:
+                  - generic [ref=e1491]: KDM
+                - cell "BOGUS_TYPE_e7bb2d774899" [ref=e1492]
+                - cell [ref=e1493]
+                - cell "⚠" [ref=e1494]
+                - cell "Open" [ref=e1495]:
+                  - button "Open" [ref=e1496]
+                - cell "✕" [ref=e1497]:
+                  - button "✕" [ref=e1498]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1499] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1500]:
+                  - generic [ref=e1501]: Ricevuta
+                - cell "KDM" [ref=e1502]:
+                  - generic [ref=e1503]: KDM
+                - cell "QUEER_FTR" [ref=e1504]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1505]
+                - cell "⚠" [ref=e1506]
+                - cell "Open" [ref=e1507]:
+                  - button "Open" [ref=e1508]
+                - cell "✕" [ref=e1509]:
+                  - button "✕" [ref=e1510]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1511] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1512]:
+                  - generic [ref=e1513]: Ricevuta
+                - cell "KDM" [ref=e1514]:
+                  - generic [ref=e1515]: KDM
+                - cell "—" [ref=e1516]
+                - cell [ref=e1517]
+                - cell "⚠" [ref=e1518]
+                - cell "Open" [ref=e1519]:
+                  - button "Open" [ref=e1520]
+                - cell "✕" [ref=e1521]:
+                  - button "✕" [ref=e1522]
+              - row "Ricevuta KDM BANNER_TEST_bf3e9242354f ⚠ Open ✕" [ref=e1523] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1524]:
+                  - generic [ref=e1525]: Ricevuta
+                - cell "KDM" [ref=e1526]:
+                  - generic [ref=e1527]: KDM
+                - cell "BANNER_TEST_bf3e9242354f" [ref=e1528]
+                - cell [ref=e1529]
+                - cell "⚠" [ref=e1530]
+                - cell "Open" [ref=e1531]:
+                  - button "Open" [ref=e1532]
+                - cell "✕" [ref=e1533]:
+                  - button "✕" [ref=e1534]
+              - row "Ricevuta KDM BOGUS_TYPE_302967626731 ⚠ Open ✕" [ref=e1535] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1536]:
+                  - generic [ref=e1537]: Ricevuta
+                - cell "KDM" [ref=e1538]:
+                  - generic [ref=e1539]: KDM
+                - cell "BOGUS_TYPE_302967626731" [ref=e1540]
+                - cell [ref=e1541]
+                - cell "⚠" [ref=e1542]
+                - cell "Open" [ref=e1543]:
+                  - button "Open" [ref=e1544]
+                - cell "✕" [ref=e1545]:
+                  - button "✕" [ref=e1546]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1547] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1548]:
+                  - generic [ref=e1549]: Ricevuta
+                - cell "KDM" [ref=e1550]:
+                  - generic [ref=e1551]: KDM
+                - cell "QUEER_FTR" [ref=e1552]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1553]
+                - cell "⚠" [ref=e1554]
+                - cell "Open" [ref=e1555]:
+                  - button "Open" [ref=e1556]
+                - cell "✕" [ref=e1557]:
+                  - button "✕" [ref=e1558]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1559] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1560]:
+                  - generic [ref=e1561]: Ricevuta
+                - cell "KDM" [ref=e1562]:
+                  - generic [ref=e1563]: KDM
+                - cell "—" [ref=e1564]
+                - cell [ref=e1565]
+                - cell "⚠" [ref=e1566]
+                - cell "Open" [ref=e1567]:
+                  - button "Open" [ref=e1568]
+                - cell "✕" [ref=e1569]:
+                  - button "✕" [ref=e1570]
+              - row "Ricevuta KDM BANNER_TEST_4c6aba0aafe2 ⚠ Open ✕" [ref=e1571] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1572]:
+                  - generic [ref=e1573]: Ricevuta
+                - cell "KDM" [ref=e1574]:
+                  - generic [ref=e1575]: KDM
+                - cell "BANNER_TEST_4c6aba0aafe2" [ref=e1576]
+                - cell [ref=e1577]
+                - cell "⚠" [ref=e1578]
+                - cell "Open" [ref=e1579]:
+                  - button "Open" [ref=e1580]
+                - cell "✕" [ref=e1581]:
+                  - button "✕" [ref=e1582]
+              - row "Ricevuta KDM BOGUS_TYPE_19b9602740d5 ⚠ Open ✕" [ref=e1583] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1584]:
+                  - generic [ref=e1585]: Ricevuta
+                - cell "KDM" [ref=e1586]:
+                  - generic [ref=e1587]: KDM
+                - cell "BOGUS_TYPE_19b9602740d5" [ref=e1588]
+                - cell [ref=e1589]
+                - cell "⚠" [ref=e1590]
+                - cell "Open" [ref=e1591]:
+                  - button "Open" [ref=e1592]
+                - cell "✕" [ref=e1593]:
+                  - button "✕" [ref=e1594]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1595] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1596]:
+                  - generic [ref=e1597]: Ricevuta
+                - cell "KDM" [ref=e1598]:
+                  - generic [ref=e1599]: KDM
+                - cell "QUEER_FTR" [ref=e1600]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1601]
+                - cell "⚠" [ref=e1602]
+                - cell "Open" [ref=e1603]:
+                  - button "Open" [ref=e1604]
+                - cell "✕" [ref=e1605]:
+                  - button "✕" [ref=e1606]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1607] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1608]:
+                  - generic [ref=e1609]: Ricevuta
+                - cell "KDM" [ref=e1610]:
+                  - generic [ref=e1611]: KDM
+                - cell "—" [ref=e1612]
+                - cell [ref=e1613]
+                - cell "⚠" [ref=e1614]
+                - cell "Open" [ref=e1615]:
+                  - button "Open" [ref=e1616]
+                - cell "✕" [ref=e1617]:
+                  - button "✕" [ref=e1618]
+              - row "Ricevuta KDM Test Film AI ⚠ Open ✕" [ref=e1619] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1620]:
+                  - generic [ref=e1621]: Ricevuta
+                - cell "KDM" [ref=e1622]:
+                  - generic [ref=e1623]: KDM
+                - cell "Test Film AI" [ref=e1624]
+                - cell [ref=e1625]
+                - cell "⚠" [ref=e1626]
+                - cell "Open" [ref=e1627]:
+                  - button "Open" [ref=e1628]
+                - cell "✕" [ref=e1629]:
+                  - button "✕" [ref=e1630]
+              - row "Ricevuta KDM Test Film AI ⚠ Open ✕" [ref=e1631] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1632]:
+                  - generic [ref=e1633]: Ricevuta
+                - cell "KDM" [ref=e1634]:
+                  - generic [ref=e1635]: KDM
+                - cell "Test Film AI" [ref=e1636]
+                - cell [ref=e1637]
+                - cell "⚠" [ref=e1638]
+                - cell "Open" [ref=e1639]:
+                  - button "Open" [ref=e1640]
+                - cell "✕" [ref=e1641]:
+                  - button "✕" [ref=e1642]
+              - row "Ricevuta KDM BANNER_TEST_8d0841c48084 ⚠ Open ✕" [ref=e1643] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1644]:
+                  - generic [ref=e1645]: Ricevuta
+                - cell "KDM" [ref=e1646]:
+                  - generic [ref=e1647]: KDM
+                - cell "BANNER_TEST_8d0841c48084" [ref=e1648]
+                - cell [ref=e1649]
+                - cell "⚠" [ref=e1650]
+                - cell "Open" [ref=e1651]:
+                  - button "Open" [ref=e1652]
+                - cell "✕" [ref=e1653]:
+                  - button "✕" [ref=e1654]
+              - row "Ricevuta KDM BOGUS_TYPE_22cebb1363f8 ⚠ Open ✕" [ref=e1655] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1656]:
+                  - generic [ref=e1657]: Ricevuta
+                - cell "KDM" [ref=e1658]:
+                  - generic [ref=e1659]: KDM
+                - cell "BOGUS_TYPE_22cebb1363f8" [ref=e1660]
+                - cell [ref=e1661]
+                - cell "⚠" [ref=e1662]
+                - cell "Open" [ref=e1663]:
+                  - button "Open" [ref=e1664]
+                - cell "✕" [ref=e1665]:
+                  - button "✕" [ref=e1666]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1667] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1668]:
+                  - generic [ref=e1669]: Ricevuta
+                - cell "KDM" [ref=e1670]:
+                  - generic [ref=e1671]: KDM
+                - cell "QUEER_FTR" [ref=e1672]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1673]
+                - cell "⚠" [ref=e1674]
+                - cell "Open" [ref=e1675]:
+                  - button "Open" [ref=e1676]
+                - cell "✕" [ref=e1677]:
+                  - button "✕" [ref=e1678]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1679] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1680]:
+                  - generic [ref=e1681]: Ricevuta
+                - cell "KDM" [ref=e1682]:
+                  - generic [ref=e1683]: KDM
+                - cell "—" [ref=e1684]
+                - cell [ref=e1685]
+                - cell "⚠" [ref=e1686]
+                - cell "Open" [ref=e1687]:
+                  - button "Open" [ref=e1688]
+                - cell "✕" [ref=e1689]:
+                  - button "✕" [ref=e1690]
+              - row "Ricevuta KDM BANNER_TEST_7f084d6f3736 ⚠ Open ✕" [ref=e1691] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1692]:
+                  - generic [ref=e1693]: Ricevuta
+                - cell "KDM" [ref=e1694]:
+                  - generic [ref=e1695]: KDM
+                - cell "BANNER_TEST_7f084d6f3736" [ref=e1696]
+                - cell [ref=e1697]
+                - cell "⚠" [ref=e1698]
+                - cell "Open" [ref=e1699]:
+                  - button "Open" [ref=e1700]
+                - cell "✕" [ref=e1701]:
+                  - button "✕" [ref=e1702]
+              - row "Ricevuta KDM BOGUS_TYPE_58ca1ca9adab ⚠ Open ✕" [ref=e1703] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1704]:
+                  - generic [ref=e1705]: Ricevuta
+                - cell "KDM" [ref=e1706]:
+                  - generic [ref=e1707]: KDM
+                - cell "BOGUS_TYPE_58ca1ca9adab" [ref=e1708]
+                - cell [ref=e1709]
+                - cell "⚠" [ref=e1710]
+                - cell "Open" [ref=e1711]:
+                  - button "Open" [ref=e1712]
+                - cell "✕" [ref=e1713]:
+                  - button "✕" [ref=e1714]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1715] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1716]:
+                  - generic [ref=e1717]: Ricevuta
+                - cell "KDM" [ref=e1718]:
+                  - generic [ref=e1719]: KDM
+                - cell "QUEER_FTR" [ref=e1720]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1721]
+                - cell "⚠" [ref=e1722]
+                - cell "Open" [ref=e1723]:
+                  - button "Open" [ref=e1724]
+                - cell "✕" [ref=e1725]:
+                  - button "✕" [ref=e1726]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1727] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1728]:
+                  - generic [ref=e1729]: Ricevuta
+                - cell "KDM" [ref=e1730]:
+                  - generic [ref=e1731]: KDM
+                - cell "—" [ref=e1732]
+                - cell [ref=e1733]
+                - cell "⚠" [ref=e1734]
+                - cell "Open" [ref=e1735]:
+                  - button "Open" [ref=e1736]
+                - cell "✕" [ref=e1737]:
+                  - button "✕" [ref=e1738]
+              - row "Ricevuta KDM BANNER_TEST_a07c4a09dd49 ⚠ Open ✕" [ref=e1739] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1740]:
+                  - generic [ref=e1741]: Ricevuta
+                - cell "KDM" [ref=e1742]:
+                  - generic [ref=e1743]: KDM
+                - cell "BANNER_TEST_a07c4a09dd49" [ref=e1744]
+                - cell [ref=e1745]
+                - cell "⚠" [ref=e1746]
+                - cell "Open" [ref=e1747]:
+                  - button "Open" [ref=e1748]
+                - cell "✕" [ref=e1749]:
+                  - button "✕" [ref=e1750]
+              - row "Ricevuta KDM BOGUS_TYPE_35e59b904382 ⚠ Open ✕" [ref=e1751] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1752]:
+                  - generic [ref=e1753]: Ricevuta
+                - cell "KDM" [ref=e1754]:
+                  - generic [ref=e1755]: KDM
+                - cell "BOGUS_TYPE_35e59b904382" [ref=e1756]
+                - cell [ref=e1757]
+                - cell "⚠" [ref=e1758]
+                - cell "Open" [ref=e1759]:
+                  - button "Open" [ref=e1760]
+                - cell "✕" [ref=e1761]:
+                  - button "✕" [ref=e1762]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1763] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1764]:
+                  - generic [ref=e1765]: Ricevuta
+                - cell "KDM" [ref=e1766]:
+                  - generic [ref=e1767]: KDM
+                - cell "QUEER_FTR" [ref=e1768]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1769]
+                - cell "⚠" [ref=e1770]
+                - cell "Open" [ref=e1771]:
+                  - button "Open" [ref=e1772]
+                - cell "✕" [ref=e1773]:
+                  - button "✕" [ref=e1774]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1775] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1776]:
+                  - generic [ref=e1777]: Ricevuta
+                - cell "KDM" [ref=e1778]:
+                  - generic [ref=e1779]: KDM
+                - cell "—" [ref=e1780]
+                - cell [ref=e1781]
+                - cell "⚠" [ref=e1782]
+                - cell "Open" [ref=e1783]:
+                  - button "Open" [ref=e1784]
+                - cell "✕" [ref=e1785]:
+                  - button "✕" [ref=e1786]
+              - row "Ricevuta KDM BANNER_TEST_6074260c2bbb ⚠ Open ✕" [ref=e1787] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1788]:
+                  - generic [ref=e1789]: Ricevuta
+                - cell "KDM" [ref=e1790]:
+                  - generic [ref=e1791]: KDM
+                - cell "BANNER_TEST_6074260c2bbb" [ref=e1792]
+                - cell [ref=e1793]
+                - cell "⚠" [ref=e1794]
+                - cell "Open" [ref=e1795]:
+                  - button "Open" [ref=e1796]
+                - cell "✕" [ref=e1797]:
+                  - button "✕" [ref=e1798]
+              - row "Ricevuta KDM BOGUS_TYPE_74338d67e089 ⚠ Open ✕" [ref=e1799] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1800]:
+                  - generic [ref=e1801]: Ricevuta
+                - cell "KDM" [ref=e1802]:
+                  - generic [ref=e1803]: KDM
+                - cell "BOGUS_TYPE_74338d67e089" [ref=e1804]
+                - cell [ref=e1805]
+                - cell "⚠" [ref=e1806]
+                - cell "Open" [ref=e1807]:
+                  - button "Open" [ref=e1808]
+                - cell "✕" [ref=e1809]:
+                  - button "✕" [ref=e1810]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1811] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1812]:
+                  - generic [ref=e1813]: Ricevuta
+                - cell "KDM" [ref=e1814]:
+                  - generic [ref=e1815]: KDM
+                - cell "QUEER_FTR" [ref=e1816]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1817]
+                - cell "⚠" [ref=e1818]
+                - cell "Open" [ref=e1819]:
+                  - button "Open" [ref=e1820]
+                - cell "✕" [ref=e1821]:
+                  - button "✕" [ref=e1822]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1823] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1824]:
+                  - generic [ref=e1825]: Ricevuta
+                - cell "KDM" [ref=e1826]:
+                  - generic [ref=e1827]: KDM
+                - cell "—" [ref=e1828]
+                - cell [ref=e1829]
+                - cell "⚠" [ref=e1830]
+                - cell "Open" [ref=e1831]:
+                  - button "Open" [ref=e1832]
+                - cell "✕" [ref=e1833]:
+                  - button "✕" [ref=e1834]
+              - row "Ricevuta KDM BANNER_TEST_04dcfb5eb22b ⚠ Open ✕" [ref=e1835] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1836]:
+                  - generic [ref=e1837]: Ricevuta
+                - cell "KDM" [ref=e1838]:
+                  - generic [ref=e1839]: KDM
+                - cell "BANNER_TEST_04dcfb5eb22b" [ref=e1840]
+                - cell [ref=e1841]
+                - cell "⚠" [ref=e1842]
+                - cell "Open" [ref=e1843]:
+                  - button "Open" [ref=e1844]
+                - cell "✕" [ref=e1845]:
+                  - button "✕" [ref=e1846]
+              - row "Ricevuta KDM BOGUS_TYPE_d12cf2e24b19 ⚠ Open ✕" [ref=e1847] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1848]:
+                  - generic [ref=e1849]: Ricevuta
+                - cell "KDM" [ref=e1850]:
+                  - generic [ref=e1851]: KDM
+                - cell "BOGUS_TYPE_d12cf2e24b19" [ref=e1852]
+                - cell [ref=e1853]
+                - cell "⚠" [ref=e1854]
+                - cell "Open" [ref=e1855]:
+                  - button "Open" [ref=e1856]
+                - cell "✕" [ref=e1857]:
+                  - button "✕" [ref=e1858]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1859] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1860]:
+                  - generic [ref=e1861]: Ricevuta
+                - cell "KDM" [ref=e1862]:
+                  - generic [ref=e1863]: KDM
+                - cell "QUEER_FTR" [ref=e1864]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1865]
+                - cell "⚠" [ref=e1866]
+                - cell "Open" [ref=e1867]:
+                  - button "Open" [ref=e1868]
+                - cell "✕" [ref=e1869]:
+                  - button "✕" [ref=e1870]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1871] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1872]:
+                  - generic [ref=e1873]: Ricevuta
+                - cell "KDM" [ref=e1874]:
+                  - generic [ref=e1875]: KDM
+                - cell "—" [ref=e1876]
+                - cell [ref=e1877]
+                - cell "⚠" [ref=e1878]
+                - cell "Open" [ref=e1879]:
+                  - button "Open" [ref=e1880]
+                - cell "✕" [ref=e1881]:
+                  - button "✕" [ref=e1882]
+              - row "Ricevuta KDM BANNER_TEST_a60e2fb7851b ⚠ Open ✕" [ref=e1883] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1884]:
+                  - generic [ref=e1885]: Ricevuta
+                - cell "KDM" [ref=e1886]:
+                  - generic [ref=e1887]: KDM
+                - cell "BANNER_TEST_a60e2fb7851b" [ref=e1888]
+                - cell [ref=e1889]
+                - cell "⚠" [ref=e1890]
+                - cell "Open" [ref=e1891]:
+                  - button "Open" [ref=e1892]
+                - cell "✕" [ref=e1893]:
+                  - button "✕" [ref=e1894]
+              - row "Ricevuta KDM BOGUS_TYPE_a7ddd5833f6b ⚠ Open ✕" [ref=e1895] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1896]:
+                  - generic [ref=e1897]: Ricevuta
+                - cell "KDM" [ref=e1898]:
+                  - generic [ref=e1899]: KDM
+                - cell "BOGUS_TYPE_a7ddd5833f6b" [ref=e1900]
+                - cell [ref=e1901]
+                - cell "⚠" [ref=e1902]
+                - cell "Open" [ref=e1903]:
+                  - button "Open" [ref=e1904]
+                - cell "✕" [ref=e1905]:
+                  - button "✕" [ref=e1906]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1907] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1908]:
+                  - generic [ref=e1909]: Ricevuta
+                - cell "KDM" [ref=e1910]:
+                  - generic [ref=e1911]: KDM
+                - cell "QUEER_FTR" [ref=e1912]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1913]
+                - cell "⚠" [ref=e1914]
+                - cell "Open" [ref=e1915]:
+                  - button "Open" [ref=e1916]
+                - cell "✕" [ref=e1917]:
+                  - button "✕" [ref=e1918]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e1919] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1920]:
+                  - generic [ref=e1921]: Ricevuta
+                - cell "KDM" [ref=e1922]:
+                  - generic [ref=e1923]: KDM
+                - cell "—" [ref=e1924]
+                - cell [ref=e1925]
+                - cell "⚠" [ref=e1926]
+                - cell "Open" [ref=e1927]:
+                  - button "Open" [ref=e1928]
+                - cell "✕" [ref=e1929]:
+                  - button "✕" [ref=e1930]
+              - row "Ricevuta KDM BANNER_TEST_490e375e0e0a ⚠ Open ✕" [ref=e1931] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1932]:
+                  - generic [ref=e1933]: Ricevuta
+                - cell "KDM" [ref=e1934]:
+                  - generic [ref=e1935]: KDM
+                - cell "BANNER_TEST_490e375e0e0a" [ref=e1936]
+                - cell [ref=e1937]
+                - cell "⚠" [ref=e1938]
+                - cell "Open" [ref=e1939]:
+                  - button "Open" [ref=e1940]
+                - cell "✕" [ref=e1941]:
+                  - button "✕" [ref=e1942]
+              - row "Ricevuta KDM BOGUS_TYPE_bd94fa476282 ⚠ Open ✕" [ref=e1943] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1944]:
+                  - generic [ref=e1945]: Ricevuta
+                - cell "KDM" [ref=e1946]:
+                  - generic [ref=e1947]: KDM
+                - cell "BOGUS_TYPE_bd94fa476282" [ref=e1948]
+                - cell [ref=e1949]
+                - cell "⚠" [ref=e1950]
+                - cell "Open" [ref=e1951]:
+                  - button "Open" [ref=e1952]
+                - cell "✕" [ref=e1953]:
+                  - button "✕" [ref=e1954]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1955] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1956]:
+                  - generic [ref=e1957]: Ricevuta
+                - cell "KDM" [ref=e1958]:
+                  - generic [ref=e1959]: KDM
+                - cell "QUEER_FTR" [ref=e1960]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1961]
+                - cell "⚠" [ref=e1962]
+                - cell "Open" [ref=e1963]:
+                  - button "Open" [ref=e1964]
+                - cell "✕" [ref=e1965]:
+                  - button "✕" [ref=e1966]
+              - row "Ricevuta KDM BANNER_TEST_74fe2630a658 ⚠ Open ✕" [ref=e1967] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1968]:
+                  - generic [ref=e1969]: Ricevuta
+                - cell "KDM" [ref=e1970]:
+                  - generic [ref=e1971]: KDM
+                - cell "BANNER_TEST_74fe2630a658" [ref=e1972]
+                - cell [ref=e1973]
+                - cell "⚠" [ref=e1974]
+                - cell "Open" [ref=e1975]:
+                  - button "Open" [ref=e1976]
+                - cell "✕" [ref=e1977]:
+                  - button "✕" [ref=e1978]
+              - row "Ricevuta KDM BOGUS_TYPE_d32d44d20b7f ⚠ Open ✕" [ref=e1979] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1980]:
+                  - generic [ref=e1981]: Ricevuta
+                - cell "KDM" [ref=e1982]:
+                  - generic [ref=e1983]: KDM
+                - cell "BOGUS_TYPE_d32d44d20b7f" [ref=e1984]
+                - cell [ref=e1985]
+                - cell "⚠" [ref=e1986]
+                - cell "Open" [ref=e1987]:
+                  - button "Open" [ref=e1988]
+                - cell "✕" [ref=e1989]:
+                  - button "✕" [ref=e1990]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e1991] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e1992]:
+                  - generic [ref=e1993]: Ricevuta
+                - cell "KDM" [ref=e1994]:
+                  - generic [ref=e1995]: KDM
+                - cell "QUEER_FTR" [ref=e1996]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1997]
+                - cell "⚠" [ref=e1998]
+                - cell "Open" [ref=e1999]:
+                  - button "Open" [ref=e2000]
+                - cell "✕" [ref=e2001]:
+                  - button "✕" [ref=e2002]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e2003] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2004]:
+                  - generic [ref=e2005]: Ricevuta
+                - cell "KDM" [ref=e2006]:
+                  - generic [ref=e2007]: KDM
+                - cell "QUEER_FTR" [ref=e2008]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e2009]
+                - cell "⚠" [ref=e2010]
+                - cell "Open" [ref=e2011]:
+                  - button "Open" [ref=e2012]
+                - cell "✕" [ref=e2013]:
+                  - button "✕" [ref=e2014]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2015] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2016]:
+                  - generic [ref=e2017]: Ricevuta
+                - cell "KDM" [ref=e2018]:
+                  - generic [ref=e2019]: KDM
+                - cell "—" [ref=e2020]
+                - cell [ref=e2021]
+                - cell "⚠" [ref=e2022]
+                - cell "Open" [ref=e2023]:
+                  - button "Open" [ref=e2024]
+                - cell "✕" [ref=e2025]:
+                  - button "✕" [ref=e2026]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e2027] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2028]:
+                  - generic [ref=e2029]: Ricevuta
+                - cell "KDM" [ref=e2030]:
+                  - generic [ref=e2031]: KDM
+                - cell "QUEER_FTR" [ref=e2032]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e2033]
+                - cell "⚠" [ref=e2034]
+                - cell "Open" [ref=e2035]:
+                  - button "Open" [ref=e2036]
+                - cell "✕" [ref=e2037]:
+                  - button "✕" [ref=e2038]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Open ✕" [ref=e2039] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2040]:
+                  - generic [ref=e2041]: Ricevuta
+                - cell "KDM" [ref=e2042]:
+                  - generic [ref=e2043]: KDM
+                - cell "QUEER_FTR" [ref=e2044]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e2045]
+                - cell "⚠" [ref=e2046]
+                - cell "Open" [ref=e2047]:
+                  - button "Open" [ref=e2048]
+                - cell "✕" [ref=e2049]:
+                  - button "✕" [ref=e2050]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2051] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2052]:
+                  - generic [ref=e2053]: Ricevuta
+                - cell "KDM" [ref=e2054]:
+                  - generic [ref=e2055]: KDM
+                - cell "—" [ref=e2056]
+                - cell [ref=e2057]
+                - cell "⚠" [ref=e2058]
+                - cell "Open" [ref=e2059]:
+                  - button "Open" [ref=e2060]
+                - cell "✕" [ref=e2061]:
+                  - button "✕" [ref=e2062]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2063] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2064]:
+                  - generic [ref=e2065]: Ricevuta
+                - cell "KDM" [ref=e2066]:
+                  - generic [ref=e2067]: KDM
+                - cell "—" [ref=e2068]
+                - cell [ref=e2069]
+                - cell "⚠" [ref=e2070]
+                - cell "Open" [ref=e2071]:
+                  - button "Open" [ref=e2072]
+                - cell "✕" [ref=e2073]:
+                  - button "✕" [ref=e2074]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2075] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2076]:
+                  - generic [ref=e2077]: Ricevuta
+                - cell "KDM" [ref=e2078]:
+                  - generic [ref=e2079]: KDM
+                - cell "—" [ref=e2080]
+                - cell [ref=e2081]
+                - cell "⚠" [ref=e2082]
+                - cell "Open" [ref=e2083]:
+                  - button "Open" [ref=e2084]
+                - cell "✕" [ref=e2085]:
+                  - button "✕" [ref=e2086]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2087] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2088]:
+                  - generic [ref=e2089]: Ricevuta
+                - cell "KDM" [ref=e2090]:
+                  - generic [ref=e2091]: KDM
+                - cell "—" [ref=e2092]
+                - cell [ref=e2093]
+                - cell "⚠" [ref=e2094]
+                - cell "Open" [ref=e2095]:
+                  - button "Open" [ref=e2096]
+                - cell "✕" [ref=e2097]:
+                  - button "✕" [ref=e2098]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2099] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2100]:
+                  - generic [ref=e2101]: Ricevuta
+                - cell "KDM" [ref=e2102]:
+                  - generic [ref=e2103]: KDM
+                - cell "—" [ref=e2104]
+                - cell [ref=e2105]
+                - cell "⚠" [ref=e2106]
+                - cell "Open" [ref=e2107]:
+                  - button "Open" [ref=e2108]
+                - cell "✕" [ref=e2109]:
+                  - button "✕" [ref=e2110]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2111] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2112]:
+                  - generic [ref=e2113]: Ricevuta
+                - cell "KDM" [ref=e2114]:
+                  - generic [ref=e2115]: KDM
+                - cell "—" [ref=e2116]
+                - cell [ref=e2117]
+                - cell "⚠" [ref=e2118]
+                - cell "Open" [ref=e2119]:
+                  - button "Open" [ref=e2120]
+                - cell "✕" [ref=e2121]:
+                  - button "✕" [ref=e2122]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2123] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2124]:
+                  - generic [ref=e2125]: Ricevuta
+                - cell "KDM" [ref=e2126]:
+                  - generic [ref=e2127]: KDM
+                - cell "—" [ref=e2128]
+                - cell [ref=e2129]
+                - cell "⚠" [ref=e2130]
+                - cell "Open" [ref=e2131]:
+                  - button "Open" [ref=e2132]
+                - cell "✕" [ref=e2133]:
+                  - button "✕" [ref=e2134]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2135] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2136]:
+                  - generic [ref=e2137]: Ricevuta
+                - cell "KDM" [ref=e2138]:
+                  - generic [ref=e2139]: KDM
+                - cell "—" [ref=e2140]
+                - cell [ref=e2141]
+                - cell "⚠" [ref=e2142]
+                - cell "Open" [ref=e2143]:
+                  - button "Open" [ref=e2144]
+                - cell "✕" [ref=e2145]:
+                  - button "✕" [ref=e2146]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2147] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2148]:
+                  - generic [ref=e2149]: Ricevuta
+                - cell "KDM" [ref=e2150]:
+                  - generic [ref=e2151]: KDM
+                - cell "—" [ref=e2152]
+                - cell [ref=e2153]
+                - cell "⚠" [ref=e2154]
+                - cell "Open" [ref=e2155]:
+                  - button "Open" [ref=e2156]
+                - cell "✕" [ref=e2157]:
+                  - button "✕" [ref=e2158]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2159] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2160]:
+                  - generic [ref=e2161]: Ricevuta
+                - cell "KDM" [ref=e2162]:
+                  - generic [ref=e2163]: KDM
+                - cell "—" [ref=e2164]
+                - cell [ref=e2165]
+                - cell "⚠" [ref=e2166]
+                - cell "Open" [ref=e2167]:
+                  - button "Open" [ref=e2168]
+                - cell "✕" [ref=e2169]:
+                  - button "✕" [ref=e2170]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2171] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2172]:
+                  - generic [ref=e2173]: Ricevuta
+                - cell "KDM" [ref=e2174]:
+                  - generic [ref=e2175]: KDM
+                - cell "—" [ref=e2176]
+                - cell [ref=e2177]
+                - cell "⚠" [ref=e2178]
+                - cell "Open" [ref=e2179]:
+                  - button "Open" [ref=e2180]
+                - cell "✕" [ref=e2181]:
+                  - button "✕" [ref=e2182]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2183] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2184]:
+                  - generic [ref=e2185]: Ricevuta
+                - cell "KDM" [ref=e2186]:
+                  - generic [ref=e2187]: KDM
+                - cell "—" [ref=e2188]
+                - cell [ref=e2189]
+                - cell "⚠" [ref=e2190]
+                - cell "Open" [ref=e2191]:
+                  - button "Open" [ref=e2192]
+                - cell "✕" [ref=e2193]:
+                  - button "✕" [ref=e2194]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2195] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2196]:
+                  - generic [ref=e2197]: Ricevuta
+                - cell "KDM" [ref=e2198]:
+                  - generic [ref=e2199]: KDM
+                - cell "—" [ref=e2200]
+                - cell [ref=e2201]
+                - cell "⚠" [ref=e2202]
+                - cell "Open" [ref=e2203]:
+                  - button "Open" [ref=e2204]
+                - cell "✕" [ref=e2205]:
+                  - button "✕" [ref=e2206]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2207] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2208]:
+                  - generic [ref=e2209]: Ricevuta
+                - cell "KDM" [ref=e2210]:
+                  - generic [ref=e2211]: KDM
+                - cell "—" [ref=e2212]
+                - cell [ref=e2213]
+                - cell "⚠" [ref=e2214]
+                - cell "Open" [ref=e2215]:
+                  - button "Open" [ref=e2216]
+                - cell "✕" [ref=e2217]:
+                  - button "✕" [ref=e2218]
+              - row "Ricevuta KDM — ⚠ Open ✕" [ref=e2219] [cursor=pointer]:
+                - cell "Ricevuta" [ref=e2220]:
+                  - generic [ref=e2221]: Ricevuta
+                - cell "KDM" [ref=e2222]:
+                  - generic [ref=e2223]: KDM
+                - cell "—" [ref=e2224]
+                - cell [ref=e2225]
+                - cell "⚠" [ref=e2226]
+                - cell "Open" [ref=e2227]:
+                  - button "Open" [ref=e2228]
+                - cell "✕" [ref=e2229]:
+                  - button "✕" [ref=e2230]
+        - text: ▾ ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e2231] [cursor=pointer]:
+    - img "Claqo bot" [ref=e2232]
+  - dialog "Copilot AI" [ref=e2233]:
+    - generic [ref=e2234]:
+      - img "Claqo bot" [ref=e2236]
+      - heading "Copilot" [level=3] [ref=e2237]
+      - generic [ref=e2238]: —
+      - button "Nuova conversazione" [ref=e2239] [cursor=pointer]:
+        - img [ref=e2240]
+      - button "Chiudi" [ref=e2241] [cursor=pointer]:
+        - img [ref=e2242]
+    - generic [ref=e2245]:
+      - generic [ref=e2246]: "Storia:"
+      - button "(new) ▾" [ref=e2248] [cursor=pointer]
+    - generic [ref=e2251]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e2252] [cursor=pointer]:
+        - img [ref=e2253]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e2255]
+      - button "Send" [ref=e2256] [cursor=pointer]
+  - generic [ref=e2257]:
+    - generic [ref=e2258]:
+      - generic [ref=e2259]: 🔔 Notifiche
+      - generic [ref=e2260]:
+        - button "✓ Tutte lette" [ref=e2261] [cursor=pointer]
+        - button "✕" [ref=e2262] [cursor=pointer]
+    - generic [ref=e2264]: Loading…
+  - text: ▾ ▾

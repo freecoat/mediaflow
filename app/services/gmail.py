@@ -94,22 +94,47 @@ def _normalize_message(msg: dict) -> dict:
 
 def list_threads(db: Session, user_id: int, *, query=None, label_ids=None,
                  page_token=None, max_results=25) -> dict:
+    """Elenca thread con metadati via messages.list (format=metadata).
+    Usa metadataHeaders ripetuti per ottenere Subject/From/Date."""
     token = get_valid_access_token(db, user_id, "google")
     if not token:
         return {"threads": [], "next_page_token": None}
-    params = {"maxResults": max_results}
+    params = {"maxResults": max_results, "format": "metadata"}
     if query:
         params["q"] = query
     if label_ids:
         params["labelIds"] = label_ids
     if page_token:
         params["pageToken"] = page_token
+    # metadataHeaders va passato come parametro ripetuto: format=metadata&metadataHeaders=Subject&metadataHeaders=From&...
+    # urllib.urlencode con doseq=True converte una lista in parametri ripetuti.
+    mh = [("metadataHeaders", "Subject"), ("metadataHeaders", "From"), ("metadataHeaders", "Date")]
+    qs = urllib.parse.urlencode(list(params.items()) + mh)
     try:
-        res = _gmail_request("GET", "/threads", token, params=params) or {}
+        req = urllib.request.Request(_API_BASE + "/messages?" + qs, method="GET",
+                                     headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            raw = r.read().decode()
+        res = json.loads(raw) if raw else {}
     except Exception as e:
         log.warning(f"list_threads fallita user={user_id}: {e}")
         return {"threads": [], "next_page_token": None}
-    return {"threads": res.get("threads") or [], "next_page_token": res.get("nextPageToken")}
+    seen_threads = set()
+    threads = []
+    for m in res.get("messages") or []:
+        tid = m.get("threadId")
+        if not tid or tid in seen_threads:
+            continue
+        seen_threads.add(tid)
+        hdrs = (m.get("payload") or {}).get("headers") or []
+        threads.append({
+            "id": tid,
+            "snippet": m.get("snippet") or "",
+            "subject": _header(hdrs, "Subject"),
+            "from": _header(hdrs, "From"),
+            "date": _header(hdrs, "Date"),
+        })
+    return {"threads": threads, "next_page_token": res.get("nextPageToken")}
 
 
 def get_thread(db: Session, user_id: int, thread_id: str) -> Optional[dict]:

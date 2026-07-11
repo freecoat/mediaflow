@@ -1291,6 +1291,22 @@ def _auto_migrate_columns():
                     print(f"[auto-migrate] user_oauth_tokens.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE user_oauth_tokens ADD COLUMN {col} {ddl}"))
 
+    # feat/calendar-phaseB — colonne sync Google Calendar su calendar_events
+    if "calendar_events" in insp.get_table_names():
+        ce = {c["name"] for c in insp.get_columns("calendar_events")}
+        ce_alters = [
+            ("sync_state", "VARCHAR(20) NOT NULL DEFAULT 'local'"),
+            ("external_event_id", "VARCHAR(255) NULL"),
+            ("external_calendar_id", "VARCHAR(255) NULL"),
+            ("last_synced_at", "DATETIME NULL"),
+            ("sync_error", "TEXT NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in ce_alters:
+                if col not in ce:
+                    print(f"[auto-migrate] calendar_events.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE calendar_events ADD COLUMN {col} {ddl}"))
+
 
 def _rebuild_asset_memberships_nullable(engine=None):
     """F4 (2026-06-11) — Rende AssetMembership.asset_id nullable per supportare

@@ -1,0 +1,72 @@
+import sys
+sys.path.insert(0, '.')
+import json
+import urllib.request
+import urllib.error
+from app.database import SessionLocal
+from app.services.oauth_providers import get_valid_access_token
+
+db = SessionLocal()
+tok = get_valid_access_token(db, 1, 'google')
+
+# 1. Check actual token scopes from Google's tokeninfo
+print('=== TOKENINFO ===')
+url = 'https://oauth2.googleapis.com/tokeninfo?access_token=' + tok
+r = urllib.request.urlopen(urllib.request.Request(url), timeout=10)
+info = json.loads(r.read().decode())
+scopes = info.get('scope', '')
+print(f'Granted: {scopes}')
+
+# 2. Test Gmail directly
+print('\n=== GMAIL ===')
+try:
+    req = urllib.request.Request(
+        'https://gmail.googleapis.com/gmail/v1/users/me/labels',
+        headers={'Authorization': 'Bearer ' + tok})
+    r = urllib.request.urlopen(req, timeout=10)
+    labels = json.loads(r.read().decode()).get('labels', [])
+    print(f'OK ({len(labels)} labels): {[l["name"] for l in labels[:3]]}...')
+except urllib.error.HTTPError as e:
+    print(f'FAILED: HTTP {e.code}: {e.read().decode()[:500]}')
+
+# 3. Test Calendar list
+print('\n=== CALENDAR LIST ===')
+try:
+    req = urllib.request.Request(
+        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+        headers={'Authorization': 'Bearer ' + tok})
+    r = urllib.request.urlopen(req, timeout=10)
+    data = json.loads(r.read().decode())
+    items = data.get('items', [])
+    print(f'OK ({len(items)} calendars)')
+    for i in items[:5]:
+        print(f'  {i.get("summary")} | {i.get("id")}')
+except urllib.error.HTTPError as e:
+    print(f'FAILED: HTTP {e.code}: {e.read().decode()[:500]}')
+
+# 4. Test Calendar create
+print('\n=== CALENDAR CREATE ===')
+try:
+    req = urllib.request.Request(
+        'https://www.googleapis.com/calendar/v3/calendars',
+        data=json.dumps({'summary': 'Claqo'}).encode(),
+        headers={'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json'})
+    r = urllib.request.urlopen(req, timeout=10)
+    cal = json.loads(r.read().decode())
+    print(f'OK: id={cal.get("id")}')
+except urllib.error.HTTPError as e:
+    print(f'FAILED: HTTP {e.code}: {e.read().decode()[:500]}')
+
+# 5. Test Gmail threads
+print('\n=== GMAIL THREADS ===')
+try:
+    req = urllib.request.Request(
+        'https://gmail.googleapis.com/gmail/v1/users/me/threads?maxResults=3',
+        headers={'Authorization': 'Bearer ' + tok})
+    r = urllib.request.urlopen(req, timeout=10)
+    data = json.loads(r.read().decode())
+    print(f'OK ({len(data.get("threads", []))} threads)')
+except urllib.error.HTTPError as e:
+    print(f'FAILED: HTTP {e.code}: {e.read().decode()[:500]}')
+
+db.close()

@@ -1,0 +1,67 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - button "Menu" [ref=e3] [cursor=pointer]:
+      - img [ref=e4]
+    - generic [ref=e5]: Cerca
+    - link "Cerca" [ref=e6] [cursor=pointer]:
+      - /url: /m/cerca
+      - img [ref=e7]
+    - link "Notifiche" [ref=e10] [cursor=pointer]:
+      - /url: /m/notifiche
+      - img [ref=e11]
+  - complementary [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]: Claqo
+      - generic [ref=e17]: Admin MediaFlow
+    - navigation [ref=e18]:
+      - generic [ref=e19]: Operativo
+      - link [ref=e20] [cursor=pointer]:
+        - /url: /m
+        - img [ref=e21]
+        - text: Oggi
+      - link [ref=e24] [cursor=pointer]:
+        - /url: /m/assegnazioni
+        - img [ref=e25]
+        - text: Assegnazioni
+      - link [ref=e28] [cursor=pointer]:
+        - /url: /m/timbra
+        - img [ref=e29]
+        - text: Timbratura
+      - link [ref=e32] [cursor=pointer]:
+        - /url: /m/ferie
+        - img [ref=e33]
+        - text: Ferie
+      - link [ref=e38] [cursor=pointer]:
+        - /url: /m/notifiche
+        - img [ref=e39]
+        - text: Notifiche
+      - generic [ref=e42]: Business
+      - link [ref=e43] [cursor=pointer]:
+        - /url: /m/progetti
+        - img [ref=e44]
+        - text: Progetti
+      - link [ref=e46] [cursor=pointer]:
+        - /url: /m/clienti
+        - img [ref=e47]
+        - text: Clienti
+      - link [ref=e51] [cursor=pointer]:
+        - /url: /m/finance
+        - img [ref=e52]
+        - text: Finance
+      - link [ref=e55] [cursor=pointer]:
+        - /url: /m/cerca
+        - img [ref=e56]
+        - text: Cerca
+    - link [ref=e59] [cursor=pointer]:
+      - /url: /prefer-desktop?next=/dashboard
+      - img [ref=e60]
+      - text: Versione desktop
+    - link [ref=e62] [cursor=pointer]:
+      - /url: /auth/logout
+      - img [ref=e63]
+      - text: Esci
+  - main [ref=e66]:
+    - generic [ref=e67]:
+      - img [ref=e68]
+      - searchbox "Cerca progetti, clienti…" [active] [ref=e71]
+    - generic [ref=e73]: Caricamento…

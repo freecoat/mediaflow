@@ -1,0 +1,75 @@
+import sys
+sys.path.insert(0, '.')
+import json
+import urllib.request
+import urllib.error
+from app.database import SessionLocal
+from app.services.oauth_providers import get_valid_access_token
+
+db = SessionLocal()
+tok = get_valid_access_token(db, 1, 'google')
+print('Token valid:', bool(tok))
+print('Token prefix:', tok[:15] if tok else 'NONE')
+
+# Test Gmail labels
+print('\n=== GMAIL LABELS ===')
+url = 'https://gmail.googleapis.com/gmail/v1/users/me/labels'
+headers = {'Authorization': 'Bearer ' + tok}
+req = urllib.request.Request(url, headers=headers, method='GET')
+try:
+    r = urllib.request.urlopen(req, timeout=10)
+    labels = json.loads(r.read().decode()).get('labels', [])
+    print(f'OK: {len(labels)} labels, first: {labels[0]["name"] if labels else "NONE"}')
+except urllib.error.HTTPError as e:
+    body = e.read().decode()
+    print(f'Gmail HTTP {e.code}: {body[:800]}')
+
+# Test Calendar creation
+print('\n=== CALENDAR CREATE ===')
+url2 = 'https://www.googleapis.com/calendar/v3/calendars'
+req2 = urllib.request.Request(
+    url2,
+    data=json.dumps({'summary': 'Claqo'}).encode(),
+    headers={'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json'},
+    method='POST')
+try:
+    r2 = urllib.request.urlopen(req2, timeout=10)
+    cal = json.loads(r2.read().decode())
+    print(f'Calendar OK: id={cal.get("id")}')
+except urllib.error.HTTPError as e2:
+    body2 = e2.read().decode()
+    print(f'Calendar HTTP {e2.code}: {body2[:800]}')
+
+# Test Calendar list (reading existing calendars)
+print('\n=== CALENDAR LIST ===')
+url3 = 'https://www.googleapis.com/calendar/v3/users/me/calendarList'
+req3 = urllib.request.Request(url3, headers={'Authorization': 'Bearer ' + tok}, method='GET')
+try:
+    r3 = urllib.request.urlopen(req3, timeout=10)
+    data = json.loads(r3.read().decode())
+    items = data.get('items', [])
+    print(f'OK: {len(items)} calendars')
+    for i in items[:3]:
+        print(f'  - {i.get("summary")} ({i.get("id")})')
+except urllib.error.HTTPError as e3:
+    body3 = e3.read().decode()
+    print(f'Calendar list HTTP {e3.code}: {body3[:800]}')
+
+# Test token info (scopes actually granted)
+print('\n=== TOKEN INFO ===')
+url4 = 'https://oauth2.googleapis.com/tokeninfo?access_token=' + tok
+req4 = urllib.request.Request(url4, method='GET')
+try:
+    r4 = urllib.request.urlopen(req4, timeout=10)
+    info = json.loads(r4.read().decode())
+    scopes = info.get('scope', '')
+    print(f'Granted scopes: {scopes}')
+    print(f'Has gmail.readonly: {"gmail.readonly" in scopes}')
+    print(f'Has gmail.compose: {"gmail.compose" in scopes}')
+    print(f'Has calendar.app.created: {"calendar.app.created" in scopes}')
+    print(f'Has calendar.readonly: {"calendar.readonly" in scopes}')
+except urllib.error.HTTPError as e4:
+    body4 = e4.read().decode()
+    print(f'Token info HTTP {e4.code}: {body4[:800]}')
+
+db.close()

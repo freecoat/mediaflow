@@ -1,0 +1,671 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Principale
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Anagrafica
+          - link "Clienti" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clienti
+          - link "Progetti" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Progetti
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operativo
+          - link "Pianificazione" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Pianificazione
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Ore lavoro" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Ore lavoro
+        - generic [ref=e55]:
+          - generic [ref=e56]: Preventivi
+          - link "Listino Prezzi" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Listino Prezzi
+          - link "Quotazioni" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotazioni
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finanza
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "Fatturazione" [ref=e76] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e78]
+            - generic [ref=e80]: Fatturazione
+          - link "Cashflow & Forecast" [ref=e81] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e83]
+            - generic [ref=e86]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=e87] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e89]
+            - generic [ref=e92]: Report YoY + Export
+          - link "Fornitori" [ref=e93] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e95]
+            - generic [ref=e98]: Fornitori
+          - link "Spese aziendali" [ref=e99] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e101]
+            - generic [ref=e104]: Spese aziendali
+        - generic [ref=e105]:
+          - generic [ref=e106]: Media
+          - link "Asset Library" [ref=e107] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e109]
+            - generic [ref=e111]: Asset Library
+          - link "Scan filesystem" [ref=e112] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e114]
+            - generic [ref=e118]: Scan filesystem
+          - link "In/Out Asset" [ref=e119] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e121]
+            - generic [ref=e126]: In/Out Asset
+          - link "Asset Fisici" [ref=e127] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e129]
+            - generic [ref=e131]: Asset Fisici
+          - link "Capitolati" [ref=e132] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e134]
+            - generic [ref=e139]: Capitolati
+          - link "Import → Quote" [ref=e140] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e142]
+            - generic [ref=e145]: Import → Quote
+        - generic [ref=e146]:
+          - generic [ref=e147]: Platform
+          - link "Tenants" [ref=e148] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e150]
+            - generic [ref=e154]: Tenants
+        - generic [ref=e155]:
+          - generic [ref=e156]: Configurazione
+          - link "Reparti" [ref=e157] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e159]
+            - generic [ref=e163]: Reparti
+          - link "Impostazioni" [ref=e164] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e166]
+            - generic [ref=e169]: Impostazioni
+        - generic [ref=e170]:
+          - generic [ref=e171]: Aiuto
+          - link "Manuale" [ref=e172] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e174]
+            - generic [ref=e176]: Manuale
+        - generic [ref=e177]:
+          - generic [ref=e178]: Amministrazione
+          - link "Utenti" [ref=e179] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e181]
+            - generic [ref=e184]: Utenti
+          - link "Ruoli & Permessi" [ref=e185] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e187]
+            - generic [ref=e190]: Ruoli & Permessi
+          - link "Cestino" [ref=e191] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e193]
+            - generic [ref=e196]: Cestino
+          - link "Audit log" [ref=e197] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e199]
+            - generic [ref=e202]: Audit log
+      - link "Logout" [ref=e204] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e206]
+        - generic [ref=e209]: Logout
+    - generic [ref=e210]:
+      - banner [ref=e211]:
+        - generic [ref=e212]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e213] [cursor=pointer]:
+            - img [ref=e214]
+          - generic [ref=e217]: Pianificazione
+        - generic [ref=e218]:
+          - button "+ Nuovo booking" [ref=e219] [cursor=pointer]
+          - link "→ Vai a quotazioni" [ref=e220] [cursor=pointer]:
+            - /url: /quotes
+          - button "Apri palette tema" [ref=e222] [cursor=pointer]:
+            - img [ref=e224]
+          - button "Ingrandisci visualizzazione" [ref=e231] [cursor=pointer]:
+            - img [ref=e233]
+          - button "🇮🇹" [ref=e237] [cursor=pointer]:
+            - generic [ref=e238]: 🇮🇹
+          - button "6" [ref=e239] [cursor=pointer]:
+            - img [ref=e241]
+            - generic [ref=e244]: "6"
+          - generic "admin@mediaflow.it" [ref=e245]:
+            - generic [ref=e246]: Admin MediaFlow
+            - generic [ref=e247]: admin
+            - link "Logout" [ref=e248] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e249]
+      - main [ref=e252]:
+        - generic [ref=e253]:
+          - complementary [ref=e254]:
+            - heading "Filtri" [level=4] [ref=e255]
+            - generic [ref=e256]:
+              - generic [ref=e257]: Cerca
+              - textbox "codice, titolo…" [ref=e258]
+            - generic [ref=e259]:
+              - generic [ref=e260]: Reparto (multi)
+              - textbox "Cerca reparto…" [ref=e262]
+            - generic [ref=e263]:
+              - generic [ref=e264]: Cliente (multi)
+              - textbox "Cerca cliente…" [ref=e266]
+            - generic [ref=e267]:
+              - generic [ref=e268]: Progetto (multi)
+              - textbox "Cerca progetto…" [ref=e270]
+            - generic [ref=e271]:
+              - generic [ref=e272]: Job (multi)
+              - textbox "Cerca job (codice, titolo, cliente, progetto)…" [ref=e274]
+            - generic [ref=e279]:
+              - generic [ref=e280]: Risorsa (multi)
+              - textbox "Cerca risorsa…" [ref=e282]
+            - text: ▾
+            - generic [ref=e387]:
+              - generic [ref=e388]: Stato deliverable
+              - button "— tutti — ▾" [ref=e390] [cursor=pointer]
+            - generic [ref=e391]:
+              - generic [ref=e392]: QC sub-status
+              - button "— tutti — ▾" [ref=e394] [cursor=pointer]
+            - text: ▾
+            - generic [ref=e291]:
+              - generic [ref=e292]: Target da
+              - textbox [ref=e293]
+            - generic [ref=e294]:
+              - generic [ref=e295]: Target a
+              - textbox [ref=e296]
+            - button "Reset filtri" [ref=e311] [cursor=pointer]
+          - generic [ref=e312]:
+            - button "◀ Nascondi filtri" [ref=e313] [cursor=pointer]:
+              - generic [ref=e314]: ◀
+              - generic [ref=e315]: Nascondi filtri
+            - generic [ref=e316]:
+              - generic [ref=e317] [cursor=pointer]: 📋 Tabella
+              - generic [ref=e318] [cursor=pointer]: 📅 Calendario
+              - generic [ref=e319] [cursor=pointer]: 📑 Agenda
+              - generic [ref=e320] [cursor=pointer]: ✓ Le mie
+              - generic [ref=e321] [cursor=pointer]: 📂 Per progetto
+              - generic [ref=e322] [cursor=pointer]: 🎬 Storyboard
+              - generic [ref=e323] [cursor=pointer]: 🧭 Timeline risorse
+              - generic [ref=e324] [cursor=pointer]: 📦 Deliverable
+            - text: ▾ ▾
+            - generic [ref=e396]:
+              - generic [ref=e397]:
+                - generic [ref=e398]:
+                  - strong [ref=e399]: 📦 Deliverable HUB
+                  - generic [ref=e400]: 70 deliverable
+                - generic [ref=e401]:
+                  - button "Kanban ▾" [ref=e403] [cursor=pointer]
+                  - button "🔄" [ref=e404] [cursor=pointer]
+              - generic [ref=e406]:
+                - generic [ref=e407]:
+                  - generic [ref=e408]: ⏸ Pianificato (70)
+                  - generic [ref=e409]:
+                    - generic [ref=e410]: Data management
+                    - generic [ref=e411]: GLO · —
+                    - generic [ref=e412]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e413] [cursor=pointer]
+                  - generic [ref=e414]:
+                    - generic [ref=e415]: LTO LTFS archive
+                    - generic [ref=e416]: GLO · —
+                    - generic [ref=e417]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e418] [cursor=pointer]
+                  - generic [ref=e419]:
+                    - generic [ref=e420]: Subtitle Sidecar (EBU-STL)
+                    - generic [ref=e421]: GLO · —
+                    - generic [ref=e422]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e423] [cursor=pointer]
+                  - generic [ref=e424]:
+                    - generic [ref=e425]: Subtitle Sidecar (TTML/IMSC)
+                    - generic [ref=e426]: GLO · —
+                    - generic [ref=e427]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e428] [cursor=pointer]
+                  - generic [ref=e429]:
+                    - generic [ref=e430]: Dialogue Stem / 5.1 SMPTE
+                    - generic [ref=e431]: GLO · —
+                    - generic [ref=e432]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e433] [cursor=pointer]
+                  - generic [ref=e434]:
+                    - generic [ref=e435]: Music Stem / Stereo 2.0
+                    - generic [ref=e436]: GLO · —
+                    - generic [ref=e437]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e438] [cursor=pointer]
+                  - generic [ref=e439]:
+                    - generic [ref=e440]: QuickTime / Apple ProRes 422 HQ
+                    - generic [ref=e441]: GLO · —
+                    - generic [ref=e442]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e443] [cursor=pointer]
+                  - generic [ref=e444]:
+                    - generic [ref=e445]: QuickTime / Apple ProRes 422 HQ / UHD 3840
+                    - generic [ref=e446]: GLO · —
+                    - generic [ref=e447]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e448] [cursor=pointer]
+                  - generic [ref=e449]:
+                    - generic [ref=e450]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10
+                    - generic [ref=e451]: GLO · —
+                    - generic [ref=e452]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e453] [cursor=pointer]
+                  - generic [ref=e454]:
+                    - generic [ref=e455]: Stems (DME bundle) / 5.1 SMPTE
+                    - generic [ref=e456]: GLO · —
+                    - generic [ref=e457]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e458] [cursor=pointer]
+                  - generic [ref=e459]:
+                    - generic [ref=e460]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 101
+                    - generic [ref=e461]: GLO · —
+                    - generic [ref=e462]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e463]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e464] [cursor=pointer]
+                  - generic [ref=e465]:
+                    - generic [ref=e466]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 102
+                    - generic [ref=e467]: GLO · —
+                    - generic [ref=e468]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e469]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e470] [cursor=pointer]
+                  - generic [ref=e471]:
+                    - generic [ref=e472]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 103
+                    - generic [ref=e473]: GLO · —
+                    - generic [ref=e474]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e475]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e476] [cursor=pointer]
+                  - generic [ref=e477]:
+                    - generic [ref=e478]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 104
+                    - generic [ref=e479]: GLO · —
+                    - generic [ref=e480]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e481]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e482] [cursor=pointer]
+                  - generic [ref=e483]:
+                    - generic [ref=e484]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 105
+                    - generic [ref=e485]: GLO · —
+                    - generic [ref=e486]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e487]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e488] [cursor=pointer]
+                  - generic [ref=e489]:
+                    - generic [ref=e490]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 106
+                    - generic [ref=e491]: GLO · —
+                    - generic [ref=e492]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e493]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e494] [cursor=pointer]
+                  - generic [ref=e495]:
+                    - generic [ref=e496]: Full Mix (Final Mix) / Stereo 2.0 - ep. 101
+                    - generic [ref=e497]: GLO · —
+                    - generic [ref=e498]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e499]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e500] [cursor=pointer]
+                  - generic [ref=e501]:
+                    - generic [ref=e502]: Full Mix (Final Mix) / Stereo 2.0 - ep. 102
+                    - generic [ref=e503]: GLO · —
+                    - generic [ref=e504]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e505]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e506] [cursor=pointer]
+                  - generic [ref=e507]:
+                    - generic [ref=e508]: Full Mix (Final Mix) / Stereo 2.0 - ep. 103
+                    - generic [ref=e509]: GLO · —
+                    - generic [ref=e510]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e511]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e512] [cursor=pointer]
+                  - generic [ref=e513]:
+                    - generic [ref=e514]: Full Mix (Final Mix) / Stereo 2.0 - ep. 104
+                    - generic [ref=e515]: GLO · —
+                    - generic [ref=e516]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e517]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e518] [cursor=pointer]
+                  - generic [ref=e519]:
+                    - generic [ref=e520]: Full Mix (Final Mix) / Stereo 2.0 - ep. 105
+                    - generic [ref=e521]: GLO · —
+                    - generic [ref=e522]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e523]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e524] [cursor=pointer]
+                  - generic [ref=e525]:
+                    - generic [ref=e526]: Full Mix (Final Mix) / Stereo 2.0 - ep. 106
+                    - generic [ref=e527]: GLO · —
+                    - generic [ref=e528]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e529]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e530] [cursor=pointer]
+                  - generic [ref=e531]:
+                    - generic [ref=e532]: QuickTime / Apple ProRes 422 HQ / UHD 3840 - ep. 101
+                    - generic [ref=e533]: GLO · —
+                    - generic [ref=e534]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e535]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e536] [cursor=pointer]
+                  - generic [ref=e537]:
+                    - generic [ref=e538]: QuickTime / Apple ProRes 422 HQ / UHD 3840 - ep. 102
+                    - generic [ref=e539]: GLO · —
+                    - generic [ref=e540]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e541]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e542] [cursor=pointer]
+                  - generic [ref=e543]:
+                    - generic [ref=e544]: QuickTime / Apple ProRes 422 HQ / UHD 3840 - ep. 103
+                    - generic [ref=e545]: GLO · —
+                    - generic [ref=e546]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e547]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e548] [cursor=pointer]
+                  - generic [ref=e549]:
+                    - generic [ref=e550]: QuickTime / Apple ProRes 422 HQ / UHD 3840 - ep. 104
+                    - generic [ref=e551]: GLO · —
+                    - generic [ref=e552]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e553]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e554] [cursor=pointer]
+                  - generic [ref=e555]:
+                    - generic [ref=e556]: QuickTime / Apple ProRes 422 HQ / UHD 3840 - ep. 105
+                    - generic [ref=e557]: GLO · —
+                    - generic [ref=e558]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e559]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e560] [cursor=pointer]
+                  - generic [ref=e561]:
+                    - generic [ref=e562]: QuickTime / Apple ProRes 422 HQ / UHD 3840 - ep. 106
+                    - generic [ref=e563]: GLO · —
+                    - generic [ref=e564]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e565]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e566] [cursor=pointer]
+                  - generic [ref=e567]:
+                    - generic [ref=e568]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 - ep. 101
+                    - generic [ref=e569]: GLO · —
+                    - generic [ref=e570]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e571]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e572] [cursor=pointer]
+                  - generic [ref=e573]:
+                    - generic [ref=e574]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 - ep. 102
+                    - generic [ref=e575]: GLO · —
+                    - generic [ref=e576]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e577]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e578] [cursor=pointer]
+                  - generic [ref=e579]:
+                    - generic [ref=e580]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 - ep. 103
+                    - generic [ref=e581]: GLO · —
+                    - generic [ref=e582]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e583]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e584] [cursor=pointer]
+                  - generic [ref=e585]:
+                    - generic [ref=e586]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 - ep. 104
+                    - generic [ref=e587]: GLO · —
+                    - generic [ref=e588]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e589]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e590] [cursor=pointer]
+                  - generic [ref=e591]:
+                    - generic [ref=e592]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 - ep. 105
+                    - generic [ref=e593]: GLO · —
+                    - generic [ref=e594]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e595]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e596] [cursor=pointer]
+                  - generic [ref=e597]:
+                    - generic [ref=e598]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 - ep. 106
+                    - generic [ref=e599]: GLO · —
+                    - generic [ref=e600]: 📦 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)
+                    - generic [ref=e601]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e602] [cursor=pointer]
+                  - generic [ref=e603]:
+                    - generic [ref=e604]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 101
+                    - generic [ref=e605]: GLO · —
+                    - generic [ref=e606]: 📦 Sky Italia
+                    - generic [ref=e607]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e608] [cursor=pointer]
+                  - generic [ref=e609]:
+                    - generic [ref=e610]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 102
+                    - generic [ref=e611]: GLO · —
+                    - generic [ref=e612]: 📦 Sky Italia
+                    - generic [ref=e613]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e614] [cursor=pointer]
+                  - generic [ref=e615]:
+                    - generic [ref=e616]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 103
+                    - generic [ref=e617]: GLO · —
+                    - generic [ref=e618]: 📦 Sky Italia
+                    - generic [ref=e619]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e620] [cursor=pointer]
+                  - generic [ref=e621]:
+                    - generic [ref=e622]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 104
+                    - generic [ref=e623]: GLO · —
+                    - generic [ref=e624]: 📦 Sky Italia
+                    - generic [ref=e625]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e626] [cursor=pointer]
+                  - generic [ref=e627]:
+                    - generic [ref=e628]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 105
+                    - generic [ref=e629]: GLO · —
+                    - generic [ref=e630]: 📦 Sky Italia
+                    - generic [ref=e631]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e632] [cursor=pointer]
+                  - generic [ref=e633]:
+                    - generic [ref=e634]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 106
+                    - generic [ref=e635]: GLO · —
+                    - generic [ref=e636]: 📦 Sky Italia
+                    - generic [ref=e637]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e638] [cursor=pointer]
+                  - generic [ref=e639]:
+                    - generic [ref=e640]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 101
+                    - generic [ref=e641]: GLO · —
+                    - generic [ref=e642]: 📦 Sky Italia
+                    - generic [ref=e643]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e644] [cursor=pointer]
+                  - generic [ref=e645]:
+                    - generic [ref=e646]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 102
+                    - generic [ref=e647]: GLO · —
+                    - generic [ref=e648]: 📦 Sky Italia
+                    - generic [ref=e649]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e650] [cursor=pointer]
+                  - generic [ref=e651]:
+                    - generic [ref=e652]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 103
+                    - generic [ref=e653]: GLO · —
+                    - generic [ref=e654]: 📦 Sky Italia
+                    - generic [ref=e655]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e656] [cursor=pointer]
+                  - generic [ref=e657]:
+                    - generic [ref=e658]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 104
+                    - generic [ref=e659]: GLO · —
+                    - generic [ref=e660]: 📦 Sky Italia
+                    - generic [ref=e661]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e662] [cursor=pointer]
+                  - generic [ref=e663]:
+                    - generic [ref=e664]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 105
+                    - generic [ref=e665]: GLO · —
+                    - generic [ref=e666]: 📦 Sky Italia
+                    - generic [ref=e667]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e668] [cursor=pointer]
+                  - generic [ref=e669]:
+                    - generic [ref=e670]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 106
+                    - generic [ref=e671]: GLO · —
+                    - generic [ref=e672]: 📦 Sky Italia
+                    - generic [ref=e673]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e674] [cursor=pointer]
+                  - generic [ref=e675]:
+                    - generic [ref=e676]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 101
+                    - generic [ref=e677]: GLO · —
+                    - generic [ref=e678]: 📦 Sky Italia
+                    - generic [ref=e679]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e680] [cursor=pointer]
+                  - generic [ref=e681]:
+                    - generic [ref=e682]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 102
+                    - generic [ref=e683]: GLO · —
+                    - generic [ref=e684]: 📦 Sky Italia
+                    - generic [ref=e685]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e686] [cursor=pointer]
+                  - generic [ref=e687]:
+                    - generic [ref=e688]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 103
+                    - generic [ref=e689]: GLO · —
+                    - generic [ref=e690]: 📦 Sky Italia
+                    - generic [ref=e691]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e692] [cursor=pointer]
+                  - generic [ref=e693]:
+                    - generic [ref=e694]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 104
+                    - generic [ref=e695]: GLO · —
+                    - generic [ref=e696]: 📦 Sky Italia
+                    - generic [ref=e697]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e698] [cursor=pointer]
+                  - generic [ref=e699]:
+                    - generic [ref=e700]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 105
+                    - generic [ref=e701]: GLO · —
+                    - generic [ref=e702]: 📦 Sky Italia
+                    - generic [ref=e703]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e704] [cursor=pointer]
+                  - generic [ref=e705]:
+                    - generic [ref=e706]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 106
+                    - generic [ref=e707]: GLO · —
+                    - generic [ref=e708]: 📦 Sky Italia
+                    - generic [ref=e709]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e710] [cursor=pointer]
+                  - generic [ref=e711]:
+                    - generic [ref=e712]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 101+102
+                    - generic [ref=e713]: GLO · —
+                    - generic [ref=e714]: 📦 Sky Italia
+                    - generic [ref=e715]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e716] [cursor=pointer]
+                  - generic [ref=e717]:
+                    - generic [ref=e718]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 103+104
+                    - generic [ref=e719]: GLO · —
+                    - generic [ref=e720]: 📦 Sky Italia
+                    - generic [ref=e721]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e722] [cursor=pointer]
+                  - generic [ref=e723]:
+                    - generic [ref=e724]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 105+106
+                    - generic [ref=e725]: GLO · —
+                    - generic [ref=e726]: 📦 Sky Italia
+                    - generic [ref=e727]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e728] [cursor=pointer]
+                  - generic [ref=e729]:
+                    - generic [ref=e730]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 101+102
+                    - generic [ref=e731]: GLO · —
+                    - generic [ref=e732]: 📦 Sky Italia
+                    - generic [ref=e733]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e734] [cursor=pointer]
+                  - generic [ref=e735]:
+                    - generic [ref=e736]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 103+104
+                    - generic [ref=e737]: GLO · —
+                    - generic [ref=e738]: 📦 Sky Italia
+                    - generic [ref=e739]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e740] [cursor=pointer]
+                  - generic [ref=e741]:
+                    - generic [ref=e742]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 105+106
+                    - generic [ref=e743]: GLO · —
+                    - generic [ref=e744]: 📦 Sky Italia
+                    - generic [ref=e745]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e746] [cursor=pointer]
+                  - generic [ref=e747]:
+                    - generic [ref=e748]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 101+102
+                    - generic [ref=e749]: GLO · —
+                    - generic [ref=e750]: 📦 Sky Italia
+                    - generic [ref=e751]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e752] [cursor=pointer]
+                  - generic [ref=e753]:
+                    - generic [ref=e754]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 103+104
+                    - generic [ref=e755]: GLO · —
+                    - generic [ref=e756]: 📦 Sky Italia
+                    - generic [ref=e757]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e758] [cursor=pointer]
+                  - generic [ref=e759]:
+                    - generic [ref=e760]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 105+106
+                    - generic [ref=e761]: GLO · —
+                    - generic [ref=e762]: 📦 Sky Italia
+                    - generic [ref=e763]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e764] [cursor=pointer]
+                  - generic [ref=e765]:
+                    - generic [ref=e766]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 101
+                    - generic [ref=e767]: GLO · —
+                    - generic [ref=e768]: 📦 Sky Italia
+                    - generic [ref=e769]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e770] [cursor=pointer]
+                  - generic [ref=e771]:
+                    - generic [ref=e772]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 103
+                    - generic [ref=e773]: GLO · —
+                    - generic [ref=e774]: 📦 Sky Italia
+                    - generic [ref=e775]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e776] [cursor=pointer]
+                  - generic [ref=e777]:
+                    - generic [ref=e778]: Full Mix (Final Mix) / 5.1 SMPTE - ep. 105
+                    - generic [ref=e779]: GLO · —
+                    - generic [ref=e780]: 📦 Sky Italia
+                    - generic [ref=e781]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e782] [cursor=pointer]
+                  - generic [ref=e783]:
+                    - generic [ref=e784]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 101
+                    - generic [ref=e785]: GLO · —
+                    - generic [ref=e786]: 📦 Sky Italia
+                    - generic [ref=e787]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e788] [cursor=pointer]
+                  - generic [ref=e789]:
+                    - generic [ref=e790]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 103
+                    - generic [ref=e791]: GLO · —
+                    - generic [ref=e792]: 📦 Sky Italia
+                    - generic [ref=e793]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e794] [cursor=pointer]
+                  - generic [ref=e795]:
+                    - generic [ref=e796]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG - ep. 105
+                    - generic [ref=e797]: GLO · —
+                    - generic [ref=e798]: 📦 Sky Italia
+                    - generic [ref=e799]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e800] [cursor=pointer]
+                  - generic [ref=e801]:
+                    - generic [ref=e802]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 101
+                    - generic [ref=e803]: GLO · —
+                    - generic [ref=e804]: 📦 Sky Italia
+                    - generic [ref=e805]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e806] [cursor=pointer]
+                  - generic [ref=e807]:
+                    - generic [ref=e808]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 103
+                    - generic [ref=e809]: GLO · —
+                    - generic [ref=e810]: 📦 Sky Italia
+                    - generic [ref=e811]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e812] [cursor=pointer]
+                  - generic [ref=e813]:
+                    - generic [ref=e814]: MXF OP1a / XDCam HD422 50 / HD 1080p - ep. 105
+                    - generic [ref=e815]: GLO · —
+                    - generic [ref=e816]: 📦 Sky Italia
+                    - generic [ref=e817]: 📄 Q-2026-008-v5
+                    - button "🔍 QC" [ref=e818] [cursor=pointer]
+                - generic [ref=e820]: ▶ In lavorazione (0)
+                - generic [ref=e822]: 🔍 QC (0)
+                - generic [ref=e824]: 📤 Consegnato (0)
+                - generic [ref=e826]: 🔒 Chiuso (0)
+        - text: ▾ ▾ ▾ ▾ ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e353] [cursor=pointer]:
+    - img "Claqo bot" [ref=e354]
+  - dialog "Copilot AI" [ref=e355]:
+    - generic [ref=e356]:
+      - img "Claqo bot" [ref=e358]
+      - heading "Copilot" [level=3] [ref=e359]
+      - generic [ref=e360]: —
+      - button "Nuova conversazione" [ref=e361] [cursor=pointer]:
+        - img [ref=e362]
+      - button "Chiudi" [ref=e363] [cursor=pointer]:
+        - img [ref=e364]
+    - generic [ref=e367]:
+      - generic [ref=e368]: "Storia:"
+      - button "(nuova) ▾" [ref=e370] [cursor=pointer]
+    - generic [ref=e373]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e374] [cursor=pointer]:
+        - img [ref=e375]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e377]
+      - button "Invia" [ref=e378] [cursor=pointer]
+  - generic [ref=e379]:
+    - generic [ref=e380]:
+      - generic [ref=e381]: 🔔 Notifiche
+      - generic [ref=e382]:
+        - button "✓ Tutte lette" [ref=e383] [cursor=pointer]
+        - button "✕" [ref=e384] [cursor=pointer]
+    - generic [ref=e386]: Caricamento…
+  - text: ▾ ▾

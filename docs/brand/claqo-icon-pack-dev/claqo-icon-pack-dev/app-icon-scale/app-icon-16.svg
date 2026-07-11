@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <title>Claqo app icon 16px</title>
+  <rect width="16" height="16" rx="3.52" fill="#D85A30"/>
+  <rect x="3.12" y="6.64" width="9.76" height="4.88" rx="0.48" fill="#FFFFFF"/>
+  <path d="M 3.12 6.64 L 6.24 3.52 L 10.24 3.52 L 7.12 6.64 Z" fill="#FFFFFF"/>
+  <path d="M 10.24 3.52 L 12.88 3.52 L 9.76 6.64 L 7.12 6.64 Z" fill="#FFFFFF" opacity="0.7"/>
+</svg>

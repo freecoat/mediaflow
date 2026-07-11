@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Claqo app icon 512</title>
+  <rect width="512" height="512" rx="113" fill="#D85A30"/>
+  <polygon points="72,210 440,210 481,77 108,108" fill="#1A1A1A"/>
+  <polygon points="148,210 195,210 220,97 174,107" fill="#FFFFFF"/>
+  <polygon points="251,210 297,210 322,87 277,97" fill="#FFFFFF"/>
+  <polygon points="353,210 399,210 425,77 379,87" fill="#FFFFFF"/>
+  <rect x="72" y="210" width="368" height="251" rx="26" fill="#FAECE7"/>
+  <circle cx="189" cy="317" r="36" fill="#1A1A1A"/>
+  <circle cx="323" cy="317" r="36" fill="#1A1A1A"/>
+  <circle cx="199" cy="307" r="10" fill="#FFFFFF"/>
+  <circle cx="333" cy="307" r="10" fill="#FFFFFF"/>
+  <circle cx="143" cy="384" r="10" fill="#D85A30" opacity="0.5"/>
+  <circle cx="369" cy="384" r="10" fill="#D85A30" opacity="0.5"/>
+  <path d="M 220 404 Q 256 430 292 404" stroke="#1A1A1A" stroke-width="9" fill="none" stroke-linecap="round"/>
+</svg>

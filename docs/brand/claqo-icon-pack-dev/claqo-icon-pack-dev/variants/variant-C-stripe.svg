@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>Claqo variant C — stripe</title>
+  <rect width="200" height="200" rx="44" fill="#FAECE7"/>
+  <path d="M 44 139 L 78 50 L 100 50 L 67 139 Z" fill="#D85A30"/>
+  <path d="M 89 139 L 122 50 L 144 50 L 111 139 Z" fill="#D85A30"/>
+  <path d="M 133 139 L 167 50 L 156 50 L 122 139 Z" fill="#D85A30" opacity="0.5"/>
+</svg>

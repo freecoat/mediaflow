@@ -1,0 +1,46 @@
+import sys, json, urllib.request, urllib.error
+sys.path.insert(0, '.')
+from app.database import SessionLocal, engine
+from app.services.oauth_providers import get_valid_access_token
+from sqlalchemy import text
+
+db = SessionLocal()
+
+# Force token refresh by clearing expires_at
+print('Clearing expires_at to force refresh...')
+with engine.begin() as conn:
+    conn.execute(text("UPDATE user_oauth_tokens SET expires_at=NULL WHERE user_id=1 AND provider='google'"))
+
+# Get a fresh token
+tok = get_valid_access_token(db, 1, 'google')
+print(f'Token acquired: {bool(tok)}')
+if tok:
+    print(f'Token prefix: {tok[:15]}...')
+
+    def do(url, method='GET', body=None):
+        data = json.dumps(body).encode() if body else None
+        headers = {'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json'}
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            r = urllib.request.urlopen(req, timeout=10)
+            d = json.loads(r.read().decode())
+            return True, d
+        except urllib.error.HTTPError as e:
+            b = e.read().decode()
+            return False, f'HTTP {e.code}: {b[:500]}'
+
+    ok, res = do('https://gmail.googleapis.com/gmail/v1/users/me/labels')
+    print(f'GMAIL LABELS: {"OK" if ok else "FAILED"} {json.dumps(res)[:300]}')
+
+    ok, res = do('https://www.googleapis.com/calendar/v3/users/me/calendarList')
+    print(f'CAL LIST: {"OK" if ok else "FAILED"} {json.dumps(res)[:300]}')
+
+    ok, res = do('https://www.googleapis.com/calendar/v3/calendars', 'POST', {'summary': 'Claqo'})
+    print(f'CAL CREATE: {"OK" if ok else "FAILED"} {json.dumps(res)[:300]}')
+
+    ok, res = do('https://gmail.googleapis.com/gmail/v1/users/me/threads?maxResults=3')
+    print(f'GMAIL THREADS: {"OK" if ok else "FAILED"} {json.dumps(res)[:300]}')
+else:
+    print('NO TOKEN - cannot run API tests')
+
+db.close()

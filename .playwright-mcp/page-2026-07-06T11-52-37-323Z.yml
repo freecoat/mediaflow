@@ -1,0 +1,380 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - complementary [ref=f3e3]:
+      - generic "Info versione" [ref=f3e4] [cursor=pointer]:
+        - generic [ref=f3e5]: claqo
+      - navigation [ref=f3e6]:
+        - generic [ref=f3e7]:
+          - generic [ref=f3e8]: Main
+          - link "Dashboard" [ref=f3e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=f3e11]
+            - generic [ref=f3e16]: Dashboard
+        - generic [ref=f3e17]:
+          - generic [ref=f3e18]: Records
+          - link "Clients" [ref=f3e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=f3e21]
+            - generic [ref=f3e25]: Clients
+          - link "Projects" [ref=f3e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=f3e28]
+            - generic [ref=f3e33]: Projects
+          - link "Acquisitions" [ref=f3e34] [cursor=pointer]:
+            - /url: /acquisitions
+            - img [ref=f3e36]
+            - generic [ref=f3e40]: Acquisitions
+          - link "Calendar" [ref=f3e41] [cursor=pointer]:
+            - /url: /calendar
+            - img [ref=f3e43]
+            - generic [ref=f3e45]: Calendar
+        - generic [ref=f3e46]:
+          - generic [ref=f3e47]: Operations
+          - link "Planning" [ref=f3e48] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=f3e50]
+            - generic [ref=f3e52]: Planning
+          - link "Team" [ref=f3e53] [cursor=pointer]:
+            - /url: /team
+            - img [ref=f3e55]
+            - generic [ref=f3e60]: Team
+          - link "Work hours" [ref=f3e61] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=f3e63]
+            - generic [ref=f3e66]: Work hours
+        - generic [ref=f3e67]:
+          - generic [ref=f3e68]: Quotes
+          - link "Price List" [ref=f3e69] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=f3e71]
+            - generic [ref=f3e74]: Price List
+          - link "Quotes" [ref=f3e75] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=f3e77]
+            - generic [ref=f3e80]: Quotes
+        - generic [ref=f3e81]:
+          - generic [ref=f3e82]: Finance
+          - link "Cost Report" [ref=f3e83] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=f3e85]
+            - generic [ref=f3e87]: Cost Report
+          - link "SAL — Avanzamento" [ref=f3e88] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=f3e90]
+            - generic [ref=f3e93]: SAL — Avanzamento
+          - link "Invoicing" [ref=f3e94] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=f3e96]
+            - generic [ref=f3e98]: Invoicing
+          - link "Cashflow & Forecast" [ref=f3e99] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=f3e101]
+            - generic [ref=f3e104]: Cashflow & Forecast
+          - link "YoY Reports + Export" [ref=f3e105] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=f3e107]
+            - generic [ref=f3e110]: YoY Reports + Export
+          - link "Suppliers" [ref=f3e111] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=f3e113]
+            - generic [ref=f3e116]: Suppliers
+          - link "Overhead costs" [ref=f3e117] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=f3e119]
+            - generic [ref=f3e122]: Overhead costs
+        - generic [ref=f3e123]:
+          - generic [ref=f3e124]: Media
+          - link "Asset Library" [ref=f3e125] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=f3e127]
+            - generic [ref=f3e129]: Asset Library
+          - link "Filesystem scan" [ref=f3e130] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=f3e132]
+            - generic [ref=f3e136]: Filesystem scan
+          - link "Asset In/Out" [ref=f3e137] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=f3e139]
+            - generic [ref=f3e144]: Asset In/Out
+          - link "Physical Assets" [ref=f3e145] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=f3e147]
+            - generic [ref=f3e149]: Physical Assets
+          - link "Delivery Specs" [ref=f3e150] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=f3e152]
+            - generic [ref=f3e157]: Delivery Specs
+          - link "Import → Quote" [ref=f3e158] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=f3e160]
+            - generic [ref=f3e163]: Import → Quote
+          - link "Storage" [ref=f3e164] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=f3e166]
+            - generic [ref=f3e170]: Storage
+          - link "KDM/DKDM" [ref=f3e171] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=f3e173]
+            - generic [ref=f3e176]: KDM/DKDM
+        - generic [ref=f3e177]:
+          - generic [ref=f3e178]: Platform
+          - link "Tenants" [ref=f3e179] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=f3e181]
+            - generic [ref=f3e185]: Tenants
+        - generic [ref=f3e186]:
+          - generic [ref=f3e187]: Configuration
+          - link "Departments" [ref=f3e188] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=f3e190]
+            - generic [ref=f3e194]: Departments
+          - link "Settings" [ref=f3e195] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=f3e197]
+            - generic [ref=f3e200]: Settings
+        - generic [ref=f3e201]:
+          - generic [ref=f3e202]: Help
+          - link "Manual" [ref=f3e203] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=f3e205]
+            - generic [ref=f3e207]: Manual
+        - generic [ref=f3e208]:
+          - generic [ref=f3e209]: Administration
+          - link "Users" [ref=f3e210] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=f3e212]
+            - generic [ref=f3e215]: Users
+          - link "Roles & Permissions" [ref=f3e216] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=f3e218]
+            - generic [ref=f3e221]: Roles & Permissions
+          - link "Trash" [ref=f3e222] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=f3e224]
+            - generic [ref=f3e227]: Trash
+          - link "Audit log" [ref=f3e228] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=f3e230]
+            - generic [ref=f3e233]: Audit log
+      - link "Logout" [ref=f3e235] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=f3e237]
+        - generic [ref=f3e240]: Logout
+    - generic [ref=f3e241]:
+      - banner [ref=f3e242]:
+        - button "Mostra/nascondi menu (Ctrl+B)" [ref=f3e244] [cursor=pointer]:
+          - img [ref=f3e245]
+        - generic [ref=f3e248]:
+          - button "Open theme palette" [ref=f3e250] [cursor=pointer]:
+            - img [ref=f3e252]
+          - button "Ingrandisci visualizzazione" [ref=f3e259] [cursor=pointer]:
+            - img [ref=f3e261]
+          - button "🇬🇧" [ref=f3e265] [cursor=pointer]:
+            - generic [ref=f3e266]: 🇬🇧
+          - button "8" [ref=f3e267] [cursor=pointer]:
+            - img [ref=f3e269]
+            - generic [ref=f3e272]: "8"
+          - generic "admin@mediaflow.it" [ref=f3e273]:
+            - generic [ref=f3e274]: Admin MediaFlow
+            - generic [ref=f3e275]: admin
+            - link "Logout" [ref=f3e276] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=f3e277]
+      - main [ref=f3e280]:
+        - heading "Calendar" [level=1] [ref=f3e282]
+        - generic [ref=f3e283]:
+          - button "Team ▾" [ref=f3e285] [cursor=pointer]
+          - generic [ref=f3e286]:
+            - checkbox "Show Google" [checked] [ref=f3e287]
+            - generic [ref=f3e288]: Show Google
+          - button "Sync" [ref=f3e289] [cursor=pointer]
+          - button "New appointment" [ref=f3e290] [cursor=pointer]
+        - generic [ref=f3e291]:
+          - generic [ref=f3e292]:
+            - generic [ref=f3e293]:
+              - generic [ref=f3e294]:
+                - button "Previous week" [ref=f3e295] [cursor=pointer]:
+                  - img [ref=f3e296]: 
+                - button "Next week" [ref=f3e297] [cursor=pointer]:
+                  - img [ref=f3e298]: 
+              - button "today" [disabled] [ref=f3e299]
+            - heading "Jul 5 – 11, 2026" [level=2] [ref=f3e301]
+            - generic [ref=f3e303]:
+              - button "month" [ref=f3e304] [cursor=pointer]
+              - button "week" [pressed] [ref=f3e305] [cursor=pointer]
+              - button "day" [ref=f3e306] [cursor=pointer]
+              - button "list" [ref=f3e307] [cursor=pointer]
+          - generic "Jul 5 – 11, 2026" [ref=f3e308]:
+            - grid [ref=f3e310]:
+              - rowgroup [ref=f3e311]:
+                - row "July 5, 2026 July 6, 2026 July 7, 2026 July 8, 2026 July 9, 2026 July 10, 2026 July 11, 2026" [ref=f3e316]:
+                  - columnheader "July 5, 2026" [ref=f3e317]:
+                    - generic "July 5, 2026" [ref=f3e319]: Sun 7/5
+                  - columnheader "July 6, 2026" [ref=f3e320]:
+                    - generic "July 6, 2026" [ref=f3e322]: Mon 7/6
+                  - columnheader "July 7, 2026" [ref=f3e323]:
+                    - generic "July 7, 2026" [ref=f3e325]: Tue 7/7
+                  - columnheader "July 8, 2026" [ref=f3e326]:
+                    - generic "July 8, 2026" [ref=f3e328]: Wed 7/8
+                  - columnheader "July 9, 2026" [ref=f3e329]:
+                    - generic "July 9, 2026" [ref=f3e331]: Thu 7/9
+                  - columnheader "July 10, 2026" [ref=f3e332]:
+                    - generic "July 10, 2026" [ref=f3e334]: Fri 7/10
+                  - columnheader "July 11, 2026" [ref=f3e335]:
+                    - generic "July 11, 2026" [ref=f3e337]: Sat 7/11
+              - rowgroup [ref=f3e338]:
+                - row [ref=f3e344]:
+                  - generic [ref=f3e346]: all-day
+                  - gridcell [ref=f3e347]
+                  - gridcell [ref=f3e350]
+                  - gridcell [ref=f3e353]
+                  - gridcell [ref=f3e356]
+                  - gridcell [ref=f3e359]
+                  - gridcell [ref=f3e362]
+                  - gridcell [ref=f3e365]
+                - generic [ref=f3e370]:
+                  - table [ref=f3e372]:
+                    - rowgroup [ref=f3e375]:
+                      - row [ref=f3e376]:
+                        - cell [ref=f3e377]:
+                          - generic [ref=f3e379]: 7am
+                        - cell [ref=f3e380]
+                      - row [ref=f3e381]:
+                        - cell [ref=f3e382]
+                        - cell [ref=f3e383]
+                      - row [ref=f3e384]:
+                        - cell [ref=f3e385]:
+                          - generic [ref=f3e387]: 8am
+                        - cell [ref=f3e388]
+                      - row [ref=f3e389]:
+                        - cell [ref=f3e390]
+                        - cell [ref=f3e391]
+                      - row [ref=f3e392]:
+                        - cell [ref=f3e393]:
+                          - generic [ref=f3e395]: 9am
+                        - cell [ref=f3e396]
+                      - row [ref=f3e397]:
+                        - cell [ref=f3e398]
+                        - cell [ref=f3e399]
+                      - row [ref=f3e400]:
+                        - cell [ref=f3e401]:
+                          - generic [ref=f3e403]: 10am
+                        - cell [ref=f3e404]
+                      - row [ref=f3e405]:
+                        - cell [ref=f3e406]
+                        - cell [ref=f3e407]
+                      - row [ref=f3e408]:
+                        - cell [ref=f3e409]:
+                          - generic [ref=f3e411]: 11am
+                        - cell [ref=f3e412]
+                      - row [ref=f3e413]:
+                        - cell [ref=f3e414]
+                        - cell [ref=f3e415]
+                      - row [ref=f3e416]:
+                        - cell [ref=f3e417]:
+                          - generic [ref=f3e419]: 12pm
+                        - cell [ref=f3e420]
+                      - row [ref=f3e421]:
+                        - cell [ref=f3e422]
+                        - cell [ref=f3e423]
+                      - row [ref=f3e424]:
+                        - cell [ref=f3e425]:
+                          - generic [ref=f3e427]: 1pm
+                        - cell [ref=f3e428]
+                      - row [ref=f3e429]:
+                        - cell [ref=f3e430]
+                        - cell [ref=f3e431]
+                      - row [ref=f3e432]:
+                        - cell [ref=f3e433]:
+                          - generic [ref=f3e435]: 2pm
+                        - cell [ref=f3e436]
+                      - row [ref=f3e437]:
+                        - cell [ref=f3e438]
+                        - cell [ref=f3e439]
+                      - row [ref=f3e440]:
+                        - cell [ref=f3e441]:
+                          - generic [ref=f3e443]: 3pm
+                        - cell [ref=f3e444]
+                      - row [ref=f3e445]:
+                        - cell [ref=f3e446]
+                        - cell [ref=f3e447]
+                      - row [ref=f3e448]:
+                        - cell [ref=f3e449]:
+                          - generic [ref=f3e451]: 4pm
+                        - cell [ref=f3e452]
+                      - row [ref=f3e453]:
+                        - cell [ref=f3e454]
+                        - cell [ref=f3e455]
+                      - row [ref=f3e456]:
+                        - cell [ref=f3e457]:
+                          - generic [ref=f3e459]: 5pm
+                        - cell [ref=f3e460]
+                      - row [ref=f3e461]:
+                        - cell [ref=f3e462]
+                        - cell [ref=f3e463]
+                      - row [ref=f3e464]:
+                        - cell [ref=f3e465]:
+                          - generic [ref=f3e467]: 6pm
+                        - cell [ref=f3e468]
+                      - row [ref=f3e469]:
+                        - cell [ref=f3e470]
+                        - cell [ref=f3e471]
+                      - row [ref=f3e472]:
+                        - cell [ref=f3e473]:
+                          - generic [ref=f3e475]: 7pm
+                        - cell [ref=f3e476]
+                      - row [ref=f3e477]:
+                        - cell [ref=f3e478]
+                        - cell [ref=f3e479]
+                      - row [ref=f3e480]:
+                        - cell [ref=f3e481]:
+                          - generic [ref=f3e483]: 8pm
+                        - cell [ref=f3e484]
+                      - row [ref=f3e485]:
+                        - cell [ref=f3e486]
+                        - cell [ref=f3e487]
+                      - row [ref=f3e488]:
+                        - cell [ref=f3e489]:
+                          - generic [ref=f3e491]: 9pm
+                        - cell [ref=f3e492]
+                      - row [ref=f3e493]:
+                        - cell [ref=f3e494]
+                        - cell [ref=f3e495]
+                  - row [ref=f3e499]:
+                    - gridcell [ref=f3e502]
+                    - gridcell [ref=f3e505]
+                    - gridcell [ref=f3e508]
+                    - gridcell [ref=f3e511]
+                    - gridcell [ref=f3e514]
+                    - gridcell [ref=f3e517]
+                    - gridcell [ref=f3e520]
+  - button "Apri Claqo Bot" [ref=f3e523] [cursor=pointer]:
+    - img "Claqo bot" [ref=f3e524]
+  - dialog "Copilot AI" [ref=f3e525]:
+    - generic [ref=f3e526]:
+      - img "Claqo bot" [ref=f3e528]
+      - heading "Copilot" [level=3] [ref=f3e529]
+      - generic [ref=f3e530]: —
+      - button "Nuova conversazione" [ref=f3e531] [cursor=pointer]:
+        - img [ref=f3e532]
+      - button "Chiudi" [ref=f3e533] [cursor=pointer]:
+        - img [ref=f3e534]
+    - generic [ref=f3e537]:
+      - generic [ref=f3e538]: "Storia:"
+      - button "(new) ▾" [ref=f3e540] [cursor=pointer]
+    - generic [ref=f3e543]:
+      - button "📥" [ref=f3e544] [cursor=pointer]
+      - button "🔎" [ref=f3e545] [cursor=pointer]
+    - generic [ref=f3e546]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=f3e547] [cursor=pointer]:
+        - img [ref=f3e548]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=f3e550]
+      - button "Send" [ref=f3e551] [cursor=pointer]
+  - generic [ref=f3e552]:
+    - generic [ref=f3e553]:
+      - generic [ref=f3e554]: 🔔 Notifiche
+      - generic [ref=f3e555]:
+        - button "✓ Tutte lette" [ref=f3e556] [cursor=pointer]
+        - button "✕" [ref=f3e557] [cursor=pointer]
+    - generic [ref=f3e559]: Loading…
+  - text: ▾ ▾

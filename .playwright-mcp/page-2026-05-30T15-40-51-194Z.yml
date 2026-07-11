@@ -1,0 +1,231 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Principale
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Anagrafica
+          - link "Clienti" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clienti
+          - link "Progetti" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Progetti
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operativo
+          - link "Pianificazione" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Pianificazione
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Ore lavoro" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Ore lavoro
+        - generic [ref=e55]:
+          - generic [ref=e56]: Preventivi
+          - link "Listino Prezzi" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Listino Prezzi
+          - link "Quotazioni" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotazioni
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finanza
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "Fatturazione" [ref=e76] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e78]
+            - generic [ref=e80]: Fatturazione
+          - link "Cashflow & Forecast" [ref=e81] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e83]
+            - generic [ref=e86]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=e87] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e89]
+            - generic [ref=e92]: Report YoY + Export
+          - link "Fornitori" [ref=e93] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e95]
+            - generic [ref=e98]: Fornitori
+          - link "Spese aziendali" [ref=e99] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e101]
+            - generic [ref=e104]: Spese aziendali
+        - generic [ref=e105]:
+          - generic [ref=e106]: Media
+          - link "Asset Library" [ref=e107] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e109]
+            - generic [ref=e111]: Asset Library
+          - link "Scan filesystem" [ref=e112] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e114]
+            - generic [ref=e118]: Scan filesystem
+          - link "In/Out Asset" [ref=e119] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e121]
+            - generic [ref=e126]: In/Out Asset
+          - link "Asset Fisici" [ref=e127] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e129]
+            - generic [ref=e131]: Asset Fisici
+          - link "Capitolati" [ref=e132] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e134]
+            - generic [ref=e139]: Capitolati
+          - link "Import → Quote" [ref=e140] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e142]
+            - generic [ref=e145]: Import → Quote
+        - generic [ref=e146]:
+          - generic [ref=e147]: Platform
+          - link "Tenants" [ref=e148] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e150]
+            - generic [ref=e154]: Tenants
+        - generic [ref=e155]:
+          - generic [ref=e156]: Configurazione
+          - link "Reparti" [ref=e157] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e159]
+            - generic [ref=e163]: Reparti
+          - link "Impostazioni" [ref=e164] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e166]
+            - generic [ref=e169]: Impostazioni
+        - generic [ref=e170]:
+          - generic [ref=e171]: Aiuto
+          - link "Manuale" [ref=e172] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e174]
+            - generic [ref=e176]: Manuale
+        - generic [ref=e177]:
+          - generic [ref=e178]: Amministrazione
+          - link "Utenti" [ref=e179] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e181]
+            - generic [ref=e184]: Utenti
+          - link "Ruoli & Permessi" [ref=e185] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e187]
+            - generic [ref=e190]: Ruoli & Permessi
+          - link "Cestino" [ref=e191] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e193]
+            - generic [ref=e196]: Cestino
+          - link "Audit log" [ref=e197] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e199]
+            - generic [ref=e202]: Audit log
+      - link "Logout" [ref=e204] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e206]
+        - generic [ref=e209]: Logout
+    - generic [ref=e210]:
+      - banner [ref=e211]:
+        - generic [ref=e212]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e213] [cursor=pointer]:
+            - img [ref=e214]
+          - generic [ref=e217]: Fatturazione & Report
+        - generic [ref=e218]:
+          - button "+ Nuova fattura" [ref=e219] [cursor=pointer]
+          - button "📦 Componi fattura periodo" [ref=e220] [cursor=pointer]
+          - button "🏁 Fattura chiusura" [ref=e221] [cursor=pointer]
+          - button "Apri palette tema" [ref=e223] [cursor=pointer]:
+            - img [ref=e225]
+          - button "Ingrandisci visualizzazione" [ref=e232] [cursor=pointer]:
+            - img [ref=e234]
+          - button "🇮🇹" [ref=e238] [cursor=pointer]:
+            - generic [ref=e239]: 🇮🇹
+          - button "4" [ref=e240] [cursor=pointer]:
+            - img [ref=e242]
+            - generic [ref=e245]: "4"
+          - generic "admin@mediaflow.it" [ref=e246]:
+            - generic [ref=e247]: Admin MediaFlow
+            - generic [ref=e248]: admin
+            - link "Logout" [ref=e249] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e250]
+      - main [ref=e253]:
+        - generic [ref=e255]:
+          - generic [ref=e256] [cursor=pointer]: Fatture
+          - generic [ref=e257] [cursor=pointer]: 📦 Batch fatturazione
+          - generic [ref=e258] [cursor=pointer]: ⚠ Anomalie
+          - generic [ref=e259] [cursor=pointer]: 💰 Bozze acconti
+        - generic [ref=e260]:
+          - generic [ref=e262]:
+            - generic [ref=e263]: 📊 Quotato vs Fatturato per progetto
+            - button "▼" [ref=e264] [cursor=pointer]
+          - generic [ref=e265]:
+            - button "Tutti gli stati ▾" [ref=e267] [cursor=pointer]
+            - generic "Filtra le fatture con scadenza nel passato non ancora pagate (anche se non flaggate overdue)." [ref=e268] [cursor=pointer]:
+              - checkbox "Solo scadute (due_date passata)" [ref=e269]
+              - text: Solo scadute (due_date passata)
+            - generic "Mostra fatture in stato 'annullato' (stornate via NC TD04)." [ref=e270] [cursor=pointer]:
+              - checkbox "Mostra annullate" [ref=e271]
+              - text: Mostra annullate
+            - generic "Mostra Note di Credito (doc_type=TD04)." [ref=e272] [cursor=pointer]:
+              - checkbox "Mostra NC" [checked] [ref=e273]
+              - text: Mostra NC
+            - textbox "🔍 N. fattura…" [ref=e274]
+          - table [ref=e277]:
+            - rowgroup [ref=e278]:
+              - row "Numero ⇅ Cliente ⇅ Progetto ⇅ Data ⇅ Scadenza ⇅ Totale ⇅ Stato ⇅" [ref=e279]:
+                - columnheader "Numero ⇅" [ref=e280] [cursor=pointer]
+                - columnheader "Cliente ⇅" [ref=e281] [cursor=pointer]
+                - columnheader "Progetto ⇅" [ref=e282] [cursor=pointer]
+                - columnheader "Data ⇅" [ref=e283] [cursor=pointer]
+                - columnheader "Scadenza ⇅" [ref=e284] [cursor=pointer]
+                - columnheader "Totale ⇅" [ref=e285] [cursor=pointer]
+                - columnheader "Stato ⇅" [ref=e286] [cursor=pointer]
+                - columnheader [ref=e287]
+            - rowgroup [ref=e288]:
+              - row "Caricamento…" [ref=e289]:
+                - cell "Caricamento…" [ref=e290]
+        - text: ▾ ⇅ ⇅ ⇅ ⇅ ⇅ ⇅ ⇅ ⇅ ⇅ ▾ ▾ ▾ ▾ ⇅ ⇅ ⇅ ⇅ ⇅ ⇅ ⇅ ⇅ ▾ ▾ ▾ ▾ ▾ ▾ ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e291] [cursor=pointer]:
+    - img "Claqo bot" [ref=e292]
+  - dialog "Copilot AI" [ref=e293]:
+    - generic [ref=e294]:
+      - img "Claqo bot" [ref=e296]
+      - heading "Copilot" [level=3] [ref=e297]
+      - generic [ref=e298]: —
+      - button "Nuova conversazione" [ref=e299] [cursor=pointer]:
+        - img [ref=e300]
+      - button "Chiudi" [ref=e301] [cursor=pointer]:
+        - img [ref=e302]
+    - generic [ref=e305]:
+      - generic [ref=e306]: "Storia:"
+      - button "(nuova) ▾" [ref=e308] [cursor=pointer]
+    - generic [ref=e311]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e312] [cursor=pointer]:
+        - img [ref=e313]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e315]
+      - button "Invia" [ref=e316] [cursor=pointer]
+  - generic [ref=e317]:
+    - generic [ref=e318]:
+      - generic [ref=e319]: 🔔 Notifiche
+      - generic [ref=e320]:
+        - button "✓ Tutte lette" [ref=e321] [cursor=pointer]
+        - button "✕" [ref=e322] [cursor=pointer]
+    - generic [ref=e324]: Caricamento…
+  - text: ▾ ▾

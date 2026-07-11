@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Claqo favicon</title>
+  <rect width="32" height="32" rx="7" fill="#D85A30"/>
+  <polygon points="5,14 28,14 30,5 7,7" fill="#1A1A1A"/>
+  <polygon points="10,14 13,14 15,6 11,7" fill="#FFFFFF"/>
+  <polygon points="17,14 20,14 22,5 18,7" fill="#FFFFFF"/>
+  <polygon points="24,14 27,14 29,5 25,6" fill="#FFFFFF"/>
+  <rect x="5" y="14" width="23" height="16" rx="2" fill="#FAECE7"/>
+  <circle cx="12" cy="22" r="2.6" fill="#1A1A1A"/>
+  <circle cx="21" cy="22" r="2.6" fill="#1A1A1A"/>
+</svg>

@@ -1,0 +1,242 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Principale
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Anagrafica
+          - link "Clienti" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clienti
+          - link "Progetti" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Progetti
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operativo
+          - link "Pianificazione" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Pianificazione
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Ore lavoro" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Ore lavoro
+        - generic [ref=e55]:
+          - generic [ref=e56]: Preventivi
+          - link "Listino Prezzi" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Listino Prezzi
+          - link "Quotazioni" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotazioni
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finanza
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "Fatturazione" [ref=e76] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e78]
+            - generic [ref=e80]: Fatturazione
+          - link "Cashflow & Forecast" [ref=e81] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e83]
+            - generic [ref=e86]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=e87] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e89]
+            - generic [ref=e92]: Report YoY + Export
+          - link "Fornitori" [ref=e93] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e95]
+            - generic [ref=e98]: Fornitori
+          - link "Spese aziendali" [ref=e99] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e101]
+            - generic [ref=e104]: Spese aziendali
+        - generic [ref=e105]:
+          - generic [ref=e106]: Media
+          - link "Asset Library" [ref=e107] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e109]
+            - generic [ref=e111]: Asset Library
+          - link "Scan filesystem" [ref=e112] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e114]
+            - generic [ref=e118]: Scan filesystem
+          - link "In/Out Asset" [ref=e119] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e121]
+            - generic [ref=e126]: In/Out Asset
+          - link "Asset Fisici" [ref=e127] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e129]
+            - generic [ref=e131]: Asset Fisici
+          - link "Capitolati" [ref=e132] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e134]
+            - generic [ref=e139]: Capitolati
+          - link "Import → Quote" [ref=e140] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e142]
+            - generic [ref=e145]: Import → Quote
+          - link "Storage" [ref=e146] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=e148]
+            - generic [ref=e152]: Storage
+        - generic [ref=e153]:
+          - generic [ref=e154]: Platform
+          - link "Tenants" [ref=e155] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e157]
+            - generic [ref=e161]: Tenants
+        - generic [ref=e162]:
+          - generic [ref=e163]: Configurazione
+          - link "Reparti" [ref=e164] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e166]
+            - generic [ref=e170]: Reparti
+          - link "Impostazioni" [ref=e171] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e173]
+            - generic [ref=e176]: Impostazioni
+        - generic [ref=e177]:
+          - generic [ref=e178]: Aiuto
+          - link "Manuale" [ref=e179] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e181]
+            - generic [ref=e183]: Manuale
+        - generic [ref=e184]:
+          - generic [ref=e185]: Amministrazione
+          - link "Utenti" [ref=e186] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e188]
+            - generic [ref=e191]: Utenti
+          - link "Ruoli & Permessi" [ref=e192] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e194]
+            - generic [ref=e197]: Ruoli & Permessi
+          - link "Cestino" [ref=e198] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e200]
+            - generic [ref=e203]: Cestino
+          - link "Audit log" [ref=e204] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e206]
+            - generic [ref=e209]: Audit log
+      - link "Logout" [ref=e211] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e213]
+        - generic [ref=e216]: Logout
+    - generic [ref=e217]:
+      - banner [ref=e218]:
+        - generic [ref=e219]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e220] [cursor=pointer]:
+            - img [ref=e221]
+          - generic [ref=e224]: Asset Fisici
+        - generic [ref=e225]:
+          - button "📦 Batch import" [ref=e226] [cursor=pointer]
+          - button "🔢 Numerazione" [ref=e227] [cursor=pointer]
+          - button "Nuovo asset fisico" [ref=e228] [cursor=pointer]:
+            - img [ref=e229]
+            - text: Nuovo asset fisico
+          - button "Apri palette tema" [ref=e231] [cursor=pointer]:
+            - img [ref=e233]
+          - button "Ingrandisci visualizzazione" [ref=e240] [cursor=pointer]:
+            - img [ref=e242]
+          - button "🇮🇹" [ref=e246] [cursor=pointer]:
+            - generic [ref=e247]: 🇮🇹
+          - button "8" [ref=e248] [cursor=pointer]:
+            - img [ref=e250]
+            - generic [ref=e253]: "8"
+          - generic "admin@mediaflow.it" [ref=e254]:
+            - generic [ref=e255]: Admin MediaFlow
+            - generic [ref=e256]: admin
+            - link "Logout" [ref=e257] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e258]
+      - main [ref=e261]:
+        - generic [ref=e263]:
+          - strong [ref=e264]: Asset fisici
+          - text: ": LTO tape, hard disk, CRU drive (DCP fisici), Blu-Ray, DVD, cases. Possono essere archivio interno (custoditi internamente) o consegnati esternamente al cliente — i due flag sono ortogonali (un drive può essere SIA archivio SIA aver generato copie spedite). Il modello digitale dei file (ProRes/DCP/IMF) è in"
+          - link "DAM Digital" [ref=e265] [cursor=pointer]:
+            - /url: /dam
+          - text: ", qui solo i supporti fisici."
+        - generic [ref=e267]:
+          - generic [ref=e268]:
+            - generic [ref=e269]: 🔍
+            - textbox "Etichetta · serial · barcode" [ref=e270]
+          - generic [ref=e271]:
+            - text: "Tipo:"
+            - button "Tutti ▾" [ref=e273] [cursor=pointer]
+          - generic [ref=e274]:
+            - checkbox "Solo archivio interno" [ref=e275]
+            - text: Solo archivio interno
+          - generic [ref=e276]:
+            - checkbox "Solo consegnati esternamente" [ref=e277]
+            - text: Solo consegnati esternamente
+          - generic [ref=e278]:
+            - checkbox "Mostra cestino" [ref=e279]
+            - text: Mostra cestino
+          - generic [ref=e280]:
+            - checkbox "⚠ Solo verifica scaduta" [ref=e281]
+            - generic [ref=e282]: ⚠ Solo verifica scaduta
+        - table [ref=e285]:
+          - rowgroup [ref=e286]:
+            - row "Tipo ⇅ Etichetta ⇅ Serial / Barcode ⇅ Capacità ⇅ Sede ⇅ Stato ⇅ Consegna ⇅ col.verification ⇅ ⇅" [ref=e287]:
+              - columnheader "Tipo ⇅" [ref=e288] [cursor=pointer]
+              - columnheader "Etichetta ⇅" [ref=e289] [cursor=pointer]
+              - columnheader "Serial / Barcode ⇅" [ref=e290] [cursor=pointer]
+              - columnheader "Capacità ⇅" [ref=e291] [cursor=pointer]
+              - columnheader "Sede ⇅" [ref=e292] [cursor=pointer]
+              - columnheader "Stato ⇅" [ref=e293] [cursor=pointer]
+              - columnheader "Consegna ⇅" [ref=e294] [cursor=pointer]
+              - columnheader "col.verification ⇅" [ref=e295] [cursor=pointer]
+              - columnheader "⇅" [ref=e296] [cursor=pointer]
+          - rowgroup [ref=e297]:
+            - row "Caricamento…" [ref=e298]:
+              - cell "Caricamento…" [ref=e299]
+        - text: ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e300] [cursor=pointer]:
+    - img "Claqo bot" [ref=e301]
+  - dialog "Copilot AI" [ref=e302]:
+    - generic [ref=e303]:
+      - img "Claqo bot" [ref=e305]
+      - heading "Copilot" [level=3] [ref=e306]
+      - generic [ref=e307]: —
+      - button "Nuova conversazione" [ref=e308] [cursor=pointer]:
+        - img [ref=e309]
+      - button "Chiudi" [ref=e310] [cursor=pointer]:
+        - img [ref=e311]
+    - generic [ref=e314]:
+      - generic [ref=e315]: "Storia:"
+      - button "(nuova) ▾" [ref=e317] [cursor=pointer]
+    - generic [ref=e320]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e321] [cursor=pointer]:
+        - img [ref=e322]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e324]
+      - button "Invia" [ref=e325] [cursor=pointer]
+  - generic [ref=e326]:
+    - generic [ref=e327]:
+      - generic [ref=e328]: 🔔 Notifiche
+      - generic [ref=e329]:
+        - button "✓ Tutte lette" [ref=e330] [cursor=pointer]
+        - button "✕" [ref=e331] [cursor=pointer]
+    - generic [ref=e333]: Caricamento…
+  - text: ▾ ▾

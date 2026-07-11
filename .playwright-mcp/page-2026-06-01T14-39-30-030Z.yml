@@ -1,0 +1,494 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Principale
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Anagrafica
+          - link "Clienti" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clienti
+          - link "Progetti" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Progetti
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operativo
+          - link "Pianificazione" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Pianificazione
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Ore lavoro" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Ore lavoro
+        - generic [ref=e55]:
+          - generic [ref=e56]: Preventivi
+          - link "Listino Prezzi" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Listino Prezzi
+          - link "Quotazioni" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotazioni
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finanza
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "Fatturazione" [ref=e76] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e78]
+            - generic [ref=e80]: Fatturazione
+          - link "Cashflow & Forecast" [ref=e81] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e83]
+            - generic [ref=e86]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=e87] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e89]
+            - generic [ref=e92]: Report YoY + Export
+          - link "Fornitori" [ref=e93] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e95]
+            - generic [ref=e98]: Fornitori
+          - link "Spese aziendali" [ref=e99] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e101]
+            - generic [ref=e104]: Spese aziendali
+        - generic [ref=e105]:
+          - generic [ref=e106]: Media
+          - link "Asset Library" [ref=e107] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e109]
+            - generic [ref=e111]: Asset Library
+          - link "Scan filesystem" [ref=e112] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e114]
+            - generic [ref=e118]: Scan filesystem
+          - link "In/Out Asset" [ref=e119] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e121]
+            - generic [ref=e126]: In/Out Asset
+          - link "Asset Fisici" [ref=e127] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e129]
+            - generic [ref=e131]: Asset Fisici
+          - link "Capitolati" [ref=e132] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e134]
+            - generic [ref=e139]: Capitolati
+          - link "Import → Quote" [ref=e140] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e142]
+            - generic [ref=e145]: Import → Quote
+        - generic [ref=e146]:
+          - generic [ref=e147]: Platform
+          - link "Tenants" [ref=e148] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e150]
+            - generic [ref=e154]: Tenants
+        - generic [ref=e155]:
+          - generic [ref=e156]: Configurazione
+          - link "Reparti" [ref=e157] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e159]
+            - generic [ref=e163]: Reparti
+          - link "Impostazioni" [ref=e164] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e166]
+            - generic [ref=e169]: Impostazioni
+        - generic [ref=e170]:
+          - generic [ref=e171]: Aiuto
+          - link "Manuale" [ref=e172] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e174]
+            - generic [ref=e176]: Manuale
+        - generic [ref=e177]:
+          - generic [ref=e178]: Amministrazione
+          - link "Utenti" [ref=e179] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e181]
+            - generic [ref=e184]: Utenti
+          - link "Ruoli & Permessi" [ref=e185] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e187]
+            - generic [ref=e190]: Ruoli & Permessi
+          - link "Cestino" [ref=e191] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e193]
+            - generic [ref=e196]: Cestino
+          - link "Audit log" [ref=e197] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e199]
+            - generic [ref=e202]: Audit log
+      - link "Logout" [ref=e204] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e206]
+        - generic [ref=e209]: Logout
+    - generic [ref=e210]:
+      - banner [ref=e211]:
+        - generic [ref=e212]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e213] [cursor=pointer]:
+            - img [ref=e214]
+          - generic [ref=e217]: Pianificazione
+        - generic [ref=e218]:
+          - button "+ Nuovo booking" [ref=e219] [cursor=pointer]
+          - link "→ Vai a quotazioni" [ref=e220] [cursor=pointer]:
+            - /url: /quotes
+          - button "Apri palette tema" [ref=e222] [cursor=pointer]:
+            - img [ref=e224]
+          - button "Ingrandisci visualizzazione" [ref=e231] [cursor=pointer]:
+            - img [ref=e233]
+          - button "🇮🇹" [ref=e237] [cursor=pointer]:
+            - generic [ref=e238]: 🇮🇹
+          - button "6" [ref=e239] [cursor=pointer]:
+            - img [ref=e241]
+            - generic [ref=e244]: "6"
+          - generic "admin@mediaflow.it" [ref=e245]:
+            - generic [ref=e246]: Admin MediaFlow
+            - generic [ref=e247]: admin
+            - link "Logout" [ref=e248] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e249]
+      - main [ref=e252]:
+        - generic [ref=e253]:
+          - complementary [ref=e254]:
+            - heading "Filtri" [level=4] [ref=e255]
+            - generic [ref=e256]:
+              - generic [ref=e257]: Cerca
+              - textbox "codice, titolo…" [ref=e258]
+            - generic [ref=e259]:
+              - generic [ref=e260]: Reparto (multi)
+              - textbox "Cerca reparto…" [ref=e262]
+            - generic [ref=e263]:
+              - generic [ref=e264]: Cliente (multi)
+              - textbox "Cerca cliente…" [ref=e266]
+            - generic [ref=e267]:
+              - generic [ref=e268]: Progetto (multi)
+              - textbox "Cerca progetto…" [ref=e270]
+            - generic [ref=e271]:
+              - generic [ref=e272]: Job (multi)
+              - textbox "Cerca job (codice, titolo, cliente, progetto)…" [ref=e274]
+            - generic [ref=e279]:
+              - generic [ref=e280]: Risorsa (multi)
+              - textbox "Cerca risorsa…" [ref=e282]
+            - text: ▾
+            - generic [ref=e387]:
+              - generic [ref=e388]: Stato deliverable
+              - button "— tutti — ▾" [ref=e390] [cursor=pointer]
+            - generic [ref=e391]:
+              - generic [ref=e392]: QC sub-status
+              - button "— tutti — ▾" [ref=e394] [cursor=pointer]
+            - text: ▾
+            - generic [ref=e291]:
+              - generic [ref=e292]: Target da
+              - textbox [ref=e293]
+            - generic [ref=e294]:
+              - generic [ref=e295]: Target a
+              - textbox [ref=e296]
+            - button "Reset filtri" [ref=e311] [cursor=pointer]
+          - generic [ref=e312]:
+            - button "◀ Nascondi filtri" [ref=e313] [cursor=pointer]:
+              - generic [ref=e314]: ◀
+              - generic [ref=e315]: Nascondi filtri
+            - generic [ref=e316]:
+              - generic [ref=e317] [cursor=pointer]: 📋 Tabella
+              - generic [ref=e318] [cursor=pointer]: 📅 Calendario
+              - generic [ref=e319] [cursor=pointer]: 📑 Agenda
+              - generic [ref=e320] [cursor=pointer]: ✓ Le mie
+              - generic [ref=e321] [cursor=pointer]: 📂 Per progetto
+              - generic [ref=e322] [cursor=pointer]: 🎬 Storyboard
+              - generic [ref=e323] [cursor=pointer]: 🧭 Timeline risorse
+              - generic [ref=e324] [cursor=pointer]: 📦 Deliverable
+            - text: ▾ ▾ ▾
+            - generic [ref=e396]:
+              - generic [ref=e397]:
+                - generic [ref=e398]:
+                  - strong [ref=e399]: 📦 Deliverable HUB
+                  - generic [ref=e400]: 11 deliverable
+                - generic [ref=e401]:
+                  - button "Kanban ▾" [ref=e403] [cursor=pointer]
+                  - button "🔄" [ref=e404] [cursor=pointer]
+              - generic [ref=e406]:
+                - generic [ref=e407]:
+                  - generic [ref=e408]: ⏸ Pianificato (11)
+                  - generic [ref=e409]:
+                    - generic [ref=e410]: Data management
+                    - generic [ref=e411]: GLO · —
+                    - button "🔍 QC" [ref=e412] [cursor=pointer]
+                  - generic [ref=e413]:
+                    - generic [ref=e414]: LTO LTFS archive
+                    - generic [ref=e415]: GLO · —
+                    - button "🔍 QC" [ref=e416] [cursor=pointer]
+                  - generic [ref=e417]:
+                    - generic [ref=e418]: Full Mix (Final Mix) / 5.1 SMPTE
+                    - generic [ref=e419]: GLO · —
+                    - button "🔍 QC" [ref=e420] [cursor=pointer]
+                  - generic [ref=e421]:
+                    - generic [ref=e422]: Full Mix (Final Mix) / Stereo 2.0
+                    - generic [ref=e423]: GLO · —
+                    - button "🔍 QC" [ref=e424] [cursor=pointer]
+                  - generic [ref=e425]:
+                    - generic [ref=e426]: QuickTime / Apple ProRes 422 HQ / UHD 3840
+                    - generic [ref=e427]: GLO · —
+                    - button "🔍 QC" [ref=e428] [cursor=pointer]
+                  - generic [ref=e429]:
+                    - generic [ref=e430]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10
+                    - generic [ref=e431]: GLO · —
+                    - button "🔍 QC" [ref=e432] [cursor=pointer]
+                  - generic [ref=e433]:
+                    - generic [ref=e434]: Subtitle Sidecar (EBU-STL)
+                    - generic [ref=e435]: GLO · —
+                    - button "🔍 QC" [ref=e436] [cursor=pointer]
+                  - generic [ref=e437]:
+                    - generic [ref=e438]: Subtitle Sidecar (TTML/IMSC)
+                    - generic [ref=e439]: GLO · —
+                    - button "🔍 QC" [ref=e440] [cursor=pointer]
+                  - generic [ref=e441]:
+                    - generic [ref=e442]: Full Mix (Final Mix) / 5.1 SMPTE
+                    - generic [ref=e443]: GLO · —
+                    - button "🔍 QC" [ref=e444] [cursor=pointer]
+                  - generic [ref=e445]:
+                    - generic [ref=e446]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG
+                    - generic [ref=e447]: GLO · —
+                    - button "🔍 QC" [ref=e448] [cursor=pointer]
+                  - generic [ref=e449]:
+                    - generic [ref=e450]: MXF OP1a / XDCam HD422 50 / HD 1080p
+                    - generic [ref=e451]: GLO · —
+                    - button "🔍 QC" [ref=e452] [cursor=pointer]
+                - generic [ref=e454]: ▶ In lavorazione (0)
+                - generic [ref=e456]: 🔍 QC (0)
+                - generic [ref=e458]: 📤 Consegnato (0)
+                - generic [ref=e460]: 🔒 Chiuso (0)
+        - dialog [ref=e461]:
+          - generic [ref=e462]:
+            - generic [ref=e463]:
+              - generic [ref=e464]: Specifiche tecniche — MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG
+              - button "✕" [active] [ref=e465] [cursor=pointer]
+            - generic [ref=e466]:
+              - generic [ref=e467]:
+                - generic [ref=e468]: "🎯 Item capitolato:"
+                - button "Sky Italia · Sky Italia Specifiche Tecniche Consegna Audio/Video ▾" [ref=e470] [cursor=pointer]
+                - button "UHD 4K Master XAVC Intra MXF Op1A ▾" [ref=e472] [cursor=pointer]
+                - button "✕ scollega" [ref=e473] [cursor=pointer]
+              - text: ▾
+              - generic [ref=e474]:
+                - generic [ref=e475]: 🎯 Specifiche tecniche derivate dal capitolato. Le modifiche aggiornano il DeliveryItem collegato.
+                - generic [ref=e476]:
+                  - generic [ref=e477]:
+                    - text: Nome
+                    - textbox [ref=e478]: UHD 4K Master XAVC Intra MXF Op1A
+                  - generic [ref=e479]:
+                    - text: Package
+                    - combobox [ref=e480] [cursor=pointer]:
+                      - option "— nessuno (single-file) —" [selected]
+                      - option "DCP Interop"
+                      - option "DCP SMPTE"
+                      - option "IMF App 2"
+                      - option "IMF App 2E"
+                      - option "IMF App 3"
+                      - option "IMF App 4"
+                      - option "IMF App 5"
+                  - generic [ref=e481]:
+                    - text: Container
+                    - combobox [ref=e482] [cursor=pointer]:
+                      - option "— nessuno —"
+                      - option "QuickTime"
+                      - option "MXF OP1a" [selected]
+                      - option "MXF OP-Atom"
+                      - option "MXF AS-11"
+                      - option "MP4"
+                      - option "Matroska MKV"
+                      - option "WAV"
+                      - option "AIFF"
+                      - option "AC-3"
+                      - option "MP3"
+                      - option "Image Sequence DPX"
+                      - option "Image Sequence EXR"
+                      - option "Image Sequence TIFF"
+                      - option "Image Sequence J2C"
+                      - option "Subtitle Sidecar (EBU-STL)"
+                      - option "Subtitle Sidecar (SRT)"
+                      - option "Subtitle Sidecar (TTML/IMSC)"
+                      - option "Subtitle Sidecar (SCC)"
+                      - option "Subtitle Sidecar (WebVTT)"
+                      - option "KDM / DKDM"
+                      - option "Optical Disc Image (ISO)"
+                      - option "Document (PDF/XLS/DOC)"
+                  - generic [ref=e483]:
+                    - text: Video codec
+                    - combobox [ref=e484] [cursor=pointer]:
+                      - option "— audio-only —"
+                      - option "Apple ProRes 4444 XQ"
+                      - option "Apple ProRes 4444"
+                      - option "Apple ProRes 422 HQ"
+                      - option "Apple ProRes 422"
+                      - option "Apple ProRes 422 LT"
+                      - option "Apple ProRes 422 Proxy"
+                      - option "Apple ProRes IMF"
+                      - option "Avid DNxHR LB"
+                      - option "Avid DNxHR SQ"
+                      - option "Avid DNxHR HQ"
+                      - option "Avid DNxHR HQX"
+                      - option "Avid DNxHR 444"
+                      - option "Avid DNxHD 145"
+                      - option "Avid DNxHD 220"
+                      - option "Avid DNxHD 220x"
+                      - option "Avid DNxHD 440x"
+                      - option "H.264 High Profile"
+                      - option "H.264 High 10"
+                      - option "H.264 High 4:2:2"
+                      - option "H.264 High 4:4:4"
+                      - option "H.265 Main"
+                      - option "H.265 Main 10"
+                      - option "H.265 Main 4:2:2 10"
+                      - option "H.265 Main 4:4:4 10"
+                      - option "JPEG 2000 (DCP)"
+                      - option "JPEG 2000 P-HT (IMF)"
+                      - option "JPEG XS"
+                      - option "XAVC Intra Class 100"
+                      - option "XAVC Intra Class 300" [selected]
+                      - option "XAVC Long-GOP"
+                      - option "XDCam HD422 50"
+                      - option "GoPro CineForm"
+                      - option "Avid Uncompressed"
+                      - option "VP9"
+                      - option "AV1"
+                      - option "MPEG-2 (XDCam IMX)"
+                      - option "AVC-Intra 100"
+                  - generic [ref=e485]:
+                    - text: Resolution
+                    - combobox [ref=e486] [cursor=pointer]:
+                      - option "— nessuno —"
+                      - option "SD NTSC 480i/p"
+                      - option "SD PAL 576i/p"
+                      - option "HD 720p"
+                      - option "HD 1080p"
+                      - option "2K DCI Flat"
+                      - option "2K DCI Scope"
+                      - option "2K DCI Full"
+                      - option "UHD 3840" [selected]
+                      - option "4K DCI Flat"
+                      - option "4K DCI Scope"
+                      - option "4K DCI Full"
+                      - option "8K UHD-2"
+                  - generic [ref=e487]:
+                    - text: Bit depth
+                    - combobox [ref=e488] [cursor=pointer]:
+                      - option "—"
+                      - option "8-bit"
+                      - option "10-bit" [selected]
+                      - option "12-bit"
+                      - option "16-bit"
+                  - generic [ref=e489]:
+                    - text: Chroma
+                    - combobox [ref=e490] [cursor=pointer]:
+                      - option "—"
+                      - option "4:4:4"
+                      - option "4:2:2" [selected]
+                      - option "4:2:0"
+                      - option "4:1:1"
+                      - option "4:4:4:4"
+                  - generic [ref=e491]:
+                    - text: Frame rate
+                    - combobox [ref=e492] [cursor=pointer]:
+                      - option "— nessuno —" [selected]
+                      - option "23.976 fps (24/1.001 NTSC film)"
+                      - option "24 fps (cinema)"
+                      - option "25 fps (PAL)"
+                      - option "29.97 fps NDF (NTSC HD)"
+                      - option "29.97 fps DF (NTSC HD)"
+                      - option "30 fps"
+                      - option "48 fps HFR"
+                      - option "50 fps (PAL HD)"
+                      - option "59.94 fps NDF (NTSC HD)"
+                      - option "59.94 fps DF (NTSC HD)"
+                      - option "60 fps"
+                      - option "96 fps HFR"
+                      - option "100 fps"
+                      - option "119.88 fps NDF"
+                      - option "120 fps HFR"
+                  - generic [ref=e493]:
+                    - text: Aspect ratio
+                    - textbox "es. 1.85 / 2.39 / 16:9" [ref=e494]: 16:9
+                  - generic [ref=e495]:
+                    - text: Scan type
+                    - combobox [ref=e496] [cursor=pointer]:
+                      - option "—"
+                      - option "progressive" [selected]
+                      - option "interlaced"
+                      - option "psf"
+                  - generic [ref=e497]:
+                    - text: HDR format
+                    - combobox [ref=e498] [cursor=pointer]:
+                      - option "—"
+                      - option "SDR"
+                      - option "HDR10"
+                      - option "HDR10+"
+                      - option "Dolby Vision"
+                      - option "HLG" [selected]
+                  - generic [ref=e499]:
+                    - text: Color space
+                    - textbox "es. Rec.709 / DCI XYZ / Rec.2020 PQ" [ref=e500]: Rec.2020 PQ
+                  - generic [ref=e501]:
+                    - text: Subtitle format
+                    - combobox [ref=e502] [cursor=pointer]:
+                      - option "—" [selected]
+                      - option "TTML IMSC 1.1"
+                      - option "PNG+XML"
+                      - option "Burn-in"
+                      - option "PGS"
+                      - option "EBU-STL"
+                      - option "SRT"
+                  - generic [ref=e503]:
+                    - text: Subtitle lang (ISO comma)
+                    - textbox "es. it,en,fr" [ref=e504]
+                  - generic [ref=e505]:
+                    - text: Note
+                    - textbox [ref=e506]
+            - generic [ref=e507]:
+              - button "Annulla" [ref=e508] [cursor=pointer]
+              - button "💾 Salva specifiche" [ref=e509] [cursor=pointer]
+        - text: ▾ ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e353] [cursor=pointer]:
+    - img "Claqo bot" [ref=e354]
+  - dialog "Copilot AI" [ref=e355]:
+    - generic [ref=e356]:
+      - img "Claqo bot" [ref=e358]
+      - heading "Copilot" [level=3] [ref=e359]
+      - generic [ref=e360]: —
+      - button "Nuova conversazione" [ref=e361] [cursor=pointer]:
+        - img [ref=e362]
+      - button "Chiudi" [ref=e363] [cursor=pointer]:
+        - img [ref=e364]
+    - generic [ref=e367]:
+      - generic [ref=e368]: "Storia:"
+      - button "(nuova) ▾" [ref=e370] [cursor=pointer]
+    - generic [ref=e373]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e374] [cursor=pointer]:
+        - img [ref=e375]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e377]
+      - button "Invia" [ref=e378] [cursor=pointer]
+  - generic [ref=e379]:
+    - generic [ref=e380]:
+      - generic [ref=e381]: 🔔 Notifiche
+      - generic [ref=e382]:
+        - button "✓ Tutte lette" [ref=e383] [cursor=pointer]
+        - button "✕" [ref=e384] [cursor=pointer]
+    - generic [ref=e386]: Caricamento…
+  - text: ▾ ▾

@@ -32,6 +32,26 @@ async function mfMailLoadLabels() {
   } catch (e) { /* best-effort */ }
 }
 
+function _mailFmtDate(raw) {
+  if (!raw) return '';
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw.substring(0, 20);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday) return d.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'});
+    return d.toLocaleDateString('it-IT', {day: '2-digit', month: 'short'});
+  } catch (e) { return raw.substring(0, 20); }
+}
+
+function _mailFmtFrom(raw) {
+  if (!raw) return '';
+  // Estrae nome o email: "Mario Rossi <mario@example.com>" → "Mario Rossi"
+  const m = raw.match(/^"?([^"<]+)"?\s*</);
+  if (m) return m[1].trim();
+  return raw.replace(/<[^>]+>/g, '').trim();
+}
+
 async function mfMailLoadThreads(reset) {
   if (reset) { _mailNextPage = null; }
   const box = document.getElementById('mail-thread-list');
@@ -43,8 +63,15 @@ async function mfMailLoadThreads(reset) {
   try {
     const d = await (await fetch('/mail/api/threads?' + params.toString())).json();
     const rows = (d.threads || []).map(function (t) {
+      const title = t.subject || t.snippet || mfT('mail.noSubject');
+      const sub  = t.from ? escapeHtml(_mailFmtFrom(t.from)) + ' · ' : '';
+      const date = _mailFmtDate(t.date);
+      const body = (t.snippet || '...').substring(0, 120);
       return '<div class="mail-thread-row" data-thread="' + escapeHtml(t.id) + '">' +
-        escapeHtml(t.snippet || '(…)') + '</div>';
+        '<div class="mail-thread-line1">' + escapeHtml(title.substring(0, 80)) +
+        (date ? ' <span class="mail-thread-date">' + date + '</span>' : '') + '</div>' +
+        '<div class="mail-thread-line2">' + sub + escapeHtml(body) + '</div>' +
+      '</div>';
     }).join('');
     box.innerHTML = (reset ? '' : box.innerHTML) + (rows || '<div class="muted">' + mfT('mail.empty') + '</div>');
     _mailNextPage = d.next_page_token || null;
@@ -58,7 +85,7 @@ function _mailRenderBody(html) {
   const doc = '<!doctype html><html><head><meta charset="utf-8">' +
     '<base target="_blank"></head><body>' + blocked + '</body></html>';
   return '<iframe class="mail-body-frame" sandbox="" srcdoc="' +
-    doc.replace(/"/g, '&quot;') + '"></iframe>';
+    doc.replace(/"/g, '"') + '"></iframe>';
 }
 
 async function mfMailOpenThread(threadId) {

@@ -168,16 +168,30 @@ def list_google_events(db: Session, user_id: int, time_min: str, time_max: str) 
         cid = cal.get("id")
         if not cid or cid == claqo_id:
             continue
-        try:
-            res = _google_request(
-                "GET", _API_BASE + "/calendars/" + urllib.parse.quote(cid) + "/events", token,
-                params={"timeMin": time_min, "timeMax": time_max,
-                        "singleEvents": "true", "maxResults": "250", "orderBy": "startTime"}) or {}
-        except Exception as e:
-            log.warning(f"events {cid} falliti: {e}")
-            continue
-        for g in res.get("items", []):
-            if g.get("status") == "cancelled":
-                continue
-            out.append(_normalize_google_event(g, cal.get("summary") or cid))
+        cal_summary = cal.get("summary") or cid
+        page_token = None
+        events_collected = 0
+        while True:
+            params = {
+                "timeMin": time_min, "timeMax": time_max,
+                "singleEvents": "true", "maxResults": "2500",
+                "orderBy": "startTime",
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            try:
+                res = _google_request(
+                    "GET", _API_BASE + "/calendars/" + urllib.parse.quote(cid) + "/events",
+                    token, params=params) or {}
+            except Exception as e:
+                log.warning(f"events {cid} ({cal_summary}) falliti: {e}")
+                break
+            for g in res.get("items", []):
+                if g.get("status") == "cancelled":
+                    continue
+                out.append(_normalize_google_event(g, cal_summary))
+                events_collected += 1
+            page_token = res.get("nextPageToken")
+            if not page_token or events_collected >= 10000:
+                break
     return out

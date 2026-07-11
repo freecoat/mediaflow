@@ -1,0 +1,23 @@
+/* Claqo design tokens — v1.0.0 */
+:root {
+  --claqo-red:    #D85A30;
+  --stage-black:  #1A1A1A;
+  --studio-grey:  #5F5E5A;
+  --take-cream:   #FAECE7;
+  --cue-amber:    #EF9F27;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --font-sans: Inter, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-bg: var(--stage-black);
+    --surface-fg: var(--take-cream);
+  }
+}

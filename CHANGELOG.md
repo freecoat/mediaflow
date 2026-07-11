@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.245 — Hotfix calendar sync + email rendering + OAuth scopes (10 lug 2026)
+
+- **Sync calendario**: `list_google_events` aumentato `maxResults` da 250 a 2500 + aggiunta paginazione su `nextPageToken` (prima troncava eventi in vista mensile densa), safety cap 10000 eventi/calendario.
+- **Visualizzazione email**: `list_threads` ora restituisce `subject`/`from`/`date` oltre allo `snippet` (usando `messages.list` + `format=metadata` + `metadataHeaders` ripetuti). Frontend `mail.js` completamente riscritto: card thread a due righe (soggetto+data / mittente+snippet), CSS in `mail.html`.
+- **Gmail scopes predefiniti**: aggiunti `gmail.readonly` e `gmail.compose` negli scope Google OAuth di default (non più solo opt-in incrementale).
+- **Auto-migrazione colonne mancanti**: `claqo_calendar_id` su `user_oauth_tokens`, +5 colonne sync (`sync_state`, `external_event_id`, `external_calendar_id`, `last_synced_at`, `sync_error`) su `calendar_events`.
+- **CLAUDE.md** aggiornato con lo stato corrente del progetto (10 lug 2026).
+
 ## v3.5.0-alpha.172.244 — Client email Sotto-fase 1: /mail webmail standalone (7 lug 2026)
 
 - **Pagina `/mail`**: client webmail su Gmail — lista/ricerca thread, vista conversazione, nav label, scarica allegati; compose Nuovo/Rispondi/Rispondi-a-tutti/Inoltra + allegati + bozze; invio via Gmail API.
