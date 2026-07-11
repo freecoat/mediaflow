@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.248** — 11 luglio 2026 — Calendario: i miei calendari (sidebar Google)
+
+### α.172.248 ✅ (Sotto-fase 1/4 — i miei calendari — 11 lug, ramo feat/mobile-responsive-email, TDD; spec 2026-07-11)
+Programma 4 sotto-fasi (post-decisioni Matteo): **1. Calendari** ✅ → 2. Email client core (Thunderbird: stato/organizzazione/compose avanzato/rubrica/filtri/cartelle+sottocartelle/auto-reply/ricerca) → 3. Restyling sleek (allineo `sleek.css`) → 4. AI copilot profondo (ricerca semantica + compilazione/bozze + estrazione dati per quotazioni/acquisizioni/contatti + azioni mailbox + assegnazione email/contatti a progetto).
+
+- **Sidebar "I miei calendari"** in `/calendar`: lista calendari Google (pallino colore + toggle per-calendario), sostituisce checkbox "Mostra Google". Voce fissa "Claqo". Overlay filtrato per calendario visibile, visibilità in `localStorage`. Layout 2-col responsive.
+- Endpoint `GET /calendar/api/google-calendars` → `list_calendars` (best-effort). i18n 5 lingue. Test `test_calendar_list` (4). 1178+ test verdi.
+
+**Prossimo step**: **Sotto-fase 2 — Email client core** (brainstorming+spec propri). Prereq smoke α.248: account Google riconnesso + People API → lista calendari popolata; toggle per-calendario funzionanti. Ramo `feat/mobile-responsive-email` NON pushato.
+
+### α.172.247 ✅ (storico sotto)
 **v3.5.0-alpha.172.247** — 7 luglio 2026 — Fix email + calendario reale (edit eventi Google, inviti, autocomplete)
 
 ### α.172.247 ✅ (Fix email + calendario reale — 7 lug, ramo feat/mobile-responsive-email, TDD)

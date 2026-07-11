@@ -1028,6 +1028,9 @@ window.MF_I18N = {
   'cal.sync.done':     {it: 'Sincronizzato', en: 'Synced', fr: 'Synchronise', de: 'Synchronisiert', es: 'Sincronizado'},
   'cal.sync.error':    {it: 'Errore sincronizzazione', en: 'Sync error', fr: 'Erreur de synchronisation', de: 'Sync-Fehler', es: 'Error de sincronizacion'},
   'cal.showGoogle':    {it: 'Mostra Google', en: 'Show Google', fr: 'Afficher Google', de: 'Google anzeigen', es: 'Mostrar Google'},
+  'cal.myCalendars':   {it: 'I miei calendari', en: 'My calendars', fr: 'Mes agendas', de: 'Meine Kalender', es: 'Mis calendarios'},
+  'cal.claqoCalendar': {it: 'Claqo (appuntamenti)', en: 'Claqo (appointments)', fr: 'Claqo (rendez-vous)', de: 'Claqo (Termine)', es: 'Claqo (citas)'},
+  'cal.noCalendars':   {it: 'Nessun calendario Google. Riconnetti l\'account in Impostazioni.', en: 'No Google calendars. Reconnect your account in Settings.', fr: 'Aucun agenda Google. Reconnectez le compte dans Parametres.', de: 'Keine Google-Kalender. Konto in Einstellungen neu verbinden.', es: 'Sin calendarios de Google. Reconecta la cuenta en Ajustes.'},
   'cal.google.readonly': {it: 'Evento Google (sola lettura)', en: 'Google event (read-only)', fr: 'Evenement Google (lecture seule)', de: 'Google-Termin (schreibgeschutzt)', es: 'Evento de Google (solo lectura)'},
   'cal.synced':        {it: 'Sincronizzato con Google', en: 'Synced with Google', fr: 'Synchronise avec Google', de: 'Mit Google synchronisiert', es: 'Sincronizado con Google'},
 

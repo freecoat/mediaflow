@@ -255,6 +255,19 @@ async def sync_now(request: Request, db: Session = Depends(get_db)):
     return sync_user_pending(db, u.id)
 
 
+@router.get("/calendar/api/google-calendars", dependencies=[RequireView])
+async def google_calendars(request: Request, db: Session = Depends(get_db)):
+    """Lista calendari Google dell'utente per la sidebar. Best-effort."""
+    u = current_user_optional(request)
+    if not u:
+        return {"calendars": []}
+    from app.services import google_calendar
+    try:
+        return {"calendars": google_calendar.list_calendars(db, u.id)}
+    except Exception:
+        return {"calendars": []}
+
+
 @router.get("/calendar/api/google-overlay", dependencies=[RequireView])
 async def google_overlay(start: Optional[str] = None, end: Optional[str] = None,
                          request: Request = None, db: Session = Depends(get_db)):

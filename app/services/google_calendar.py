@@ -188,6 +188,35 @@ def delete_event(db: Session, user_id: int, ev) -> bool:
     return True
 
 
+def list_calendars(db: Session, user_id: int) -> list:
+    """Lista dei calendari dell'utente (per la sidebar 'I miei calendari').
+    Esclude il calendario secondario 'Claqo' (mostrato a parte come eventi locali).
+    Best-effort: token/rete/403 → []."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return []
+    row = get_token(db, user_id, "google")
+    claqo_id = row.claqo_calendar_id if row else None
+    try:
+        cal_list = _google_request("GET", _API_BASE + "/users/me/calendarList", token) or {}
+    except Exception as e:
+        log.warning(f"list_calendars fallita user={user_id}: {e}")
+        return []
+    out = []
+    for cal in cal_list.get("items", []):
+        cid = cal.get("id")
+        if not cid or cid == claqo_id:
+            continue
+        out.append({
+            "id": cid,
+            "summary": cal.get("summary") or cid,
+            "color": cal.get("backgroundColor"),
+            "access_role": cal.get("accessRole") or "",
+            "primary": bool(cal.get("primary")),
+        })
+    return out
+
+
 def _normalize_google_event(g: dict, cal_summary: str, cal_id: str,
                             editable: bool, cal_color: Optional[str] = None) -> dict:
     start = g.get("start", {})

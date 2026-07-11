@@ -6,6 +6,41 @@ function calScope() {
   return s ? s.value : 'team';
 }
 
+// ── Visibilità calendari (localStorage: array di id NASCOSTI; 'claqo' = eventi locali) ──
+function _calHidden() {
+  try { return new Set(JSON.parse(localStorage.getItem('mf_cal_hidden') || '[]')); }
+  catch (e) { return new Set(); }
+}
+function _calSetHidden(id, hidden) {
+  const s = _calHidden();
+  if (hidden) s.add(id); else s.delete(id);
+  try { localStorage.setItem('mf_cal_hidden', JSON.stringify([...s])); } catch (e) { /* quota */ }
+}
+
+async function calLoadCalendars() {
+  const box = document.getElementById('cal-list');
+  if (!box) return;
+  const hidden = _calHidden();
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#6272f5';
+  let rows = '<label class="cal-item"><input type="checkbox" data-cal-id="claqo"' +
+    (hidden.has('claqo') ? '' : ' checked') + '>' +
+    '<span class="cal-dot" style="background:' + accent.trim() + '"></span>' +
+    '<span class="cal-item-name">' + mfT('cal.claqoCalendar') + '</span></label>';
+  try {
+    const d = await (await fetch('/calendar/api/google-calendars')).json();
+    const cals = d.calendars || [];
+    cals.forEach(function (c) {
+      const color = c.color || '#888';
+      rows += '<label class="cal-item"><input type="checkbox" data-cal-id="' + escapeHtml(c.id) + '"' +
+        (hidden.has(c.id) ? '' : ' checked') + '>' +
+        '<span class="cal-dot" style="background:' + escapeHtml(color) + '"></span>' +
+        '<span class="cal-item-name">' + escapeHtml(c.summary) + '</span></label>';
+    });
+    if (!cals.length) rows += '<div class="cal-empty">' + mfT('cal.noCalendars') + '</div>';
+  } catch (e) { /* best-effort */ }
+  box.innerHTML = rows;
+}
+
 async function calFetchEvents(info, success, failure) {
   try {
     const url = '/calendar/api/events?start=' + encodeURIComponent(info.startStr) +
@@ -13,7 +48,9 @@ async function calFetchEvents(info, success, failure) {
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
-    const evs = (data.events || []).map(e => ({
+    const hidden = _calHidden();
+    // Eventi locali (calendario "Claqo") — nascondibili dalla sidebar.
+    const evs = hidden.has('claqo') ? [] : (data.events || []).map(e => ({
       id: e.id, title: e.title, start: e.start, end: e.end, allDay: e.all_day,
       classNames: e.external_event_id ? ['cal-synced'] : [],
       extendedProps: {
@@ -26,15 +63,14 @@ async function calFetchEvents(info, success, failure) {
       title: '• ' + m.title, start: m.date, allDay: true, display: 'background',
       classNames: ['cal-marker'], editable: false, extendedProps: { marker: m.kind }
     }));
-    // Overlay Google read-only (best-effort, non blocca il calendario)
-    const showG = document.getElementById('cal-show-google');
-    if (showG && showG.checked) {
+    // Overlay Google: sempre fetchato, filtrato per calendario visibile (sidebar).
+    {
       try {
         const gr = await fetch('/calendar/api/google-overlay?start=' +
           encodeURIComponent(info.startStr) + '&end=' + encodeURIComponent(info.endStr));
         if (gr.ok) {
           const gd = await gr.json();
-          (gd.events || []).forEach(g => evs.push({
+          (gd.events || []).filter(g => !hidden.has(g.calendar_id)).forEach(g => evs.push({
             id: 'g:' + g.calendar_id + ':' + g.id,
             title: g.title, start: g.start, end: g.end, allDay: g.all_day,
             editable: !g.read_only,
@@ -172,6 +208,12 @@ document.addEventListener('DOMContentLoaded', function () {
   _cal.render();
   const sc = document.getElementById('cal-scope');
   if (sc) sc.addEventListener('change', () => _cal.refetchEvents());
-  const shg = document.getElementById('cal-show-google');
-  if (shg) shg.addEventListener('change', () => _cal.refetchEvents());
+  const list = document.getElementById('cal-list');
+  if (list) list.addEventListener('change', function (ev) {
+    const cb = ev.target.closest('[data-cal-id]');
+    if (!cb) return;
+    _calSetHidden(cb.getAttribute('data-cal-id'), !cb.checked);
+    _cal.refetchEvents();
+  });
+  calLoadCalendars();
 });

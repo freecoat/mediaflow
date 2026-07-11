@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.248 — Calendario: i miei calendari (sidebar Google) (11 lug 2026)
+
+Sotto-fase 1/4 del programma email+calendario (spec `docs/superpowers/specs/2026-07-11-calendar-my-calendars-design.md`).
+
+- **Sidebar "I miei calendari"** in `/calendar`: lista dei calendari Google dell'utente con pallino colore + toggle visibilità per-calendario. Sostituisce il singolo checkbox "Mostra Google".
+- Voce fissa "Claqo (appuntamenti)" per gli eventi locali; toggle nasconde/mostra.
+- Eventi colorati per calendario d'origine; overlay sempre fetchato e **filtrato** per calendario visibile. Visibilità in `localStorage` (`mf_cal_hidden`, per-browser).
+- Endpoint `GET /calendar/api/google-calendars` → `google_calendar.list_calendars` (calendarList, esclude Claqo, best-effort).
+- Layout `/calendar` a 2 colonne (sidebar + calendario), responsive ≤768px. i18n 5 lingue (`cal.myCalendars/claqoCalendar/noCalendars`).
+- Test `test_calendar_list` (4). Prereq lista piena: account Google riconnesso (scope α.247) + People API.
+
 ## v3.5.0-alpha.172.247 — Fix email + calendario reale (7 lug 2026)
 
 **Email (`/mail`)**
