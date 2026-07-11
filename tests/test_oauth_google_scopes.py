@@ -3,10 +3,11 @@ from app.services import oauth_providers as oauth
 
 def test_google_scopes_include_calendar_and_drive():
     scopes = oauth.PROVIDERS["google"]["scopes"]
-    assert "https://www.googleapis.com/auth/calendar.app.created" in scopes
-    assert "https://www.googleapis.com/auth/calendar.readonly" in scopes
-    # full read/write calendar scope must NOT be granted (least privilege)
-    assert "auth/calendar " not in (scopes + " ")  # no bare 'calendar' scope token
+    # α.172.247: Calendar full read/write (edit eventi Google esistenti + inviti).
+    # Sostituisce calendar.app.created + calendar.readonly.
+    assert "https://www.googleapis.com/auth/calendar" in (scopes + " ")
+    assert "calendar.app.created" not in scopes
+    assert "calendar.readonly" not in scopes
     assert "https://www.googleapis.com/auth/drive.file" in scopes
     assert "gmail.send" in scopes
     assert "email" in scopes and "profile" in scopes

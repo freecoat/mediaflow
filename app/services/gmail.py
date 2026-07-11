@@ -55,7 +55,7 @@ def _gmail_request(method: str, path: str, token: str, params=None, body=None) -
     Ritorna dict JSON (o {} se vuoto). Solleva su status >=400."""
     url = _API_BASE + path
     if params:
-        url = url + "?" + urllib.parse.urlencode(params)
+        url = url + "?" + urllib.parse.urlencode(params, doseq=True)
     data = None
     headers = {"Authorization": "Bearer " + token}
     if body is not None:
@@ -109,8 +109,30 @@ def _normalize_message(msg: dict) -> dict:
     }
 
 
+def _thread_headers(token: str, thread_id: str) -> dict:
+    """Metadata leggeri (From/Subject/Date/unread) dell'ultimo messaggio del thread.
+    Best-effort: errore/vuoto → {} (la lista mostra comunque lo snippet)."""
+    try:
+        res = _gmail_request("GET", "/threads/" + urllib.parse.quote(thread_id), token,
+                             params={"format": "metadata",
+                                     "metadataHeaders": ["From", "Subject", "Date"]}) or {}
+    except Exception:
+        return {}
+    msgs = res.get("messages") or []
+    if not msgs:
+        return {}
+    last = msgs[-1]
+    headers = (last.get("payload") or {}).get("headers") or []
+    return {
+        "from": _header(headers, "From"), "subject": _header(headers, "Subject"),
+        "date": _header(headers, "Date"),
+        "unread": "UNREAD" in (last.get("labelIds") or []),
+        "msg_count": len(msgs),
+    }
+
+
 def list_threads(db: Session, user_id: int, *, query=None, label_ids=None,
-                 page_token=None, max_results=25) -> dict:
+                 page_token=None, max_results=25, enrich=True) -> dict:
     token = get_valid_access_token(db, user_id, "google")
     if not token:
         return {"threads": [], "next_page_token": None}
@@ -126,7 +148,12 @@ def list_threads(db: Session, user_id: int, *, query=None, label_ids=None,
     except Exception as e:
         log.warning(f"list_threads fallita user={user_id}: {e}")
         return {"threads": [], "next_page_token": None}
-    return {"threads": res.get("threads") or [], "next_page_token": res.get("nextPageToken")}
+    threads = res.get("threads") or []
+    if enrich:
+        for t in threads:
+            if t.get("id"):
+                t.update(_thread_headers(token, t["id"]))
+    return {"threads": threads, "next_page_token": res.get("nextPageToken")}
 
 
 def get_thread(db: Session, user_id: int, thread_id: str) -> Optional[dict]:
@@ -238,6 +265,52 @@ def delete_draft(db: Session, user_id: int, draft_id: str) -> bool:
     except Exception as e:
         log.warning(f"delete_draft fallita user={user_id} draft={draft_id}: {e}")
         return False
+
+
+_PEOPLE_BASE = "https://people.googleapis.com/v1"
+
+
+def _people_request(path: str, token: str, params=None) -> dict:
+    """GET su People API (base diversa da Gmail). Punto di mock separato."""
+    url = _PEOPLE_BASE + path
+    if params:
+        url = url + "?" + urllib.parse.urlencode(params, doseq=True)
+    req = urllib.request.Request(url, method="GET",
+                                 headers={"Authorization": "Bearer " + token})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        raw = r.read().decode()
+    return json.loads(raw) if raw else {}
+
+
+def _collect_people(people: list, out: dict) -> None:
+    for p in people or []:
+        name = ((p.get("names") or [{}])[0]).get("displayName") or ""
+        for em in p.get("emailAddresses") or []:
+            e = (em.get("value") or "").strip()
+            if e and e.lower() not in out:
+                out[e.lower()] = {"email": e, "name": name}
+
+
+def list_contacts(db: Session, user_id: int, limit: int = 800) -> list:
+    """Rubrica per autocomplete: contatti Google (connections) + contatti
+    auto-salvati dalle email (otherContacts). Best-effort: errore → lista parziale/[]."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return []
+    out: dict = {}
+    try:
+        res = _people_request("/people/me/connections", token,
+                              params={"personFields": "names,emailAddresses", "pageSize": 1000})
+        _collect_people(res.get("connections"), out)
+    except Exception as e:
+        log.warning(f"connections fallita user={user_id}: {e}")
+    try:
+        res = _people_request("/otherContacts", token,
+                              params={"readMask": "names,emailAddresses", "pageSize": 1000})
+        _collect_people(res.get("otherContacts"), out)
+    except Exception as e:
+        log.warning(f"otherContacts fallita user={user_id}: {e}")
+    return list(out.values())[:limit]
 
 
 def get_attachment(db: Session, user_id: int, message_id: str, attachment_id: str) -> Optional[bytes]:

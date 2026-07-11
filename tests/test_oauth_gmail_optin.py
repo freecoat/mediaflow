@@ -23,6 +23,9 @@ def test_authorization_url_with_extra_scopes():
     p = _params(url)
     assert "gmail.readonly" in p["scope"]
     assert "gmail.compose" in p["scope"]
+    # contacts per autocomplete indirizzi (α.172.247)
+    assert "contacts.readonly" in p["scope"]
+    assert "contacts.other.readonly" in p["scope"]
     assert p["include_granted_scopes"] == "true"
-    # gli scope base restano presenti
-    assert "calendar.app.created" in p["scope"]
+    # scope base Calendar full (α.172.247: era calendar.app.created+readonly)
+    assert "auth/calendar" in p["scope"]

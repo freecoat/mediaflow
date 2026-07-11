@@ -1,5 +1,24 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.247 — Fix email + calendario reale (7 lug 2026)
+
+**Email (`/mail`)**
+- **Compose riparato**: il modal non si apriva mai — `mfMailCompose` toglieva `.hidden` ma `.modal-overlay` si mostra solo con `.open` (via `openModal`). Ora usa `openModal`/`closeModal`.
+- **Visualizzazione corpo**: iframe `.mail-body-frame` senza dimensioni → collassato; ora `width:100%`+`min-height:420px`, sandbox `allow-popups` (link cliccabili), stili `.mail-msg`.
+- **Lista thread arricchita**: mittente + oggetto + data + snippet + badge non-letto/conteggio (prima solo snippet). `gmail.list_threads(enrich=True)` → `_thread_headers` (metadata ultimo messaggio).
+- **Autocomplete indirizzi**: `<datalist>` su A/Cc/Ccn da `gmail.list_contacts` (People API: rubrica `connections` + `otherContacts` = indirizzi auto-salvati). Endpoint `GET /mail/api/contacts`.
+
+**Calendario (`/calendar`)**
+- **Editi eventi Google esistenti**: overlay ora editabile (calendari con accessRole owner/writer) — click→modal, drag/resize→PATCH sul calendario di origine. Endpoint `PUT/DELETE /calendar/api/google-event` + `google_calendar.update_google_event`/`delete_google_event`.
+- **Inviti partecipanti**: campo Partecipanti nel modal → `attendees` + `sendUpdates=all` (notifica email). Anche descrizione nel modal.
+- **Vedi tutti i calendari**: overlay con colore del calendario; eventi read-only (accessRole reader) resi tenui e non editabili.
+
+**OAuth (⚠️ richiede riconnessione account)**
+- Scope Calendar da `calendar.app.created`+`calendar.readonly` → **`calendar` full** (read/write tutti i calendari). Aggiunti `contacts.readonly`+`contacts.other.readonly` all'opt-in email (autocomplete). **Gli utenti già connessi devono riconnettere l'account Google** (`/settings → Account`) per il re-consenso.
+- Prereq Google Cloud: abilitare **Google People API** (oltre a Calendar/Gmail) per l'autocomplete.
+
+- 1174 test (+13: `test_calendar_google_edit`, `test_gmail_contacts`; aggiornati test scope). i18n 5 lingue (`cal.event.attendees/attendeesHint/description`, `mail.noSubject`).
+
 ## v3.5.0-alpha.172.246 — Mobile responsive Sotto-fase A: email + trattative (7 lug 2026)
 
 - **Client email `/mail` e pipeline `/acquisitions` raggiungibili e usabili da smartphone**: esentate dal redirect mobile (isole desktop-responsive), linkate dal drawer `/m` (gruppo "Commerciale").

@@ -15,6 +15,19 @@ async function mfMailInit() {
   }
   mfMailLoadLabels();
   mfMailLoadThreads(true);
+  mfMailLoadContacts();
+}
+
+async function mfMailLoadContacts() {
+  try {
+    const d = await (await fetch('/mail/api/contacts')).json();
+    const dl = document.getElementById('mail-contacts');
+    if (!dl) return;
+    dl.innerHTML = (d.contacts || []).map(function (c) {
+      const label = c.name ? (c.name + ' <' + c.email + '>') : c.email;
+      return '<option value="' + escapeHtml(c.email) + '">' + escapeHtml(label) + '</option>';
+    }).join('');
+  } catch (e) { /* best-effort: autocomplete assente */ }
 }
 
 async function mfMailLoadLabels() {
@@ -43,8 +56,17 @@ async function mfMailLoadThreads(reset) {
   try {
     const d = await (await fetch('/mail/api/threads?' + params.toString())).json();
     const rows = (d.threads || []).map(function (t) {
-      return '<div class="mail-thread-row" data-thread="' + escapeHtml(t.id) + '">' +
-        escapeHtml(t.snippet || '(…)') + '</div>';
+      const subj = t.subject || mfT('mail.noSubject');
+      const from = t.from || '';
+      let date = '';
+      if (t.date) { const dd = new Date(t.date); if (!isNaN(dd.getTime())) date = dd.toLocaleDateString(); }
+      const unread = t.unread ? ' mail-unread' : '';
+      const count = (t.msg_count && t.msg_count > 1) ? ' <span class="mail-row-count">' + t.msg_count + '</span>' : '';
+      return '<div class="mail-thread-row' + unread + '" data-thread="' + escapeHtml(t.id) + '">' +
+        '<div class="mail-row-top"><span class="mail-row-from">' + escapeHtml(from) + '</span>' +
+        '<span class="mail-row-date">' + escapeHtml(date) + '</span></div>' +
+        '<div class="mail-row-subj">' + escapeHtml(subj) + count + '</div>' +
+        '<div class="mail-row-snip">' + escapeHtml(t.snippet || '') + '</div></div>';
     }).join('');
     box.innerHTML = (reset ? '' : box.innerHTML) + (rows || '<div class="muted">' + mfT('mail.empty') + '</div>');
     _mailNextPage = d.next_page_token || null;
@@ -57,7 +79,7 @@ function _mailRenderBody(html) {
   const blocked = (html || '').replace(/(<img\b[^>]*?)\ssrc=/gi, '$1 data-blocked-src=');
   const doc = '<!doctype html><html><head><meta charset="utf-8">' +
     '<base target="_blank"></head><body>' + blocked + '</body></html>';
-  return '<iframe class="mail-body-frame" sandbox="" srcdoc="' +
+  return '<iframe class="mail-body-frame" sandbox="allow-popups allow-popups-to-escape-sandbox" srcdoc="' +
     doc.replace(/"/g, '&quot;') + '"></iframe>';
 }
 
@@ -100,7 +122,7 @@ function mfMailCompose(prefill) {
   ov.querySelector('[name=body]').value = prefill.body || '';
   ov.querySelector('[name=thread_id]').value = prefill.thread_id || '';
   ov.querySelector('[name=in_reply_to]').value = prefill.in_reply_to || '';
-  ov.classList.remove('hidden');
+  if (window.openModal) openModal('mail-compose'); else ov.classList.add('open');
 }
 
 async function mfMailSend() {
@@ -116,7 +138,7 @@ async function mfMailSend() {
   if (fileInp && fileInp.files) { for (const f of fileInp.files) fd.append('attachments', f); }
   try {
     const r = await (await fetch('/mail/api/send', {method: 'POST', body: fd})).json();
-    if (r.ok) { if (window.toast) toast(mfT('mail.sentOk'), 'success'); ov.classList.add('hidden'); mfMailLoadThreads(true); }
+    if (r.ok) { if (window.toast) toast(mfT('mail.sentOk'), 'success'); if (window.closeModal) closeModal('mail-compose'); else ov.classList.remove('open'); mfMailLoadThreads(true); }
     else { if (window.toast) toast(mfT('mail.sendError'), 'error'); }
   } catch (e) { if (window.toast) toast(mfT('mail.sendError'), 'error'); }
 }

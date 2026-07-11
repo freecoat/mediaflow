@@ -10,8 +10,13 @@ Env vars necessarie (`.env`):
 - OAUTH_REDIRECT_BASE_URL (default http://localhost:8000)
 
 Scope di default:
-- google: openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.readonly
+- google: openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar
 - microsoft: openid email profile offline_access User.Read Mail.Send Files.ReadWrite
+
+Nota (α.172.247): scope Calendar passato da calendar.app.created+calendar.readonly
+a `calendar` full (read/write su TUTTI i calendari) per editare eventi Google
+esistenti e invitare partecipanti. Gli utenti già connessi devono RICONNETTERE
+l'account per concedere il nuovo scope (re-consenso).
 
 Refresh token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
 """
@@ -49,8 +54,7 @@ PROVIDERS = {
             "openid email profile "
             "https://www.googleapis.com/auth/gmail.send "
             "https://www.googleapis.com/auth/drive.file "
-            "https://www.googleapis.com/auth/calendar.app.created "
-            "https://www.googleapis.com/auth/calendar.readonly"
+            "https://www.googleapis.com/auth/calendar"
         ),
         "client_id_env": "GOOGLE_OAUTH_CLIENT_ID",
         "client_secret_env": "GOOGLE_OAUTH_CLIENT_SECRET",
@@ -72,9 +76,14 @@ PROVIDERS = {
 
 # Scope Gmail richiesti SOLO su opt-in email (autorizzazione incrementale).
 # NON inseriti nel bundle PROVIDERS["google"]["scopes"] di default.
+# contacts.readonly + contacts.other.readonly: alimentano l'autocomplete indirizzi
+# in /mail — rubrica Google (connections) + contatti auto-salvati dalle email
+# scambiate (otherContacts = "indirizzi recenti"). Opt-in con l'email.
 GMAIL_SCOPES = (
     "https://www.googleapis.com/auth/gmail.readonly "
-    "https://www.googleapis.com/auth/gmail.compose"
+    "https://www.googleapis.com/auth/gmail.compose "
+    "https://www.googleapis.com/auth/contacts.readonly "
+    "https://www.googleapis.com/auth/contacts.other.readonly"
 )
 
 

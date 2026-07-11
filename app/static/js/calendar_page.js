@@ -35,8 +35,18 @@ async function calFetchEvents(info, success, failure) {
         if (gr.ok) {
           const gd = await gr.json();
           (gd.events || []).forEach(g => evs.push({
+            id: 'g:' + g.calendar_id + ':' + g.id,
             title: g.title, start: g.start, end: g.end, allDay: g.all_day,
-            editable: false, classNames: ['cal-google'], extendedProps: { google: true }
+            editable: !g.read_only,
+            classNames: g.read_only ? ['cal-google', 'cal-google-ro'] : ['cal-google'],
+            backgroundColor: g.color || undefined,
+            borderColor: g.color || undefined,
+            extendedProps: {
+              google: true, read_only: g.read_only,
+              google_calendar_id: g.calendar_id, google_event_id: g.id,
+              description: g.description, location: g.location,
+              status: g.status, attendees: g.attendees, calendar: g.calendar
+            }
           }));
         }
       } catch (e) { /* overlay best-effort */ }
@@ -54,8 +64,22 @@ function _fcEventToObj(fc) {
     end: fc.end ? fc.end.toISOString() : null,
     location: p.location || '', meeting_url: p.meeting_url || '',
     status: p.status || 'confirmed', description: p.description || '',
+    attendees: p.attendees || [],
     acquisition_id: p.acquisition_id || null, client_id: p.client_id || null,
     project_id: p.project_id || null
+  };
+}
+
+// Evento Google esistente → oggetto per openEventModal (modalità google).
+function _fcGoogleToObj(fc) {
+  const p = fc.extendedProps || {};
+  return {
+    id: fc.id, title: fc.title, all_day: fc.allDay,
+    start: fc.start ? fc.start.toISOString() : null,
+    end: fc.end ? fc.end.toISOString() : null,
+    location: p.location || '', status: p.status || 'confirmed',
+    description: p.description || '', attendees: p.attendees || [],
+    google_calendar_id: p.google_calendar_id, google_event_id: p.google_event_id
   };
 }
 
@@ -80,11 +104,20 @@ async function calSyncNow() {
 }
 
 function _calPutTimes(info) {
-  if (info.event.extendedProps.marker) { info.revert(); return; }
+  const p = info.event.extendedProps;
+  if (p.marker) { info.revert(); return; }
   const fd = new FormData();
   fd.append('start_at', info.event.start.toISOString());
   if (info.event.end) fd.append('end_at', info.event.end.toISOString());
-  fetch('/calendar/api/events/' + info.event.id, { method: 'PUT', body: fd })
+  fd.append('all_day', info.event.allDay ? '1' : '0');
+  let url = '/calendar/api/events/' + info.event.id;
+  if (p.google) {
+    if (p.read_only) { info.revert(); return; }
+    fd.append('calendar_id', p.google_calendar_id);
+    fd.append('event_id', p.google_event_id);
+    url = '/calendar/api/google-event';
+  }
+  fetch(url, { method: 'PUT', body: fd })
     .then(r => { if (!r.ok) { info.revert(); if (window.toast) toast(mfT('common.error'), 'error'); } });
 }
 
@@ -107,8 +140,14 @@ document.addEventListener('DOMContentLoaded', function () {
     eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
     events: calFetchEvents,
     eventClick: function (info) {
-      if (info.event.extendedProps.marker || info.event.extendedProps.google) return;
+      const p = info.event.extendedProps;
+      if (p.marker) return;
       info.jsEvent.preventDefault();
+      if (p.google) {
+        if (p.read_only) { if (window.toast) toast(mfT('cal.google.readonly'), 'error'); return; }
+        window.openEventModal({ event: _fcGoogleToObj(info.event), onSaved: () => _cal.refetchEvents() });
+        return;
+      }
       window.openEventModal({ event: _fcEventToObj(info.event), onSaved: () => _cal.refetchEvents() });
     },
     select: function (info) {

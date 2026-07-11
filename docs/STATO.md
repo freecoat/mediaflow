@@ -8,6 +8,20 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.247** — 7 luglio 2026 — Fix email + calendario reale (edit eventi Google, inviti, autocomplete)
+
+### α.172.247 ✅ (Fix email + calendario reale — 7 lug, ramo feat/mobile-responsive-email, TDD)
+Debug su segnalazioni Matteo (email visualizzazione/compose rotti, calendario limitato).
+
+- **Email `/mail`**: (E4) **compose riparato** — modal non si apriva mai: `mfMailCompose` toglieva `.hidden` ma `.modal-overlay` si mostra solo con `.open`. Ora `openModal`/`closeModal`. (E1) **corpo visibile** — iframe `.mail-body-frame` senza dimensioni → `width:100%`+`min-height:420px`+sandbox `allow-popups`. (E2) **lista arricchita** — mittente/oggetto/data/non-letto (`list_threads(enrich=True)`→`_thread_headers`). (E3) **autocomplete** `<datalist>` da `list_contacts` (People API connections+otherContacts), endpoint `/mail/api/contacts`.
+- **Calendario `/calendar`**: (C2) **edit eventi Google esistenti** — overlay editabile (owner/writer), click→modal, drag→PATCH origine; `PUT/DELETE /calendar/api/google-event`. (C4) **inviti** — campo Partecipanti→`attendees`+`sendUpdates=all`; +descrizione nel modal. (C1) tutti i calendari con colore; read-only tenui.
+- **OAuth ⚠️**: scope Calendar → **`calendar` full**; +`contacts.readonly`/`contacts.other.readonly` opt-in email. Modello least-privilege Fase-A superato per volontà utente (client reale).
+- 1174 test verdi (+13). i18n 5 lingue. `_normalize_google_event`/`list_threads`/`_event_to_google` firma cambiata.
+
+**Prossimo step / AZIONE MATTEO (prereq smoke)**:
+1. **Google Cloud**: abilitare **People API** (oltre Calendar+Gmail). 2. **Riconnettere account Google** (`/settings → Account`, disconnetti+riconnetti) per re-consenso nuovi scope. 3. Smoke: `/mail` (compose apre, lista con mittente/oggetto, autocomplete A:, corpo email visibile); `/calendar` (vedi calendari Google, click evento Google→modifica, aggiungi partecipante→invito, drag). Ramo `feat/mobile-responsive-email` NON pushato.
+
+### α.172.246 ✅ (storico sotto)
 **v3.5.0-alpha.172.246** — 7 luglio 2026 — Mobile responsive Sotto-fase A: email + trattative
 
 ### α.172.246 ✅ (Mobile responsive Sotto-fase A — email + trattative — 7 lug, ramo feat/mobile-responsive-email, 6 task TDD; spec+plan 2026-07-07)

@@ -60,6 +60,13 @@ async def mail_labels(request: Request, db: Session = Depends(get_db)):
     return {"labels": gmail.list_labels(db, user.id)}
 
 
+@router.get("/mail/api/contacts")
+async def mail_contacts(request: Request, db: Session = Depends(get_db)):
+    """Rubrica per autocomplete indirizzi (People API). Best-effort."""
+    user = current_user(request)
+    return {"contacts": gmail.list_contacts(db, user.id)}
+
+
 @router.get("/mail/api/attachment/{message_id}/{attachment_id}")
 async def mail_attachment(message_id: str, attachment_id: str, request: Request,
                           filename: str = "allegato", mime: str = "application/octet-stream",

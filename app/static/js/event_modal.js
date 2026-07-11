@@ -17,6 +17,8 @@
       '    </div>' +
       '    <div class="modal-body">' +
       '      <input type="hidden" id="evm-id">' +
+      '      <input type="hidden" id="evm-g-calendar">' +
+      '      <input type="hidden" id="evm-g-event">' +
       '      <input type="hidden" id="evm-acquisition-id">' +
       '      <input type="hidden" id="evm-client-id">' +
       '      <input type="hidden" id="evm-project-id">' +
@@ -57,6 +59,14 @@
       '      <div class="form-group">' +
       '        <label class="form-label" data-i18n="cal.event.link">Link riunione</label>' +
       '        <input class="form-input" id="evm-url" type="url">' +
+      '      </div>' +
+      '      <div class="form-group">' +
+      '        <label class="form-label" data-i18n="cal.event.attendees">Partecipanti</label>' +
+      '        <input class="form-input" id="evm-attendees" type="text" data-i18n-attr="placeholder" data-i18n="cal.event.attendeesHint" placeholder="email, separate da virgola">' +
+      '      </div>' +
+      '      <div class="form-group">' +
+      '        <label class="form-label" data-i18n="cal.event.description">Descrizione</label>' +
+      '        <textarea class="form-input" id="evm-description" rows="3"></textarea>' +
       '      </div>' +
       '    </div>' +
       '    <div class="modal-footer" style="display:flex;justify-content:space-between;gap:8px;">' +
@@ -110,6 +120,12 @@
     document.getElementById('evm-location').value = isEdit ? (ev.location || '') : '';
     document.getElementById('evm-url').value = isEdit ? (ev.meeting_url || '') : '';
     document.getElementById('evm-status').value = isEdit ? (ev.status || 'confirmed') : 'confirmed';
+    document.getElementById('evm-description').value = isEdit ? (ev.description || '') : (pf.description || '');
+    var att = isEdit ? ev.attendees : pf.attendees;
+    document.getElementById('evm-attendees').value = Array.isArray(att) ? att.join(', ') : (att || '');
+    // Modalità evento Google esistente (edit/delete sul calendario di origine)
+    document.getElementById('evm-g-calendar').value = isEdit ? (ev.google_calendar_id || '') : '';
+    document.getElementById('evm-g-event').value = isEdit ? (ev.google_event_id || '') : '';
 
     var startIso = isEdit ? ev.start : (pf.start || null);
     var endIso = isEdit ? ev.end : (pf.end || null);
@@ -156,6 +172,24 @@
     fd.append('location', document.getElementById('evm-location').value.trim());
     fd.append('meeting_url', document.getElementById('evm-url').value.trim());
     fd.append('status', document.getElementById('evm-status').value);
+    fd.append('description', document.getElementById('evm-description').value.trim());
+    fd.append('attendees', document.getElementById('evm-attendees').value.trim());
+
+    // Evento Google esistente → PATCH sul calendario di origine.
+    var gcal = document.getElementById('evm-g-calendar').value;
+    var gev = document.getElementById('evm-g-event').value;
+    if (gcal && gev) {
+      fd.append('calendar_id', gcal);
+      fd.append('event_id', gev);
+      fetch('/calendar/api/google-event', { method: 'PUT', body: fd }).then(function (r) {
+        if (!r.ok) { if (window.toast) toast(_T('common.error'), 'error'); return; }
+        if (window.toast) toast(_T('cal.event.saved'), 'success');
+        closeModal(MODAL_ID);
+        if (_ctx.onSaved) _ctx.onSaved();
+      });
+      return;
+    }
+
     var aid = document.getElementById('evm-acquisition-id').value;
     var cid = document.getElementById('evm-client-id').value;
     var pid = document.getElementById('evm-project-id').value;
@@ -174,6 +208,18 @@
   }
 
   function _onDelete() {
+    var gcal = document.getElementById('evm-g-calendar').value;
+    var gev = document.getElementById('evm-g-event').value;
+    if (gcal && gev) {
+      if (!confirm(_T('cal.event.deleteConfirm'))) return;
+      var qs = '?calendar_id=' + encodeURIComponent(gcal) + '&event_id=' + encodeURIComponent(gev);
+      fetch('/calendar/api/google-event' + qs, { method: 'DELETE' }).then(function (r) {
+        if (!r.ok) { if (window.toast) toast(_T('common.error'), 'error'); return; }
+        closeModal(MODAL_ID);
+        if (_ctx.onSaved) _ctx.onSaved();
+      });
+      return;
+    }
     var id = _ctx.id;
     if (!id) return;
     if (!confirm(_T('cal.event.deleteConfirm'))) return;

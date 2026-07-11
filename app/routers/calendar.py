@@ -56,6 +56,20 @@ def _int_or_none(v: Optional[str]) -> Optional[int]:
     return int(v)
 
 
+def _parse_attendees(s: Optional[str]) -> list:
+    """Stringa (virgole/newline/;) → lista di email deduplicate, ordine preservato."""
+    if not s:
+        return []
+    import re
+    seen, out = set(), []
+    for p in re.split(r"[,\n;]+", s):
+        e = p.strip()
+        if e and e.lower() not in seen:
+            seen.add(e.lower())
+            out.append(e)
+    return out
+
+
 @router.get("/calendar", response_class=HTMLResponse, dependencies=[RequireView])
 async def calendar_page(request: Request):
     from app.main import templates
@@ -122,7 +136,8 @@ async def list_events(
 
 
 def _apply_fields(ev: CalendarEvent, *, title, start_at, end_at, all_day, location,
-                  meeting_url, status, acquisition_id, project_id, activity_id, client_id):
+                  meeting_url, status, acquisition_id, project_id, activity_id, client_id,
+                  description=None, attendees=None):
     if title is not None:
         ev.title = title.strip()
     if start_at is not None:
@@ -135,6 +150,10 @@ def _apply_fields(ev: CalendarEvent, *, title, start_at, end_at, all_day, locati
         ev.location = location.strip() or None
     if meeting_url is not None:
         ev.meeting_url = meeting_url.strip() or None
+    if description is not None:
+        ev.description = description.strip() or None
+    if attendees is not None:
+        ev.attendees = _parse_attendees(attendees)
     if status is not None and status.strip():
         ev.status = CalendarEventStatus(status.strip())
     if acquisition_id is not None:
@@ -157,6 +176,8 @@ async def create_event(
     location: Optional[str] = Form(None),
     meeting_url: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    attendees: Optional[str] = Form(None),
     acquisition_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
     activity_id: Optional[str] = Form(None),
@@ -169,6 +190,7 @@ async def create_event(
                        owner_user_id=(u.id if u else None), created_by=(u.id if u else None))
     _apply_fields(ev, title=None, start_at=None, end_at=None, all_day=all_day,
                   location=location, meeting_url=meeting_url, status=status,
+                  description=description, attendees=attendees,
                   acquisition_id=acquisition_id, project_id=project_id,
                   activity_id=activity_id, client_id=client_id)
     db.add(ev); db.commit(); db.refresh(ev)
@@ -187,6 +209,8 @@ async def update_event(
     location: Optional[str] = Form(None),
     meeting_url: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    attendees: Optional[str] = Form(None),
     acquisition_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
     activity_id: Optional[str] = Form(None),
@@ -200,6 +224,7 @@ async def update_event(
         raise HTTPException(404, "Appuntamento non trovato")
     _apply_fields(ev, title=title, start_at=start_at, end_at=end_at, all_day=all_day,
                   location=location, meeting_url=meeting_url, status=status,
+                  description=description, attendees=attendees,
                   acquisition_id=acquisition_id, project_id=project_id,
                   activity_id=activity_id, client_id=client_id)
     db.commit(); db.refresh(ev)
@@ -241,3 +266,75 @@ async def google_overlay(start: Optional[str] = None, end: Optional[str] = None,
         return {"events": google_calendar.list_google_events(db, u.id, start, end)}
     except Exception:
         return {"events": []}
+
+
+def _google_body_from_form(*, title, start_at, end_at, all_day, location,
+                           description, meeting_url, status, attendees) -> dict:
+    """Costruisce il body Google (PATCH parziale) dai campi form del modal.
+    Solo i campi valorizzati vengono inclusi."""
+    body = {}
+    if title is not None:
+        body["summary"] = title.strip()
+    desc = (description or "").strip()
+    if meeting_url and meeting_url.strip():
+        desc = (desc + "\n\n" + meeting_url.strip()).strip()
+    if description is not None or (meeting_url and meeting_url.strip()):
+        body["description"] = desc
+    if location is not None:
+        body["location"] = location.strip()
+    if status is not None and status.strip():
+        body["status"] = status.strip()
+    if attendees is not None:
+        body["attendees"] = [{"email": e} for e in _parse_attendees(attendees)]
+    is_all = str(all_day or "").lower() in ("1", "true", "on", "yes")
+    if start_at:
+        dt = _parse_dt(start_at)
+        body["start"] = {"date": dt.date().isoformat()} if is_all else {"dateTime": dt.isoformat()}
+    if end_at:
+        dt = _parse_dt(end_at)
+        body["end"] = {"date": dt.date().isoformat()} if is_all else {"dateTime": dt.isoformat()}
+    return body
+
+
+@router.put("/calendar/api/google-event", dependencies=[RequireManage])
+async def update_google_event_ep(
+    request: Request,
+    calendar_id: str = Form(...),
+    event_id: str = Form(...),
+    title: Optional[str] = Form(None),
+    start_at: Optional[str] = Form(None),
+    end_at: Optional[str] = Form(None),
+    all_day: Optional[str] = Form(None),
+    location: Optional[str] = Form(None),
+    meeting_url: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    status: Optional[str] = Form(None),
+    attendees: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Modifica un evento Google ESISTENTE sul suo calendario (scope full)."""
+    u = current_user_optional(request)
+    if not u:
+        raise HTTPException(401, "Non autenticato")
+    from app.services import google_calendar
+    body = _google_body_from_form(title=title, start_at=start_at, end_at=end_at, all_day=all_day,
+                                  location=location, description=description, meeting_url=meeting_url,
+                                  status=status, attendees=attendees)
+    res = google_calendar.update_google_event(db, u.id, calendar_id, event_id, body)
+    if res is None:
+        raise HTTPException(502, "Aggiornamento Google fallito")
+    return {"ok": True, "id": res.get("id")}
+
+
+@router.delete("/calendar/api/google-event", dependencies=[RequireManage])
+async def delete_google_event_ep(request: Request, calendar_id: str, event_id: str,
+                                 db: Session = Depends(get_db)):
+    """Elimina un evento Google esistente sul suo calendario (scope full)."""
+    u = current_user_optional(request)
+    if not u:
+        raise HTTPException(401, "Non autenticato")
+    from app.services import google_calendar
+    ok = google_calendar.delete_google_event(db, u.id, calendar_id, event_id)
+    if not ok:
+        raise HTTPException(502, "Eliminazione Google fallita")
+    return {"ok": True}

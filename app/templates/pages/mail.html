@@ -17,18 +17,19 @@
   <section id="mail-reading" class="mail-reading"></section>
 </div>
 
-<div id="mail-compose" class="modal-overlay hidden">
+<div id="mail-compose" class="modal-overlay">
   <div class="modal" style="display:flex;flex-direction:column;gap:8px;min-width:min(560px,90vw);">
-    <input name="to" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.to" placeholder="A">
-    <input name="cc" class="form-input" placeholder="Cc">
-    <input name="bcc" class="form-input" placeholder="Bcc">
+    <input name="to" class="form-input" list="mail-contacts" autocomplete="off" data-i18n-attr="placeholder" data-i18n="mail.to" placeholder="A">
+    <input name="cc" class="form-input" list="mail-contacts" autocomplete="off" placeholder="Cc">
+    <input name="bcc" class="form-input" list="mail-contacts" autocomplete="off" placeholder="Bcc">
+    <datalist id="mail-contacts"></datalist>
     <input name="subject" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.subject" placeholder="Oggetto">
     <textarea name="body" class="form-input" rows="10"></textarea>
     <input type="hidden" name="thread_id"><input type="hidden" name="in_reply_to"><input type="hidden" name="references">
     <input type="file" name="attachments" multiple>
     <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn btn-primary" onclick="mfMailSend()" data-i18n="mail.send">Invia</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('mail-compose').classList.add('hidden')">✕</button>
+      <button class="btn btn-secondary" onclick="closeModal('mail-compose')">✕</button>
     </div>
   </div>
 </div>
@@ -39,7 +40,26 @@
   .mail-labels { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
   .mail-list { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
   .mail-thread-list { display: flex; flex-direction: column; gap: 2px; }
-  .mail-reading { overflow: auto; }
+  .mail-thread-row { padding: 8px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .mail-thread-row:hover { background: var(--bg3, #222); }
+  .mail-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+  .mail-row-from { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail-row-date { color: var(--text3, #888); flex-shrink: 0; }
+  .mail-row-subj { font-size: 13px; margin: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail-row-snip { font-size: 12px; color: var(--text3, #888); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail-row-count { font-size: 10px; background: var(--bg3, #333); border-radius: 8px; padding: 0 5px; margin-left: 4px; }
+  .mail-thread-row.mail-unread { border-left: 3px solid var(--accent, #6272f5); }
+  .mail-thread-row.mail-unread .mail-row-from,
+  .mail-thread-row.mail-unread .mail-row-subj { font-weight: 700; }
+  .mail-reading { overflow: auto; padding-right: 4px; }
+  .mail-msg { border: 1px solid var(--border2, #333); border-radius: 8px; padding: 12px; margin-bottom: 12px; background: var(--bg2, #1a1a1a); }
+  .mail-msg-head { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border2, #333); }
+  .mail-msg-head b { font-size: 14px; }
+  .mail-msg-head > div { font-size: 15px; font-weight: 600; margin-top: 2px; }
+  .mail-body-frame { width: 100%; min-height: 420px; border: 0; border-radius: 6px; background: #fff; }
+  .mail-atts { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .mail-att { font-size: 12px; padding: 3px 8px; border: 1px solid var(--border2, #333); border-radius: 4px; text-decoration: none; }
+  .mail-msg-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
   .mail-mobile-bar { display: none; gap: 6px; margin-bottom: 8px; }
   #mail-mb-back { display: none; }
   @media (max-width: 768px) {
