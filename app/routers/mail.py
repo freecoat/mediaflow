@@ -19,7 +19,8 @@ from app.services import gmail
 
 router = APIRouter(tags=["mail"])
 
-_GMAIL_READ_SCOPE = "gmail.readonly"
+# gmail.modify include lettura; gmail.readonly resta valido per account già connessi.
+_GMAIL_READ_SCOPES = ("gmail.modify", "gmail.readonly")
 
 
 @router.get("/mail")
@@ -32,7 +33,8 @@ async def mail_page(request: Request):
 async def mail_status(request: Request, db: Session = Depends(get_db)):
     user = current_user(request)
     token = get_token(db, user.id, "google")
-    connected = bool(token and _GMAIL_READ_SCOPE in (token.scopes or ""))
+    scopes = (token.scopes or "") if token else ""
+    connected = bool(token and any(s in scopes for s in _GMAIL_READ_SCOPES))
     return {"connected": connected,
             "account_email": token.account_email if (token and connected) else None}
 
@@ -55,9 +57,19 @@ async def mail_thread(thread_id: str, request: Request, db: Session = Depends(ge
 
 
 @router.get("/mail/api/labels")
-async def mail_labels(request: Request, db: Session = Depends(get_db)):
+async def mail_labels(request: Request, counts: bool = False, db: Session = Depends(get_db)):
     user = current_user(request)
-    return {"labels": gmail.list_labels(db, user.id)}
+    return {"labels": gmail.list_labels(db, user.id, counts=counts)}
+
+
+@router.post("/mail/api/threads/action")
+async def mail_threads_action(request: Request, db: Session = Depends(get_db),
+                              thread_ids: str = Form(...), action: str = Form(...),
+                              label_id: Optional[str] = Form(None)):
+    """Azione (letto/stella/archivia/cestino/sposta/etichetta) su uno o più thread."""
+    user = current_user(request)
+    ids = [t.strip() for t in thread_ids.split(",") if t.strip()]
+    return gmail.apply_action(db, user.id, ids, action, label_id=label_id)
 
 
 @router.get("/mail/api/contacts")

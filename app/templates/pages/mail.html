@@ -12,7 +12,17 @@
   <section class="mail-list">
     <input id="mail-search" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.search"
            placeholder="Cerca nella posta…" onkeydown="if(event.key==='Enter')mfMailLoadThreads(true)">
+    <div id="mail-actionbar" class="mail-actionbar">
+      <span id="mail-sel-count" class="mail-sel-count"></span>
+      <button class="btn btn-sm" data-mail-action="read" data-i18n="mail.markRead">Letto</button>
+      <button class="btn btn-sm" data-mail-action="unread" data-i18n="mail.markUnread">Non letto</button>
+      <button class="btn btn-sm" data-mail-action="star" data-i18n="mail.star">Stella</button>
+      <button class="btn btn-sm" data-mail-action="archive" data-i18n="mail.archive">Archivia</button>
+      <button class="btn btn-sm" data-mail-action="trash" data-i18n="mail.trash">Cestino</button>
+      <select id="mail-move-select" class="form-input mail-move-select"></select>
+    </div>
     <div id="mail-thread-list" class="mail-thread-list"></div>
+    <button id="mail-loadmore" class="btn btn-secondary btn-block mail-loadmore" onclick="mfMailLoadThreads(false)" data-i18n="mail.loadMore">Carica altro</button>
   </section>
   <section id="mail-reading" class="mail-reading"></section>
 </div>
@@ -40,8 +50,21 @@
   .mail-labels { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
   .mail-list { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
   .mail-thread-list { display: flex; flex-direction: column; gap: 2px; }
-  .mail-thread-row { padding: 8px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .mail-actionbar { display: none; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 4px; border-bottom: 1px solid var(--border2, #333); margin-bottom: 4px; }
+  .mail-sel-count { font-size: 12px; color: var(--text3, #888); margin-right: 4px; }
+  .mail-move-select { height: 30px; padding: 2px 6px; font-size: 12px; width: auto; }
+  .mail-loadmore { display: none; margin-top: 8px; }
+  .mail-label-count { font-size: 11px; background: var(--accent, #6272f5); color: #fff; border-radius: 8px; padding: 0 6px; margin-left: 4px; }
+  .mail-thread-row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
   .mail-thread-row:hover { background: var(--bg3, #222); }
+  .mail-sel { margin: 0; }
+  .mail-star { background: none; border: 0; cursor: pointer; font-size: 15px; color: var(--text3, #888); padding: 0; }
+  .mail-star.mail-star-on { color: #f5c518; }
+  .mail-row-main { min-width: 0; }
+  .mail-row-quick { display: none; gap: 2px; }
+  .mail-thread-row:hover .mail-row-quick { display: flex; }
+  .mail-q { background: none; border: 0; cursor: pointer; font-size: 14px; padding: 2px; opacity: .7; }
+  .mail-q:hover { opacity: 1; }
   .mail-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
   .mail-row-from { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mail-row-date { color: var(--text3, #888); flex-shrink: 0; }

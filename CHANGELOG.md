@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.249 — Email client: azioni & organizzazione (Gmail-native) (11 lug 2026)
+
+Sotto-fase 2a/4 (spec `docs/superpowers/specs/2026-07-11-mail-2a-actions-organization-design.md`).
+
+- **Azioni Gmail reali su `/mail`**: letto/non-letto, stella (☆/★ per riga), archivia, cestino, sposta in etichetta. Singolo (hover 🗄/🗑 + stella) o **bulk** (multi-select + barra azioni).
+- **Multi-select**: checkbox per riga → barra azioni con conteggio + Letto/Non-letto/Stella/Archivia/Cestino/Sposta-in.
+- **Conteggi non-letti** accanto alle etichette in nav (`?counts=1`). Cartelle di sistema estese (Speciali, Cestino).
+- **Paginazione** "Carica altro" (usa `next_page_token`, append).
+- **Rispondi a tutti** nel pannello lettura (cc = destinatari tranne il proprio indirizzo).
+- Backend: `gmail.modify_thread`/`trash_thread`/`untrash_thread`/`apply_action` + `list_labels(counts)`; endpoint `POST /mail/api/threads/action`. Enrichment thread con `starred`.
+- **OAuth ⚠️ riconnessione**: scope email `gmail.readonly` → **`gmail.modify`** (azioni) + **`gmail.settings.basic`** (per Sotto-fase 2d filtri/auto-reply). `mail_status` accetta modify o readonly.
+- 1184 test (+7 `test_mail_actions`; aggiornati scope/labels). i18n 5 lingue.
+
 ## v3.5.0-alpha.172.248 — Calendario: i miei calendari (sidebar Google) (11 lug 2026)
 
 Sotto-fase 1/4 del programma email+calendario (spec `docs/superpowers/specs/2026-07-11-calendar-my-calendars-design.md`).

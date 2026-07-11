@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.249** — 11 luglio 2026 — Email client 2a: azioni & organizzazione (Gmail-native)
+
+### α.172.249 ✅ (Sotto-fase 2a/4 — azioni & organizzazione email — 11 lug, ramo feat/mobile-responsive-email, TDD; spec 2026-07-11)
+- **`/mail` operativo Gmail-native**: letto/non-letto, stella, archivia, cestino, sposta-in-etichetta (singolo hover + bulk multi-select con barra azioni). Conteggi non-letti in nav. Paginazione "Carica altro". Rispondi-a-tutti.
+- Backend: `modify_thread`/`trash_thread`/`untrash_thread`/`apply_action` + `list_labels(counts)` + `POST /mail/api/threads/action`. Enrichment `starred`.
+- **OAuth**: scope email → `gmail.modify` + `gmail.settings.basic` (riconnessione necessaria).
+- 1184 test verdi (+7). i18n 5 lingue.
+
+**Prossimo step**: **Sotto-fase 2b** — cartelle/etichette (albero, crea/rinomina/annida sottocartelle) + ricerca avanzata. Poi 2c compose avanzato, 2d rubrica/filtri/auto-reply, poi 3 sleek, 4 AI. Prereq smoke 2a: riconnettere Google (scope `gmail.modify`). Ramo NON pushato.
+
+### α.172.248 ✅ (storico sotto)
 **v3.5.0-alpha.172.248** — 11 luglio 2026 — Calendario: i miei calendari (sidebar Google)
 
 ### α.172.248 ✅ (Sotto-fase 1/4 — i miei calendari — 11 lug, ramo feat/mobile-responsive-email, TDD; spec 2026-07-11)

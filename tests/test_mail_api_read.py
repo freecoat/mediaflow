@@ -85,7 +85,7 @@ def test_labels(client, monkeypatch):
     c, s = client
     import app.routers.mail as mailmod
     monkeypatch.setattr(mailmod.gmail, "list_labels",
-                        lambda db, uid: [{"id": "INBOX", "name": "INBOX", "type": "system"}])
+                        lambda db, uid, counts=False: [{"id": "INBOX", "name": "INBOX", "type": "system"}])
     r = c.get("/mail/api/labels")
     assert r.json()["labels"][0]["id"] == "INBOX"
 

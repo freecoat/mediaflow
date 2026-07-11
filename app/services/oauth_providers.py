@@ -79,9 +79,12 @@ PROVIDERS = {
 # contacts.readonly + contacts.other.readonly: alimentano l'autocomplete indirizzi
 # in /mail — rubrica Google (connections) + contatti auto-salvati dalle email
 # scambiate (otherContacts = "indirizzi recenti"). Opt-in con l'email.
+# α.172.249: gmail.modify (azioni: letto/stella/archivia/cestino/sposta/etichetta,
+# include readonly) + gmail.settings.basic (filtri + auto-reply, Sotto-fase 2d).
 GMAIL_SCOPES = (
-    "https://www.googleapis.com/auth/gmail.readonly "
+    "https://www.googleapis.com/auth/gmail.modify "
     "https://www.googleapis.com/auth/gmail.compose "
+    "https://www.googleapis.com/auth/gmail.settings.basic "
     "https://www.googleapis.com/auth/contacts.readonly "
     "https://www.googleapis.com/auth/contacts.other.readonly"
 )

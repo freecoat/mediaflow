@@ -123,10 +123,14 @@ def _thread_headers(token: str, thread_id: str) -> dict:
         return {}
     last = msgs[-1]
     headers = (last.get("payload") or {}).get("headers") or []
+    labels = set()
+    for m in msgs:
+        labels.update(m.get("labelIds") or [])
     return {
         "from": _header(headers, "From"), "subject": _header(headers, "Subject"),
         "date": _header(headers, "Date"),
-        "unread": "UNREAD" in (last.get("labelIds") or []),
+        "unread": "UNREAD" in labels,
+        "starred": "STARRED" in labels,
         "msg_count": len(msgs),
     }
 
@@ -172,7 +176,7 @@ def get_thread(db: Session, user_id: int, thread_id: str) -> Optional[dict]:
             "messages": [_normalize_message(m) for m in res.get("messages") or []]}
 
 
-def list_labels(db: Session, user_id: int) -> list:
+def list_labels(db: Session, user_id: int, counts: bool = False) -> list:
     token = get_valid_access_token(db, user_id, "google")
     if not token:
         return []
@@ -181,8 +185,93 @@ def list_labels(db: Session, user_id: int) -> list:
     except Exception as e:
         log.warning(f"list_labels fallita user={user_id}: {e}")
         return []
-    return [{"id": l.get("id"), "name": l.get("name"), "type": l.get("type")}
-            for l in res.get("labels") or []]
+    out = [{"id": l.get("id"), "name": l.get("name"), "type": l.get("type")}
+           for l in res.get("labels") or []]
+    if counts:
+        for lab in out:
+            try:
+                d = _gmail_request("GET", "/labels/" + urllib.parse.quote(lab["id"]), token) or {}
+                lab["threads_unread"] = d.get("threadsUnread") or 0
+            except Exception:
+                lab["threads_unread"] = 0
+    return out
+
+
+# ── Azioni (Gmail-native, scope gmail.modify) — Sotto-fase 2a ──────────
+
+def modify_thread(db: Session, user_id: int, thread_id: str,
+                  add_labels=None, remove_labels=None) -> bool:
+    """Aggiunge/rimuove etichette a un thread. Best-effort → bool."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return False
+    body = {"addLabelIds": add_labels or [], "removeLabelIds": remove_labels or []}
+    try:
+        _gmail_request("POST", "/threads/" + urllib.parse.quote(thread_id) + "/modify",
+                       token, body=body)
+        return True
+    except Exception as e:
+        log.warning(f"modify_thread fallita user={user_id} thread={thread_id}: {e}")
+        return False
+
+
+def _thread_simple(db: Session, user_id: int, thread_id: str, verb: str) -> bool:
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return False
+    try:
+        _gmail_request("POST", "/threads/" + urllib.parse.quote(thread_id) + "/" + verb, token)
+        return True
+    except Exception as e:
+        log.warning(f"{verb} thread fallita user={user_id} thread={thread_id}: {e}")
+        return False
+
+
+def trash_thread(db: Session, user_id: int, thread_id: str) -> bool:
+    return _thread_simple(db, user_id, thread_id, "trash")
+
+
+def untrash_thread(db: Session, user_id: int, thread_id: str) -> bool:
+    return _thread_simple(db, user_id, thread_id, "untrash")
+
+
+# azione → (add_labels, remove_labels). label_id sostituisce il placeholder {LABEL}.
+_ACTION_LABELS = {
+    "read": ([], ["UNREAD"]),
+    "unread": (["UNREAD"], []),
+    "star": (["STARRED"], []),
+    "unstar": ([], ["STARRED"]),
+    "archive": ([], ["INBOX"]),
+    "spam": (["SPAM"], ["INBOX"]),
+    "move": (["{LABEL}"], ["INBOX"]),
+    "label": (["{LABEL}"], []),
+    "unlabel": ([], ["{LABEL}"]),
+}
+
+
+def apply_action(db: Session, user_id: int, thread_ids, action: str,
+                 label_id=None) -> dict:
+    """Applica un'azione a uno o più thread. Ritorna {ok, failed}."""
+    ids = [t for t in (thread_ids or []) if t]
+    ok, failed = 0, 0
+    for tid in ids:
+        if action in ("trash", "untrash"):
+            res = _thread_simple(db, user_id, tid, action)
+        elif action in _ACTION_LABELS:
+            add, rem = _ACTION_LABELS[action]
+            add = [label_id if x == "{LABEL}" else x for x in add]
+            rem = [label_id if x == "{LABEL}" else x for x in rem]
+            if any(x is None for x in add + rem):  # label_id mancante
+                res = False
+            else:
+                res = modify_thread(db, user_id, tid, add_labels=add, remove_labels=rem)
+        else:
+            res = False
+        if res:
+            ok += 1
+        else:
+            failed += 1
+    return {"ok": ok, "failed": failed}
 
 
 def build_mime(*, to, subject, body_html, cc=None, bcc=None,
