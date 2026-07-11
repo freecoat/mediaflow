@@ -22,7 +22,7 @@ async function mfMailLoadLabels() {
     const d = await (await fetch('/mail/api/labels')).json();
     const box = document.getElementById('mail-labels');
     if (!box) return;
-    const sys = [['INBOX', mfT('mail.inbox')], ['SENT', mfT('mail.sent')], ['DRAFT', mfT('mail.drafts')]];
+    const sys = [['INBOX', mfT('mail.inbox')], ['SENT', mfT('mail.sent')], ['DRAFT', mfT('mail.drafts')], ['SPAM', mfT('mail.spam')]];
     const user = (d.labels || []).filter(function (l) { return l.type === 'user'; });
     box.innerHTML = sys.map(function (p) {
       return '<a href="#" class="mail-label" data-label="' + p[0] + '">' + escapeHtml(p[1]) + '</a>';

@@ -94,24 +94,23 @@ def _normalize_message(msg: dict) -> dict:
 
 def list_threads(db: Session, user_id: int, *, query=None, label_ids=None,
                  page_token=None, max_results=25) -> dict:
-    """Elenca thread con metadati via messages.list (format=metadata).
-    Usa metadataHeaders ripetuti per ottenere Subject/From/Date."""
+    """Elenca thread con metadati via messages.list.
+    Usa un URL costruito manualmente per i metadataHeaders ripetuti."""
     token = get_valid_access_token(db, user_id, "google")
     if not token:
         return {"threads": [], "next_page_token": None}
-    params = {"maxResults": max_results, "format": "metadata"}
+    # Costruiamo l'URL manualmente: urllib non supporta parametri ripetuti nativamente
+    qs_parts = ["maxResults=" + str(max_results)]
     if query:
-        params["q"] = query
+        qs_parts.append("q=" + urllib.parse.quote(query, safe=''))
     if label_ids:
-        params["labelIds"] = label_ids
+        qs_parts.append("labelIds=" + urllib.parse.quote(label_ids, safe=''))
     if page_token:
-        params["pageToken"] = page_token
-    # metadataHeaders va passato come parametro ripetuto: format=metadata&metadataHeaders=Subject&metadataHeaders=From&...
-    # urllib.urlencode con doseq=True converte una lista in parametri ripetuti.
-    mh = [("metadataHeaders", "Subject"), ("metadataHeaders", "From"), ("metadataHeaders", "Date")]
-    qs = urllib.parse.urlencode(list(params.items()) + mh)
+        qs_parts.append("pageToken=" + urllib.parse.quote(page_token, safe=''))
+    qs = "&".join(qs_parts)
+    url = _API_BASE + "/messages?" + qs + "&format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date"
     try:
-        req = urllib.request.Request(_API_BASE + "/messages?" + qs, method="GET",
+        req = urllib.request.Request(url, method="GET",
                                      headers={"Authorization": "Bearer " + token})
         with urllib.request.urlopen(req, timeout=20) as r:
             raw = r.read().decode()
