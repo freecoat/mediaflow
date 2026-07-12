@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.255 — Email Sotto-fase 3: restyle sleek (12 lug 2026)
+
+Allinea il client `/mail` al layer sleek esistente (`sleek.css`, `body.sleek-mode`). Solo override CSS, nessun cambio funzionale.
+
+- **Blocco `.mail-*` in `sleek.css`**: righe thread (radius, hover morbido, unread con bordo+gradient indigo), etichette+albero (hover, attivo indigo, micro-label uppercase, badge indigo), messaggio in lettura come card sleek (shadow+gradient), compose (toolbar/editor/chip radius+border tenui, focus indigo), tab impostazioni indigo, strumenti nav e toggle ricerca con hover-lift.
+- **Pop-out `/mail/compose`**: applica `sleek-mode` da `localStorage.mf_sleek` (la finestra standalone non ha il toggler globale).
+- Nessun test nuovo (CSS-only). **Smoke browser reale** (sleek ON default): lista+etichette+compose renderizzati coerenti, 0 errori console. Screenshot verificati.
+
 ## v3.5.0-alpha.172.254 — Email Sotto-fase 2d: rubrica + filtri Gmail + auto-reply (12 lug 2026)
 
 Chiude la **Sotto-fase 2 (Email client core)**. Impostazioni ⚙️ ora **a tab**: Generali · Rubrica · Filtri · Risposta automatica.

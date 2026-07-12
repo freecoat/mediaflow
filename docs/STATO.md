@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.254** — 12 luglio 2026 — Email 2d: rubrica + filtri Gmail + auto-reply (CHIUDE Sotto-fase 2)
+**v3.5.0-alpha.172.255** — 12 luglio 2026 — Email 3: restyle sleek
+
+### α.172.255 ✅ (Sotto-fase 3 — restyle sleek — 12 lug, ramo feat/mobile-responsive-email, CSS-only + smoke visivo)
+- Blocco `.mail-*` in `sleek.css` (`body.sleek-mode`): righe thread/etichette/albero/lettura/compose/tab allineati al linguaggio sleek (radius, border tenui, hover morbido, accent indigo, micro-label). Pop-out applica sleek da `localStorage.mf_sleek`. Nessun cambio funzionale. Smoke browser reale verde (lista+compose coerenti, 0 errori console, screenshot ok).
+
+**Prossimo step**: **Sotto-fase 4 — AI copilot profondo** (mail+calendario). Capacità: ricerca semantica (NL→query Gmail), bozze/risposte AI (con conferma), estrazione dati email → quotazioni/acquisizioni/contatti (riusa registry `propose_*`), azioni mailbox con conferma, assegnazione email/contatti a progetto. Riusa infra copilot esistente (drawer FAB, AIAction propose/apply). Asset Library = backlog. Ramo NON pushato. **AZIONE MATTEO smoke 250-255**: reconnect Google; poi /mail completo + verifica look sleek.
 
 ### α.172.254 ✅ (Sotto-fase 2d — rubrica/filtri/auto-reply — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser)
 - Impostazioni ⚙️ **a tab** (Generali/Rubrica/Filtri/Risposta automatica). **Rubrica** read-only People (ricerca+Scrivi). **Filtri Gmail CRUD** (criteri→azioni, `gmail.list/create/delete_filter` + `GET/POST/DELETE /mail/api/filters`). **Vacation responder** (attiva/oggetto/corpo/solo-contatti/date, `get/set_vacation` + `GET/POST /mail/api/vacation`). Scope `gmail.settings.basic`+`contacts.readonly` già presenti. +10 test (1214 tot). i18n +20 chiavi. Smoke browser reale verde (4 tab, rubrica, filtri, vacation, 0 errori console). **CHIUDE Sotto-fase 2 (Email client core: 2a+2b+2c+2d).**
