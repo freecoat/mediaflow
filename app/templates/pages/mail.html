@@ -49,37 +49,82 @@
 {% include "components/mail_compose.html" %}
 
 <div id="mail-settings-modal" class="modal-overlay">
-  <div class="modal" style="display:flex;flex-direction:column;gap:12px;min-width:min(480px,92vw);">
-    <h3 style="margin:0" data-i18n="mail.settingsTitle">Impostazioni email</h3>
-    <label class="mail-set-row"><input type="checkbox" id="mail-set-markread"> <span data-i18n="mail.setMarkRead">Segna come letto all'apertura</span></label>
-    <label class="mail-set-row"><input type="checkbox" id="mail-set-autosave"> <span data-i18n="mail.setAutosave">Salvataggio automatico in bozze</span></label>
-    <label class="mail-set-row"><input type="checkbox" id="mail-set-newwin"> <span data-i18n="mail.setNewWindow">Apri "Scrivi" in finestra separata</span></label>
-    <label class="mail-set-row mail-set-inline"><span data-i18n="mail.setAutoRefresh">Aggiornamento automatico</span>
-      <select id="mail-set-refresh" class="form-input">
-        <option value="0" data-i18n="mail.refreshOff">Disattivato</option>
-        <option value="30">30 s</option>
-        <option value="60">1 min</option>
-        <option value="120">2 min</option>
-        <option value="300">5 min</option>
-      </select>
-    </label>
-    <label class="mail-set-row mail-set-inline"><span data-i18n="mail.setDefaultFont">Font predefinito</span>
-      <select id="mail-set-font" class="form-input">
-        <option value="Arial, sans-serif">Arial</option>
-        <option value="Calibri, sans-serif">Calibri</option>
-        <option value="Verdana, sans-serif">Verdana</option>
-        <option value="Tahoma, sans-serif">Tahoma</option>
-        <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
-        <option value="Georgia, serif">Georgia</option>
-        <option value="'Times New Roman', serif">Times</option>
-        <option value="Garamond, serif">Garamond</option>
-        <option value="'Courier New', monospace">Courier</option>
-      </select>
-    </label>
-    <button class="btn btn-secondary btn-sm" onclick="mfMailOpenSignature()" data-i18n="mail.editSignature">Modifica firma…</button>
-    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
-      <button class="btn btn-primary" onclick="mfMailSaveSettings()" data-i18n="mail.save">Salva</button>
-      <button class="btn btn-secondary" onclick="closeModal('mail-settings-modal')" data-i18n="mail.cancel">Annulla</button>
+  <div class="modal mail-settings-box" style="display:flex;flex-direction:column;gap:12px;width:min(620px,94vw);max-height:90vh;">
+    <div class="mail-set-head">
+      <h3 style="margin:0" data-i18n="mail.settingsTitle">Impostazioni email</h3>
+      <button class="mail-win-btn" onclick="closeModal('mail-settings-modal')" data-i18n-attr="title" data-i18n="mail.close" title="Chiudi">✕</button>
+    </div>
+    <div class="mail-set-tabs">
+      <button class="mail-set-tab mail-set-tab-active" data-set-tab="general" data-i18n="mail.tabGeneral">Generali</button>
+      <button class="mail-set-tab" data-set-tab="contacts" data-i18n="mail.tabContacts">Rubrica</button>
+      <button class="mail-set-tab" data-set-tab="filters" data-i18n="mail.tabFilters">Filtri</button>
+      <button class="mail-set-tab" data-set-tab="vacation" data-i18n="mail.tabVacation">Risposta automatica</button>
+    </div>
+
+    <div class="mail-set-panel" data-set-panel="general">
+      <label class="mail-set-row"><input type="checkbox" id="mail-set-markread"> <span data-i18n="mail.setMarkRead">Segna come letto all'apertura</span></label>
+      <label class="mail-set-row"><input type="checkbox" id="mail-set-autosave"> <span data-i18n="mail.setAutosave">Salvataggio automatico in bozze</span></label>
+      <label class="mail-set-row"><input type="checkbox" id="mail-set-newwin"> <span data-i18n="mail.setNewWindow">Apri "Scrivi" in finestra separata</span></label>
+      <label class="mail-set-row mail-set-inline"><span data-i18n="mail.setAutoRefresh">Aggiornamento automatico</span>
+        <select id="mail-set-refresh" class="form-input">
+          <option value="0" data-i18n="mail.refreshOff">Disattivato</option>
+          <option value="30">30 s</option><option value="60">1 min</option>
+          <option value="120">2 min</option><option value="300">5 min</option>
+        </select>
+      </label>
+      <label class="mail-set-row mail-set-inline"><span data-i18n="mail.setDefaultFont">Font predefinito</span>
+        <select id="mail-set-font" class="form-input">
+          <option value="Arial, sans-serif">Arial</option><option value="Calibri, sans-serif">Calibri</option>
+          <option value="Verdana, sans-serif">Verdana</option><option value="Tahoma, sans-serif">Tahoma</option>
+          <option value="'Trebuchet MS', sans-serif">Trebuchet</option><option value="Georgia, serif">Georgia</option>
+          <option value="'Times New Roman', serif">Times</option><option value="Garamond, serif">Garamond</option>
+          <option value="'Courier New', monospace">Courier</option>
+        </select>
+      </label>
+      <button class="btn btn-secondary btn-sm" onclick="mfMailOpenSignature()" data-i18n="mail.editSignature">Modifica firma…</button>
+      <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-primary" onclick="mfMailSaveSettings()" data-i18n="mail.save">Salva</button>
+      </div>
+    </div>
+
+    <div class="mail-set-panel" data-set-panel="contacts" hidden>
+      <input id="mail-contacts-search" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.contactsSearch" placeholder="Cerca contatto…" oninput="mfMailRenderContacts()">
+      <div id="mail-contacts-list" class="mail-contacts-list"></div>
+    </div>
+
+    <div class="mail-set-panel" data-set-panel="filters" hidden>
+      <div id="mail-filters-list" class="mail-filters-list"></div>
+      <div class="mail-filter-form">
+        <div class="mail-filter-grid">
+          <input id="mail-filt-from" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.advFrom" placeholder="Da">
+          <input id="mail-filt-to" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.advTo" placeholder="A">
+          <input id="mail-filt-subject" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.advSubject" placeholder="Oggetto">
+          <input id="mail-filt-query" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.filtHasWords" placeholder="Contiene">
+        </div>
+        <label class="mail-adv-att"><input type="checkbox" id="mail-filt-attach"> <span data-i18n="mail.advHasAttach">Con allegati</span></label>
+        <div class="mail-filter-actions-row">
+          <span class="muted" data-i18n="mail.filtThen">Poi:</span>
+          <label class="mail-set-inline"><span data-i18n="mail.filtApplyLabel">Applica etichetta</span><select id="mail-filt-label" class="form-input"></select></label>
+          <label class="mail-adv-att"><input type="checkbox" id="mail-filt-markread"> <span data-i18n="mail.markRead">Segna letto</span></label>
+          <label class="mail-adv-att"><input type="checkbox" id="mail-filt-star"> <span data-i18n="mail.star">Speciale</span></label>
+          <label class="mail-adv-att"><input type="checkbox" id="mail-filt-archive"> <span data-i18n="mail.archive">Archivia</span></label>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="mfMailCreateFilter()" data-i18n="mail.filtCreate">Crea filtro</button>
+      </div>
+    </div>
+
+    <div class="mail-set-panel" data-set-panel="vacation" hidden>
+      <label class="mail-set-row"><input type="checkbox" id="mail-vac-enabled"> <span data-i18n="mail.vacEnable">Attiva risposta automatica</span></label>
+      <input id="mail-vac-subject" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.vacSubject" placeholder="Oggetto risposta">
+      <div id="mail-vac-body" class="mail-editor" contenteditable="true" style="min-height:120px"></div>
+      <label class="mail-set-row"><input type="checkbox" id="mail-vac-contacts"> <span data-i18n="mail.vacRestrict">Solo ai miei contatti</span></label>
+      <div class="mail-adv-dates">
+        <label><span data-i18n="mail.advAfter">Dal</span> <input id="mail-vac-start" type="date" class="form-input"></label>
+        <label><span data-i18n="mail.advBefore">Al</span> <input id="mail-vac-end" type="date" class="form-input"></label>
+      </div>
+      <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-primary" onclick="mfMailSaveVacation()" data-i18n="mail.save">Salva</button>
+      </div>
     </div>
   </div>
 </div>
@@ -164,6 +209,24 @@
   .mail-adv-dates { display: flex; gap: 8px; }
   .mail-adv-dates label { display: flex; align-items: center; gap: 4px; font-size: 12px; flex: 1; }
   .mail-adv-att { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  /* Impostazioni tabbed (2d) */
+  .mail-set-head { display: flex; align-items: center; justify-content: space-between; }
+  .mail-set-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border2, #333); flex-wrap: wrap; }
+  .mail-set-tab { background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; color: var(--text3, #888); font-size: 13px; padding: 8px 12px; }
+  .mail-set-tab:hover { color: var(--text, #eee); }
+  .mail-set-tab-active { color: var(--text, #eee); border-bottom-color: var(--accent, #6272f5); font-weight: 600; }
+  .mail-set-panel { display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+  .mail-contacts-list, .mail-filters-list { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow: auto; }
+  .mail-contact-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
+  .mail-contact-row:hover { background: var(--bg3, #222); }
+  .mail-contact-meta { min-width: 0; overflow: hidden; }
+  .mail-contact-meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail-contact-meta span { font-size: 12px; color: var(--text3, #888); }
+  .mail-filter-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--border2, #333); border-radius: 6px; font-size: 12px; }
+  .mail-filter-form { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border2, #333); padding-top: 10px; }
+  .mail-filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .mail-filter-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .mail-filter-actions-row select { width: auto; height: 30px; }
   /* Nav foot: sync + impostazioni */
   .mail-nav-foot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
   .mail-nav-tool { flex: 1; background: var(--bg3, #222); border: 1px solid var(--border2, #333); border-radius: 6px; cursor: pointer; color: var(--text2, #ccc); font-size: 15px; padding: 6px; }

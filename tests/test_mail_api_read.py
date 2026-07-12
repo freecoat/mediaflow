@@ -116,6 +116,45 @@ def test_label_delete(client, monkeypatch):
     assert c.delete("/mail/api/labels/L1").json()["ok"] is True
 
 
+def test_filter_create_builds_action(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    captured = {}
+    monkeypatch.setattr(mailmod.gmail, "create_filter",
+                        lambda db, uid, criteria, action: captured.update(criteria=criteria, action=action) or {"id": "F1", "criteria": criteria, "action": action})
+    r = c.post("/mail/api/filters", data={"from_addr": "boss@x.com", "add_label_id": "L1",
+                                          "mark_read": "1", "archive": "1"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert captured["criteria"]["from"] == "boss@x.com"
+    assert "L1" in captured["action"]["addLabelIds"]
+    assert "UNREAD" in captured["action"]["removeLabelIds"]
+    assert "INBOX" in captured["action"]["removeLabelIds"]
+
+
+def test_filter_list_delete(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "list_filters", lambda db, uid: [{"id": "F1"}])
+    monkeypatch.setattr(mailmod.gmail, "delete_filter", lambda db, uid, fid: True)
+    assert c.get("/mail/api/filters").json()["filters"][0]["id"] == "F1"
+    assert c.delete("/mail/api/filters/F1").json()["ok"] is True
+
+
+def test_vacation_get_set(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "get_vacation", lambda db, uid: {"enableAutoReply": False})
+    assert c.get("/mail/api/vacation").json()["vacation"]["enableAutoReply"] is False
+    captured = {}
+    monkeypatch.setattr(mailmod.gmail, "set_vacation",
+                        lambda db, uid, **k: captured.update(k) or {"enableAutoReply": k["enabled"]})
+    r = c.post("/mail/api/vacation", data={"enabled": "1", "subject": "Ferie", "body": "<p>ciao</p>",
+                                           "start": "2026-08-01"})
+    assert r.json()["ok"] is True
+    assert captured["enabled"] is True
+    assert captured["start_ms"] is not None  # data convertita in ms
+
+
 def test_attachment_download(client, monkeypatch):
     c, s = client
     import app.routers.mail as mailmod

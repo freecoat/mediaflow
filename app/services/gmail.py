@@ -256,6 +256,84 @@ def delete_label(db: Session, user_id: int, label_id: str) -> bool:
         return False
 
 
+# ── Filtri Gmail (scope gmail.settings.basic) — Sotto-fase 2d ──────────
+
+def list_filters(db: Session, user_id: int) -> list:
+    """Elenco filtri Gmail. Best-effort → [] su errore."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return []
+    try:
+        res = _gmail_request("GET", "/settings/filters", token) or {}
+    except Exception as e:
+        log.warning(f"list_filters fallita user={user_id}: {e}")
+        return []
+    return res.get("filter") or []
+
+
+def create_filter(db: Session, user_id: int, criteria: dict, action: dict) -> Optional[dict]:
+    """Crea un filtro (criteria + action già pronti per l'API). Best-effort → dict|None."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return None
+    crit = {k: v for k, v in (criteria or {}).items() if v not in (None, "", False, [])}
+    act = {k: v for k, v in (action or {}).items() if v not in (None, "", [], {})}
+    if not crit or not act:
+        return None
+    try:
+        return _gmail_request("POST", "/settings/filters", token,
+                              body={"criteria": crit, "action": act})
+    except Exception as e:
+        log.warning(f"create_filter fallita user={user_id}: {e}")
+        return None
+
+
+def delete_filter(db: Session, user_id: int, filter_id: str) -> bool:
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return False
+    try:
+        _gmail_request("DELETE", "/settings/filters/" + urllib.parse.quote(filter_id), token)
+        return True
+    except Exception as e:
+        log.warning(f"delete_filter fallita user={user_id} filter={filter_id}: {e}")
+        return False
+
+
+# ── Risposta automatica / vacation responder (gmail.settings.basic) ────
+
+def get_vacation(db: Session, user_id: int) -> dict:
+    """Stato risposta automatica. Best-effort → {} su errore."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return {}
+    try:
+        return _gmail_request("GET", "/settings/vacation", token) or {}
+    except Exception as e:
+        log.warning(f"get_vacation fallita user={user_id}: {e}")
+        return {}
+
+
+def set_vacation(db: Session, user_id: int, *, enabled: bool, subject: str = "",
+                 body_html: str = "", restrict_to_contacts: bool = False,
+                 start_ms: int = None, end_ms: int = None) -> Optional[dict]:
+    """Imposta/disattiva la risposta automatica. Best-effort → dict|None."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return None
+    body = {"enableAutoReply": bool(enabled), "responseSubject": subject or "",
+            "responseBodyHtml": body_html or "", "restrictToContacts": bool(restrict_to_contacts)}
+    if start_ms:
+        body["startTime"] = start_ms
+    if end_ms:
+        body["endTime"] = end_ms
+    try:
+        return _gmail_request("PUT", "/settings/vacation", token, body=body)
+    except Exception as e:
+        log.warning(f"set_vacation fallita user={user_id}: {e}")
+        return None
+
+
 # ── Azioni (Gmail-native, scope gmail.modify) — Sotto-fase 2a ──────────
 
 def modify_thread(db: Session, user_id: int, thread_id: str,

@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.254 — Email Sotto-fase 2d: rubrica + filtri Gmail + auto-reply (12 lug 2026)
+
+Chiude la **Sotto-fase 2 (Email client core)**. Impostazioni ⚙️ ora **a tab**: Generali · Rubrica · Filtri · Risposta automatica.
+
+- **Rubrica** (read-only, People API): lista contatti (connections + otherContacts) con ricerca live e "Scrivi" → apre compose precompilato. Riusa `list_contacts` (scope `contacts.readonly`).
+- **Filtri Gmail CRUD**: elenco filtri esistenti (riassunto criteri→azioni + 🗑), form creazione (criteri Da/A/Oggetto/Contiene/allegati → azioni Applica-etichetta/Segna-letto/Speciale/Archivia). Backend `gmail.list_filters`/`create_filter`/`delete_filter` + `GET/POST/DELETE /mail/api/filters` (scope `gmail.settings.basic`).
+- **Risposta automatica** (vacation responder): attiva/disattiva, oggetto, corpo (editor ricco), "solo ai miei contatti", intervallo date. Backend `gmail.get_vacation`/`set_vacation` + `GET/POST /mail/api/vacation`. Date `YYYY-MM-DD` → epoch ms.
+- Scope invariati (già richiesti in 2a/α.247): `gmail.settings.basic` + `contacts.readonly`. Nessuna migrazione/modello nuovo.
+- Test: `test_gmail_filters` (+7), router filtri/vacation (+3). 1214 verdi. i18n 5 lingue (+20 chiavi). **Smoke browser reale**: 4 tab, rubrica render+filtro, label select, vacation form, 0 errori console. Flussi live Gmail pendenti reconnect Matteo.
+
 ## v3.5.0-alpha.172.253 — Email Sotto-fase 2b: cartelle/etichette + ricerca avanzata (12 lug 2026)
 
 - **Sidebar etichette ad albero**: le etichette utente Gmail (nome annidato `Parent/Child`) rese come **struttura gerarchica** collassabile (caret ▸/▾), badge non-letti per nodo, sezione "Le mie etichette". Nodi intermedi senza label propria = gruppi non cliccabili.

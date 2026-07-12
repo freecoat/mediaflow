@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.253** — 12 luglio 2026 — Email 2b: cartelle/etichette + ricerca avanzata
+**v3.5.0-alpha.172.254** — 12 luglio 2026 — Email 2d: rubrica + filtri Gmail + auto-reply (CHIUDE Sotto-fase 2)
+
+### α.172.254 ✅ (Sotto-fase 2d — rubrica/filtri/auto-reply — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser)
+- Impostazioni ⚙️ **a tab** (Generali/Rubrica/Filtri/Risposta automatica). **Rubrica** read-only People (ricerca+Scrivi). **Filtri Gmail CRUD** (criteri→azioni, `gmail.list/create/delete_filter` + `GET/POST/DELETE /mail/api/filters`). **Vacation responder** (attiva/oggetto/corpo/solo-contatti/date, `get/set_vacation` + `GET/POST /mail/api/vacation`). Scope `gmail.settings.basic`+`contacts.readonly` già presenti. +10 test (1214 tot). i18n +20 chiavi. Smoke browser reale verde (4 tab, rubrica, filtri, vacation, 0 errori console). **CHIUDE Sotto-fase 2 (Email client core: 2a+2b+2c+2d).**
+
+**Prossimo step**: **Sotto-fase 3 — Restyle sleek** del client email (+calendario): allineare a `sleek.css` esistente (densità, colori, spaziature, coerenza componenti) — NON nuovo design. Poi **4 — AI copilot profondo** (ricerca semantica mail, bozze AI con conferma, estrazione→quotazioni/acquisizioni/contatti, azioni mailbox, assegnazione email/contatti a progetto). Asset Library = backlog. Ramo NON pushato. **AZIONE MATTEO smoke 250-254**: reconnect Google (`gmail.modify`+`gmail.settings.basic`); poi /mail completo: lista veloce, mark-read, compose pro (font/massimizza/pop-out/allegati/drag&drop/autosave/firma), etichette albero+ricerca avanzata, ⚙️ tab (rubrica/filtri/auto-reply).
 
 ### α.172.253 ✅ (Sotto-fase 2b — cartelle/etichette — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser)
 - **Sidebar etichette ad albero** (Gmail `Parent/Child`) collassabile + badge non-letti + evidenza attiva. **CRUD**: + Nuova (modal nome+parent), rinomina ✎ (prompt, `/` annida/sposta), elimina 🗑 (conferma). Backend `gmail.create/rename/delete_label` + `POST/PUT/DELETE /mail/api/labels[/{id}]` (scope `gmail.modify`). **Ricerca avanzata** (⋯): Da/A/Oggetto/parole/allegati/date → query Gmail. +9 test (1204 tot). i18n +22 chiavi. Smoke browser reale verde (tree/collapse/query/modal, 0 errori console).

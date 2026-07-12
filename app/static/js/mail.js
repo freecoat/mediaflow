@@ -14,6 +14,7 @@ let _mailAutosaveTimer = null;
 let _mailRefreshTimer = null;
 let _mailStandalone = false;       // true nella finestra pop-out /mail/compose
 let _mailCollapsed = new Set();     // full-name dei nodi etichetta collassati
+let _mailContactsCache = [];        // rubrica (People) cache per tab Rubrica
 
 // Icone SVG inline (16px, stroke=currentColor). Gmail-like, sostituiscono le emoji.
 const _MAIL_ICONS = {
@@ -82,9 +83,9 @@ function mfMailOnFocus() {
 async function mfMailLoadContacts() {
   try {
     const d = await (await fetch('/mail/api/contacts')).json();
+    _mailContactsCache = d.contacts || [];
     const dl = document.getElementById('mail-contacts');
-    if (!dl) return;
-    dl.innerHTML = (d.contacts || []).map(function (c) {
+    if (dl) dl.innerHTML = _mailContactsCache.map(function (c) {
       const label = c.name ? (c.name + ' <' + c.email + '>') : c.email;
       return '<option value="' + escapeHtml(c.email) + '">' + escapeHtml(label) + '</option>';
     }).join('');
@@ -591,8 +592,138 @@ function mfMailOpenSettings() {
   set('mail-set-newwin', _mailPrefs.compose_new_window);
   const ref = document.getElementById('mail-set-refresh'); if (ref) ref.value = String(_mailPrefs.auto_refresh_sec);
   const fnt = document.getElementById('mail-set-font'); if (fnt) fnt.value = _mailPrefs.default_font || 'Arial, sans-serif';
+  mfMailSettingsTab('general');
   if (window.openModal) openModal('mail-settings-modal');
 }
+
+function mfMailSettingsTab(name) {
+  document.querySelectorAll('.mail-set-tab').forEach(function (t) {
+    t.classList.toggle('mail-set-tab-active', t.getAttribute('data-set-tab') === name);
+  });
+  document.querySelectorAll('.mail-set-panel').forEach(function (p) {
+    p.hidden = p.getAttribute('data-set-panel') !== name;
+  });
+  if (name === 'contacts') { if (!_mailContactsCache.length) mfMailLoadContacts().then(mfMailRenderContacts); else mfMailRenderContacts(); }
+  else if (name === 'filters') mfMailLoadFilters();
+  else if (name === 'vacation') mfMailLoadVacation();
+}
+
+document.addEventListener('click', function (ev) {
+  const tb = ev.target.closest && ev.target.closest('[data-set-tab]');
+  if (tb) { mfMailSettingsTab(tb.getAttribute('data-set-tab')); return; }
+});
+
+// ── Rubrica (People, read-only) ────────────────────────────────────────
+function mfMailRenderContacts() {
+  const box = document.getElementById('mail-contacts-list');
+  if (!box) return;
+  const q = ((document.getElementById('mail-contacts-search') || {}).value || '').toLowerCase();
+  const list = _mailContactsCache.filter(function (c) {
+    return !q || (c.email || '').toLowerCase().indexOf(q) > -1 || (c.name || '').toLowerCase().indexOf(q) > -1;
+  }).sort(function (a, b) { return (a.name || a.email || '').localeCompare(b.name || b.email || ''); }).slice(0, 300);
+  if (!list.length) { box.innerHTML = '<div class="muted">' + mfT('mail.contactsEmpty') + '</div>'; return; }
+  box.innerHTML = list.map(function (c) {
+    return '<div class="mail-contact-row"><div class="mail-contact-meta"><b>' +
+      escapeHtml(c.name || c.email) + '</b><span>' + escapeHtml(c.email) + '</span></div>' +
+      '<button class="btn btn-sm" data-contact-write="' + escapeHtml(c.email) + '">' + mfT('mail.write') + '</button></div>';
+  }).join('');
+}
+
+// ── Filtri Gmail ───────────────────────────────────────────────────────
+async function mfMailLoadFilters() {
+  const box = document.getElementById('mail-filters-list');
+  const sel = document.getElementById('mail-filt-label');
+  if (sel) sel.innerHTML = '<option value="">—</option>' +
+    _mailLabels.filter(function (l) { return l.type === 'user'; })
+      .map(function (l) { return '<option value="' + escapeHtml(l.id) + '">' + escapeHtml(l.name) + '</option>'; }).join('');
+  if (!box) return;
+  box.innerHTML = '<div class="muted">…</div>';
+  try {
+    const d = await (await fetch('/mail/api/filters')).json();
+    const labById = {}; _mailLabels.forEach(function (l) { labById[l.id] = l.name; });
+    const rows = (d.filters || []).map(function (f) {
+      const c = f.criteria || {}, a = f.action || {};
+      const crit = [c.from && ('da:' + c.from), c.to && ('a:' + c.to), c.subject && ('ogg:' + c.subject),
+                    c.query, c.hasAttachment && mfT('mail.advHasAttach')].filter(Boolean).join(', ');
+      const acts = [].concat((a.addLabelIds || []).map(function (id) {
+        return id === 'STARRED' ? mfT('mail.star') : ('+' + (labById[id] || id));
+      }), (a.removeLabelIds || []).map(function (id) {
+        return id === 'UNREAD' ? mfT('mail.markRead') : (id === 'INBOX' ? mfT('mail.archive') : ('-' + (labById[id] || id)));
+      })).join(', ');
+      return '<div class="mail-filter-row"><span>' + escapeHtml(crit || '—') + ' → ' + escapeHtml(acts || '—') +
+        '</span><button class="mail-lb-act" data-filter-del="' + escapeHtml(f.id) + '" title="' + escapeHtml(mfT('mail.deleteLabel')) + '">🗑</button></div>';
+    }).join('');
+    box.innerHTML = rows || '<div class="muted">' + mfT('mail.filtEmpty') + '</div>';
+  } catch (e) { box.innerHTML = '<div class="muted">' + mfT('mail.filtEmpty') + '</div>'; }
+}
+
+async function mfMailCreateFilter() {
+  const g = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const ck = function (id) { const el = document.getElementById(id); return el && el.checked; };
+  const fd = new FormData();
+  if (g('mail-filt-from')) fd.append('from_addr', g('mail-filt-from'));
+  if (g('mail-filt-to')) fd.append('to_addr', g('mail-filt-to'));
+  if (g('mail-filt-subject')) fd.append('subject', g('mail-filt-subject'));
+  if (g('mail-filt-query')) fd.append('query', g('mail-filt-query'));
+  if (ck('mail-filt-attach')) fd.append('has_attachment', '1');
+  if (g('mail-filt-label')) fd.append('add_label_id', g('mail-filt-label'));
+  if (ck('mail-filt-markread')) fd.append('mark_read', '1');
+  if (ck('mail-filt-star')) fd.append('star', '1');
+  if (ck('mail-filt-archive')) fd.append('archive', '1');
+  try {
+    const r = await (await fetch('/mail/api/filters', {method: 'POST', body: fd})).json();
+    if (r.ok) {
+      if (window.toast) toast(mfT('mail.filtCreated'), 'success');
+      ['mail-filt-from', 'mail-filt-to', 'mail-filt-subject', 'mail-filt-query'].forEach(function (id) { const e = document.getElementById(id); if (e) e.value = ''; });
+      ['mail-filt-attach', 'mail-filt-markread', 'mail-filt-star', 'mail-filt-archive'].forEach(function (id) { const e = document.getElementById(id); if (e) e.checked = false; });
+      mfMailLoadFilters();
+    } else if (window.toast) toast(mfT('mail.filtInvalid'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+async function mfMailDeleteFilter(id) {
+  if (!confirm(mfT('mail.filtDelConfirm'))) return;
+  try {
+    const r = await (await fetch('/mail/api/filters/' + encodeURIComponent(id), {method: 'DELETE'})).json();
+    if (r.ok) { if (window.toast) toast(mfT('mail.filtDeleted'), 'success'); mfMailLoadFilters(); }
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+// ── Risposta automatica (vacation) ─────────────────────────────────────
+async function mfMailLoadVacation() {
+  try {
+    const d = await (await fetch('/mail/api/vacation')).json();
+    const v = d.vacation || {};
+    const set = function (id, val) { const e = document.getElementById(id); if (e) e.checked = !!val; };
+    set('mail-vac-enabled', v.enableAutoReply);
+    set('mail-vac-contacts', v.restrictToContacts);
+    const subj = document.getElementById('mail-vac-subject'); if (subj) subj.value = v.responseSubject || '';
+    const body = document.getElementById('mail-vac-body'); if (body) body.innerHTML = v.responseBodyHtml || v.responseBodyPlainText || '';
+  } catch (e) { /* best-effort */ }
+}
+
+async function mfMailSaveVacation() {
+  const fd = new FormData();
+  fd.append('enabled', document.getElementById('mail-vac-enabled').checked ? '1' : '0');
+  fd.append('subject', (document.getElementById('mail-vac-subject') || {}).value || '');
+  const body = document.getElementById('mail-vac-body');
+  fd.append('body', body ? body.innerHTML : '');
+  fd.append('restrict_contacts', document.getElementById('mail-vac-contacts').checked ? '1' : '0');
+  const st = (document.getElementById('mail-vac-start') || {}).value; if (st) fd.append('start', st);
+  const en = (document.getElementById('mail-vac-end') || {}).value; if (en) fd.append('end', en);
+  try {
+    const r = await (await fetch('/mail/api/vacation', {method: 'POST', body: fd})).json();
+    if (r.ok) { if (window.toast) toast(mfT('mail.vacSaved'), 'success'); }
+    else if (window.toast) toast(mfT('email.error'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+document.addEventListener('click', function (ev) {
+  const cw = ev.target.closest && ev.target.closest('[data-contact-write]');
+  if (cw) { if (window.closeModal) closeModal('mail-settings-modal'); mfMailCompose({to: cw.getAttribute('data-contact-write')}); return; }
+  const fd = ev.target.closest && ev.target.closest('[data-filter-del]');
+  if (fd) { mfMailDeleteFilter(fd.getAttribute('data-filter-del')); return; }
+});
 
 async function mfMailSaveSettings() {
   const fd = new FormData();

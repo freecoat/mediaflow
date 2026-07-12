@@ -148,6 +148,81 @@ async def mail_label_delete(label_id: str, request: Request, db: Session = Depen
     return {"ok": gmail.delete_label(db, user.id, label_id)}
 
 
+@router.get("/mail/api/filters")
+async def mail_filters_list(request: Request, db: Session = Depends(get_db)):
+    user = current_user(request)
+    return {"filters": gmail.list_filters(db, user.id)}
+
+
+@router.post("/mail/api/filters")
+async def mail_filter_create(request: Request, db: Session = Depends(get_db),
+                             from_addr: Optional[str] = Form(None), to_addr: Optional[str] = Form(None),
+                             subject: Optional[str] = Form(None), query: Optional[str] = Form(None),
+                             has_attachment: Optional[str] = Form(None),
+                             add_label_id: Optional[str] = Form(None),
+                             mark_read: Optional[str] = Form(None), star: Optional[str] = Form(None),
+                             archive: Optional[str] = Form(None)):
+    """Crea un filtro Gmail: criteri (da/a/oggetto/query/allegati) + azioni."""
+    user = current_user(request)
+    def _b(v): return str(v).lower() in ("1", "true", "on", "yes")
+    criteria = {"from": from_addr, "to": to_addr, "subject": subject, "query": query,
+                "hasAttachment": _b(has_attachment) if has_attachment is not None else False}
+    add, rem = [], []
+    if add_label_id:
+        add.append(add_label_id)
+    if mark_read is not None and _b(mark_read):
+        rem.append("UNREAD")
+    if star is not None and _b(star):
+        add.append("STARRED")
+    if archive is not None and _b(archive):
+        rem.append("INBOX")
+    action = {"addLabelIds": add, "removeLabelIds": rem}
+    res = gmail.create_filter(db, user.id, criteria, action)
+    if not res:
+        return {"ok": False}
+    return {"ok": True, "filter": res}
+
+
+@router.delete("/mail/api/filters/{filter_id}")
+async def mail_filter_delete(filter_id: str, request: Request, db: Session = Depends(get_db)):
+    user = current_user(request)
+    return {"ok": gmail.delete_filter(db, user.id, filter_id)}
+
+
+def _date_to_ms(d: Optional[str]) -> Optional[int]:
+    """'YYYY-MM-DD' → epoch ms (mezzanotte UTC). None se vuoto/invalido."""
+    if not d:
+        return None
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.strptime(d, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return int(dt.timestamp() * 1000)
+    except Exception:
+        return None
+
+
+@router.get("/mail/api/vacation")
+async def mail_vacation_get(request: Request, db: Session = Depends(get_db)):
+    user = current_user(request)
+    return {"vacation": gmail.get_vacation(db, user.id)}
+
+
+@router.post("/mail/api/vacation")
+async def mail_vacation_set(request: Request, db: Session = Depends(get_db),
+                            enabled: Optional[str] = Form(None), subject: str = Form(""),
+                            body: str = Form(""), restrict_contacts: Optional[str] = Form(None),
+                            start: Optional[str] = Form(None), end: Optional[str] = Form(None)):
+    """Imposta/disattiva la risposta automatica (vacation responder)."""
+    user = current_user(request)
+    def _b(v): return str(v).lower() in ("1", "true", "on", "yes")
+    res = gmail.set_vacation(db, user.id, enabled=_b(enabled), subject=subject, body_html=body,
+                             restrict_to_contacts=_b(restrict_contacts),
+                             start_ms=_date_to_ms(start), end_ms=_date_to_ms(end))
+    if res is None:
+        return {"ok": False}
+    return {"ok": True, "vacation": res}
+
+
 @router.post("/mail/api/threads/action")
 async def mail_threads_action(request: Request, db: Session = Depends(get_db),
                               thread_ids: str = Form(...), action: str = Form(...),
