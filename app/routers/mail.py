@@ -24,10 +24,67 @@ router = APIRouter(tags=["mail"])
 _GMAIL_READ_SCOPES = ("gmail.modify", "gmail.readonly")
 
 
+# Default preferenze client email. Chiavi note; salvate in users.mail_prefs (JSON).
+MAIL_PREFS_DEFAULTS = {
+    "mark_read_on_open": True,
+    "autosave": True,
+    "auto_refresh_sec": 120,
+    "compose_new_window": False,
+    "default_font": "Arial, sans-serif",
+}
+
+
 @router.get("/mail")
 async def mail_page(request: Request):
     from app.main import templates
     return templates.TemplateResponse("pages/mail.html", {"request": request, "active_page": "mail"})
+
+
+@router.get("/mail/compose")
+async def mail_compose_page(request: Request):
+    """Finestra compose standalone (pop-out via window.open)."""
+    from app.main import templates
+    return templates.TemplateResponse("pages/mail_compose.html", {"request": request, "active_page": "mail"})
+
+
+@router.get("/mail/api/prefs")
+async def mail_get_prefs(request: Request, db: Session = Depends(get_db)):
+    user = current_user(request)
+    u = db.get(User, user.id)
+    prefs = dict(MAIL_PREFS_DEFAULTS)
+    if u and isinstance(u.mail_prefs, dict):
+        prefs.update({k: v for k, v in u.mail_prefs.items() if k in MAIL_PREFS_DEFAULTS})
+    return {"prefs": prefs}
+
+
+@router.post("/mail/api/prefs")
+async def mail_set_prefs(request: Request, db: Session = Depends(get_db),
+                         mark_read_on_open: Optional[str] = Form(None),
+                         autosave: Optional[str] = Form(None),
+                         auto_refresh_sec: Optional[int] = Form(None),
+                         compose_new_window: Optional[str] = Form(None),
+                         default_font: Optional[str] = Form(None)):
+    user = current_user(request)
+    u = db.get(User, user.id)
+    if not u:
+        return {"ok": False}
+    prefs = dict(u.mail_prefs) if isinstance(u.mail_prefs, dict) else {}
+    def _bool(v):  # checkbox: "1"/"true"/"on" → True, altrimenti False
+        return str(v).lower() in ("1", "true", "on", "yes")
+    if mark_read_on_open is not None:
+        prefs["mark_read_on_open"] = _bool(mark_read_on_open)
+    if autosave is not None:
+        prefs["autosave"] = _bool(autosave)
+    if compose_new_window is not None:
+        prefs["compose_new_window"] = _bool(compose_new_window)
+    if auto_refresh_sec is not None:
+        prefs["auto_refresh_sec"] = max(0, min(3600, auto_refresh_sec))  # 0 = off
+    if default_font is not None:
+        prefs["default_font"] = default_font[:80]
+    u.mail_prefs = prefs
+    db.commit()
+    merged = dict(MAIL_PREFS_DEFAULTS); merged.update(prefs)
+    return {"ok": True, "prefs": merged}
 
 
 @router.get("/mail/api/status")
@@ -155,6 +212,25 @@ async def mail_draft_create(request: Request, db: Session = Depends(get_db),
     res = gmail.save_draft(db, user.id, to=to, subject=subject, body_html=body, cc=cc, bcc=bcc,
                            thread_id=thread_id, in_reply_to=in_reply_to, references=references,
                            attachments=atts or None)
+    if not res:
+        return {"ok": False}
+    return {"ok": True, "id": res.get("id")}
+
+
+@router.put("/mail/api/draft/{draft_id}")
+async def mail_draft_update(draft_id: str, request: Request, db: Session = Depends(get_db),
+                            to: str = Form(""), subject: str = Form(""), body: str = Form(""),
+                            cc: Optional[str] = Form(None), bcc: Optional[str] = Form(None),
+                            thread_id: Optional[str] = Form(None),
+                            in_reply_to: Optional[str] = Form(None),
+                            references: Optional[str] = Form(None),
+                            attachments: Optional[List[UploadFile]] = File(None)):
+    """Aggiorna una bozza esistente (autosave debounced dal compose)."""
+    user = current_user(request)
+    atts = await _collect_attachments(attachments)
+    res = gmail.update_draft(db, user.id, draft_id, to=to, subject=subject, body_html=body,
+                             cc=cc, bcc=bcc, thread_id=thread_id, in_reply_to=in_reply_to,
+                             references=references, attachments=atts or None)
     if not res:
         return {"ok": False}
     return {"ok": True, "id": res.get("id")}

@@ -342,6 +342,26 @@ def save_draft(db: Session, user_id: int, *, to, subject, body_html, cc=None, bc
         return None
 
 
+def update_draft(db: Session, user_id: int, draft_id: str, *, to, subject, body_html,
+                 cc=None, bcc=None, in_reply_to=None, references=None,
+                 thread_id=None, attachments=None) -> Optional[dict]:
+    """Aggiorna una bozza esistente (autosave). Best-effort → dict|None."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return None
+    raw = build_mime(to=to, subject=subject, body_html=body_html, cc=cc, bcc=bcc,
+                     in_reply_to=in_reply_to, references=references, attachments=attachments)
+    message = {"raw": raw}
+    if thread_id:
+        message["threadId"] = thread_id
+    try:
+        return _gmail_request("PUT", "/drafts/" + urllib.parse.quote(draft_id), token,
+                              body={"id": draft_id, "message": message})
+    except Exception as e:
+        log.warning(f"update_draft fallita user={user_id} draft={draft_id}: {e}")
+        return None
+
+
 def list_drafts(db: Session, user_id: int) -> list:
     token = get_valid_access_token(db, user_id, "google")
     if not token:

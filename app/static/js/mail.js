@@ -7,6 +7,20 @@ let _mailSel = new Set();          // thread id selezionati (multi-select)
 let _mailLabels = [];              // cache etichette (per dropdown "Sposta in")
 let _mailAtts = [];                // File[] allegati compose (accumulanti, no replace)
 let _mailSignature = '';           // firma HTML utente (auto-inserita nel compose)
+let _mailPrefs = {mark_read_on_open: true, autosave: true, auto_refresh_sec: 120,
+                  compose_new_window: false, default_font: 'Arial, sans-serif'};
+let _mailDraftId = null;           // id bozza corrente (autosave)
+let _mailAutosaveTimer = null;
+let _mailRefreshTimer = null;
+let _mailStandalone = false;       // true nella finestra pop-out /mail/compose
+
+// Icone SVG inline (16px, stroke=currentColor). Gmail-like, sostituiscono le emoji.
+const _MAIL_ICONS = {
+  archive: '<svg class="mail-ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>',
+  trash: '<svg class="mail-ico" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg>',
+  star: '<svg class="mail-ico" viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.6 14 18.5 21 12 17 5.5 21 7.4 14 2 9.3 9 9"/></svg>',
+};
+function mfMailIcon(name) { return _MAIL_ICONS[name] || ''; }
 
 async function mfMailInit() {
   const st = await (await fetch('/mail/api/status')).json().catch(function () { return {connected: false}; });
@@ -19,10 +33,13 @@ async function mfMailInit() {
       mfT('mail.connect') + '</a></div>';
     return;
   }
+  await mfMailLoadPrefs();
   mfMailLoadLabels();
   mfMailLoadThreads(true);
   mfMailLoadContacts();
   mfMailLoadSignature();
+  mfMailStartAutoRefresh();
+  window.addEventListener('focus', mfMailOnFocus);
 }
 
 async function mfMailLoadSignature() {
@@ -30,6 +47,35 @@ async function mfMailLoadSignature() {
     const d = await (await fetch('/mail/api/signature')).json();
     _mailSignature = d.signature || '';
   } catch (e) { _mailSignature = ''; }
+}
+
+async function mfMailLoadPrefs() {
+  try {
+    const d = await (await fetch('/mail/api/prefs')).json();
+    if (d.prefs) _mailPrefs = d.prefs;
+  } catch (e) { /* best-effort: default */ }
+}
+
+// ── Auto-sync: polling periodico + refresh su focus finestra ────────────
+function mfMailStartAutoRefresh() {
+  if (_mailRefreshTimer) { clearInterval(_mailRefreshTimer); _mailRefreshTimer = null; }
+  const sec = parseInt(_mailPrefs.auto_refresh_sec, 10) || 0;
+  if (sec > 0) {
+    _mailRefreshTimer = setInterval(function () {
+      // non disturbare mentre si scrive un'email
+      const composing = document.getElementById('mail-compose');
+      if (composing && composing.classList.contains('open')) return;
+      mfMailLoadThreads(true);
+      mfMailLoadLabels();
+    }, sec * 1000);
+  }
+}
+
+function mfMailOnFocus() {
+  const composing = document.getElementById('mail-compose');
+  if (composing && composing.classList.contains('open')) return;
+  mfMailLoadThreads(true);
+  mfMailLoadLabels();
 }
 
 async function mfMailLoadContacts() {
@@ -82,20 +128,19 @@ async function mfMailLoadThreads(reset) {
       if (t.date) { const dd = new Date(t.date); if (!isNaN(dd.getTime())) date = dd.toLocaleDateString(); }
       const unread = t.unread ? ' mail-unread' : '';
       const sel = _mailSel.has(t.id) ? ' checked' : '';
-      const star = t.starred ? '★' : '☆';
       const starOn = t.starred ? ' mail-star-on' : '';
       const count = (t.msg_count && t.msg_count > 1) ? ' <span class="mail-row-count">' + t.msg_count + '</span>' : '';
       return '<div class="mail-thread-row' + unread + '" data-thread="' + id + '">' +
         '<input type="checkbox" class="mail-sel" data-sel="' + id + '"' + sel + '>' +
-        '<button class="mail-star' + starOn + '" data-mail-star="' + id + '" title="' + escapeHtml(mfT('mail.star')) + '">' + star + '</button>' +
+        '<button class="mail-star' + starOn + '" data-mail-star="' + id + '" title="' + escapeHtml(mfT('mail.star')) + '">' + mfMailIcon('star') + '</button>' +
         '<div class="mail-row-main">' +
         '<div class="mail-row-top"><span class="mail-row-from">' + escapeHtml(from) + '</span>' +
         '<span class="mail-row-date">' + escapeHtml(date) + '</span></div>' +
         '<div class="mail-row-subj">' + escapeHtml(subj) + count + '</div>' +
         '<div class="mail-row-snip">' + escapeHtml(t.snippet || '') + '</div></div>' +
         '<div class="mail-row-quick">' +
-        '<button class="mail-q" data-mail-quick="archive" data-thread="' + id + '" title="' + escapeHtml(mfT('mail.archive')) + '">🗄</button>' +
-        '<button class="mail-q" data-mail-quick="trash" data-thread="' + id + '" title="' + escapeHtml(mfT('mail.trash')) + '">🗑</button>' +
+        '<button class="mail-q" data-mail-quick="archive" data-thread="' + id + '" title="' + escapeHtml(mfT('mail.archive')) + '">' + mfMailIcon('archive') + '</button>' +
+        '<button class="mail-q" data-mail-quick="trash" data-thread="' + id + '" title="' + escapeHtml(mfT('mail.trash')) + '">' + mfMailIcon('trash') + '</button>' +
         '</div></div>';
     }).join('');
     box.innerHTML = (reset ? '' : box.innerHTML) + (rows || (reset ? '<div class="muted">' + mfT('mail.empty') + '</div>' : ''));
@@ -174,11 +219,32 @@ async function mfMailOpenThread(threadId) {
     }).join('') || '<div class="muted">' + mfT('mail.empty') + '</div>';
     // memorizza l'ultimo thread per reply/forward
     box._lastThread = t;
+    if (_mailPrefs.mark_read_on_open) mfMailMarkReadLocal(threadId);
   } catch (e) { box.innerHTML = '<div class="muted">' + mfT('mail.sendError') + '</div>'; }
+}
+
+// Segna letto senza ricaricare tutta la lista: aggiorna solo la riga + backend.
+function mfMailMarkReadLocal(threadId) {
+  const row = document.querySelector('.mail-thread-row[data-thread="' + (window.CSS && CSS.escape ? CSS.escape(threadId) : threadId) + '"]');
+  if (row && !row.classList.contains('mail-unread')) return;  // già letto
+  if (row) row.classList.remove('mail-unread');
+  const fd = new FormData();
+  fd.append('thread_ids', threadId);
+  fd.append('action', 'read');
+  fetch('/mail/api/threads/action', {method: 'POST', body: fd}).catch(function () {});
 }
 
 function mfMailCompose(prefill) {
   prefill = prefill || {};
+  // Finestra separata (pref) — solo dalla finestra principale, non da un pop-out.
+  if (_mailPrefs.compose_new_window && !_mailStandalone) {
+    const qs = new URLSearchParams();
+    ['to', 'cc', 'subject', 'thread_id', 'in_reply_to'].forEach(function (k) {
+      if (prefill[k]) qs.set(k, prefill[k]);
+    });
+    mfMailOpenPopout(qs.toString());
+    return;
+  }
   const ov = document.getElementById('mail-compose');
   if (!ov) return;
   ov.querySelector('[name=to]').value = prefill.to || '';
@@ -187,14 +253,102 @@ function mfMailCompose(prefill) {
   ov.querySelector('[name=subject]').value = prefill.subject || '';
   ov.querySelector('[name=thread_id]').value = prefill.thread_id || '';
   ov.querySelector('[name=in_reply_to]').value = prefill.in_reply_to || '';
+  ov.querySelector('[name=draft_id]').value = '';
+  _mailDraftId = null;
+  mfMailDraftStatus('');
+  const titleEl = document.getElementById('mail-compose-title');
+  if (titleEl) titleEl.textContent = mfT(prefill.thread_id ? 'mail.reply' : 'mail.newMessage');
   // corpo: prefill.bodyHtml (già HTML) oppure prefill.body (testo → nl2br) + firma in coda
   const ed = document.getElementById('mail-body-editor');
   let html = prefill.bodyHtml || (prefill.body ? escapeHtml(prefill.body).replace(/\n/g, '<br>') : '');
   if (_mailSignature) html += '<br><br>' + _mailSignature;
-  if (ed) ed.innerHTML = html;
+  if (ed) { ed.innerHTML = html; ed.style.fontFamily = _mailPrefs.default_font || 'Arial, sans-serif'; }
   _mailAtts = [];
   mfMailRenderAtts();
   if (window.openModal) openModal('mail-compose'); else ov.classList.add('open');
+}
+
+function mfMailOpenPopout(query) {
+  const url = '/mail/compose' + (query ? ('?' + query) : '');
+  window.open(url, 'mfCompose_' + Date.now(), 'width=820,height=680');
+}
+
+function mfMailCloseCompose() {
+  if (_mailAutosaveTimer) { clearTimeout(_mailAutosaveTimer); _mailAutosaveTimer = null; }
+  if (_mailStandalone) { window.close(); return; }
+  if (window.closeModal) closeModal('mail-compose'); else {
+    const ov = document.getElementById('mail-compose'); if (ov) ov.classList.remove('open');
+  }
+}
+
+function mfMailDraftStatus(txt) {
+  const el = document.getElementById('mail-draft-status');
+  if (el) el.textContent = txt || '';
+}
+
+async function mfMailSend() {
+  const ov = document.getElementById('mail-compose');
+  if (!ov) return;
+  if (!confirm(mfT('mail.sendConfirm'))) return;
+  const fd = new FormData();
+  ['to', 'cc', 'bcc', 'subject', 'thread_id', 'in_reply_to', 'references'].forEach(function (n) {
+    const el = ov.querySelector('[name=' + n + ']');
+    if (el && el.value) fd.append(n, el.value);
+  });
+  const ed = document.getElementById('mail-body-editor');
+  const font = _mailPrefs.default_font || 'Arial, sans-serif';
+  fd.append('body', ed ? '<div style="font-family:' + font + '">' + ed.innerHTML + '</div>' : '');
+  _mailAtts.forEach(function (f) { fd.append('attachments', f); });
+  try {
+    const r = await (await fetch('/mail/api/send', {method: 'POST', body: fd})).json();
+    if (r.ok) {
+      if (window.toast) toast(mfT('mail.sentOk'), 'success');
+      _mailAtts = []; _mailDraftId = null;
+      mfMailCloseCompose();
+      if (!_mailStandalone) mfMailLoadThreads(true);
+    } else { if (window.toast) toast(mfT('mail.sendError'), 'error'); }
+  } catch (e) { if (window.toast) toast(mfT('mail.sendError'), 'error'); }
+}
+
+// ── Autosave bozze (debounced) ─────────────────────────────────────────
+function mfMailScheduleAutosave() {
+  if (!_mailPrefs.autosave) return;
+  if (_mailAutosaveTimer) clearTimeout(_mailAutosaveTimer);
+  _mailAutosaveTimer = setTimeout(mfMailAutosave, 2500);
+}
+
+function _mailComposeFormData() {
+  const ov = document.getElementById('mail-compose');
+  const fd = new FormData();
+  ['to', 'cc', 'bcc', 'subject', 'thread_id', 'in_reply_to', 'references'].forEach(function (n) {
+    const el = ov.querySelector('[name=' + n + ']');
+    if (el && el.value) fd.append(n, el.value);
+  });
+  const ed = document.getElementById('mail-body-editor');
+  fd.append('body', ed ? ed.innerHTML : '');
+  _mailAtts.forEach(function (f) { fd.append('attachments', f); });
+  return fd;
+}
+
+async function mfMailAutosave() {
+  const ov = document.getElementById('mail-compose');
+  if (!ov) return;
+  const ed = document.getElementById('mail-body-editor');
+  const to = (ov.querySelector('[name=to]') || {}).value || '';
+  const subj = (ov.querySelector('[name=subject]') || {}).value || '';
+  if (!to && !subj && (!ed || !ed.textContent.trim())) return;  // niente da salvare
+  try {
+    const url = _mailDraftId ? ('/mail/api/draft/' + encodeURIComponent(_mailDraftId)) : '/mail/api/draft';
+    const method = _mailDraftId ? 'PUT' : 'POST';
+    const r = await (await fetch(url, {method: method, body: _mailComposeFormData()})).json();
+    if (r.ok) { if (r.id) _mailDraftId = r.id; mfMailDraftStatus(mfT('mail.draftSaved')); }
+  } catch (e) { /* best-effort */ }
+}
+
+async function mfMailSaveDraftNow() {
+  if (_mailAutosaveTimer) { clearTimeout(_mailAutosaveTimer); _mailAutosaveTimer = null; }
+  await mfMailAutosave();
+  if (window.toast) toast(mfT('mail.draftSaved'), 'success');
 }
 
 function mfMailRenderAtts() {
@@ -265,7 +419,70 @@ document.addEventListener('click', function (ev) {
   if (rm) { _mailAtts.splice(parseInt(rm.getAttribute('data-mail-att-rm'), 10), 1); mfMailRenderAtts(); return; }
   const sig = ev.target.closest && ev.target.closest('[data-mail-signature]');
   if (sig) { mfMailOpenSignature(); return; }
+  const mx = ev.target.closest && ev.target.closest('[data-mail-maximize]');
+  if (mx) { const m = document.querySelector('.mail-compose-modal'); if (m) m.classList.toggle('mail-compose-max'); return; }
+  const po = ev.target.closest && ev.target.closest('[data-mail-popout]');
+  if (po) {
+    const ov = document.getElementById('mail-compose');
+    const qs = new URLSearchParams();
+    ['to', 'cc', 'subject', 'thread_id', 'in_reply_to'].forEach(function (k) {
+      const el = ov.querySelector('[name=' + k + ']'); if (el && el.value) qs.set(k, el.value);
+    });
+    mfMailCloseCompose();
+    mfMailOpenPopout(qs.toString());
+    return;
+  }
 });
+
+// Autosave: qualsiasi input dentro il compose (ri)avvia il timer debounced.
+document.addEventListener('input', function (ev) {
+  if (ev.target.closest && ev.target.closest('#mail-compose')) mfMailScheduleAutosave();
+});
+
+// ── Impostazioni email ─────────────────────────────────────────────────
+function mfMailOpenSettings() {
+  const set = function (id, val) { const el = document.getElementById(id); if (el) el.checked = !!val; };
+  set('mail-set-markread', _mailPrefs.mark_read_on_open);
+  set('mail-set-autosave', _mailPrefs.autosave);
+  set('mail-set-newwin', _mailPrefs.compose_new_window);
+  const ref = document.getElementById('mail-set-refresh'); if (ref) ref.value = String(_mailPrefs.auto_refresh_sec);
+  const fnt = document.getElementById('mail-set-font'); if (fnt) fnt.value = _mailPrefs.default_font || 'Arial, sans-serif';
+  if (window.openModal) openModal('mail-settings-modal');
+}
+
+async function mfMailSaveSettings() {
+  const fd = new FormData();
+  fd.append('mark_read_on_open', document.getElementById('mail-set-markread').checked ? '1' : '0');
+  fd.append('autosave', document.getElementById('mail-set-autosave').checked ? '1' : '0');
+  fd.append('compose_new_window', document.getElementById('mail-set-newwin').checked ? '1' : '0');
+  fd.append('auto_refresh_sec', document.getElementById('mail-set-refresh').value);
+  fd.append('default_font', document.getElementById('mail-set-font').value);
+  try {
+    const r = await (await fetch('/mail/api/prefs', {method: 'POST', body: fd})).json();
+    if (r.ok && r.prefs) {
+      _mailPrefs = r.prefs;
+      mfMailStartAutoRefresh();
+      if (window.toast) toast(mfT('mail.settingsSaved'), 'success');
+      if (window.closeModal) closeModal('mail-settings-modal');
+    }
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+// ── Init finestra pop-out /mail/compose ────────────────────────────────
+async function mfMailComposeStandalone() {
+  _mailStandalone = true;
+  if (typeof applyI18n === 'function') applyI18n(document);
+  await mfMailLoadPrefs();
+  await mfMailLoadSignature();
+  mfMailLoadContacts();
+  const p = new URLSearchParams(location.search);
+  mfMailCompose({
+    to: p.get('to') || '', cc: p.get('cc') || '', subject: p.get('subject') || '',
+    thread_id: p.get('thread_id') || '', in_reply_to: p.get('in_reply_to') || '',
+  });
+  const m = document.querySelector('.mail-compose-modal'); if (m) m.classList.add('mail-compose-max');
+  const po = document.querySelector('[data-mail-popout]'); if (po) po.style.display = 'none';
+}
 
 document.addEventListener('change', function (ev) {
   const sel = ev.target.closest && ev.target.closest('[data-mail-cmd]');

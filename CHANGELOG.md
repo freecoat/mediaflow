@@ -1,5 +1,18 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.252 — Email: compose pro + impostazioni + auto-sync (12 lug 2026)
+
+Feedback Matteo /remote-control (2° giro). Decisioni: pannello ⚙️ in /mail, pop-out vero + massimizza, icone azione ora.
+
+- **Mark-as-read automatico**: apertura thread toglie `UNREAD` (aggiorna solo la riga + backend, no reload lista). Pref attivabile.
+- **Pannello impostazioni email** (⚙️ in /mail): mark-read, autosave, finestra separata, auto-refresh (off/30s/1/2/5min), font predefinito, link modifica firma. Persistite in `users.mail_prefs` (JSON). Endpoint `GET/POST /mail/api/prefs`. Auto-migrate colonna al boot.
+- **Auto-sync**: polling periodico (thread+conteggi, intervallo da pref) + **refresh su focus finestra**. Niente più refresh manuale (resta ↻ per sync immediato). Gmail è pull → polling (no Pub/Sub).
+- **Autosave bozze**: debounce 2.5s → crea bozza poi la aggiorna (`PUT /mail/api/draft/{id}` + `gmail.update_draft`). Indicatore "Bozza salvata" + bottone "Salva bozza".
+- **Compose più grande + massimizza + finestra separata**: modal `760px` → toggle ⤢ quasi-fullscreen; ⧉ **pop-out** finestra browser (`/mail/compose` standalone che riusa il partial `components/mail_compose.html`). Pref "apri sempre in finestra separata".
+- **Più font** (9: Arial/Calibri/Verdana/Tahoma/Trebuchet/Georgia/Times/Garamond/Courier) + 7 dimensioni. Font predefinito applicato al corpo inviato (`<div style=font-family>`).
+- **Icone azione SVG** (stella/archivia/cestino) Gmail-like al posto delle emoji. Restyle sleek completo resta fase 3.
+- Test: `test_mail_prefs` (+4), `test_gmail_send::update_draft` (+2). 1195 verdi. i18n 5 lingue (+28 chiavi). **Smoke browser reale**: compose standalone (prefill, toolbar Grassetto→`<b>`, i18n), /mail (gear, settings modal, 0 errori console). Flussi live Gmail pendenti reconnect Matteo.
+
 ## v3.5.0-alpha.172.251 — Email: compose Gmail-like (editor ricco + allegati + firma) (12 lug 2026)
 
 Feedback Matteo /remote-control: "compose molto povero (no formattazione/font/firma), solo 1 allegato, no drag&drop". Editor pragmatico Gmail-core (vanilla JS, no librerie).

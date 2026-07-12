@@ -72,6 +72,28 @@ def test_send_message_best_effort_on_error(monkeypatch):
     assert gmail.send_message(s, 1, to="x@y.com", subject="S", body_html="b") is None
 
 
+def test_update_draft_puts_to_draft_id(monkeypatch):
+    s = _session()
+    captured = {}
+    def fake(m, p, t, params=None, body=None):
+        captured["method"] = m; captured["path"] = p; captured["body"] = body
+        return {"id": "DR1"}
+    monkeypatch.setattr(gmail, "_gmail_request", fake)
+    out = gmail.update_draft(s, 1, "DR1", to="x@y.com", subject="S", body_html="<p>b</p>")
+    assert out["id"] == "DR1"
+    assert captured["method"] == "PUT"
+    assert captured["path"] == "/drafts/DR1"
+    assert captured["body"]["id"] == "DR1"
+    assert "raw" in captured["body"]["message"]
+
+
+def test_update_draft_best_effort_on_error(monkeypatch):
+    s = _session()
+    def boom(*a, **k): raise RuntimeError("HTTP 500")
+    monkeypatch.setattr(gmail, "_gmail_request", boom)
+    assert gmail.update_draft(s, 1, "DR1", to="x@y.com", subject="S", body_html="b") is None
+
+
 def test_get_attachment_decodes(monkeypatch):
     s = _session()
     payload = base64.urlsafe_b64encode(b"filedata").rstrip(b"=").decode()

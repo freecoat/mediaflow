@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.251** — 12 luglio 2026 — Email: compose Gmail-like (editor ricco + allegati + firma)
+**v3.5.0-alpha.172.252** — 12 luglio 2026 — Email: compose pro + impostazioni + auto-sync
+
+### α.172.252 ✅ (Compose pro + impostazioni + auto-sync — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser; feedback Matteo /remote-control 2° giro)
+- **Mark-read auto** all'apertura thread (leggero, no reload). **Pannello ⚙️ impostazioni** in /mail (mark-read/autosave/finestra/auto-refresh/font/firma → `users.mail_prefs` JSON, `GET/POST /mail/api/prefs`, auto-migrate boot). **Auto-sync** polling+focus (no refresh manuale; ↻ per sync immediato). **Autosave bozze** debounce 2.5s (`PUT /mail/api/draft/{id}`+`gmail.update_draft`). **Compose 760px + massimizza ⤢ + pop-out ⧉** (`/mail/compose` standalone riusa partial `components/mail_compose.html`). **9 font + 7 size**, font default nel corpo inviato. **Icone SVG** azione (stella/archivia/cestino). +6 test (1195 tot). i18n +28 chiavi. Smoke browser reale verde (toolbar/pop-out/settings, 0 errori console).
+
+**Prossimo step**: **Sotto-fase 2b — cartelle/etichette** (albero, crea/rinomina/annida sottocartelle) + ricerca avanzata. Poi 2d rubrica/filtri/auto-reply → 3 restyle sleek completo (`sleek.css`) → 4 AI copilot. Asset Library = backlog (dopo email+calendar). Ramo NON pushato. **AZIONE MATTEO smoke 250-252**: reconnect Google (`gmail.modify`), poi `/mail`: lista veloce+auto-refresh, apri thread→si segna letto, ⚙️ impostazioni, "Scrivi" toolbar/9 font/massimizza/pop-out/allega multipli/drag&drop/autosave bozza/firma.
 
 ### α.172.251 ✅ (Compose Gmail-like — 12 lug, ramo feat/mobile-responsive-email, TDD; feedback Matteo /remote-control)
 - **Editor WYSIWYG** `contentEditable`+toolbar `execCommand` (bold/italic/underline/colore/liste/quote/link/clear/font/size), invio **HTML**. **Allegati multipli accumulanti** (array `_mailAtts`, chip rimovibili — risolve limite "1 file" del FileList nativo). **Drag&drop** file sull'editor. **Firma persistente** `users.email_signature` (modal ✎ Firma, auto-inserita nei nuovi msg, `GET/POST /mail/api/signature`, auto-migrate al boot). Backend send invariato. +3 test (1189 tot). i18n 5 lingue (23 chiavi).
