@@ -106,6 +106,9 @@ PERMISSIONS: Dict[str, Dict[str, List[str]]] = {
         "confirm_deliverables": ["Conferma consegna (quantity_delivered)"],
         # v3.5.0-alpha.172.226 — Gestione KDM/DKDM per consegne DCP.
         "manage_kdm":          ["Gestione richieste KDM/DKDM (chiavi DCP)"],
+        # Media Library (Fase A) — permesso dedicato; retrocompat con
+        # edit_planning_all gestita da app.services.media_gate.
+        "manage_assets":       ["Gestione Media Library (asset digitali/fisici, associazioni)"],
     },
     "Risorse": {
         "view_resources":   ["Visualizza anagrafica risorse"],
@@ -165,6 +168,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_deliverables", "edit_deliverables", "confirm_deliverables",
         # v3.5.0-alpha.172.226 — KDM/DKDM management
         "manage_kdm",
+        # Media Library (Fase A)
+        "manage_assets",
     ],
     "producer": [
         "view_clients",
@@ -184,6 +189,8 @@ PRESET_PERMISSIONS: Dict[str, List[str]] = {
         "view_settings_global",
         # v3.5.0-alpha.172.3 — Deliverable workflow (producer = conferma consegne)
         "view_deliverables", "edit_deliverables", "confirm_deliverables",
+        # Media Library (Fase A)
+        "manage_assets",
     ],
     "accounting": [
         "view_clients",
