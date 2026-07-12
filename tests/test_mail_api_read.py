@@ -90,6 +90,32 @@ def test_labels(client, monkeypatch):
     assert r.json()["labels"][0]["id"] == "INBOX"
 
 
+def test_label_create(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "create_label",
+                        lambda db, uid, name, parent=None: {"id": "L9", "name": name, "type": "user"})
+    r = c.post("/mail/api/labels", data={"name": "Clienti"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert r.json()["label"]["id"] == "L9"
+
+
+def test_label_rename(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "rename_label",
+                        lambda db, uid, lid, name: {"id": lid, "name": name, "type": "user"})
+    r = c.put("/mail/api/labels/L1", data={"name": "Fornitori"})
+    assert r.json()["label"]["name"] == "Fornitori"
+
+
+def test_label_delete(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "delete_label", lambda db, uid, lid: True)
+    assert c.delete("/mail/api/labels/L1").json()["ok"] is True
+
+
 def test_attachment_download(client, monkeypatch):
     c, s = client
     import app.routers.mail as mailmod

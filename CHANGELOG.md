@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.253 — Email Sotto-fase 2b: cartelle/etichette + ricerca avanzata (12 lug 2026)
+
+- **Sidebar etichette ad albero**: le etichette utente Gmail (nome annidato `Parent/Child`) rese come **struttura gerarchica** collassabile (caret ▸/▾), badge non-letti per nodo, sezione "Le mie etichette". Nodi intermedi senza label propria = gruppi non cliccabili.
+- **CRUD etichette**: **+ Nuova etichetta** (modal con nome + select "Annida sotto" → parent), **rinomina** (✎ hover → prompt nome pieno, `/` per annidare/spostare), **elimina** (🗑 hover → conferma; le email non vengono cancellate). Se elimini la label attiva → torna a Inbox.
+- Backend `gmail.create_label`/`rename_label`/`delete_label` (labels.create/patch/delete) + endpoint `POST/PUT/DELETE /mail/api/labels[/{id}]`. Scope `gmail.modify` (già richiesto).
+- **Ricerca avanzata**: pannello (⋯ accanto alla ricerca) con Da/A/Oggetto/Contiene-parole/Con-allegati/Dopo/Prima → costruisce la **query Gmail** (`from:() subject:() has:attachment after:YYYY/MM/DD`) e la esegue.
+- Evidenziazione etichetta attiva. i18n 5 lingue (+22 chiavi `mail.*Label*`/`mail.adv*`).
+- Test: `test_gmail_labels` (+6), router label CRUD (+3). 1204 verdi. **Smoke browser reale**: tree annidato+collapse, build query avanzata, modal parent, 0 errori console. Flussi live Gmail pendenti reconnect Matteo.
+
 ## v3.5.0-alpha.172.252 — Email: compose pro + impostazioni + auto-sync (12 lug 2026)
 
 Feedback Matteo /remote-control (2° giro). Decisioni: pannello ⚙️ in /mail, pop-out vero + massimizza, icone azione ora.

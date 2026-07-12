@@ -14,8 +14,23 @@
     </div>
   </aside>
   <section class="mail-list">
-    <input id="mail-search" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.search"
-           placeholder="Cerca nella posta…" onkeydown="if(event.key==='Enter')mfMailLoadThreads(true)">
+    <div class="mail-search-row">
+      <input id="mail-search" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.search"
+             placeholder="Cerca nella posta…" onkeydown="if(event.key==='Enter')mfMailLoadThreads(true)">
+      <button class="mail-adv-toggle" onclick="mfMailToggleAdvSearch()" data-i18n-attr="title" data-i18n="mail.advSearch" title="Ricerca avanzata">⋯</button>
+    </div>
+    <div id="mail-adv-search" class="mail-adv-search">
+      <input id="mail-adv-from" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.advFrom" placeholder="Da">
+      <input id="mail-adv-to" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.advTo" placeholder="A">
+      <input id="mail-adv-subject" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.advSubject" placeholder="Oggetto">
+      <input id="mail-adv-words" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.advWords" placeholder="Contiene le parole">
+      <div class="mail-adv-dates">
+        <label><span data-i18n="mail.advAfter">Dopo</span> <input id="mail-adv-after" type="date" class="form-input"></label>
+        <label><span data-i18n="mail.advBefore">Prima</span> <input id="mail-adv-before" type="date" class="form-input"></label>
+      </div>
+      <label class="mail-adv-att"><input id="mail-adv-attach" type="checkbox"> <span data-i18n="mail.advHasAttach">Con allegati</span></label>
+      <button class="btn btn-primary btn-sm" onclick="mfMailRunAdvSearch()" data-i18n="mail.advRun">Cerca</button>
+    </div>
     <div id="mail-actionbar" class="mail-actionbar">
       <span id="mail-sel-count" class="mail-sel-count"></span>
       <button class="btn btn-sm" data-mail-action="read" data-i18n="mail.markRead">Letto</button>
@@ -69,6 +84,20 @@
   </div>
 </div>
 
+<div id="mail-label-modal" class="modal-overlay">
+  <div class="modal" style="display:flex;flex-direction:column;gap:10px;min-width:min(420px,92vw);">
+    <h3 style="margin:0" data-i18n="mail.newLabel">Nuova etichetta</h3>
+    <input name="label_name" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.labelName" placeholder="Nome etichetta">
+    <label class="mail-set-row mail-set-inline"><span data-i18n="mail.labelParent">Annida sotto</span>
+      <select name="label_parent" class="form-input"></select>
+    </label>
+    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-primary" onclick="mfMailCreateLabel()" data-i18n="mail.create">Crea</button>
+      <button class="btn btn-secondary" onclick="closeModal('mail-label-modal')" data-i18n="mail.cancel">Annulla</button>
+    </div>
+  </div>
+</div>
+
 <style>
   .mail-layout { display: grid; grid-template-columns: 200px 320px 1fr; gap: 12px; height: calc(100vh - 120px); }
   .mail-nav { display: flex; flex-direction: column; }
@@ -110,6 +139,31 @@
   .mail-msg-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
   .mail-mobile-bar { display: none; gap: 6px; margin-bottom: 8px; }
   #mail-mb-back { display: none; }
+  /* Etichette ad albero + CRUD */
+  .mail-labels-sep { height: 1px; background: var(--border2, #333); margin: 8px 0; }
+  .mail-lb-head { display: flex; align-items: center; justify-content: space-between; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text3, #888); padding: 2px 4px; }
+  .mail-lb-add { background: none; border: 0; color: var(--text3, #888); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; border-radius: 4px; }
+  .mail-lb-add:hover { background: var(--bg3, #222); color: var(--text, #eee); }
+  .mail-label-active { background: var(--bg3, #222); font-weight: 600; }
+  .mail-lb-row { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+  .mail-lb-row:hover { background: var(--bg3, #222); }
+  .mail-lb-caret { width: 16px; flex-shrink: 0; background: none; border: 0; color: var(--text3, #888); cursor: pointer; font-size: 10px; padding: 0; }
+  .mail-lb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail-lb-group { color: var(--text3, #888); cursor: default; }
+  .mail-lb-actions { display: none; gap: 0; flex-shrink: 0; }
+  .mail-lb-row:hover .mail-lb-actions { display: flex; }
+  .mail-lb-act { background: none; border: 0; cursor: pointer; color: var(--text3, #888); font-size: 12px; padding: 2px 4px; }
+  .mail-lb-act:hover { color: var(--text, #eee); }
+  /* Ricerca avanzata */
+  .mail-search-row { display: flex; gap: 6px; align-items: center; }
+  .mail-search-row #mail-search { flex: 1; }
+  .mail-adv-toggle { background: var(--bg3, #222); border: 1px solid var(--border2, #333); border-radius: 6px; cursor: pointer; color: var(--text2, #ccc); font-size: 15px; padding: 6px 10px; }
+  .mail-adv-toggle:hover { background: var(--bg2, #1a1a1a); }
+  .mail-adv-search { display: none; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--border2, #333); border-radius: 8px; background: var(--bg2, #1a1a1a); }
+  .mail-adv-search.open { display: flex; }
+  .mail-adv-dates { display: flex; gap: 8px; }
+  .mail-adv-dates label { display: flex; align-items: center; gap: 4px; font-size: 12px; flex: 1; }
+  .mail-adv-att { display: flex; align-items: center; gap: 6px; font-size: 13px; }
   /* Nav foot: sync + impostazioni */
   .mail-nav-foot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
   .mail-nav-tool { flex: 1; background: var(--bg3, #222); border: 1px solid var(--border2, #333); border-radius: 6px; cursor: pointer; color: var(--text2, #ccc); font-size: 15px; padding: 6px; }

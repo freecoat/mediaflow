@@ -207,6 +207,55 @@ def list_labels(db: Session, user_id: int, counts: bool = False) -> list:
     return out
 
 
+# ── Etichette/cartelle CRUD (scope gmail.modify) — Sotto-fase 2b ───────
+
+def create_label(db: Session, user_id: int, name: str, parent: str = None) -> Optional[dict]:
+    """Crea un'etichetta utente. Se `parent`, la annida (`Parent/Nome`).
+    Best-effort → dict {id,name,type} | None."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return None
+    full = ((parent.rstrip("/") + "/") if parent else "") + (name or "").strip()
+    if not full.strip("/"):
+        return None
+    body = {"name": full, "labelListVisibility": "labelShow",
+            "messageListVisibility": "show"}
+    try:
+        res = _gmail_request("POST", "/labels", token, body=body) or {}
+    except Exception as e:
+        log.warning(f"create_label fallita user={user_id}: {e}")
+        return None
+    return {"id": res.get("id"), "name": res.get("name"), "type": res.get("type")}
+
+
+def rename_label(db: Session, user_id: int, label_id: str, new_name: str) -> Optional[dict]:
+    """Rinomina (o sposta annidando) un'etichetta. `new_name` è il nome pieno
+    con eventuale `Parent/`. Best-effort → dict | None."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token or not (new_name or "").strip():
+        return None
+    try:
+        res = _gmail_request("PATCH", "/labels/" + urllib.parse.quote(label_id), token,
+                             body={"name": new_name.strip()}) or {}
+    except Exception as e:
+        log.warning(f"rename_label fallita user={user_id} label={label_id}: {e}")
+        return None
+    return {"id": res.get("id"), "name": res.get("name"), "type": res.get("type")}
+
+
+def delete_label(db: Session, user_id: int, label_id: str) -> bool:
+    """Elimina un'etichetta utente. Best-effort → bool."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return False
+    try:
+        _gmail_request("DELETE", "/labels/" + urllib.parse.quote(label_id), token)
+        return True
+    except Exception as e:
+        log.warning(f"delete_label fallita user={user_id} label={label_id}: {e}")
+        return False
+
+
 # ── Azioni (Gmail-native, scope gmail.modify) — Sotto-fase 2a ──────────
 
 def modify_thread(db: Session, user_id: int, thread_id: str,

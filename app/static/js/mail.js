@@ -13,6 +13,7 @@ let _mailDraftId = null;           // id bozza corrente (autosave)
 let _mailAutosaveTimer = null;
 let _mailRefreshTimer = null;
 let _mailStandalone = false;       // true nella finestra pop-out /mail/compose
+let _mailCollapsed = new Set();     // full-name dei nodi etichetta collassati
 
 // Icone SVG inline (16px, stroke=currentColor). Gmail-like, sostituiscono le emoji.
 const _MAIL_ICONS = {
@@ -94,20 +95,163 @@ async function mfMailLoadLabels() {
   try {
     const d = await (await fetch('/mail/api/labels?counts=1')).json();
     _mailLabels = d.labels || [];
-    const box = document.getElementById('mail-labels');
-    if (!box) return;
-    const cnt = {};
-    _mailLabels.forEach(function (l) { cnt[l.id] = l.threads_unread || 0; });
-    const sys = [['INBOX', mfT('mail.inbox')], ['STARRED', mfT('mail.star')],
-                 ['SENT', mfT('mail.sent')], ['DRAFT', mfT('mail.drafts')], ['TRASH', mfT('mail.trash')]];
-    const user = _mailLabels.filter(function (l) { return l.type === 'user'; });
-    function badge(id) { return cnt[id] ? ' <span class="mail-label-count">' + cnt[id] + '</span>' : ''; }
-    box.innerHTML = sys.map(function (p) {
-      return '<a href="#" class="mail-label" data-label="' + p[0] + '">' + escapeHtml(p[1]) + badge(p[0]) + '</a>';
-    }).join('') + user.map(function (l) {
-      return '<a href="#" class="mail-label" data-label="' + escapeHtml(l.id) + '">' + escapeHtml(l.name) + badge(l.id) + '</a>';
-    }).join('');
+    mfMailRenderLabels();
   } catch (e) { /* best-effort */ }
+}
+
+function mfMailRenderLabels() {
+  const box = document.getElementById('mail-labels');
+  if (!box) return;
+  const cnt = {};
+  _mailLabels.forEach(function (l) { cnt[l.id] = l.threads_unread || 0; });
+  function badge(id) { return cnt[id] ? ' <span class="mail-label-count">' + cnt[id] + '</span>' : ''; }
+  const sys = [['INBOX', mfT('mail.inbox')], ['STARRED', mfT('mail.star')],
+               ['SENT', mfT('mail.sent')], ['DRAFT', mfT('mail.drafts')], ['TRASH', mfT('mail.trash')]];
+  const sysHtml = sys.map(function (p) {
+    return '<a href="#" class="mail-label' + (p[0] === _mailLabel ? ' mail-label-active' : '') +
+      '" data-label="' + p[0] + '">' + escapeHtml(p[1]) + badge(p[0]) + '</a>';
+  }).join('');
+  const tree = mfMailBuildLabelTree(_mailLabels.filter(function (l) { return l.type === 'user'; }), cnt);
+  box.innerHTML = sysHtml +
+    '<div class="mail-labels-sep"></div>' +
+    '<div class="mail-lb-head"><span data-i18n="mail.myLabels">' + mfT('mail.myLabels') + '</span>' +
+    '<button class="mail-lb-add" data-lb-new title="' + escapeHtml(mfT('mail.newLabel')) + '">+</button></div>' +
+    mfMailRenderLabelTree(tree, 0, badge);
+}
+
+function mfMailBuildLabelTree(userLabels, cnt) {
+  const root = {children: {}};
+  userLabels.forEach(function (l) {
+    const parts = (l.name || '').split('/');
+    let node = root, acc = '';
+    parts.forEach(function (part, i) {
+      acc = acc ? (acc + '/' + part) : part;
+      if (!node.children[part]) node.children[part] = {name: part, full: acc, id: null, unread: 0, children: {}};
+      node = node.children[part];
+      if (i === parts.length - 1) { node.id = l.id; node.unread = (cnt && cnt[l.id]) || 0; }
+    });
+  });
+  return root;
+}
+
+function mfMailRenderLabelTree(node, depth, badge) {
+  const keys = Object.keys(node.children).sort(function (a, b) { return a.localeCompare(b, undefined, {sensitivity: 'base'}); });
+  return keys.map(function (k) {
+    const n = node.children[k];
+    const hasKids = Object.keys(n.children).length > 0;
+    const collapsed = _mailCollapsed.has(n.full);
+    const caret = hasKids
+      ? '<button class="mail-lb-caret" data-lb-toggle="' + escapeHtml(n.full) + '">' + (collapsed ? '▸' : '▾') + '</button>'
+      : '<span class="mail-lb-caret"></span>';
+    const active = (n.id && n.id === _mailLabel) ? ' mail-label-active' : '';
+    const linkOpen = n.id ? ('<a href="#" class="mail-label mail-lb-name' + active + '" data-label="' + escapeHtml(n.id) + '">')
+                          : ('<span class="mail-label mail-lb-name mail-lb-group">');
+    const linkClose = n.id ? '</a>' : '</span>';
+    const actions = n.id
+      ? '<span class="mail-lb-actions">' +
+          '<button class="mail-lb-act" data-lb-rename="' + escapeHtml(n.id) + '" data-lb-full="' + escapeHtml(n.full) + '" title="' + escapeHtml(mfT('mail.renameLabel')) + '">✎</button>' +
+          '<button class="mail-lb-act" data-lb-del="' + escapeHtml(n.id) + '" data-lb-full="' + escapeHtml(n.full) + '" title="' + escapeHtml(mfT('mail.deleteLabel')) + '">🗑</button>' +
+        '</span>'
+      : '';
+    let html = '<div class="mail-lb-row" style="padding-left:' + (depth * 14) + 'px">' +
+      caret + linkOpen + escapeHtml(n.name) + (n.id ? badge(n.id) : '') + linkClose + actions + '</div>';
+    if (hasKids && !collapsed) html += mfMailRenderLabelTree(n, depth + 1, badge);
+    return html;
+  }).join('');
+}
+
+// ── CRUD etichette/cartelle ────────────────────────────────────────────
+function mfMailNewLabel() {
+  const modal = document.getElementById('mail-label-modal');
+  if (!modal) return;
+  modal.querySelector('[name=label_name]').value = '';
+  const psel = modal.querySelector('[name=label_parent]');
+  if (psel) {
+    psel.innerHTML = '<option value="">' + escapeHtml(mfT('mail.noParent')) + '</option>' +
+      _mailLabels.filter(function (l) { return l.type === 'user'; })
+        .sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); })
+        .map(function (l) { return '<option value="' + escapeHtml(l.name) + '">' + escapeHtml(l.name) + '</option>'; }).join('');
+  }
+  if (window.openModal) openModal('mail-label-modal');
+}
+
+async function mfMailCreateLabel() {
+  const modal = document.getElementById('mail-label-modal');
+  const name = (modal.querySelector('[name=label_name]').value || '').trim();
+  const parent = modal.querySelector('[name=label_parent]').value || '';
+  if (!name) return;
+  const fd = new FormData();
+  fd.append('name', name);
+  if (parent) fd.append('parent', parent);
+  try {
+    const r = await (await fetch('/mail/api/labels', {method: 'POST', body: fd})).json();
+    if (r.ok) { if (window.toast) toast(mfT('mail.labelCreated'), 'success'); if (window.closeModal) closeModal('mail-label-modal'); mfMailLoadLabels(); }
+    else if (window.toast) toast(mfT('email.error'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+async function mfMailRenameLabel(id, full) {
+  const next = prompt(mfT('mail.renamePrompt'), full || '');
+  if (!next || next === full) return;
+  const fd = new FormData();
+  fd.append('name', next.trim());
+  try {
+    const r = await (await fetch('/mail/api/labels/' + encodeURIComponent(id), {method: 'PUT', body: fd})).json();
+    if (r.ok) { if (window.toast) toast(mfT('mail.labelRenamed'), 'success'); mfMailLoadLabels(); }
+    else if (window.toast) toast(mfT('email.error'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+async function mfMailDeleteLabel(id, full) {
+  if (!confirm(mfT('mail.deleteLabelConfirm').replace('{name}', full || ''))) return;
+  try {
+    const r = await (await fetch('/mail/api/labels/' + encodeURIComponent(id), {method: 'DELETE'})).json();
+    if (r.ok) {
+      if (window.toast) toast(mfT('mail.labelDeleted'), 'success');
+      if (_mailLabel === id) { _mailLabel = 'INBOX'; mfMailLoadThreads(true); }
+      mfMailLoadLabels();
+    } else if (window.toast) toast(mfT('email.error'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
+}
+
+document.addEventListener('click', function (ev) {
+  const tg = ev.target.closest && ev.target.closest('[data-lb-toggle]');
+  if (tg) {
+    const f = tg.getAttribute('data-lb-toggle');
+    if (_mailCollapsed.has(f)) _mailCollapsed.delete(f); else _mailCollapsed.add(f);
+    mfMailRenderLabels();
+    return;
+  }
+  const nl = ev.target.closest && ev.target.closest('[data-lb-new]');
+  if (nl) { mfMailNewLabel(); return; }
+  const rn = ev.target.closest && ev.target.closest('[data-lb-rename]');
+  if (rn) { mfMailRenameLabel(rn.getAttribute('data-lb-rename'), rn.getAttribute('data-lb-full')); return; }
+  const dl = ev.target.closest && ev.target.closest('[data-lb-del]');
+  if (dl) { mfMailDeleteLabel(dl.getAttribute('data-lb-del'), dl.getAttribute('data-lb-full')); return; }
+});
+
+// ── Ricerca avanzata → costruisce query Gmail ─────────────────────────
+function mfMailToggleAdvSearch() {
+  const p = document.getElementById('mail-adv-search');
+  if (p) p.classList.toggle('open');
+}
+
+function mfMailRunAdvSearch() {
+  const g = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const parts = [];
+  if (g('mail-adv-from')) parts.push('from:(' + g('mail-adv-from') + ')');
+  if (g('mail-adv-to')) parts.push('to:(' + g('mail-adv-to') + ')');
+  if (g('mail-adv-subject')) parts.push('subject:(' + g('mail-adv-subject') + ')');
+  if (g('mail-adv-words')) parts.push(g('mail-adv-words'));
+  const hasAtt = document.getElementById('mail-adv-attach');
+  if (hasAtt && hasAtt.checked) parts.push('has:attachment');
+  if (g('mail-adv-after')) parts.push('after:' + g('mail-adv-after').replace(/-/g, '/'));
+  if (g('mail-adv-before')) parts.push('before:' + g('mail-adv-before').replace(/-/g, '/'));
+  const q = parts.join(' ').trim();
+  const sb = document.getElementById('mail-search');
+  if (sb) sb.value = q;
+  mfMailToggleAdvSearch();
+  mfMailLoadThreads(true);
 }
 
 async function mfMailLoadThreads(reset) {

@@ -120,6 +120,34 @@ async def mail_labels(request: Request, counts: bool = False, db: Session = Depe
     return {"labels": gmail.list_labels(db, user.id, counts=counts)}
 
 
+@router.post("/mail/api/labels")
+async def mail_label_create(request: Request, db: Session = Depends(get_db),
+                            name: str = Form(...), parent: Optional[str] = Form(None)):
+    """Crea etichetta/cartella (annidata se `parent`)."""
+    user = current_user(request)
+    res = gmail.create_label(db, user.id, name, parent=parent)
+    if not res:
+        return {"ok": False}
+    return {"ok": True, "label": res}
+
+
+@router.put("/mail/api/labels/{label_id}")
+async def mail_label_rename(label_id: str, request: Request, db: Session = Depends(get_db),
+                            name: str = Form(...)):
+    """Rinomina/sposta etichetta (name = nome pieno con eventuale Parent/)."""
+    user = current_user(request)
+    res = gmail.rename_label(db, user.id, label_id, name)
+    if not res:
+        return {"ok": False}
+    return {"ok": True, "label": res}
+
+
+@router.delete("/mail/api/labels/{label_id}")
+async def mail_label_delete(label_id: str, request: Request, db: Session = Depends(get_db)):
+    user = current_user(request)
+    return {"ok": gmail.delete_label(db, user.id, label_id)}
+
+
 @router.post("/mail/api/threads/action")
 async def mail_threads_action(request: Request, db: Session = Depends(get_db),
                               thread_ids: str = Form(...), action: str = Form(...),

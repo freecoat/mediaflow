@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.252** — 12 luglio 2026 — Email: compose pro + impostazioni + auto-sync
+**v3.5.0-alpha.172.253** — 12 luglio 2026 — Email 2b: cartelle/etichette + ricerca avanzata
+
+### α.172.253 ✅ (Sotto-fase 2b — cartelle/etichette — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser)
+- **Sidebar etichette ad albero** (Gmail `Parent/Child`) collassabile + badge non-letti + evidenza attiva. **CRUD**: + Nuova (modal nome+parent), rinomina ✎ (prompt, `/` annida/sposta), elimina 🗑 (conferma). Backend `gmail.create/rename/delete_label` + `POST/PUT/DELETE /mail/api/labels[/{id}]` (scope `gmail.modify`). **Ricerca avanzata** (⋯): Da/A/Oggetto/parole/allegati/date → query Gmail. +9 test (1204 tot). i18n +22 chiavi. Smoke browser reale verde (tree/collapse/query/modal, 0 errori console).
+
+**Prossimo step**: **Sotto-fase 2d — rubrica/filtri/auto-reply** (contatti gestibili, filtri Gmail, risposta automatica; scope `gmail.settings.basic` già richiesto). Poi **3 restyle sleek completo** (`sleek.css`) → **4 AI copilot profondo**. Asset Library = backlog. Ramo NON pushato. **AZIONE MATTEO smoke 250-253**: reconnect Google (`gmail.modify`); poi /mail: albero etichette (crea/annida/rinomina/elimina), ricerca avanzata, + tutto 250-252 (lista veloce, mark-read, ⚙️ impostazioni, compose pro).
 
 ### α.172.252 ✅ (Compose pro + impostazioni + auto-sync — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser; feedback Matteo /remote-control 2° giro)
 - **Mark-read auto** all'apertura thread (leggero, no reload). **Pannello ⚙️ impostazioni** in /mail (mark-read/autosave/finestra/auto-refresh/font/firma → `users.mail_prefs` JSON, `GET/POST /mail/api/prefs`, auto-migrate boot). **Auto-sync** polling+focus (no refresh manuale; ↻ per sync immediato). **Autosave bozze** debounce 2.5s (`PUT /mail/api/draft/{id}`+`gmail.update_draft`). **Compose 760px + massimizza ⤢ + pop-out ⧉** (`/mail/compose` standalone riusa partial `components/mail_compose.html`). **9 font + 7 size**, font default nel corpo inviato. **Icone SVG** azione (stella/archivia/cestino). +6 test (1195 tot). i18n +28 chiavi. Smoke browser reale verde (toolbar/pop-out/settings, 0 errori console).
