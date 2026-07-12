@@ -13,6 +13,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.models import User
 from app.services.rbac import current_user
 from app.services.oauth_providers import get_token
 from app.services import gmail
@@ -70,6 +71,25 @@ async def mail_threads_action(request: Request, db: Session = Depends(get_db),
     user = current_user(request)
     ids = [t.strip() for t in thread_ids.split(",") if t.strip()]
     return gmail.apply_action(db, user.id, ids, action, label_id=label_id)
+
+
+@router.get("/mail/api/signature")
+async def mail_get_signature(request: Request, db: Session = Depends(get_db)):
+    """Firma email HTML per-utente (auto-inserita nel compose)."""
+    user = current_user(request)
+    u = db.get(User, user.id)
+    return {"signature": (u.email_signature if u else None) or ""}
+
+
+@router.post("/mail/api/signature")
+async def mail_set_signature(request: Request, db: Session = Depends(get_db),
+                             signature: str = Form("")):
+    user = current_user(request)
+    u = db.get(User, user.id)
+    if u:
+        u.email_signature = signature or None
+        db.commit()
+    return {"ok": True}
 
 
 @router.get("/mail/api/contacts")

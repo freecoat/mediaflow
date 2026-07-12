@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.251 — Email: compose Gmail-like (editor ricco + allegati + firma) (12 lug 2026)
+
+Feedback Matteo /remote-control: "compose molto povero (no formattazione/font/firma), solo 1 allegato, no drag&drop". Editor pragmatico Gmail-core (vanilla JS, no librerie).
+
+- **Editor WYSIWYG** (`contentEditable` + toolbar `document.execCommand`): grassetto/corsivo/sottolineato, colore testo, elenco puntato/numerato, citazione, link, rimuovi-formattazione, font (Sans/Serif/Mono) + dimensione (S/M/L/XL). Il corpo viene inviato come **HTML** (`build_mime` già lo supportava). `mousedown` sulla toolbar preserva la selezione.
+- **Allegati multipli accumulanti**: risolto il limite "1 file" (il FileList nativo si azzerava a ogni re-pick). Ora array `_mailAtts` con **chip rimovibili**; 📎 aggiunge senza sostituire.
+- **Drag & drop**: trascina file sull'editor → aggiunti al tray (dropzone con highlight).
+- **Firma persistente** (`users.email_signature`, nullable): modal dedicato (✎ Firma) con editor ricco; auto-inserita in coda ai nuovi messaggi. Endpoint `GET/POST /mail/api/signature`. Auto-migrate colonna al boot.
+- Backend send/attachments invariati (già `List[UploadFile]` + `body_html`). i18n 5 lingue (23 chiavi `mail.tb*`/`mail.signature*`/`mail.save/cancel/remove/linkPrompt`).
+- Test: `test_mail_signature` (+3). 1189 test verdi. **Smoke browser pendente Matteo** (prereq: reconnect Google scope Gmail).
+
 ## v3.5.0-alpha.172.250 — Email: fix lentezza lista/refresh (parallelo N+1) (12 lug 2026)
 
 Hotfix perf su segnalazione Matteo ("visualizzazione e invio email molto lento, pagina refresha dopo anche 5 secondi").

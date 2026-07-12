@@ -8,12 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.250** — 12 luglio 2026 — Email: fix lentezza lista/refresh (parallelo N+1)
+**v3.5.0-alpha.172.251** — 12 luglio 2026 — Email: compose Gmail-like (editor ricco + allegati + firma)
+
+### α.172.251 ✅ (Compose Gmail-like — 12 lug, ramo feat/mobile-responsive-email, TDD; feedback Matteo /remote-control)
+- **Editor WYSIWYG** `contentEditable`+toolbar `execCommand` (bold/italic/underline/colore/liste/quote/link/clear/font/size), invio **HTML**. **Allegati multipli accumulanti** (array `_mailAtts`, chip rimovibili — risolve limite "1 file" del FileList nativo). **Drag&drop** file sull'editor. **Firma persistente** `users.email_signature` (modal ✎ Firma, auto-inserita nei nuovi msg, `GET/POST /mail/api/signature`, auto-migrate al boot). Backend send invariato. +3 test (1189 tot). i18n 5 lingue (23 chiavi).
+
+**Prossimo step**: **Sotto-fase 2b — cartelle/etichette** (albero, crea/rinomina/annida sottocartelle) + ricerca avanzata. Poi 2d rubrica/filtri/auto-reply → 3 sleek → 4 AI copilot. Asset Library = backlog (dopo email+calendar). Ramo NON pushato. **AZIONE MATTEO smoke 250+251**: 1) riconnetti Google (scope `gmail.modify`); 2) `/mail` → lista veloce (no più 5s); apri "Scrivi" → toolbar formattazione, allega 2+ file, drag&drop, ✎ Firma salva+auto-inserisce; invia HTML.
 
 ### α.172.250 ✅ (Hotfix perf email — 12 lug, ramo feat/mobile-responsive-email, TDD; feedback Matteo /remote-control)
-- **Fix lentezza 5s**: `gmail.list_threads(enrich)` e `list_labels(counts)` facevano N+1 chiamate HTTP **sequenziali** (urllib bloccante) → parallelizzate con `ThreadPoolExecutor` (8 worker). Refresh post-invio eredita il guadagno. Nessun cambio API/scope/migrazione. +2 test (1186 tot).
-
-**Prossimo step**: **Compose Gmail-like** (editor WYSIWYG pragmatico: grassetto/corsivo/sottolineato/liste/link/colore/font/size/quote + **firma persistente** `users.email_signature` + **allegati multipli accumulanti** + **drag&drop**). Poi 2b cartelle/etichette. Decisioni Matteo (/remote-control): ordine perf→compose→2b, editor pragmatico Gmail-core. Asset Library = backlog (dopo email+calendar). Ramo NON pushato; smoke richiede reconnect Google.
+- **Fix lentezza 5s**: `gmail.list_threads(enrich)` e `list_labels(counts)` facevano N+1 chiamate HTTP **sequenziali** (urllib bloccante) → parallelizzate con `ThreadPoolExecutor` (8 worker). Refresh post-invio eredita il guadagno. Nessun cambio API/scope/migrazione. +2 test.
 
 ### α.172.249 ✅ (Sotto-fase 2a/4 — azioni & organizzazione email — 11 lug, ramo feat/mobile-responsive-email, TDD; spec 2026-07-11)
 - **`/mail` operativo Gmail-native**: letto/non-letto, stella, archivia, cestino, sposta-in-etichetta (singolo hover + bulk multi-select con barra azioni). Conteggi non-letti in nav. Paginazione "Carica altro". Rispondi-a-tutti.

@@ -5,6 +5,8 @@ let _mailConnected = false;
 let _mailAccount = null;            // email account (per reply-all)
 let _mailSel = new Set();          // thread id selezionati (multi-select)
 let _mailLabels = [];              // cache etichette (per dropdown "Sposta in")
+let _mailAtts = [];                // File[] allegati compose (accumulanti, no replace)
+let _mailSignature = '';           // firma HTML utente (auto-inserita nel compose)
 
 async function mfMailInit() {
   const st = await (await fetch('/mail/api/status')).json().catch(function () { return {connected: false}; });
@@ -20,6 +22,14 @@ async function mfMailInit() {
   mfMailLoadLabels();
   mfMailLoadThreads(true);
   mfMailLoadContacts();
+  mfMailLoadSignature();
+}
+
+async function mfMailLoadSignature() {
+  try {
+    const d = await (await fetch('/mail/api/signature')).json();
+    _mailSignature = d.signature || '';
+  } catch (e) { _mailSignature = ''; }
 }
 
 async function mfMailLoadContacts() {
@@ -173,11 +183,32 @@ function mfMailCompose(prefill) {
   if (!ov) return;
   ov.querySelector('[name=to]').value = prefill.to || '';
   ov.querySelector('[name=cc]').value = prefill.cc || '';
+  ov.querySelector('[name=bcc]').value = '';
   ov.querySelector('[name=subject]').value = prefill.subject || '';
-  ov.querySelector('[name=body]').value = prefill.body || '';
   ov.querySelector('[name=thread_id]').value = prefill.thread_id || '';
   ov.querySelector('[name=in_reply_to]').value = prefill.in_reply_to || '';
+  // corpo: prefill.bodyHtml (già HTML) oppure prefill.body (testo → nl2br) + firma in coda
+  const ed = document.getElementById('mail-body-editor');
+  let html = prefill.bodyHtml || (prefill.body ? escapeHtml(prefill.body).replace(/\n/g, '<br>') : '');
+  if (_mailSignature) html += '<br><br>' + _mailSignature;
+  if (ed) ed.innerHTML = html;
+  _mailAtts = [];
+  mfMailRenderAtts();
   if (window.openModal) openModal('mail-compose'); else ov.classList.add('open');
+}
+
+function mfMailRenderAtts() {
+  const tray = document.getElementById('mail-att-tray');
+  if (!tray) return;
+  tray.innerHTML = _mailAtts.map(function (f, i) {
+    return '<span class="mail-att-chip">📎 ' + escapeHtml(f.name) +
+      ' <button type="button" data-mail-att-rm="' + i + '" title="' + escapeHtml(mfT('mail.remove')) + '">✕</button></span>';
+  }).join('');
+}
+
+function mfMailAddFiles(files) {
+  for (const f of files || []) { if (f) _mailAtts.push(f); }
+  mfMailRenderAtts();
 }
 
 async function mfMailSend() {
@@ -185,17 +216,98 @@ async function mfMailSend() {
   if (!ov) return;
   if (!confirm(mfT('mail.sendConfirm'))) return;
   const fd = new FormData();
-  ['to', 'cc', 'bcc', 'subject', 'body', 'thread_id', 'in_reply_to', 'references'].forEach(function (n) {
+  ['to', 'cc', 'bcc', 'subject', 'thread_id', 'in_reply_to', 'references'].forEach(function (n) {
     const el = ov.querySelector('[name=' + n + ']');
     if (el && el.value) fd.append(n, el.value);
   });
-  const fileInp = ov.querySelector('[name=attachments]');
-  if (fileInp && fileInp.files) { for (const f of fileInp.files) fd.append('attachments', f); }
+  const ed = document.getElementById('mail-body-editor');
+  fd.append('body', ed ? ed.innerHTML : '');
+  _mailAtts.forEach(function (f) { fd.append('attachments', f); });
   try {
     const r = await (await fetch('/mail/api/send', {method: 'POST', body: fd})).json();
-    if (r.ok) { if (window.toast) toast(mfT('mail.sentOk'), 'success'); if (window.closeModal) closeModal('mail-compose'); else ov.classList.remove('open'); mfMailLoadThreads(true); }
+    if (r.ok) { if (window.toast) toast(mfT('mail.sentOk'), 'success'); if (window.closeModal) closeModal('mail-compose'); else ov.classList.remove('open'); _mailAtts = []; mfMailLoadThreads(true); }
     else { if (window.toast) toast(mfT('mail.sendError'), 'error'); }
   } catch (e) { if (window.toast) toast(mfT('mail.sendError'), 'error'); }
+}
+
+// ── Editor ricco: toolbar (execCommand) ────────────────────────────────
+function mfMailExec(cmd, value) {
+  const ed = document.getElementById('mail-body-editor');
+  if (ed) ed.focus();
+  try { document.execCommand(cmd, false, value || null); } catch (e) { /* best-effort */ }
+}
+
+document.addEventListener('mousedown', function (ev) {
+  // mantiene la selezione nell'editor mentre si clicca la toolbar
+  if (ev.target.closest && ev.target.closest('#mail-toolbar') &&
+      !ev.target.closest('input, select')) {
+    ev.preventDefault();
+  }
+});
+
+document.addEventListener('click', function (ev) {
+  const cmdEl = ev.target.closest && ev.target.closest('[data-mail-cmd]');
+  if (cmdEl && cmdEl.tagName !== 'SELECT') {   // i <select> si gestiscono da 'change'
+    const raw = cmdEl.getAttribute('data-mail-cmd');
+    if (raw.indexOf(':') > -1) { const p = raw.split(':'); mfMailExec(p[0], p[1]); }
+    else mfMailExec(raw);
+    return;
+  }
+  const linkEl = ev.target.closest && ev.target.closest('[data-mail-link]');
+  if (linkEl) {
+    const url = prompt(mfT('mail.linkPrompt'), 'https://');
+    if (url) mfMailExec('createLink', url);
+    return;
+  }
+  const attBtn = ev.target.closest && ev.target.closest('[data-mail-attach]');
+  if (attBtn) { const fi = document.getElementById('mail-file-input'); if (fi) fi.click(); return; }
+  const rm = ev.target.closest && ev.target.closest('[data-mail-att-rm]');
+  if (rm) { _mailAtts.splice(parseInt(rm.getAttribute('data-mail-att-rm'), 10), 1); mfMailRenderAtts(); return; }
+  const sig = ev.target.closest && ev.target.closest('[data-mail-signature]');
+  if (sig) { mfMailOpenSignature(); return; }
+});
+
+document.addEventListener('change', function (ev) {
+  const sel = ev.target.closest && ev.target.closest('[data-mail-cmd]');
+  if (sel && (sel.tagName === 'SELECT')) { mfMailExec(sel.getAttribute('data-mail-cmd'), sel.value); return; }
+  if (ev.target.matches && ev.target.matches('[data-mail-color]')) { mfMailExec('foreColor', ev.target.value); return; }
+  if (ev.target.id === 'mail-file-input') { mfMailAddFiles(ev.target.files); ev.target.value = ''; return; }
+});
+
+// ── Drag & drop allegati sull'editor ───────────────────────────────────
+document.addEventListener('dragover', function (ev) {
+  const ed = ev.target.closest && ev.target.closest('#mail-body-editor');
+  if (ed) { ev.preventDefault(); ed.classList.add('mail-drop-hover'); }
+});
+document.addEventListener('dragleave', function (ev) {
+  const ed = ev.target.closest && ev.target.closest('#mail-body-editor');
+  if (ed) ed.classList.remove('mail-drop-hover');
+});
+document.addEventListener('drop', function (ev) {
+  const ed = ev.target.closest && ev.target.closest('#mail-body-editor');
+  if (!ed) return;
+  const files = ev.dataTransfer && ev.dataTransfer.files;
+  if (files && files.length) { ev.preventDefault(); mfMailAddFiles(files); }
+  ed.classList.remove('mail-drop-hover');
+});
+
+// ── Firma persistente ──────────────────────────────────────────────────
+function mfMailOpenSignature() {
+  const ed = document.getElementById('mail-signature-editor');
+  if (ed) ed.innerHTML = _mailSignature || '';
+  if (window.openModal) openModal('mail-signature-modal');
+}
+
+async function mfMailSaveSignature() {
+  const ed = document.getElementById('mail-signature-editor');
+  const html = ed ? ed.innerHTML : '';
+  const fd = new FormData();
+  fd.append('signature', html);
+  try {
+    const r = await (await fetch('/mail/api/signature', {method: 'POST', body: fd})).json();
+    if (r.ok) { _mailSignature = html; if (window.toast) toast(mfT('mail.signatureSaved'), 'success'); if (window.closeModal) closeModal('mail-signature-modal'); }
+    else if (window.toast) toast(mfT('email.error'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('email.error'), 'error'); }
 }
 
 document.addEventListener('change', function (ev) {

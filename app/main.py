@@ -75,6 +75,11 @@ def _auto_migrate_columns():
             print("[auto-migrate] users.parse_ai_provider mancante -> ALTER TABLE")
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE users ADD COLUMN parse_ai_provider VARCHAR(32) NULL"))
+        # v3.5.0-alpha.172.251 — firma email per-utente
+        if "email_signature" not in cols:
+            print("[auto-migrate] users.email_signature mancante -> ALTER TABLE")
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN email_signature TEXT NULL"))
         # v3.5.0-alpha.101 — Multi-tenant HARD R-MT1: users.tenant_id FK.
         # Default=1 (tenant Default). UNIQUE switch da email globale a
         # (tenant_id, email): per SQLite serve DROP+CREATE table; qui faccio
@@ -2395,7 +2400,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.250", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.251", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
