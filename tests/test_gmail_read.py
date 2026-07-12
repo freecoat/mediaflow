@@ -79,6 +79,36 @@ def test_get_thread_best_effort_on_error(monkeypatch):
     assert gmail.get_thread(s, 1, "T1") is None
 
 
+def test_list_threads_enrich_parallel(monkeypatch):
+    """enrich su molti thread: header popolati per tutti (percorso parallelo)."""
+    s = _session(); _connect(s)
+    def fake(m, p, t, params=None, body=None):
+        if p == "/threads":
+            return {"threads": [{"id": "T%d" % i, "snippet": "s"} for i in range(10)]}
+        return {"messages": [{"labelIds": ["UNREAD", "STARRED"], "payload": {"headers": [
+            {"name": "From", "value": "x@y.com"}, {"name": "Subject", "value": "Hi"}]}}]}
+    monkeypatch.setattr(gmail, "_gmail_request", fake)
+    out = gmail.list_threads(s, 1)
+    assert len(out["threads"]) == 10
+    assert all(t.get("unread") is True for t in out["threads"])
+    assert all(t.get("starred") is True for t in out["threads"])
+    assert all(t.get("from") == "x@y.com" for t in out["threads"])
+
+
+def test_list_labels_counts_parallel(monkeypatch):
+    """counts=True su piu' label: threads_unread popolato per ciascuna (parallelo)."""
+    s = _session(); _connect(s)
+    def fake(m, p, t, params=None, body=None):
+        if p == "/labels":
+            return {"labels": [{"id": "L%d" % i, "name": "N%d" % i, "type": "user"}
+                               for i in range(6)]}
+        return {"threadsUnread": 3}
+    monkeypatch.setattr(gmail, "_gmail_request", fake)
+    labs = gmail.list_labels(s, 1, counts=True)
+    assert len(labs) == 6
+    assert all(l["threads_unread"] == 3 for l in labs)
+
+
 def test_list_labels_ok(monkeypatch):
     s = _session(); _connect(s)
     monkeypatch.setattr(gmail, "_gmail_request", lambda m, p, t, params=None, body=None: {

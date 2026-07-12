@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.250 — Email: fix lentezza lista/refresh (parallelo N+1) (12 lug 2026)
+
+Hotfix perf su segnalazione Matteo ("visualizzazione e invio email molto lento, pagina refresha dopo anche 5 secondi").
+
+- **Root cause**: `gmail.list_threads(enrich=True)` faceva **1 + N chiamate HTTP sequenziali** (`_thread_headers` per ogni thread, urllib bloccante) — 25 thread ≈ 25 round-trip ≈ 4-7s. Idem `list_labels(counts=True)` = 1 + N-label.
+- **Fix**: entrambe le raccolte parallelizzate con `ThreadPoolExecutor` (max 8 worker), token condiviso, output identico. Wall-clock da ~N round-trip a pochi batch. Il refresh post-invio (che ri-carica la lista) eredita lo stesso guadagno.
+- Nessun cambio di API/scope/modello/migrazione. `_gmail_request` resta unico punto di mock.
+- Test: `test_list_threads_enrich_parallel`, `test_list_labels_counts_parallel` (+2, 1186 tot). Suite mail verde.
+
 ## v3.5.0-alpha.172.249 — Email client: azioni & organizzazione (Gmail-native) (11 lug 2026)
 
 Sotto-fase 2a/4 (spec `docs/superpowers/specs/2026-07-11-mail-2a-actions-organization-design.md`).

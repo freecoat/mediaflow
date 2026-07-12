@@ -12,6 +12,7 @@ import logging
 import re
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage
 from typing import Optional
 
@@ -153,10 +154,15 @@ def list_threads(db: Session, user_id: int, *, query=None, label_ids=None,
         log.warning(f"list_threads fallita user={user_id}: {e}")
         return {"threads": [], "next_page_token": None}
     threads = res.get("threads") or []
-    if enrich:
-        for t in threads:
-            if t.get("id"):
-                t.update(_thread_headers(token, t["id"]))
+    if enrich and threads:
+        # N+1 → parallelo: gli header per-thread sono chiamate HTTP indipendenti.
+        # Sequenziale ≈ 25×round-trip (~5s); pool le collassa in pochi batch.
+        with ThreadPoolExecutor(max_workers=min(8, len(threads))) as ex:
+            metas = list(ex.map(
+                lambda t: _thread_headers(token, t["id"]) if t.get("id") else {}, threads))
+        for t, meta in zip(threads, metas):
+            if meta:
+                t.update(meta)
     return {"threads": threads, "next_page_token": res.get("nextPageToken")}
 
 
@@ -187,13 +193,17 @@ def list_labels(db: Session, user_id: int, counts: bool = False) -> list:
         return []
     out = [{"id": l.get("id"), "name": l.get("name"), "type": l.get("type")}
            for l in res.get("labels") or []]
-    if counts:
-        for lab in out:
+    if counts and out:
+        def _count(lab):
             try:
                 d = _gmail_request("GET", "/labels/" + urllib.parse.quote(lab["id"]), token) or {}
-                lab["threads_unread"] = d.get("threadsUnread") or 0
+                return d.get("threadsUnread") or 0
             except Exception:
-                lab["threads_unread"] = 0
+                return 0
+        with ThreadPoolExecutor(max_workers=min(8, len(out))) as ex:
+            vals = list(ex.map(_count, out))
+        for lab, v in zip(out, vals):
+            lab["threads_unread"] = v
     return out
 
 
