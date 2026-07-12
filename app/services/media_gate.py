@@ -2,7 +2,7 @@
 retrocompatibilità (il DAM usava edit_planning_all) il gate accetta anche
 edit_planning_all finché la migrazione ruoli non è diffusa."""
 from typing import Optional
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from app.models.models import User
 from app.services.rbac import has_permission, current_user_optional
 
