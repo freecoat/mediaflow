@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.256 — Email Sotto-fase 4: AI copilot mail (12 lug 2026)
+
+Chiude il **programma email+calendario** (fasi 1→4). AI nel client, riusa l'infra provider per-utente + il registry `propose_*` del copilot.
+
+- **Rispondi con AI** (pannello lettura ✨): `POST /mail/api/ai/reply` — `provider.complete` genera una bozza HTML dal thread (istruzioni opzionali via prompt) → apre il compose precompilato (**AI propone, utente invia**). Non inventa fatti/impegni. Rimuove fence ```` ``` ````.
+- **Ricerca semantica** (✨ accanto alla ricerca): `POST /mail/api/ai/search` — traduce il linguaggio naturale in query Gmail (`from: subject: has:attachment after:…`) → riempie la barra e cerca.
+- **Estrai** (pannello lettura 📥): inietta il corpo email nel **copilot globale** (`#cp-input`+`copilotSend`, come Acquisizioni F2) → riusa `propose_client/activity/quote/…` per estrarre dati verso quotazioni/acquisizioni/contatti. Nessun backend AI nuovo.
+- Provider risolto per-utente (`get_provider_for_user`); degrada con toast "Nessun provider AI" se non configurato. Bottoni AI con tinta indigo (sleek).
+- Test: `test_ai_reply`/`test_ai_search`/`no_provider` (+3). 1217 verdi. i18n 5 lingue (+9 chiavi). **Smoke browser reale**: bottoni AI resi, flusso ricerca AI riempie query, 0 errori console.
+
 ## v3.5.0-alpha.172.255 — Email Sotto-fase 3: restyle sleek (12 lug 2026)
 
 Allinea il client `/mail` al layer sleek esistente (`sleek.css`, `body.sleek-mode`). Solo override CSS, nessun cambio funzionale.

@@ -388,3 +388,15 @@ body.sleek-mode .mail-contact-row {
   transition: background 130ms ease;
 }
 body.sleek-mode .mail-contact-row:hover { background: rgba(255,255,255,0.03); }
+
+/* Bottoni AI (Sotto-fase 4): tinta indigo discreta */
+body.sleek-mode .mail-ai-btn {
+  border-color: rgba(98,114,245,0.35);
+  color: var(--indigo2);
+  background: rgba(98,114,245,0.08);
+}
+body.sleek-mode .mail-ai-btn:hover {
+  background: rgba(98,114,245,0.16);
+  border-color: rgba(98,114,245,0.5);
+}
+body.sleek-mode .mail-ai-search { color: var(--indigo2); }

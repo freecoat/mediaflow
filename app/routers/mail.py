@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.models import User
 from app.services.rbac import current_user
 from app.services.oauth_providers import get_token
+from app.services.ai_provider import get_provider_for_user
 from app.services import gmail
 
 router = APIRouter(tags=["mail"])
@@ -221,6 +222,69 @@ async def mail_vacation_set(request: Request, db: Session = Depends(get_db),
     if res is None:
         return {"ok": False}
     return {"ok": True, "vacation": res}
+
+
+# ── AI copilot mail (Sotto-fase 4) — provider.complete per-utente ──────
+
+def _strip_fences(txt: str) -> str:
+    """Rimuove eventuali ```...``` che il modello può avvolgere attorno all'output."""
+    t = (txt or "").strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else t[3:]
+        if t.rstrip().endswith("```"):
+            t = t.rstrip()[:-3]
+    return t.strip()
+
+
+@router.post("/mail/api/ai/reply")
+async def mail_ai_reply(request: Request, db: Session = Depends(get_db),
+                        thread_id: str = Form(...), instruction: str = Form("")):
+    """Genera una bozza di risposta HTML per un thread (AI propone, utente invia)."""
+    user = current_user(request)
+    provider = get_provider_for_user(user.id, db)
+    if not provider:
+        return {"ok": False, "error": "no_provider"}
+    thr = gmail.get_thread(db, user.id, thread_id)
+    if not thr or not thr.get("messages"):
+        return {"ok": False, "error": "no_thread"}
+    msgs = thr["messages"]
+    last = msgs[-1]
+    convo = "\n\n---\n\n".join(
+        f"Da: {m.get('from', '')}\nOggetto: {m.get('subject', '')}\n{(m.get('body_text') or '')[:4000]}"
+        for m in msgs[-4:])
+    system = ("Sei un assistente email professionale italiano. Scrivi SOLO il corpo HTML "
+              "(usa <p>, <br>, <b>, <ul><li>) di una bozza di risposta, tono professionale e "
+              "conciso. NON inventare fatti, date o impegni non presenti nel thread. Niente "
+              "oggetto, niente firma, niente commenti fuori dall'HTML.")
+    user_prompt = (f"Conversazione:\n{convo}\n\nIstruzioni per la risposta: "
+                   f"{instruction.strip() or 'Rispondi in modo appropriato al mittente.'}")
+    try:
+        html = _strip_fences(provider.complete(system, user_prompt, max_tokens=1500, temperature=0.5))
+    except Exception as e:
+        return {"ok": False, "error": "ai_failed"}
+    subj = last.get("subject") or ""
+    return {"ok": True, "html": html, "thread_id": thread_id,
+            "to": last.get("from") or "",
+            "subject": subj if subj.lower().startswith("re:") else ("Re: " + subj)}
+
+
+@router.post("/mail/api/ai/search")
+async def mail_ai_search(request: Request, db: Session = Depends(get_db), q: str = Form(...)):
+    """Traduce una richiesta in linguaggio naturale in una query di ricerca Gmail."""
+    user = current_user(request)
+    provider = get_provider_for_user(user.id, db)
+    if not provider:
+        return {"ok": False, "error": "no_provider"}
+    system = ("Converti la richiesta dell'utente in UNA query di ricerca Gmail valida usando "
+              "gli operatori (from: to: subject: has:attachment after:YYYY/MM/DD before:YYYY/MM/DD "
+              "is:unread is:starred label:). Rispondi SOLO con la query, senza spiegazioni, "
+              "senza virgolette, su una sola riga.")
+    try:
+        query = _strip_fences(provider.complete(system, q, max_tokens=80, temperature=0.0))
+    except Exception:
+        return {"ok": False, "error": "ai_failed"}
+    query = query.replace("\n", " ").strip().strip('"').strip("`")
+    return {"ok": True, "query": query}
 
 
 @router.post("/mail/api/threads/action")

@@ -359,6 +359,8 @@ async function mfMailOpenThread(threadId) {
         '<button class="btn btn-sm" data-mail-reply="' + escapeHtml(m.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.reply') + '</button> ' +
         '<button class="btn btn-sm" data-mail-replyall="' + escapeHtml(m.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.replyAll') + '</button> ' +
         '<button class="btn btn-sm" data-mail-forward="' + escapeHtml(m.id) + '">' + mfT('mail.forward') + '</button>' +
+        '<button class="btn btn-sm mail-ai-btn" data-mail-aireply="' + escapeHtml(threadId) + '">✨ ' + mfT('mail.aiReply') + '</button>' +
+        '<button class="btn btn-sm mail-ai-btn" data-mail-extract="' + escapeHtml(threadId) + '">📥 ' + mfT('mail.aiExtract') + '</button>' +
         '<button class="btn btn-sm" data-mail-assign="' + escapeHtml(threadId) + '">' + mfT('email.assign') + '</button>' +
         '</div></div>';
     }).join('') || '<div class="muted">' + mfT('mail.empty') + '</div>';
@@ -879,7 +881,59 @@ document.addEventListener('click', function (ev) {
   }
   const asg = t.closest && t.closest('[data-mail-assign]');
   if (asg) { mfMailAssign(asg.getAttribute('data-mail-assign')); return; }
+  const air = t.closest && t.closest('[data-mail-aireply]');
+  if (air) { mfMailAiReply(air.getAttribute('data-mail-aireply')); return; }
+  const aex = t.closest && t.closest('[data-mail-extract]');
+  if (aex) { mfMailAiExtract(aex.getAttribute('data-mail-extract')); return; }
 });
+
+// ── AI copilot mail (Sotto-fase 4) ─────────────────────────────────────
+async function mfMailAiReply(threadId) {
+  const instruction = prompt(mfT('mail.aiReplyPrompt'), '') || '';
+  if (window.toast) toast(mfT('mail.aiThinking'), 'info');
+  const fd = new FormData();
+  fd.append('thread_id', threadId);
+  fd.append('instruction', instruction);
+  try {
+    const r = await (await fetch('/mail/api/ai/reply', {method: 'POST', body: fd})).json();
+    if (r.ok) {
+      mfMailCompose({to: r.to, subject: r.subject, thread_id: r.thread_id, bodyHtml: r.html});
+    } else if (r.error === 'no_provider') {
+      if (window.toast) toast(mfT('mail.aiNoProvider'), 'error');
+    } else if (window.toast) toast(mfT('mail.aiError'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('mail.aiError'), 'error'); }
+}
+
+async function mfMailAiExtract(threadId) {
+  // riusa il copilot globale (registry propose_*): inietta il corpo come Acquisizioni F2.
+  try {
+    const t = await (await fetch('/mail/api/thread/' + encodeURIComponent(threadId))).json();
+    const body = (t.messages || []).map(function (m) { return m.body_text || ''; }).join('\n\n');
+    const ta = document.getElementById('cp-input');
+    if (ta && window.copilotSend) {
+      ta.value = mfT('copilot.email.instruction') + '\n\n' + body;
+      copilotSend();
+    } else if (window.toast) toast(mfT('mail.aiNoCopilot'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('mail.aiError'), 'error'); }
+}
+
+async function mfMailAiSearch() {
+  const nl = prompt(mfT('mail.aiSearchPrompt'), '');
+  if (!nl) return;
+  if (window.toast) toast(mfT('mail.aiThinking'), 'info');
+  const fd = new FormData();
+  fd.append('q', nl);
+  try {
+    const r = await (await fetch('/mail/api/ai/search', {method: 'POST', body: fd})).json();
+    if (r.ok && r.query) {
+      const sb = document.getElementById('mail-search');
+      if (sb) sb.value = r.query;
+      mfMailLoadThreads(true);
+    } else if (r.error === 'no_provider') {
+      if (window.toast) toast(mfT('mail.aiNoProvider'), 'error');
+    } else if (window.toast) toast(mfT('mail.aiError'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('mail.aiError'), 'error'); }
+}
 
 async function mfMailAssign(threadId) {
   try {

@@ -155,6 +155,45 @@ def test_vacation_get_set(client, monkeypatch):
     assert captured["start_ms"] is not None  # data convertita in ms
 
 
+class _FakeProvider:
+    def __init__(self, out): self._out = out
+    def complete(self, system, user, max_tokens=2000, temperature=0.3): return self._out
+
+
+def test_ai_reply_generates_html(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod, "get_provider_for_user",
+                        lambda uid, db: _FakeProvider("```html\n<p>Grazie, confermo.</p>\n```"))
+    monkeypatch.setattr(mailmod.gmail, "get_thread", lambda db, uid, tid: {
+        "id": tid, "messages": [{"id": "M1", "from": "anna@x.com", "subject": "Consegna",
+                                 "body_text": "Mi confermi la consegna?"}]})
+    r = c.post("/mail/api/ai/reply", data={"thread_id": "T1", "instruction": "conferma"})
+    b = r.json()
+    assert b["ok"] is True
+    assert b["html"] == "<p>Grazie, confermo.</p>"  # fence rimosso
+    assert b["to"] == "anna@x.com"
+    assert b["subject"] == "Re: Consegna"
+
+
+def test_ai_reply_no_provider(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod, "get_provider_for_user", lambda uid, db: None)
+    assert c.post("/mail/api/ai/reply", data={"thread_id": "T1"}).json()["ok"] is False
+
+
+def test_ai_search_translates(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod, "get_provider_for_user",
+                        lambda uid, db: _FakeProvider('  "from:anna subject:A24"\n'))
+    r = c.post("/mail/api/ai/search", data={"q": "email di anna sul progetto A24"})
+    b = r.json()
+    assert b["ok"] is True
+    assert b["query"] == "from:anna subject:A24"  # virgolette/newline ripulite
+
+
 def test_attachment_download(client, monkeypatch):
     c, s = client
     import app.routers.mail as mailmod

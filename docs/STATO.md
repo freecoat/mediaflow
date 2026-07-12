@@ -8,7 +8,12 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.255** — 12 luglio 2026 — Email 3: restyle sleek
+**v3.5.0-alpha.172.256** — 12 luglio 2026 — Email 4: AI copilot mail (CHIUDE programma email+calendario)
+
+### α.172.256 ✅ (Sotto-fase 4 — AI copilot mail — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser)
+- **Rispondi con AI** (`POST /mail/api/ai/reply`, `provider.complete`→bozza HTML dal thread→compose precompilato, AI-propone-utente-invia). **Ricerca semantica** (`POST /mail/api/ai/search`, NL→query Gmail). **Estrai** (inietta corpo nel copilot globale `#cp-input`+`copilotSend`, riusa registry `propose_*` verso quotazioni/acquisizioni/contatti). Provider per-utente (`get_provider_for_user`), degrada senza config. +3 test (1217 tot). i18n +9. Smoke browser reale verde (bottoni AI, flusso ricerca, 0 errori console). **CHIUDE programma email+calendario (fasi 1→4).**
+
+**Prossimo step**: **smoke live completo Matteo** (reconnect Google, prova tutto 250-256 incl. Rispondi-AI/Ricerca-AI/Estrai — richiedono provider AI configurato in Impostazioni→AI). Poi decidere: merge ramo `feat/mobile-responsive-email` su main + push, oppure **Asset Library redesign** (backlog, [[project_asset_library_redesign_backlog]]). Nota: Fase 4 qui = slice mail (reply/search/extract); estensioni AI più profonde (azioni mailbox proposte, calendario semantico) restano possibili follow-up. Ramo NON pushato.
 
 ### α.172.255 ✅ (Sotto-fase 3 — restyle sleek — 12 lug, ramo feat/mobile-responsive-email, CSS-only + smoke visivo)
 - Blocco `.mail-*` in `sleek.css` (`body.sleek-mode`): righe thread/etichette/albero/lettura/compose/tab allineati al linguaggio sleek (radius, border tenui, hover morbido, accent indigo, micro-label). Pop-out applica sleek da `localStorage.mf_sleek`. Nessun cambio funzionale. Smoke browser reale verde (lista+compose coerenti, 0 errori console, screenshot ok).
