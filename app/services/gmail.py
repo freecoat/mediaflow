@@ -35,6 +35,73 @@ def _b64url_decode(data: str) -> str:
         return ""
 
 
+from html import escape as _html_escape
+from html.parser import HTMLParser
+
+_ALLOWED_TAGS = {"p", "br", "b", "strong", "i", "em", "u", "ul", "ol", "li", "blockquote", "a"}
+_ALLOWED_HREF_TAGS = {"a"}
+
+
+def _safe_href(v: str) -> bool:
+    s = (v or "").strip().lower()
+    return s.startswith("http://") or s.startswith("https://") or s.startswith("mailto:")
+
+
+class _HtmlSanitizer(HTMLParser):
+    """Allowlist sanitizer: tiene solo tag basilari, nessun attributo tranne
+    href (http/https/mailto) su <a>. Testo escaped, script/style scartati.
+    Difende da HTML AI-generato (prompt injection) verso innerHTML/invio."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.out = []
+        self._skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self._skip += 1
+            return
+        if tag not in _ALLOWED_TAGS:
+            return
+        if tag == "br":
+            self.out.append("<br>")
+            return
+        kept = ""
+        if tag in _ALLOWED_HREF_TAGS:
+            for k, v in attrs:
+                if k == "href" and v and _safe_href(v):
+                    kept = ' href="%s"' % _html_escape(v, quote=True)
+        self.out.append("<%s%s>" % (tag, kept))
+
+    def handle_startendtag(self, tag, attrs):
+        if tag == "br":
+            self.out.append("<br>")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style"):
+            if self._skip:
+                self._skip -= 1
+            return
+        if tag in _ALLOWED_TAGS and tag != "br":
+            self.out.append("</%s>" % tag)
+
+    def handle_data(self, data):
+        if self._skip:
+            return
+        self.out.append(_html_escape(data))
+
+
+def sanitize_html(html: str) -> str:
+    """Ripulisce HTML non fidato lasciando solo tag/attributi in allowlist."""
+    p = _HtmlSanitizer()
+    try:
+        p.feed(html or "")
+        p.close()
+    except Exception:
+        return _html_escape(html or "")
+    return "".join(p.out)
+
+
 def parse_gmail_thread_id(url: str) -> Optional[str]:
     """Estrae il thread id da un URL Gmail. None se non riconosciuto/non-Gmail.
     Gestisce #inbox/ID, #label/Nome/ID, #search/query/ID e ?th=ID."""

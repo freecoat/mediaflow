@@ -1,5 +1,13 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.257 — Security: sanitizza HTML AI-generato (12 lug 2026)
+
+Fix su segnalazione automated security review del commit α.256.
+
+- **DOM XSS via prompt injection**: `/mail/api/ai/reply` restituiva l'HTML del modello (derivato dal corpo email = non fidato) che finiva in `innerHTML` del compose e nel messaggio inviato. Un'email malevola poteva indurre l'AI a emettere `onerror`/`onclick`/`javascript:`.
+- **Fix**: `gmail.sanitize_html` (allowlist stdlib `HTMLParser`, no dipendenze): tiene solo `p/br/b/strong/i/em/u/ul/ol/li/blockquote/a`, nessun attributo tranne `href` http/https/mailto su `<a>`, testo escaped, `<script>/<style>` scartati. Applicato all'output di `mail_ai_reply`.
+- Test: `test_sanitize_html_strips_dangerous` (+1). 1218 verdi.
+
 ## v3.5.0-alpha.172.256 — Email Sotto-fase 4: AI copilot mail (12 lug 2026)
 
 Chiude il **programma email+calendario** (fasi 1→4). AI nel client, riusa l'infra provider per-utente + il registry `propose_*` del copilot.

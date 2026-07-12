@@ -79,6 +79,18 @@ def test_get_thread_best_effort_on_error(monkeypatch):
     assert gmail.get_thread(s, 1, "T1") is None
 
 
+def test_sanitize_html_strips_dangerous():
+    s = gmail.sanitize_html
+    # event handler + script + javascript: href rimossi, testo preservato
+    assert s('<p onclick="x()">ciao</p>') == '<p>ciao</p>'
+    assert '<script>' not in s('<script>alert(1)</script><p>ok</p>')
+    assert 'alert' not in s('<img src=x onerror=alert(1)>')  # img non in allowlist
+    assert s('<a href="javascript:alert(1)">l</a>') == '<a>l</a>'
+    assert s('<a href="https://x.com">l</a>') == '<a href="https://x.com">l</a>'
+    # tag basilari mantenuti
+    assert s('<b>bold</b><br><ul><li>a</li></ul>') == '<b>bold</b><br><ul><li>a</li></ul>'
+
+
 def test_list_threads_enrich_parallel(monkeypatch):
     """enrich su molti thread: header popolati per tutti (percorso parallelo)."""
     s = _session(); _connect(s)

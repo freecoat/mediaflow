@@ -259,9 +259,12 @@ async def mail_ai_reply(request: Request, db: Session = Depends(get_db),
     user_prompt = (f"Conversazione:\n{convo}\n\nIstruzioni per la risposta: "
                    f"{instruction.strip() or 'Rispondi in modo appropriato al mittente.'}")
     try:
-        html = _strip_fences(provider.complete(system, user_prompt, max_tokens=1500, temperature=0.5))
+        raw = _strip_fences(provider.complete(system, user_prompt, max_tokens=1500, temperature=0.5))
     except Exception as e:
         return {"ok": False, "error": "ai_failed"}
+    # Output AI = non fidato (prompt injection dal corpo email): sanitizza prima
+    # che finisca in innerHTML del compose e nel messaggio inviato.
+    html = gmail.sanitize_html(raw)
     subj = last.get("subject") or ""
     return {"ok": True, "html": html, "thread_id": thread_id,
             "to": last.get("from") or "",
