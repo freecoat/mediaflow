@@ -51,26 +51,50 @@ def _active_link_same_nature(db: Session, jd: JobDeliverable, nature: str) -> Op
     return q.order_by(DeliverableAsset.confirmed_at.desc(), DeliverableAsset.id.desc()).first()
 
 
+def _lookup_asset(db: Session, nature: str, aid: int):
+    """Asset (digital) o PhysicalAsset del tenant corrente, o None. Evita link
+    cross-tenant: link_asset di per sé non valida l'ownership dell'asset."""
+    model = Asset if nature == "digital" else PhysicalAsset
+    return db.query(model).filter(
+        model.id == aid, model.tenant_id == current_tenant_id()
+    ).first()
+
+
 def associate(db: Session, user, *, deliverable_id: int, items: list, reason: Optional[str] = None) -> dict:
     jd = _get_deliverable(db, user, deliverable_id)
+    # Snapshot dei link attivi pre-esistenti per natura: vengono superseduti UNA
+    # sola volta, e i nuovi link creati in QUESTA stessa call non si superseduno
+    # a vicenda (senza snapshot, un secondo item della stessa natura troverebbe
+    # il link appena creato dal primo e lo marcherebbe superseded).
+    prev_by_nature = {
+        "digital": _active_link_same_nature(db, jd, "digital"),
+        "physical": _active_link_same_nature(db, jd, "physical"),
+    }
     linked = superseded = 0
     for it in items or []:
         nature = it.get("nature")
-        aid = int(it.get("id"))
         if nature not in ("digital", "physical"):
             continue
-        prev = _active_link_same_nature(db, jd, nature)
+        try:
+            aid = int(it.get("id"))
+        except (TypeError, ValueError):
+            continue  # item malformato: salta invece di 500
+        # Validazione tenant/esistenza PRIMA di creare il link.
+        if _lookup_asset(db, nature, aid) is None:
+            raise MediaActionError(f"Asset {nature}:{aid} non trovato")
         if nature == "digital":
             new_link = link_asset(db, jd, asset_id=aid, source="manual", user_id=user.id, notes=reason)
         else:
             new_link = link_asset(db, jd, physical_asset_id=aid, source="manual", user_id=user.id, notes=reason)
         linked += 1
-        # supersede: c'era un attivo DIVERSO della stessa natura
+        # supersede: c'era un attivo pre-esistente DIVERSO della stessa natura.
+        prev = prev_by_nature.get(nature)
         if prev is not None and prev.id != new_link.id:
             prev.superseded_at = now_utc()
             prev.superseded_by_id = new_link.id
             prev.supersede_reason = reason
             superseded += 1
+            prev_by_nature[nature] = None  # consumato: supersede una sola volta
     status_reset = False
     if superseded and jd.status in _REOPEN_FROM:
         jd.status = DeliverableStatus.in_progress

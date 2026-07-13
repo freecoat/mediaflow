@@ -165,3 +165,43 @@ def test_associate_deliverable_other_tenant_raises(ctx):
     with pytest.raises(media_actions.MediaActionError):
         media_actions.associate(db, admin, deliverable_id=999999,
                                 items=[{"nature": "digital", "id": ctx["a_new"].id}])
+
+
+def test_associate_rejects_cross_tenant_asset(ctx):
+    # asset di tenant 2 su consegna tenant 1 → MediaActionError, nessun link
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_progress"]
+    with pytest.raises(media_actions.MediaActionError):
+        media_actions.associate(db, admin, deliverable_id=jd.id,
+                                items=[{"nature": "digital", "id": ctx["other_tenant_asset"].id}])
+
+
+def test_associate_multi_same_nature_supersedes_preexisting_once(ctx):
+    # jd_delivered ha a_old attivo. Associo DUE digitali nuovi in una call:
+    # solo a_old (pre-esistente) va superseded UNA volta; i due nuovi non si
+    # superseduno tra loro; primario = ultimo linkato.
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_delivered"]
+    now = datetime.now(UTC).replace(tzinfo=None)
+    a_third = Asset(
+        tenant_id=1, filename="third.mov", original_name="third.mov", file_path="/vol/third.mov",
+        file_size=100, mime_type="video/quicktime", asset_type=AssetType.video,
+        uploaded_by=admin.id, project_id=ctx["project"].id,
+        proposed_state=AssetProposedState.confirmed, created_at=now,
+    )
+    db.add(a_third)
+    db.flush()
+    out = media_actions.associate(db, admin, deliverable_id=jd.id, items=[
+        {"nature": "digital", "id": ctx["a_new"].id},
+        {"nature": "digital", "id": a_third.id},
+    ])
+    db.commit()
+    assert out["linked"] == 2
+    assert out["superseded"] == 1  # solo a_old, non a_new
+    old = db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == jd.id,
+        DeliverableAsset.asset_id == ctx["a_old"].id).first()
+    assert old.superseded_at is not None
+    a_new_link = db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == jd.id,
+        DeliverableAsset.asset_id == ctx["a_new"].id).first()
+    assert a_new_link.superseded_at is None  # nuovo non superseded intra-call
+    assert jd.digital_asset_id == a_third.id  # primario = ultimo linkato
