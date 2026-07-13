@@ -205,3 +205,37 @@ def test_associate_multi_same_nature_supersedes_preexisting_once(ctx):
         DeliverableAsset.asset_id == ctx["a_new"].id).first()
     assert a_new_link.superseded_at is None  # nuovo non superseded intra-call
     assert jd.digital_asset_id == a_third.id  # primario = ultimo linkato
+
+
+def test_set_flags_toggle(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_actions.set_flags(db, admin,
+        [{"nature": "digital", "id": ctx["a_new"].id},
+         {"nature": "physical", "id": ctx["lto"].id}],
+        internal_archive=True)
+    db.commit()
+    assert out["updated"] == 2
+    db.refresh(ctx["a_new"]); db.refresh(ctx["lto"])
+    assert ctx["a_new"].is_internal_archive is True
+    assert ctx["lto"].is_internal_archive is True
+
+
+def test_set_flags_tenant_scope(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_actions.set_flags(db, admin,
+        [{"nature": "digital", "id": ctx["other_tenant_asset"].id}],
+        delivered_external=True)
+    db.commit()
+    assert out["updated"] == 0  # altro tenant: non toccato
+
+
+def test_unlink_removes_pivot(ctx):
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_delivered"]
+    out = media_actions.unlink(db, admin, deliverable_id=jd.id,
+                               items=[{"nature": "digital", "id": ctx["a_old"].id}])
+    db.commit()
+    assert out["removed"] == 1
+    from app.models.models import DeliverableAsset
+    assert db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == jd.id,
+        DeliverableAsset.asset_id == ctx["a_old"].id).count() == 0

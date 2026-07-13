@@ -105,6 +105,44 @@ def associate(db: Session, user, *, deliverable_id: int, items: list, reason: Op
     return {"linked": linked, "superseded": superseded, "status_reset": status_reset}
 
 
+def set_flags(db: Session, user, items: list, *, internal_archive=None, delivered_external=None) -> dict:
+    tid = current_tenant_id()
+    updated = 0
+    for it in items or []:
+        nature = it.get("nature")
+        aid = int(it.get("id"))
+        model = Asset if nature == "digital" else PhysicalAsset if nature == "physical" else None
+        if model is None:
+            continue
+        obj = db.query(model).filter(model.id == aid, model.tenant_id == tid).first()
+        if not obj:
+            continue
+        if not is_admin(user):
+            if obj.project_id is None or obj.project_id not in accessible_project_ids(user, db):
+                continue
+        if internal_archive is not None:
+            obj.is_internal_archive = bool(internal_archive)
+        if delivered_external is not None:
+            obj.is_delivered_external = bool(delivered_external)
+        updated += 1
+    db.flush()
+    return {"updated": updated}
+
+
+def unlink(db: Session, user, *, deliverable_id: int, items: list) -> dict:
+    jd = _get_deliverable(db, user, deliverable_id)
+    removed = 0
+    for it in items or []:
+        nature = it.get("nature")
+        aid = int(it.get("id"))
+        if nature == "digital":
+            removed += unlink_asset(db, jd, asset_id=aid)
+        elif nature == "physical":
+            removed += unlink_asset(db, jd, physical_asset_id=aid)
+    db.flush()
+    return {"removed": removed}
+
+
 def _notify_reopen(db, jd, user, reason):
     try:
         from app.services.notifications import notify_permission
