@@ -9,6 +9,8 @@ from sqlalchemy.pool import StaticPool
 from app.models.models import (
     Base, Tenant, Client, Project, Asset, AssetType, AssetProposedState, User, UserRole,
     PhysicalAsset, PhysicalAssetKind,
+    Department, PriceCategory, PriceItem, JobDeliverable, DeliverableAsset,
+    DeliverableStatus, DeliverableNature,
 )
 from app.services import media_library
 
@@ -58,6 +60,8 @@ def ctx():
         file_size=100, mime_type="video/quicktime", asset_type=AssetType.video,
         uploaded_by=admin.id, project_id=project.id,
         proposed_state=AssetProposedState.confirmed, created_at=now,
+        tech_specs_json={"video": {"width": 3840, "height": 2160,
+                                   "codec": "hevc", "framerate": "25"}, "audio": []},
     )
     b_wav = Asset(
         tenant_id=1, filename="b.wav", original_name="b.wav", file_path="/vol/b.wav",
@@ -102,6 +106,26 @@ def ctx():
         project_id=None, created_at=now,
     )
     db.add_all([lto, hdd, lto_deleted, other_tenant_phys])
+    db.flush()
+
+    # Task 4 — catena delivery: Department → PriceItem → JobDeliverable(delivered)
+    # → DeliverableAsset che linka a_mov. Serve per linked_to_delivery/status/dept.
+    dept = Department(tenant_id=1, code="DI-VIDEO", name="DI / Video")
+    db.add(dept)
+    db.flush()
+    cat = PriceCategory(tenant_id=1, name="Color")
+    db.add(cat)
+    db.flush()
+    pi = PriceItem(tenant_id=1, category_id=cat.id, name="Color HDR",
+                   unit="day", department_id=dept.id)
+    db.add(pi)
+    db.flush()
+    jd = JobDeliverable(tenant_id=1, job_id=1, name="DCP INTEROP", price_item_id=pi.id,
+                        nature=DeliverableNature.digital, status=DeliverableStatus.delivered)
+    db.add(jd)
+    db.flush()
+    da = DeliverableAsset(tenant_id=1, job_deliverable_id=jd.id, asset_id=a_mov.id)
+    db.add(da)
     db.commit()
 
     return {
@@ -110,6 +134,7 @@ def ctx():
         "other_tenant_asset": other_tenant_asset,
         "lto": lto, "hdd": hdd, "lto_deleted": lto_deleted,
         "other_tenant_phys": other_tenant_phys,
+        "dept": dept, "job_deliverable": jd,
     }
 
 
@@ -204,3 +229,45 @@ def test_pagination(ctx):
     overlap = ({(r["nature"], r["id"]) for r in p1["rows"]}
                & {(r["nature"], r["id"]) for r in p2["rows"]})
     assert not overlap
+
+
+# ── Task 4 — delivery link/status + department + tech-specs ────────────────
+
+def test_linked_to_delivery(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"linked_to_delivery": "yes"})
+    r = next(x for x in out["rows"] if x["name"] == "a.mov")
+    assert r["linked_to_delivery"] is True
+    assert r["delivery_status"] == "delivered"
+    out2 = media_library.list_assets(db, admin, {"linked_to_delivery": "no"})
+    assert "a.mov" not in {x["name"] for x in out2["rows"]}
+
+
+def test_delivery_status_filter(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"delivery_status": "delivered"})
+    assert "a.mov" in {x["name"] for x in out["rows"]}
+    assert all(r["delivery_status"] == "delivered" for r in out["rows"])
+
+
+def test_department_populated_and_filter(ctx):
+    db, admin, dept = ctx["db"], ctx["admin"], ctx["dept"]
+    out = media_library.list_assets(db, admin, {"linked_to_delivery": "yes"})
+    r = next(x for x in out["rows"] if x["name"] == "a.mov")
+    assert r["department"] == {"id": dept.id, "name": "DI / Video"}
+    out2 = media_library.list_assets(db, admin, {"department_id": dept.id})
+    assert "a.mov" in {x["name"] for x in out2["rows"]}
+    assert "b.wav" not in {x["name"] for x in out2["rows"]}
+
+
+def test_tech_resolution_filter(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"tech_resolution": "3840x2160"})
+    assert "a.mov" in {r["name"] for r in out["rows"]}
+    assert "b.wav" not in {r["name"] for r in out["rows"]}
+
+
+def test_tech_codec_filter(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"tech_codec": "hevc"})
+    assert "a.mov" in {r["name"] for r in out["rows"]}

@@ -8,10 +8,11 @@ delivery_status/linked_to_delivery arrivano in Task 4 (join deliverable)."""
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from app.models.models import (
     Asset, AssetProposedState, PhysicalAsset, Project, Client,
+    DeliverableAsset, JobDeliverable, PriceItem, Department,
 )
 from app.context import current_tenant_id
 from app.services.rbac import is_admin
@@ -112,8 +113,49 @@ def _digital_query(db, user, f: dict):
         like = f"%{f['q']}%"
         q = q.filter(or_(Asset.original_name.like(like), Asset.filename.like(like),
                          Asset.rel_path.like(like), Asset.file_path.like(like)))
+    # Tech-specs: shape reale nidificato (video/audio) — vedi _tech_from_json.
+    if f.get("tech_codec"):
+        q = q.filter(func.json_extract(Asset.tech_specs_json, "$.video.codec") == f["tech_codec"])
+    if f.get("tech_frame_rate"):
+        q = q.filter(func.json_extract(Asset.tech_specs_json, "$.video.framerate") == f["tech_frame_rate"])
+    if f.get("tech_hdr"):
+        q = q.filter(func.json_extract(Asset.tech_specs_json, "$.video.color_transfer") == f["tech_hdr"])
+    if f.get("tech_resolution"):
+        w, _, h = str(f["tech_resolution"]).partition("x")
+        if w.isdigit() and h.isdigit():
+            q = q.filter(
+                func.json_extract(Asset.tech_specs_json, "$.video.width") == int(w),
+                func.json_extract(Asset.tech_specs_json, "$.video.height") == int(h),
+            )
     q = _visible_project_filter(q, user, db)
     return q
+
+
+def _delivery_info(db, *, asset_id=None, physical_asset_id=None):
+    """Interroga il pivot DeliverableAsset → JobDeliverable per capire se
+    l'asset è linkato a una consegna, qual è lo stato (o "multi" se
+    divergono) e a quale reparto appartiene (via PriceItem.department_id).
+    Ritorna (linked: bool, status: str|None, department: dict|None)."""
+    col = (DeliverableAsset.asset_id == asset_id) if asset_id \
+        else (DeliverableAsset.physical_asset_id == physical_asset_id)
+    links = db.query(DeliverableAsset).filter(col).all()
+    if not links:
+        return False, None, None
+    statuses, dept = set(), None
+    for ln in links:
+        jd = db.get(JobDeliverable, ln.job_deliverable_id)
+        if not jd:
+            continue
+        statuses.add(getattr(jd.status, "value", None) or (jd.status and str(jd.status)))
+        if dept is None and jd.price_item_id:
+            pi = db.get(PriceItem, jd.price_item_id)
+            if pi and getattr(pi, "department_id", None):
+                d = db.get(Department, pi.department_id)
+                if d:
+                    dept = {"id": d.id, "name": d.name}
+    statuses.discard(None)
+    status = next(iter(statuses)) if len(statuses) == 1 else ("multi" if statuses else None)
+    return True, status, dept
 
 
 def row_from_physical(pa: PhysicalAsset, *, project=None, client=None) -> dict:
@@ -187,21 +229,53 @@ def list_assets(db: Session, user, filters: dict, *, offset: int = 0, limit: int
     want_digital = nature in (None, "", "digital") and not physical_only
     want_physical = nature in (None, "", "physical") and not digital_only
 
+    # Filtri derivati (calcolati sulla riga, non SQL): quando presenti si
+    # materializza senza il taglio offset+limit per non perdere righe valide.
+    derived = any(f.get(k) for k in ("linked_to_delivery", "delivery_status", "department_id"))
+    fetch = None if derived else (offset + limit)
+
     if want_digital:
         dq = _digital_query(db, user, f)
         total += dq.count()
-        for a in dq.order_by(Asset.created_at.desc()).limit(offset + limit).all():
+        aq = dq.order_by(Asset.created_at.desc())
+        if fetch is not None:
+            aq = aq.limit(fetch)
+        for a in aq.all():
             project = db.get(Project, a.project_id) if a.project_id else None
             client = db.get(Client, project.client_id) if (project and project.client_id) else None
-            built.append((a.created_at, row_from_asset(a, project=project, client=client)))
+            row = row_from_asset(a, project=project, client=client)
+            row["linked_to_delivery"], row["delivery_status"], row["department"] = \
+                _delivery_info(db, asset_id=a.id)
+            built.append((a.created_at, row))
 
     if want_physical:
         pq = _physical_query(db, user, f)
         total += pq.count()
-        for pa in pq.order_by(PhysicalAsset.created_at.desc()).limit(offset + limit).all():
+        pqq = pq.order_by(PhysicalAsset.created_at.desc())
+        if fetch is not None:
+            pqq = pqq.limit(fetch)
+        for pa in pqq.all():
             project = db.get(Project, pa.project_id) if pa.project_id else None
             client = db.get(Client, project.client_id) if (project and project.client_id) else None
-            built.append((pa.created_at, row_from_physical(pa, project=project, client=client)))
+            row = row_from_physical(pa, project=project, client=client)
+            row["linked_to_delivery"], row["delivery_status"], row["department"] = \
+                _delivery_info(db, physical_asset_id=pa.id)
+            built.append((pa.created_at, row))
+
+    if derived:
+        def _keep(r):
+            ld = f.get("linked_to_delivery")
+            if ld == "yes" and not r["linked_to_delivery"]:
+                return False
+            if ld == "no" and r["linked_to_delivery"]:
+                return False
+            if f.get("delivery_status") and r["delivery_status"] != f["delivery_status"]:
+                return False
+            if f.get("department_id") and (
+                    not r["department"] or r["department"]["id"] != int(f["department_id"])):
+                return False
+            return True
+        built = [(ts, r) for ts, r in built if _keep(r)]
 
     built.sort(key=lambda t: (t[0] or datetime.min), reverse=True)
     page = [r for _, r in built[offset:offset + limit]]
