@@ -2841,6 +2841,8 @@ app.include_router(acquisitions.router)  # feat/acquisizioni-fase1 — Pipeline 
 app.include_router(contacts.router)  # feat/acquisizioni-fase1 Task 10 — Contatti cliente
 app.include_router(calendar_router.router)  # feat/calendar-phaseB Task 3 — CRUD eventi + marcatori
 app.include_router(documents_router.router)  # Fase D — documenti Drive collegati
+from app.routers import media as media_router  # feat/media-library Fase A — browser unificato asset
+app.include_router(media_router.router)
 
 
 @app.get("/", response_class=HTMLResponse)
