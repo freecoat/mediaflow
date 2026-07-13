@@ -271,3 +271,45 @@ def test_tech_codec_filter(ctx):
     db, admin = ctx["db"], ctx["admin"]
     out = media_library.list_assets(db, admin, {"tech_codec": "hevc"})
     assert "a.mov" in {r["name"] for r in out["rows"]}
+
+
+# ── Task 5 — opzioni filtri + dettaglio asset ──────────────────────────────
+
+def test_filter_options(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    opt = media_library.filter_options(db, admin)
+    assert any(p["code"] == "PRJ001" for p in opt["projects"])
+    assert any(c["name"] == "Cliente Uno" for c in opt["clients"])
+    assert "video" in opt["asset_types"]
+    assert "lto" in opt["physical_kinds"]
+    assert "delivered" in opt["delivery_statuses"]
+    assert any(d["name"] == "DI / Video" for d in opt["departments"])
+    assert "3840x2160" in opt["tech"]["resolution"]
+    assert "hevc" in opt["tech"]["codec"]
+
+
+def test_asset_detail_digital(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    d = media_library.asset_detail(db, admin, "digital", ctx["a_mov"].id)
+    assert d is not None
+    assert d["name"] == "a.mov"
+    assert d["linked_to_delivery"] is True
+    assert d["deliverables"][0]["status"] == "delivered"
+    assert d["tech_specs_json"]["video"]["codec"] == "hevc"
+
+
+def test_asset_detail_physical(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    d = media_library.asset_detail(db, admin, "physical", ctx["lto"].id)
+    assert d is not None and d["name"] == "LTO-001"
+
+
+def test_asset_detail_denied_other_tenant(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    assert media_library.asset_detail(db, admin, "digital", ctx["other_tenant_asset"].id) is None
+    assert media_library.asset_detail(db, admin, "physical", ctx["other_tenant_phys"].id) is None
+
+
+def test_asset_detail_soft_deleted_physical_none(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    assert media_library.asset_detail(db, admin, "physical", ctx["lto_deleted"].id) is None

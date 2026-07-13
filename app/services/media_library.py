@@ -11,8 +11,9 @@ from typing import Optional
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from app.models.models import (
-    Asset, AssetProposedState, PhysicalAsset, Project, Client,
-    DeliverableAsset, JobDeliverable, PriceItem, Department,
+    Asset, AssetType, AssetProposedState, PhysicalAsset, PhysicalAssetKind,
+    Project, Client, Job,
+    DeliverableAsset, JobDeliverable, DeliverableStatus, PriceItem, Department,
 )
 from app.context import current_tenant_id
 from app.services.rbac import is_admin
@@ -281,3 +282,133 @@ def list_assets(db: Session, user, filters: dict, *, offset: int = 0, limit: int
     page = [r for _, r in built[offset:offset + limit]]
     next_offset = offset + limit if (offset + limit) < len(built) else None
     return {"rows": page, "total": total, "next_offset": next_offset}
+
+
+# ── Task 5 — opzioni filtri + dettaglio ────────────────────────────────────
+
+def filter_options(db: Session, user) -> dict:
+    """Valori distinti reali per popolare i dropdown dei filtri. Scoped al
+    tenant + visibilità TPN (progetti/clienti/job accessibili)."""
+    tid = current_tenant_id()
+    admin = is_admin(user)
+    if admin:
+        projects = db.query(Project).filter(Project.tenant_id == tid).all()
+    else:
+        ids = accessible_project_ids(user, db)
+        projects = (db.query(Project).filter(Project.tenant_id == tid, Project.id.in_(ids)).all()
+                    if ids else [])
+    proj_out = sorted(
+        [{"id": p.id, "code": p.code, "title": p.title} for p in projects],
+        key=lambda x: (x["code"] or "").lower())
+
+    if admin:
+        clients = db.query(Client).filter(Client.tenant_id == tid).all()
+    else:
+        cids = {p.client_id for p in projects if p.client_id}
+        clients = (db.query(Client).filter(Client.tenant_id == tid, Client.id.in_(cids)).all()
+                   if cids else [])
+    cli_out = sorted([{"id": c.id, "name": c.name} for c in clients],
+                     key=lambda x: (x["name"] or "").lower())
+
+    jq = db.query(Job).filter(Job.tenant_id == tid)
+    if not admin:
+        pids = [p["id"] for p in proj_out]
+        jq = jq.filter(Job.project_id.in_(pids)) if pids else jq.filter(Job.id < 0)
+    jobs_out = sorted([{"id": j.id, "code": j.code, "title": j.title} for j in jq.all()],
+                      key=lambda x: (x["code"] or "").lower())
+
+    depts = db.query(Department).filter(Department.tenant_id == tid).all()
+    dept_out = sorted([{"id": d.id, "name": d.name} for d in depts],
+                      key=lambda x: (x["name"] or "").lower())
+
+    tech_rows = db.query(
+        func.json_extract(Asset.tech_specs_json, "$.video.width"),
+        func.json_extract(Asset.tech_specs_json, "$.video.height"),
+        func.json_extract(Asset.tech_specs_json, "$.video.codec"),
+        func.json_extract(Asset.tech_specs_json, "$.video.framerate"),
+        func.json_extract(Asset.tech_specs_json, "$.video.color_transfer"),
+    ).filter(Asset.tenant_id == tid, Asset.tech_specs_json.isnot(None)).all()
+    resolutions, codecs, frame_rates, hdrs = set(), set(), set(), set()
+    for w, h, codec, fr, hdr in tech_rows:
+        if w and h:
+            resolutions.add(f"{w}x{h}")
+        if codec:
+            codecs.add(codec)
+        if fr:
+            frame_rates.add(str(fr))
+        if hdr:
+            hdrs.add(hdr)
+
+    return {
+        "projects": proj_out, "clients": cli_out, "jobs": jobs_out, "departments": dept_out,
+        "asset_types": [e.value for e in AssetType],
+        "physical_kinds": [e.value for e in PhysicalAssetKind],
+        "delivery_statuses": [e.value for e in DeliverableStatus],
+        "tech": {"resolution": sorted(resolutions), "codec": sorted(codecs),
+                 "hdr": sorted(hdrs), "frame_rate": sorted(frame_rates)},
+    }
+
+
+def _deliverables_list(db, *, asset_id=None, physical_asset_id=None) -> list:
+    col = (DeliverableAsset.asset_id == asset_id) if asset_id \
+        else (DeliverableAsset.physical_asset_id == physical_asset_id)
+    out = []
+    for ln in db.query(DeliverableAsset).filter(col).all():
+        jd = db.get(JobDeliverable, ln.job_deliverable_id)
+        if not jd:
+            continue
+        out.append({"id": jd.id, "job": jd.name,
+                    "status": getattr(jd.status, "value", None) or str(jd.status),
+                    "source": ln.source})
+    return out
+
+
+def _digital_accessible(a: Asset, user, db) -> bool:
+    if is_admin(user):
+        return True
+    if a.project_id is None:
+        return bool(user) and a.uploaded_by == user.id
+    return a.project_id in accessible_project_ids(user, db)
+
+
+def _physical_accessible(pa: PhysicalAsset, user, db) -> bool:
+    if is_admin(user):
+        return True
+    return bool(pa.project_id) and pa.project_id in accessible_project_ids(user, db)
+
+
+def asset_detail(db: Session, user, nature: str, asset_id: int) -> Optional[dict]:
+    """Riga unificata + campi estesi (tech_specs_json completo, deliverables,
+    memberships, history). None se inesistente o non accessibile."""
+    tid = current_tenant_id()
+    if nature == "digital":
+        a = db.query(Asset).filter(Asset.id == asset_id, Asset.tenant_id == tid).first()
+        if not a or not _digital_accessible(a, user, db):
+            return None
+        project = db.get(Project, a.project_id) if a.project_id else None
+        client = db.get(Client, project.client_id) if (project and project.client_id) else None
+        row = row_from_asset(a, project=project, client=client)
+        row["linked_to_delivery"], row["delivery_status"], row["department"] = \
+            _delivery_info(db, asset_id=a.id)
+        row["tech_specs_json"] = a.tech_specs_json
+        row["deliverables"] = _deliverables_list(db, asset_id=a.id)
+        row["memberships"] = []   # bundle/membership: fase successiva
+        row["history"] = []       # audit log asset: fase successiva
+        return row
+    if nature == "physical":
+        pa = db.query(PhysicalAsset).filter(
+            PhysicalAsset.id == asset_id, PhysicalAsset.tenant_id == tid,
+            PhysicalAsset.deleted_at.is_(None)).first()
+        if not pa or not _physical_accessible(pa, user, db):
+            return None
+        project = db.get(Project, pa.project_id) if pa.project_id else None
+        client = db.get(Client, project.client_id) if (project and project.client_id) else None
+        row = row_from_physical(pa, project=project, client=client)
+        row["linked_to_delivery"], row["delivery_status"], row["department"] = \
+            _delivery_info(db, physical_asset_id=pa.id)
+        row["tech_specs_json"] = None
+        row["deliverables"] = _deliverables_list(db, physical_asset_id=pa.id)
+        row["memberships"] = []
+        row["history"] = []
+        return row
+    return None
