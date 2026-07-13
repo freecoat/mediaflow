@@ -176,16 +176,49 @@ def _row_to_csv_dict(r: dict) -> dict:
 
 
 def export_manifest_csv(db: Session, user, *, items=None, filters=None, cap: int = 5000) -> str:
+    """Manifest CSV degli asset. `items` = elenco esplicito; altrimenti esporta
+    tutti i risultati di `filters` fino a `cap` righe. `list_assets` clampa
+    `limit` a 200, quindi si pagina in loop (dedup su (nature,id)) fino a `cap`
+    o esaurimento; se si tocca `cap` con altri risultati disponibili, si logga
+    il troncamento (no silent truncation)."""
+    import logging
     from app.services import media_library
     rows = []
     if items:
         for it in items:
-            d = media_library.asset_detail(db, user, it.get("nature"), int(it.get("id")))
+            try:
+                aid = int(it.get("id"))
+            except (TypeError, ValueError):
+                continue
+            d = media_library.asset_detail(db, user, it.get("nature"), aid)
             if d:
                 rows.append(d)
     else:
-        out = media_library.list_assets(db, user, filters or {}, offset=0, limit=cap)
-        rows = out["rows"]
+        seen = set()
+        offset = 0
+        truncated = False
+        while True:
+            out = media_library.list_assets(db, user, filters or {}, offset=offset, limit=200)
+            added = 0
+            for r in out["rows"]:
+                key = (r["nature"], r["id"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append(r)
+                added += 1
+                if len(rows) >= cap:
+                    break
+            nxt = out.get("next_offset")
+            if len(rows) >= cap:
+                truncated = nxt is not None
+                break
+            if nxt is None or added == 0:
+                break
+            offset = nxt
+        if truncated:
+            logging.getLogger(__name__).warning(
+                "export_manifest_csv: troncato a cap=%d righe (altri risultati disponibili)", cap)
     buf = io.StringIO()
     w = _csv.DictWriter(buf, fieldnames=_CSV_COLUMNS, extrasaction="ignore")
     w.writeheader()

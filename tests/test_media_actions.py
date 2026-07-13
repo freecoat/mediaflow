@@ -264,3 +264,20 @@ def test_export_csv_from_items(ctx):
     csv = media_actions.export_manifest_csv(db, admin,
         items=[{"nature": "physical", "id": ctx["lto"].id}])
     assert "LTO-SMK-001" in csv or "physical" in csv
+
+
+def test_export_csv_paginates_all(ctx):
+    # senza cap: tutti gli asset confermati tenant 1 (a_old, a_new digitali +
+    # lto fisico) = 3 righe dati + header
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin, filters={})
+    lines = [ln for ln in csv.strip().splitlines() if ln]
+    assert len(lines) == 4  # header + 3
+
+
+def test_export_csv_respects_cap(ctx):
+    # cap=1 → header + 1 riga soltanto, nessun duplicato dalla paginazione
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin, filters={}, cap=1)
+    lines = [ln for ln in csv.strip().splitlines() if ln]
+    assert len(lines) == 2  # header + 1
