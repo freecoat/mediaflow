@@ -98,3 +98,59 @@ def test_asset_detail_404(client, monkeypatch):
 def test_asset_detail_bad_nature_404(client):
     c, s = client
     assert c.get("/media/api/asset/weird/1").status_code == 404
+
+
+def test_associate_ok(client, monkeypatch):
+    c, s = client
+    import app.routers.media as m
+    monkeypatch.setattr(m.media_actions, "associate",
+                        lambda db, u, **k: {"linked": 1, "superseded": 1, "status_reset": True})
+    r = c.post("/media/api/associate", data={"deliverable_id": "1",
+               "items": '[{"nature":"digital","id":5}]', "reason": "QC"})
+    assert r.status_code == 200 and r.json()["superseded"] == 1
+
+def test_associate_bad_items_400(client):
+    c, s = client
+    r = c.post("/media/api/associate", data={"deliverable_id": "1", "items": "not-json"})
+    assert r.status_code == 400
+
+def test_associate_missing_deliverable_404(client, monkeypatch):
+    c, s = client
+    import app.routers.media as m
+    def _raise(db, u, **k):
+        raise m.media_actions.MediaActionError("x")
+    monkeypatch.setattr(m.media_actions, "associate", _raise)
+    r = c.post("/media/api/associate", data={"deliverable_id": "9",
+               "items": '[{"nature":"digital","id":5}]'})
+    assert r.status_code == 404
+
+def test_flags_ok(client, monkeypatch):
+    c, s = client
+    import app.routers.media as m
+    monkeypatch.setattr(m.media_actions, "set_flags", lambda db, u, items, **k: {"updated": 2})
+    r = c.post("/media/api/flags", data={"items": '[{"nature":"digital","id":1}]',
+               "internal_archive": "1"})
+    assert r.status_code == 200 and r.json()["updated"] == 2
+
+def test_unlink_ok(client, monkeypatch):
+    c, s = client
+    import app.routers.media as m
+    monkeypatch.setattr(m.media_actions, "unlink", lambda db, u, **k: {"removed": 1})
+    r = c.post("/media/api/unlink", data={"deliverable_id": "1",
+               "items": '[{"nature":"digital","id":1}]'})
+    assert r.status_code == 200 and r.json()["removed"] == 1
+
+def test_export_csv_download(client, monkeypatch):
+    c, s = client
+    import app.routers.media as m
+    monkeypatch.setattr(m.media_actions, "export_manifest_csv", lambda db, u, **k: "nature,name\ndigital,x\n")
+    r = c.get("/media/api/export?nature=digital")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers["content-type"]
+    assert "attachment" in r.headers.get("content-disposition", "")
+
+def test_associate_denied_viewer(client):
+    c, s = client
+    vc = _viewer_client(s)
+    r = vc.post("/media/api/associate", data={"deliverable_id": "1", "items": "[]"})
+    assert r.status_code == 403
