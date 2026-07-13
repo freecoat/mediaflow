@@ -2,6 +2,8 @@
 Riusa deliverable_assets.link_asset/unlink_asset come fonte di verità dei
 link. Nessuna funzione committa (commit gestito dal router)."""
 from __future__ import annotations
+import csv as _csv
+import io
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -149,6 +151,47 @@ def unlink(db: Session, user, *, deliverable_id: int, items: list) -> dict:
             removed += unlink_asset(db, jd, physical_asset_id=aid)
     db.flush()
     return {"removed": removed}
+
+
+_CSV_COLUMNS = ["nature", "name", "type", "project_code", "client", "department",
+                "delivery_status", "linked_to_delivery", "checksum", "size_bytes",
+                "storage_path", "created_at"]
+
+
+def _row_to_csv_dict(r: dict) -> dict:
+    return {
+        "nature": r.get("nature"),
+        "name": r.get("name"),
+        "type": r.get("asset_type") or r.get("physical_kind") or "",
+        "project_code": (r.get("project") or {}).get("code") if r.get("project") else "",
+        "client": (r.get("client") or {}).get("name") if r.get("client") else "",
+        "department": (r.get("department") or {}).get("name") if r.get("department") else "",
+        "delivery_status": r.get("delivery_status") or "",
+        "linked_to_delivery": "yes" if r.get("linked_to_delivery") else "no",
+        "checksum": r.get("checksum") or "",
+        "size_bytes": r.get("size_bytes") or "",
+        "storage_path": (r.get("storage") or {}).get("path") if r.get("storage") else "",
+        "created_at": r.get("created_at") or "",
+    }
+
+
+def export_manifest_csv(db: Session, user, *, items=None, filters=None, cap: int = 5000) -> str:
+    from app.services import media_library
+    rows = []
+    if items:
+        for it in items:
+            d = media_library.asset_detail(db, user, it.get("nature"), int(it.get("id")))
+            if d:
+                rows.append(d)
+    else:
+        out = media_library.list_assets(db, user, filters or {}, offset=0, limit=cap)
+        rows = out["rows"]
+    buf = io.StringIO()
+    w = _csv.DictWriter(buf, fieldnames=_CSV_COLUMNS, extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow(_row_to_csv_dict(r))
+    return buf.getvalue()
 
 
 def _notify_reopen(db, jd, user, reason):

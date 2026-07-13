@@ -249,3 +249,18 @@ def test_unlink_removes_pivot(ctx):
     assert db.query(DeliverableAsset).filter(
         DeliverableAsset.job_deliverable_id == jd.id,
         DeliverableAsset.asset_id == ctx["a_old"].id).count() == 0
+
+
+def test_export_csv_from_filters(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin, filters={"nature": "digital"})
+    lines = csv.strip().splitlines()
+    assert lines[0].startswith("nature,name,type")
+    assert any("a.mov" in ln for ln in lines[1:]) or any("new.mov" in ln for ln in lines[1:])
+
+
+def test_export_csv_from_items(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin,
+        items=[{"nature": "physical", "id": ctx["lto"].id}])
+    assert "LTO-SMK-001" in csv or "physical" in csv
