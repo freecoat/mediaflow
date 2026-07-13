@@ -110,10 +110,13 @@ def set_flags(db: Session, user, items: list, *, internal_archive=None, delivere
     updated = 0
     for it in items or []:
         nature = it.get("nature")
-        aid = int(it.get("id"))
         model = Asset if nature == "digital" else PhysicalAsset if nature == "physical" else None
         if model is None:
             continue
+        try:
+            aid = int(it.get("id"))
+        except (TypeError, ValueError):
+            continue  # item malformato: salta invece di 500
         obj = db.query(model).filter(model.id == aid, model.tenant_id == tid).first()
         if not obj:
             continue
@@ -134,10 +137,15 @@ def unlink(db: Session, user, *, deliverable_id: int, items: list) -> dict:
     removed = 0
     for it in items or []:
         nature = it.get("nature")
-        aid = int(it.get("id"))
+        if nature not in ("digital", "physical"):
+            continue
+        try:
+            aid = int(it.get("id"))
+        except (TypeError, ValueError):
+            continue  # item malformato: salta invece di 500
         if nature == "digital":
             removed += unlink_asset(db, jd, asset_id=aid)
-        elif nature == "physical":
+        else:
             removed += unlink_asset(db, jd, physical_asset_id=aid)
     db.flush()
     return {"removed": removed}

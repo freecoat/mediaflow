@@ -167,6 +167,16 @@ def test_associate_deliverable_other_tenant_raises(ctx):
                                 items=[{"nature": "digital", "id": ctx["a_new"].id}])
 
 
+def test_set_flags_skips_malformed_item(ctx):
+    # id mancante/non numerico → skip, niente 500 (coerente con associate)
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_actions.set_flags(db, admin,
+        [{"nature": "digital", "id": None}, {"nature": "digital"}],
+        internal_archive=True)
+    db.commit()
+    assert out["updated"] == 0
+
+
 def test_associate_rejects_cross_tenant_asset(ctx):
     # asset di tenant 2 su consegna tenant 1 → MediaActionError, nessun link
     db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_progress"]
