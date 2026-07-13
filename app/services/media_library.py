@@ -1,10 +1,12 @@
 """Media Library — serializer unificato Asset (digitale) + PhysicalAsset (fisico).
 Read-only (Fase A). Tenant-scoped + visibilità TPN. Righe omogenee per il browser.
 
-Task 2: SOLO asset digitali (Asset). PhysicalAsset arriva in Task 3 (merge
-delle due nature nello stesso elenco). department/delivery_status/
-linked_to_delivery arrivano in Task 4 (join capitolato/deliverable)."""
+Task 2: asset digitali (Asset).
+Task 3: PhysicalAsset (fisico) fuso nello stesso elenco, ordinato per
+created_at DESC, con paginazione best-effort cross-natura. department/
+delivery_status/linked_to_delivery arrivano in Task 4 (join deliverable)."""
 from __future__ import annotations
+from datetime import datetime
 from typing import Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -14,6 +16,14 @@ from app.models.models import (
 from app.context import current_tenant_id
 from app.services.rbac import is_admin
 from app.services.project_access import accessible_project_ids
+
+
+# Filtri validi solo per una natura: se presenti restringono l'elenco a quella
+# natura (una riga fisica non ha asset_type/proposed_state/tech; una digitale
+# non ha physical_kind).
+_DIGITAL_ONLY_FILTERS = ("asset_type", "proposed_state",
+                         "tech_resolution", "tech_codec", "tech_hdr", "tech_frame_rate")
+_PHYSICAL_ONLY_FILTERS = ("physical_kind",)
 
 
 def _tech_from_json(tech_specs_json) -> Optional[dict]:
@@ -106,21 +116,94 @@ def _digital_query(db, user, f: dict):
     return q
 
 
+def row_from_physical(pa: PhysicalAsset, *, project=None, client=None) -> dict:
+    return {
+        "nature": "physical", "id": pa.id,
+        "name": pa.label or pa.serial_number or f"physical-{pa.id}",
+        "asset_type": None,
+        "physical_kind": getattr(pa.kind, "value", None) or (pa.kind and str(pa.kind)),
+        "project": {"id": project.id, "code": project.code, "title": project.title} if project else None,
+        "client": {"id": client.id, "name": client.name} if client else None,
+        "department": None,          # Task 4
+        "delivery_status": None,     # Task 4
+        "linked_to_delivery": False, # Task 4
+        "proposed_state": None,
+        "flags": {"internal_archive": bool(pa.is_internal_archive),
+                  "delivered_external": bool(pa.is_delivered_external)},
+        "storage": {"volume_id": None, "volume_name": None, "path": pa.location},
+        "checksum": pa.checksum_xxhash or pa.checksum_md5,
+        "size_bytes": int(pa.capacity_gb * (1024 ** 3)) if pa.capacity_gb else None,
+        "tech": None,
+        "created_at": pa.created_at.isoformat() if pa.created_at else None,
+    }
+
+
+def _physical_query(db, user, f: dict):
+    q = db.query(PhysicalAsset).filter(
+        PhysicalAsset.tenant_id == current_tenant_id(),
+        PhysicalAsset.deleted_at.is_(None),
+    )
+    if f.get("project_id"):
+        q = q.filter(PhysicalAsset.project_id == int(f["project_id"]))
+    if f.get("job_id"):
+        q = q.filter(PhysicalAsset.job_id == int(f["job_id"]))
+    if f.get("physical_kind"):
+        q = q.filter(PhysicalAsset.kind == f["physical_kind"])
+    if f.get("internal_archive") in ("1", "true", True):
+        q = q.filter(PhysicalAsset.is_internal_archive.is_(True))
+    if f.get("delivered_external") in ("1", "true", True):
+        q = q.filter(PhysicalAsset.is_delivered_external.is_(True))
+    if f.get("checksum"):
+        q = q.filter(or_(PhysicalAsset.checksum_xxhash.like(f["checksum"] + "%"),
+                         PhysicalAsset.checksum_md5.like(f["checksum"] + "%")))
+    if f.get("q"):
+        like = f"%{f['q']}%"
+        q = q.filter(or_(PhysicalAsset.label.like(like),
+                         PhysicalAsset.serial_number.like(like),
+                         PhysicalAsset.location.like(like)))
+    # visibilità TPN: admin tutto; altrimenti solo progetti accessibili.
+    if not is_admin(user):
+        proj_ids = accessible_project_ids(user, db)
+        q = (q.filter(PhysicalAsset.project_id.in_(proj_ids))
+             if proj_ids else q.filter(PhysicalAsset.id < 0))
+    return q
+
+
 def list_assets(db: Session, user, filters: dict, *, offset: int = 0, limit: int = 50) -> dict:
+    """Fonde asset digitali (Asset) e fisici (PhysicalAsset) in un unico elenco
+    ordinato per created_at DESC. Paginazione best-effort cross-natura: si
+    materializzano fino a offset+limit righe per natura, poi si fonde e si
+    taglia la finestra. `total` = conteggio combinato reale delle due nature."""
+    f = filters or {}
     limit = max(1, min(200, int(limit)))
-    nature = (filters or {}).get("nature")
-    rows = []
+    nature = f.get("nature")
     total = 0
-    if nature in (None, "", "digital"):
-        dq = _digital_query(db, user, filters or {})
+    built: list[tuple] = []
+
+    # Un filtro esclusivo di una natura restringe l'elenco a quella natura,
+    # anche senza `nature` esplicito (es. asset_type è solo digitale).
+    digital_only = any(f.get(k) for k in _DIGITAL_ONLY_FILTERS)
+    physical_only = any(f.get(k) for k in _PHYSICAL_ONLY_FILTERS)
+    want_digital = nature in (None, "", "digital") and not physical_only
+    want_physical = nature in (None, "", "physical") and not digital_only
+
+    if want_digital:
+        dq = _digital_query(db, user, f)
         total += dq.count()
-        for a in dq.order_by(Asset.created_at.desc()).offset(offset).limit(limit).all():
+        for a in dq.order_by(Asset.created_at.desc()).limit(offset + limit).all():
             project = db.get(Project, a.project_id) if a.project_id else None
             client = db.get(Client, project.client_id) if (project and project.client_id) else None
-            rows.append(row_from_asset(a, project=project, client=client))
-    # physical: Task 3 — stub, non ancora implementato in Task 2. `nature`
-    # "physical"/"all" non produce righe fisiche finché Task 3 non aggiunge
-    # la query PhysicalAsset + merge. `total` riflette solo il conteggio
-    # digitale finché resta così.
-    next_offset = offset + limit if len(rows) == limit else None
-    return {"rows": rows, "total": total, "next_offset": next_offset}
+            built.append((a.created_at, row_from_asset(a, project=project, client=client)))
+
+    if want_physical:
+        pq = _physical_query(db, user, f)
+        total += pq.count()
+        for pa in pq.order_by(PhysicalAsset.created_at.desc()).limit(offset + limit).all():
+            project = db.get(Project, pa.project_id) if pa.project_id else None
+            client = db.get(Client, project.client_id) if (project and project.client_id) else None
+            built.append((pa.created_at, row_from_physical(pa, project=project, client=client)))
+
+    built.sort(key=lambda t: (t[0] or datetime.min), reverse=True)
+    page = [r for _, r in built[offset:offset + limit]]
+    next_offset = offset + limit if (offset + limit) < len(built) else None
+    return {"rows": page, "total": total, "next_offset": next_offset}

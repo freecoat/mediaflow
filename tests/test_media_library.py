@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.models.models import (
     Base, Tenant, Client, Project, Asset, AssetType, AssetProposedState, User, UserRole,
+    PhysicalAsset, PhysicalAssetKind,
 )
 from app.services import media_library
 
@@ -77,25 +78,51 @@ def ctx():
         proposed_state=AssetProposedState.confirmed, created_at=now,
     )
     db.add_all([a_mov, b_wav, pending_mov, other_tenant_asset])
+    db.flush()
+
+    # Task 3 — asset fisici (PhysicalAsset). LTO + HDD nel progetto tenant 1,
+    # più uno soft-deleted (deleted_at) che NON deve apparire, e uno di tenant 2.
+    lto = PhysicalAsset(
+        tenant_id=1, kind=PhysicalAssetKind.lto, label="LTO-001",
+        serial_number="LTO0001SN", location="Cassaforte", capacity_gb=18000,
+        project_id=project.id, created_at=now + timedelta(seconds=3),
+    )
+    hdd = PhysicalAsset(
+        tenant_id=1, kind=PhysicalAssetKind.hdd, label="HDD-Backup",
+        serial_number="HDD0001SN", location="Scaffale A", capacity_gb=8000,
+        project_id=project.id, created_at=now + timedelta(seconds=4),
+    )
+    lto_deleted = PhysicalAsset(
+        tenant_id=1, kind=PhysicalAssetKind.lto, label="LTO-DEL",
+        project_id=project.id, created_at=now + timedelta(seconds=5),
+        deleted_at=now + timedelta(seconds=6),
+    )
+    other_tenant_phys = PhysicalAsset(
+        tenant_id=2, kind=PhysicalAssetKind.hdd, label="HDD-OTHER",
+        project_id=None, created_at=now,
+    )
+    db.add_all([lto, hdd, lto_deleted, other_tenant_phys])
     db.commit()
 
     return {
         "db": db, "admin": admin, "project": project, "client": client,
         "a_mov": a_mov, "b_wav": b_wav, "pending_mov": pending_mov,
         "other_tenant_asset": other_tenant_asset,
+        "lto": lto, "hdd": hdd, "lto_deleted": lto_deleted,
+        "other_tenant_phys": other_tenant_phys,
     }
 
 
 def test_list_digital_basic(ctx):
     db, admin = ctx["db"], ctx["admin"]
-    rows = media_library.list_assets(db, admin, {})["rows"]
+    rows = media_library.list_assets(db, admin, {"nature": "digital"})["rows"]
     assert all(r["nature"] == "digital" for r in rows)
     assert {r["name"] for r in rows} == {"a.mov", "b.wav"}
 
 
 def test_filter_project(ctx):
     db, admin, project = ctx["db"], ctx["admin"], ctx["project"]
-    out = media_library.list_assets(db, admin, {"project_id": project.id})
+    out = media_library.list_assets(db, admin, {"nature": "digital", "project_id": project.id})
     assert out["total"] == 2
 
 
@@ -126,4 +153,54 @@ def test_filter_proposed_pending(ctx):
 def test_tenant_scope(ctx):
     db, admin, other_id = ctx["db"], ctx["admin"], ctx["other_tenant_asset"].id
     rows = media_library.list_assets(db, admin, {})["rows"]
-    assert all(r["id"] != other_id for r in rows)
+    assert all(not (r["nature"] == "digital" and r["id"] == other_id) for r in rows)
+
+
+# ── Task 3 — physical + merge + paginazione ────────────────────────────────
+
+def test_list_physical(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"nature": "physical"})
+    assert all(r["nature"] == "physical" for r in out["rows"])
+    names = {r["name"] for r in out["rows"]}
+    assert "LTO-001" in names
+    assert "HDD-Backup" in names
+
+
+def test_physical_soft_delete_hidden(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"nature": "physical"})
+    assert "LTO-DEL" not in {r["name"] for r in out["rows"]}
+
+
+def test_physical_tenant_scope(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"nature": "physical"})
+    assert "HDD-OTHER" not in {r["name"] for r in out["rows"]}
+
+
+def test_nature_both_merges(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {})
+    natures = {r["nature"] for r in out["rows"]}
+    assert natures == {"digital", "physical"}
+    # 2 digital confirmed + 2 physical attivi = 4
+    assert out["total"] == 4
+
+
+def test_physical_kind_filter(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_library.list_assets(db, admin, {"nature": "physical", "physical_kind": "lto"})
+    assert all(r["physical_kind"] == "lto" for r in out["rows"])
+    assert "LTO-001" in {r["name"] for r in out["rows"]}
+    assert "HDD-Backup" not in {r["name"] for r in out["rows"]}
+
+
+def test_pagination(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    p1 = media_library.list_assets(db, admin, {}, offset=0, limit=2)
+    assert len(p1["rows"]) == 2 and p1["next_offset"] == 2
+    p2 = media_library.list_assets(db, admin, {}, offset=2, limit=2)
+    overlap = ({(r["nature"], r["id"]) for r in p1["rows"]}
+               & {(r["nature"], r["id"]) for r in p2["rows"]})
+    assert not overlap
