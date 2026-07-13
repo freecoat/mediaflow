@@ -263,3 +263,28 @@ body.sleek-mode :focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* ── Media Library (feat/media-library Fase A) ───────────────────────── */
+/* Filtro = label impilata sopra il select, compatta e allineata. */
+.media-flt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.media-flt > span {
+  font-size: 11px;
+  color: var(--text-2, #94a3b8);
+  line-height: 1;
+}
+.media-flt .form-select { max-width: 170px; }
+.media-filters .search-bar { flex: 0 1 240px; }
+#media-detail code { background: rgba(127,127,127,0.10); padding: 1px 4px; border-radius: 3px; }
+body.sleek-mode .media-filters,
+body.sleek-mode #media-actionbar,
+body.sleek-mode #media-detail {
+  border-radius: 10px;
+}
+body.sleek-mode #media-detail-body .badge {
+  border-radius: 6px;
+}

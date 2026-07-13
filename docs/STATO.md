@@ -8,7 +8,18 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.243** — 6 luglio 2026 — Fase D Calendario/Account: documenti Drive collegati
+**v3.5.0-alpha.172.244** — 13 luglio 2026 — Media Library Fase A: browser unificato asset (ramo `feat/media-library`)
+
+### α.172.244 ✅ (Media Library Fase A — 13 lug, ramo feat/media-library, 7 task TDD; spec+plan docs/superpowers/…/2026-07-12-media-library-phaseA.md)
+- **`/media`** browser **read-only** che fonde `Asset` (digitale) + `PhysicalAsset` (fisico) tenant-scoped in righe omogenee, `created_at DESC`, paginazione best-effort cross-natura. Zero azioni mutanti (bulk disabilitati, "disponibile a breve").
+- **Servizio** `app/services/media_library.py`: `list_assets` (merge+filtri+gating natura), `row_from_asset`/`row_from_physical`, `_delivery_info` (pivot `DeliverableAsset`→`JobDeliverable` → linked/status/department via `PriceItem.department_id`), `filter_options`, `asset_detail` (riga + `tech_specs_json` completo + `deliverables[]` + memberships/history placeholder).
+- **Filtri**: contesto (project/client/department/job) · natura (nature/asset_type/physical_kind) · consegna (linked_to_delivery yes/no, delivery_status "multi" se divergono) · tech (`json_extract` shape **nidificato** `$.video.codec/width/height/framerate` — NON flat come ipotizzava il piano) · ricerca libera · toggle proposte agent. Filtro esclusivo di una natura → elenco ristretto a quella natura.
+- **Router** `app/routers/media.py`: `GET /media` (gate) + `/media/api/assets` (whitelist filtri) + `/api/filters` + `/api/asset/{nature}/{id}` (404 su natura/asset non valido). Registrato in `main.py`.
+- **RBAC**: permesso `manage_assets` (+ default ai ruoli con `edit_planning_all`), gate `app/services/media_gate.py` (retrocompat `edit_planning_all`), migrazione idempotente `scripts/migrate_manage_assets.py`. Voce sidebar "Media Library" (gruppo Media). i18n 5 lingue `media.*`. `.media-*` in `sleek.css`.
+- **Test**: `test_media_rbac` (2) + `test_media_library` (23) + `test_media_api` (7) = 32 verdi. Smoke Playwright (DB copia + 2 asset + 1 LTO): login admin → `/media` = 3 righe merge ordinate, dropdown popolati, ricerca "wav"→1 riga, dettaglio master.mov con tech "3840x2160 · hevc · 25" + checksum, **0 errori console**.
+- Nessuna migrazione di schema (solo permesso RBAC). 6 commit `feat(media)` su `feat/media-library` (backend 1-6 + frontend 7).
+
+**Prossimo step**: smoke Matteo sul Mac (migrare ruoli con `scripts/migrate_manage_assets.py`, verificare `/media` con dati reali). Poi decidere: merge `feat/media-library` → main, oppure **Fase B** (associazioni/azioni: link asset↔consegna, archivia, export dai bulk oggi disabilitati). Ramo NON pushato.
 
 ### α.172.243 ✅ (Fase D — documenti Drive — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
 - **`DocumentLink`** (tabella `document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo riferimento (metadata + link), nessuno storage locale. Link nullable a project/acquisition/activity/client.

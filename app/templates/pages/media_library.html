@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% set active_page = "media" %}
+{% block title %}Media Library — Claqo{% endblock %}
+{% block topbar_title %}<span data-i18n="media.title">Media Library</span>{% endblock %}
+
+{% block content %}
+<div class="card mb-3" style="background:rgba(98,114,245,0.06);border-color:rgba(98,114,245,0.18);">
+  <div style="padding:12px 16px;font-size:13px;line-height:1.55;color:var(--text-2);">
+    <strong data-i18n="media.introTitle">Media Library</strong>
+    <span data-i18n="media.introBody">— browser unificato di asset digitali (file) e fisici (LTO, HDD, DCP). Sola lettura: filtra, seleziona, ispeziona. Le azioni di associazione arrivano nelle fasi successive.</span>
+  </div>
+</div>
+
+<!-- Barra filtri (4 gruppi + ricerca + toggle proposte) -->
+<div class="card mb-3 media-filters" style="padding:12px 14px;">
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <div class="search-bar" style="min-width:220px;">
+      <span>🔍</span>
+      <input type="text" id="media-q" data-i18n="media.search" data-i18n-attr="placeholder"
+             placeholder="Nome · path · serial" oninput="mfMediaDebouncedLoad()">
+    </div>
+    <label class="text-sm media-flt"><span data-i18n="media.fltNature">Natura</span>
+      <select id="media-f-nature" class="form-select" onchange="mfMediaLoad(true)">
+        <option value="" data-i18n="media.all">Tutte</option>
+        <option value="digital" data-i18n="media.digital">Digitale</option>
+        <option value="physical" data-i18n="media.physical">Fisico</option>
+      </select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltProject">Progetto</span>
+      <select id="media-f-project" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltClient">Cliente</span>
+      <select id="media-f-client" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltDepartment">Reparto</span>
+      <select id="media-f-department" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltAssetType">Tipo (digitale)</span>
+      <select id="media-f-asset_type" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltPhysicalKind">Tipo (fisico)</span>
+      <select id="media-f-physical_kind" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltDeliveryStatus">Stato consegna</span>
+      <select id="media-f-delivery_status" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltLinked">Consegna</span>
+      <select id="media-f-linked_to_delivery" class="form-select" onchange="mfMediaLoad(true)">
+        <option value=""></option>
+        <option value="yes" data-i18n="media.linkedYes">Linkato</option>
+        <option value="no" data-i18n="media.linkedNo">Non linkato</option>
+      </select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltResolution">Risoluzione</span>
+      <select id="media-f-tech_resolution" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm media-flt"><span data-i18n="media.fltCodec">Codec</span>
+      <select id="media-f-tech_codec" class="form-select" onchange="mfMediaLoad(true)"><option value=""></option></select>
+    </label>
+    <label class="text-sm" style="display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="media-f-internal_archive" onchange="mfMediaLoad(true)">
+      <span data-i18n="media.fltArchive">Solo archivio interno</span>
+    </label>
+    <label class="text-sm" style="display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="media-f-delivered_external" onchange="mfMediaLoad(true)">
+      <span data-i18n="media.fltDelivered">Solo consegnati</span>
+    </label>
+    <label class="text-sm" style="display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" id="media-f-proposals" onchange="mfMediaLoad(true)">
+      <span data-i18n="media.showProposals">Mostra proposte agent</span>
+    </label>
+    <span style="flex:1;"></span>
+    <button class="btn btn-secondary btn-sm" onclick="mfMediaResetFilters()" data-i18n="media.reset">Azzera</button>
+    <span id="media-count" class="text-sm text-muted"></span>
+  </div>
+</div>
+
+<!-- Barra selezione (azioni bulk disabilitate in Fase A) -->
+<div id="media-actionbar" class="card mb-2" style="display:none;padding:8px 14px;">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <span id="media-sel-count" class="text-sm" style="font-weight:600;"></span>
+    <span style="flex:1;"></span>
+    <button class="btn btn-secondary btn-sm" disabled data-i18n="media.bulkAssociate" title="" data-i18n-title="media.bulkSoon">Associa a consegna</button>
+    <button class="btn btn-secondary btn-sm" disabled data-i18n="media.bulkArchive" title="" data-i18n-title="media.bulkSoon">Archivia</button>
+    <button class="btn btn-secondary btn-sm" disabled data-i18n="media.bulkExport" title="" data-i18n-title="media.bulkSoon">Esporta</button>
+  </div>
+</div>
+
+<div style="display:flex;gap:14px;align-items:flex-start;">
+  <div class="card" style="flex:1;min-width:0;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32px;"><input type="checkbox" id="media-selall" onchange="mfMediaToggleAll(this.checked)"></th>
+            <th data-i18n="media.colName">Nome</th>
+            <th style="width:70px;" data-i18n="media.nature">Natura</th>
+            <th style="width:90px;" data-i18n="media.type">Tipo</th>
+            <th data-i18n="media.colProject">Progetto · Cliente</th>
+            <th style="width:110px;" data-i18n="media.status">Stato</th>
+            <th data-i18n="media.storage">Storage</th>
+            <th style="width:90px;" data-i18n="media.checksum">Checksum</th>
+            <th class="text-right" style="width:90px;" data-i18n="media.size">Dimensione</th>
+          </tr>
+        </thead>
+        <tbody id="media-tbody"></tbody>
+      </table>
+    </div>
+    <div style="padding:10px;text-align:center;">
+      <button id="media-loadmore" class="btn btn-secondary btn-sm" style="display:none;"
+              onclick="mfMediaLoad(false)" data-i18n="media.loadMore">Carica altro</button>
+      <div id="media-empty" class="text-muted text-sm" style="display:none;padding:24px;" data-i18n="media.empty">Nessun asset trovato con questi filtri.</div>
+    </div>
+  </div>
+
+  <div id="media-detail" class="card" style="width:360px;flex:none;display:none;padding:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <strong data-i18n="media.detail">Dettaglio</strong>
+      <button class="btn btn-secondary btn-sm" onclick="mfMediaCloseDetail()">✕</button>
+    </div>
+    <div id="media-detail-body"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/media_library.js?v={{ app_version }}"></script>
+<script>document.addEventListener('DOMContentLoaded', mfMediaInit);</script>
+{% endblock %}

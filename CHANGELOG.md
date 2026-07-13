@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.244 — Media Library Fase A: browser unificato asset (13 lug 2026)
+
+- **`/media`** — browser **read-only** che fonde asset **digitali** (`Asset`) e **fisici** (`PhysicalAsset`) tenant-scoped in righe omogenee, ordinate per `created_at DESC`, con paginazione best-effort cross-natura. Nessuna azione mutante (associazioni/bulk rimandate alle fasi B/C/D — pulsanti bulk visibili ma disabilitati).
+- **Servizio** `app/services/media_library.py`: `list_assets` (merge + filtri), `filter_options` (dropdown reali), `asset_detail` (riga + tech_specs completo + deliverables). **Router** `app/routers/media.py`: `GET /media` + `/media/api/{assets,filters,asset/{nature}/{id}}`.
+- **Filtri** 4 gruppi: contesto (progetto/cliente/reparto/job), natura (digitale/fisico, asset_type, physical_kind), consegna (linked_to_delivery/delivery_status via pivot `DeliverableAsset`→`JobDeliverable`, department via `PriceItem.department_id`), tech-specs (risoluzione/codec via `json_extract` sullo shape nidificato `$.video.*`) + ricerca libera + toggle proposte agent. Gating: un filtro esclusivo di una natura restringe l'elenco a quella natura.
+- **RBAC**: nuovo permesso `manage_assets` (gate `media_gate.requires_manage_assets`, retrocompat `edit_planning_all`) + migrazione idempotente `scripts/migrate_manage_assets.py`. Voce sidebar "Media Library" nel gruppo Media. i18n 5 lingue (`media.*`). Blocco `.media-*` in `sleek.css`.
+- **Test**: `test_media_rbac` + `test_media_library` (23: digital/physical/merge/paginazione/delivery/tech/filter_options/asset_detail) + `test_media_api` (7: router+gate JWT-cookie). Smoke browser verde (login → /media: 3 righe merge, filtri popolati, ricerca, dettaglio con tech-specs, 0 errori console).
+- Nessuna migrazione di schema (solo permesso RBAC). Fase A chiude read+filtri; prossimo: fase associazioni.
+
 ## v3.5.0-alpha.172.243 — Fase D Calendario/Account: documenti Drive collegati (6 lug 2026)
 
 - **DocumentLink** (`document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo un riferimento (metadata + link), nessuno storage locale.
