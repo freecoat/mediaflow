@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.245 — Media Library Fase B: azioni mutanti + supersede (13 lug 2026)
+
+- **Azioni bulk attive in `/media`** (prima disabilitate): **Associa a consegna**, **Archivia** / **Smarca archivio** (flag `is_internal_archive`), **Scollega**, **Esporta CSV**. Gate `manage_assets`; viewer → 403.
+- **Semantica supersede**: associare un asset a una consegna che ne ha già uno attivo della stessa natura **supersede** il precedente (link vecchio conservato come storico, non cancellato) e **auto-resetta** lo stato consegna da `qc/delivered/closed` → `in_progress` (+ notifica `deliverable_reopened_supersede` a `view_finance`). 3 colonne nuove su `DeliverableAsset`: `superseded_at`, `superseded_by_id`, `supersede_reason`. `_resync_primary` ignora i link superati.
+- **Servizio** `app/services/media_actions.py` (read-write, tenant-scoped, riusa `deliverable_assets.link_asset/unlink_asset` come fonte di verità): `associate` / `set_flags` / `unlink` / `export_manifest_csv` (CSV UTF-8, cap 5000, da filtri o da selezione). **Router** `app/routers/media.py`: `POST /media/api/{associate,flags,unlink}` (Form) + `GET /media/api/{export,deliverables}`.
+- **UI**: modal Associa/Scollega con cascata Progetto → ricerca → Consegna, badge **superseduto** (barrato) nel dettaglio asset. i18n 5 lingue (`media.assocBtn`, `media.supersedeWarn`, `media.superseded`, …). Nessun nuovo static file (esteso `media_library.js`).
+- **Migrazione** `scripts/migrate_deliverable_asset_supersede.py` (idempotente) + auto-migrate al boot in `_auto_migrate_columns()`.
+- **Test**: `test_media_supersede_model` (3) + `test_media_actions` (associate/supersede/reset/flags/unlink/export) + `test_media_api` (endpoint nuovi) — 59 test media verdi. Smoke Playwright: seleziona `a_new` → Associa a `SMOKE DCP` (delivered) → vecchio link superseduto (`superseded_by`=nuovo), `digital_asset_id` = nuovo, stato → `in_progress`, badge nel dettaglio, **0 errori console**.
+
 ## v3.5.0-alpha.172.244 — Media Library Fase A: browser unificato asset (13 lug 2026)
 
 - **`/media`** — browser **read-only** che fonde asset **digitali** (`Asset`) e **fisici** (`PhysicalAsset`) tenant-scoped in righe omogenee, ordinate per `created_at DESC`, con paginazione best-effort cross-natura. Nessuna azione mutante (associazioni/bulk rimandate alle fasi B/C/D — pulsanti bulk visibili ma disabilitati).

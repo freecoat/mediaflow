@@ -75,14 +75,16 @@
   </div>
 </div>
 
-<!-- Barra selezione (azioni bulk disabilitate in Fase A) -->
+<!-- Barra selezione (azioni bulk — Fase B) -->
 <div id="media-actionbar" class="card mb-2" style="display:none;padding:8px 14px;">
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
     <span id="media-sel-count" class="text-sm" style="font-weight:600;"></span>
     <span style="flex:1;"></span>
-    <button class="btn btn-secondary btn-sm" disabled data-i18n="media.bulkAssociate" title="" data-i18n-title="media.bulkSoon">Associa a consegna</button>
-    <button class="btn btn-secondary btn-sm" disabled data-i18n="media.bulkArchive" title="" data-i18n-title="media.bulkSoon">Archivia</button>
-    <button class="btn btn-secondary btn-sm" disabled data-i18n="media.bulkExport" title="" data-i18n-title="media.bulkSoon">Esporta</button>
+    <button class="btn btn-primary btn-sm" onclick="mfMediaOpenAssociate()" data-i18n="media.assocBtn">Associa a consegna</button>
+    <button class="btn btn-secondary btn-sm" onclick="mfMediaArchive(true)" data-i18n="media.archiveBtn">Archivia</button>
+    <button class="btn btn-secondary btn-sm" onclick="mfMediaArchive(false)" data-i18n="media.unarchiveBtn">Smarca archivio</button>
+    <button class="btn btn-secondary btn-sm" onclick="mfMediaUnlinkPrompt()" data-i18n="media.unlinkBtn">Scollega</button>
+    <button class="btn btn-secondary btn-sm" onclick="mfMediaExport()" data-i18n="media.exportBtn">Esporta CSV</button>
   </div>
 </div>
 
@@ -119,6 +121,33 @@
       <button class="btn btn-secondary btn-sm" onclick="mfMediaCloseDetail()">✕</button>
     </div>
     <div id="media-detail-body"></div>
+  </div>
+</div>
+
+<!-- Modal Associa / Scollega (Fase B) -->
+<div id="media-assoc-modal" class="modal-overlay">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <strong id="media-assoc-title" data-i18n="media.assocTitle">Associa a consegna</strong>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('media-assoc-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="text-sm" data-i18n="media.fltProject">Progetto</label>
+      <select id="assoc-project" class="form-select" onchange="mfMediaAssocLoadDeliv()"><option value=""></option></select>
+      <label class="text-sm" data-i18n="media.assocSearch">Cerca consegna</label>
+      <input type="text" id="assoc-search" class="form-input" oninput="mfMediaAssocDebounced()">
+      <label class="text-sm" data-i18n="media.assocDeliverable">Consegna</label>
+      <select id="assoc-deliverable" class="form-select"><option value=""></option></select>
+      <div id="media-assoc-reason-row">
+        <label class="text-sm" data-i18n="media.reason">Motivo (opzionale)</label>
+        <input type="text" id="assoc-reason" class="form-input" data-i18n="media.reasonPh" data-i18n-attr="placeholder" placeholder="Es. QC negativo, ri-consegna">
+        <p class="text-muted text-sm" data-i18n="media.supersedeWarn">Se la consegna ha già un asset attivo della stessa natura, verrà superseduto (storico mantenuto).</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('media-assoc-modal')" data-i18n="media.cancel">Annulla</button>
+      <button class="btn btn-primary" onclick="mfMediaConfirmAssociate()" data-i18n="media.confirm">Conferma</button>
+    </div>
   </div>
 </div>
 {% endblock %}

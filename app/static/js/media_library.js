@@ -38,10 +38,6 @@ function mfMediaCollectFilters() {
 }
 
 async function mfMediaInit() {
-  // Titoli bulk "disponibile a breve" (data-i18n usato per il testo bottone).
-  document.querySelectorAll('#media-actionbar button[disabled]').forEach(b => {
-    b.title = mfT('media.bulkSoon');
-  });
   try {
     const opt = await api('GET', '/media/api/filters');
     _mediaFillSelect('media-f-project', (opt.projects || []).map(p => ({ v: p.id, t: (p.code ? p.code + ' — ' : '') + (p.title || '') })));
@@ -200,7 +196,7 @@ async function mfMediaOpenDetail(key) {
   }
   if (Array.isArray(d.deliverables) && d.deliverables.length) {
     const dl = d.deliverables.map(x =>
-      `<li>${escapeHtml(x.job || '')} — <em>${escapeHtml(x.status || '')}</em></li>`).join('');
+      `<li style="${x.superseded ? 'text-decoration:line-through;opacity:.6;' : ''}">${escapeHtml(x.job || '')} — <em>${escapeHtml(x.status || '')}</em>${x.superseded ? ' <span class="badge">' + escapeHtml(mfT('media.superseded')) + '</span>' : ''}</li>`).join('');
     kv(mfT('media.deliverables'), `<ul style="margin:4px 0 0 16px;">${dl}</ul>`);
   }
   body.innerHTML = rows.join('');
@@ -209,4 +205,101 @@ async function mfMediaOpenDetail(key) {
 
 function mfMediaCloseDetail() {
   document.getElementById('media-detail').style.display = 'none';
+}
+
+/* ── Azioni bulk (Fase B) ───────────────────────────────────────── */
+
+let _mediaAssocMode = 'associate';   // 'associate' | 'unlink'
+let _mediaAssocDebounce = null;
+
+function _mediaSelItems() {
+  return Array.from(_mediaSel).map(k => {
+    const i = k.indexOf(':');
+    return { nature: k.slice(0, i), id: parseInt(k.slice(i + 1), 10) };
+  });
+}
+
+async function _mediaOpenAssocModal(mode) {
+  if (!_mediaSel.size) { toast(mfT('media.selectFirst'), 'error'); return; }
+  _mediaAssocMode = mode;
+  document.getElementById('media-assoc-title').textContent =
+    mfT(mode === 'unlink' ? 'media.unlinkTitle' : 'media.assocTitle');
+  document.getElementById('media-assoc-reason-row').style.display = mode === 'unlink' ? 'none' : '';
+  document.getElementById('assoc-reason').value = '';
+  document.getElementById('assoc-search').value = '';
+  document.getElementById('assoc-project').innerHTML = '<option value=""></option>';
+  document.getElementById('assoc-deliverable').innerHTML = '<option value=""></option>';
+  try {
+    const opt = await api('GET', '/media/api/filters');
+    _mediaFillSelect('assoc-project',
+      (opt.projects || []).map(p => ({ v: p.id, t: (p.code ? p.code + ' — ' : '') + (p.title || '') })));
+  } catch (e) { console.error('assoc filters', e); }
+  openModal('media-assoc-modal');
+  mfMediaAssocLoadDeliv();
+}
+
+function mfMediaOpenAssociate() { _mediaOpenAssocModal('associate'); }
+function mfMediaUnlinkPrompt() { _mediaOpenAssocModal('unlink'); }
+
+function mfMediaAssocDebounced() {
+  clearTimeout(_mediaAssocDebounce);
+  _mediaAssocDebounce = setTimeout(mfMediaAssocLoadDeliv, 300);
+}
+
+async function mfMediaAssocLoadDeliv() {
+  const pid = document.getElementById('assoc-project').value;
+  const q = document.getElementById('assoc-search').value.trim();
+  const params = new URLSearchParams();
+  if (pid) params.set('project_id', pid);
+  if (q) params.set('q', q);
+  let list = [];
+  try { list = await api('GET', '/media/api/deliverables?' + params.toString()); }
+  catch (e) { console.error('assoc deliv', e); }
+  const sel = document.getElementById('assoc-deliverable');
+  sel.innerHTML = '<option value=""></option>' + list.map(d =>
+    `<option value="${d.id}">${escapeHtml((d.project ? d.project.code + ' · ' : '') + d.name + ' [' + d.status + ']')}</option>`).join('');
+}
+
+async function mfMediaConfirmAssociate() {
+  const did = document.getElementById('assoc-deliverable').value;
+  if (!did) { toast(mfT('media.pickDeliverable'), 'error'); return; }
+  const fd = new FormData();
+  fd.append('deliverable_id', did);
+  fd.append('items', JSON.stringify(_mediaSelItems()));
+  const url = _mediaAssocMode === 'unlink' ? '/media/api/unlink' : '/media/api/associate';
+  if (_mediaAssocMode !== 'unlink') {
+    const reason = document.getElementById('assoc-reason').value.trim();
+    if (reason) fd.append('reason', reason);
+  }
+  try {
+    const out = await api('POST', url, fd);
+    if (_mediaAssocMode === 'unlink') {
+      toast(mfT('media.unlinkDone').replace('{n}', out.removed), 'success');
+    } else {
+      toast(mfT('media.assocDone').replace('{n}', out.linked).replace('{s}', out.superseded), 'success');
+    }
+    closeModal('media-assoc-modal');
+    _mediaSel.clear();
+    mfMediaLoad(true);
+  } catch (e) { console.error(e); toast(mfT('media.actionError'), 'error'); }
+}
+
+async function mfMediaArchive(on) {
+  if (!_mediaSel.size) { toast(mfT('media.selectFirst'), 'error'); return; }
+  const fd = new FormData();
+  fd.append('items', JSON.stringify(_mediaSelItems()));
+  fd.append('internal_archive', on ? '1' : '0');
+  try {
+    const out = await api('POST', '/media/api/flags', fd);
+    toast(mfT('media.flagsDone').replace('{n}', out.updated), 'success');
+    _mediaSel.clear();
+    mfMediaLoad(true);
+  } catch (e) { console.error(e); toast(mfT('media.actionError'), 'error'); }
+}
+
+function mfMediaExport() {
+  const suffix = _mediaSel.size
+    ? '?items=' + encodeURIComponent(JSON.stringify(_mediaSelItems()))
+    : '?' + new URLSearchParams(mfMediaCollectFilters()).toString();
+  window.location = '/media/api/export' + suffix;
 }

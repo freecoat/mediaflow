@@ -359,7 +359,8 @@ def _deliverables_list(db, *, asset_id=None, physical_asset_id=None) -> list:
             continue
         out.append({"id": jd.id, "job": jd.name,
                     "status": getattr(jd.status, "value", None) or str(jd.status),
-                    "source": ln.source})
+                    "source": ln.source,
+                    "superseded": ln.superseded_at is not None})
     return out
 
 

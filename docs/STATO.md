@@ -8,7 +8,17 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.244** — 13 luglio 2026 — Media Library Fase A: browser unificato asset (ramo `feat/media-library`)
+**v3.5.0-alpha.172.245** — 13 luglio 2026 — Media Library Fase B: azioni mutanti + supersede (ramo `feat/media-library`)
+
+### α.172.245 ✅ (Media Library Fase B — 13 lug, ramo feat/media-library, 6 task TDD; spec+plan docs/superpowers/…/2026-07-13-media-library-phaseB.md)
+- **Azioni bulk attive** in `/media` (Fase A le aveva disabilitate): **Associa a consegna**, **Archivia**/**Smarca** (`is_internal_archive`), **Scollega**, **Esporta CSV**. Gate `manage_assets` (viewer 403).
+- **Supersede**: associare un asset a una consegna con già un attivo della stessa natura → il vecchio link diventa **superseduto** (storico conservato, `superseded_at`/`superseded_by_id`/`supersede_reason`) e lo stato consegna torna da `qc/delivered/closed` → `in_progress` (+ notifica `deliverable_reopened_supersede` → `view_finance`). `_resync_primary` ignora i superati.
+- **Servizio** `app/services/media_actions.py` (read-write, riusa `deliverable_assets.link_asset/unlink_asset`): `associate`/`set_flags`/`unlink`/`export_manifest_csv` (CSV cap 5000, da filtri o selezione). **Router**: `POST /media/api/{associate,flags,unlink}` (Form, `items` JSON) + `GET /media/api/{export,deliverables}`.
+- **UI**: modal Associa/Scollega (cascata Progetto→ricerca→Consegna, riusa `openModal/closeModal`), badge **superseduto** barrato nel dettaglio (`_deliverables_list` espone `superseded`). i18n 5 lingue (`media.assocBtn`…`media.superseded`). Esteso `media_library.js` (nessun nuovo static).
+- **Migrazione** `scripts/migrate_deliverable_asset_supersede.py` (idempotente) + auto-migrate boot. 3 colonne su `deliverable_assets`.
+- **Test**: `test_media_supersede_model` (3) + `test_media_actions` + `test_media_api` (endpoint nuovi) = **59 test media verdi**. Smoke Playwright (DB copia + SMK001/SMOKE DCP delivered + a_old linkato + a_new): seleziona a_new → Associa a SMOKE DCP → vecchio link superseduto (`superseded_by`=nuovo), `digital_asset_id`→a_new, stato `delivered`→`in_progress`, `superseded:true` nel dettaglio, **0 errori console**.
+
+**Prossimo step**: smoke Matteo sul Mac (`scripts/migrate_deliverable_asset_supersede.py` + prova associa/archivia/scollega/export con dati reali). Poi **merge `feat/media-library` → main** (contiene Fase A + B) oppure Fase C (filtri saved-view / azioni avanzate). Ramo NON pushato.
 
 ### α.172.244 ✅ (Media Library Fase A — 13 lug, ramo feat/media-library, 7 task TDD; spec+plan docs/superpowers/…/2026-07-12-media-library-phaseA.md)
 - **`/media`** browser **read-only** che fonde `Asset` (digitale) + `PhysicalAsset` (fisico) tenant-scoped in righe omogenee, `created_at DESC`, paginazione best-effort cross-natura. Zero azioni mutanti (bulk disabilitati, "disponibile a breve").
