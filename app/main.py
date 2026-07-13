@@ -1290,6 +1290,20 @@ def _auto_migrate_columns():
                     print(f"[auto-migrate] user_oauth_tokens.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE user_oauth_tokens ADD COLUMN {col} {ddl}"))
 
+    # v3.5.0-alpha.172.245 — Fase B Media Library: supersede su deliverable_assets
+    if "deliverable_assets" in insp.get_table_names():
+        da_cols = {c["name"] for c in insp.get_columns("deliverable_assets")}
+        da_alter = [
+            ("superseded_at", "DATETIME NULL"),
+            ("superseded_by_id", "INTEGER NULL REFERENCES deliverable_assets(id)"),
+            ("supersede_reason", "VARCHAR(255) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in da_alter:
+                if col not in da_cols:
+                    print(f"[auto-migrate] deliverable_assets.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE deliverable_assets ADD COLUMN {col} {ddl}"))
+
 
 def _rebuild_asset_memberships_nullable(engine=None):
     """F4 (2026-06-11) — Rende AssetMembership.asset_id nullable per supportare

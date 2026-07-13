@@ -479,6 +479,8 @@ class NotificationKind(str, enum.Enum):
     legacy_jcl_non_time = "legacy_jcl_non_time"  # → admin (JCL residuali da migrare a Deliverable)
     # v3.5.0-alpha.172.89 (Bundle I) — cascade QC reject su deliverable
     deliverable_qc_rejected = "deliverable_qc_rejected"  # → view_finance (asset rejected + placeholder spawn)
+    # Fase B Media Library — asset superseduto (errore/QC negativo → riproduzione)
+    deliverable_reopened_supersede = "deliverable_reopened_supersede"  # → view_finance (asset superseduto in Media Library)
     custom = "custom"
 
 
@@ -3883,6 +3885,13 @@ class DeliverableAsset(Base):
     )
     confirmed_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Fase B Media Library — supersede: un asset riprodotto (errore/QC negativo)
+    # sostituisce il precedente. Il vecchio link resta come storico.
+    superseded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    superseded_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("deliverable_assets.id"), nullable=True
+    )
+    supersede_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
 
 class DeliverableSpec(Base):
