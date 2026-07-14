@@ -19,7 +19,7 @@ from app.database import get_db
 from app.context import current_tenant_id
 from app.models.models import (
     Contact, Client, ContactAcquisition, ContactProject, Acquisition, Project,
-    Activity, EmailLink,
+    Activity, EmailLink, ProjectTechSheet,
 )
 from app.services.rbac import requires_permission, current_user, has_permission
 from app.services.tenant_guard import fetch_or_404
@@ -505,3 +505,65 @@ async def extract_contacts_enrich(
                  "company_text": company_text}
     provider = get_provider_for_user(user.id, db)
     return contact_extract.enrich_with_ai(candidate, signature, provider)
+
+
+@router.post("/contacts/api/from-tech-sheet")
+async def create_contact_from_tech_sheet(
+    request: Request,
+    project_id: int = Form(...),
+    idx: int = Form(...),
+    name: str = Form(...),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    role: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    user = current_user(request)
+    if not has_permission(user, "edit_projects"):
+        raise HTTPException(403, "Permesso negato")
+    proj = fetch_or_404(db, Project, project_id, error="Progetto non trovato")
+    ts = db.query(ProjectTechSheet).filter(
+        ProjectTechSheet.project_id == proj.id,
+        ProjectTechSheet.tenant_id == current_tenant_id(),
+    ).first()
+    if not ts:
+        raise HTTPException(404, "Scheda tecnica non trovata")
+    contacts_arr = list((ts.data or {}).get("contacts") or [])
+    if idx < 0 or idx >= len(contacts_arr):
+        raise HTTPException(400, "Indice contatto non valido")
+    name = name.strip()
+    if not name:
+        raise HTTPException(400, "Nome richiesto")
+
+    existing = None
+    if email:
+        existing = db.query(Contact).filter(
+            Contact.tenant_id == current_tenant_id(),
+            Contact.is_active == True,  # noqa: E712
+            func.lower(Contact.email) == email.strip().lower(),
+        ).first()
+    if existing:
+        c = existing
+    else:
+        c = Contact(tenant_id=current_tenant_id(), client_id=None, name=name,
+                    role=role, email=email, phone=phone, source="manual")
+        db.add(c)
+        db.flush()
+
+    link_exists = db.query(ContactProject).filter(
+        ContactProject.tenant_id == current_tenant_id(),
+        ContactProject.contact_id == c.id, ContactProject.project_id == proj.id,
+    ).first()
+    if not link_exists:
+        db.add(ContactProject(tenant_id=current_tenant_id(), contact_id=c.id,
+                              project_id=proj.id, role=role))
+
+    new_arr = list(contacts_arr)
+    new_arr[idx] = dict(new_arr[idx], contact_id=c.id)
+    new_data = dict(ts.data or {})
+    new_data["contacts"] = new_arr
+    ts.data = new_data
+
+    db.commit()
+    db.refresh(c)
+    return {"id": c.id, "existing": existing is not None, "name": c.name}
