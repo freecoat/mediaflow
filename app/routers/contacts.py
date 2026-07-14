@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Form, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,13 @@ from app.services.ai_provider import get_provider_for_user
 router = APIRouter(tags=["contacts"])
 RequireView = Depends(requires_permission("view_clients"))
 RequireEdit = Depends(requires_permission("edit_clients"))
+
+
+@router.get("/contacts", response_class=HTMLResponse, dependencies=[RequireView])
+async def contacts_page(request: Request):
+    from app.main import templates
+    return templates.TemplateResponse(
+        "pages/contacts.html", {"request": request, "active_page": "contacts"})
 
 
 def _contact_dict(c: Contact) -> dict:
