@@ -142,3 +142,83 @@ def test_create_with_unknown_client_id_404(client):
     c, s = client
     r = c.post("/contacts/api/create", data={"name": "X", "client_id": "999"})
     assert r.status_code == 404
+
+
+def test_update_contact_sets_company_text_and_source(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Orfano"))
+    s.commit()
+    r = c.put("/contacts/api/1", data={"company_text": "ACME", "source": "email"})
+    assert r.status_code == 200
+    b = r.json()
+    assert b["company_text"] == "ACME"
+    assert b["source"] == "email"
+
+
+def test_update_contact_client_id_sentinel_zero_clears(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=1, name="Con cliente"))
+    s.commit()
+    r = c.put("/contacts/api/1", data={"client_id": "0"})
+    assert r.status_code == 200
+    assert r.json()["client_id"] is None
+
+
+def test_update_contact_client_id_sets_new_value(client):
+    c, s = client
+    s.add(Client(id=2, tenant_id=1, name="Cliente B"))
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Orfano"))
+    s.commit()
+    r = c.put("/contacts/api/1", data={"client_id": "2"})
+    assert r.status_code == 200
+    assert r.json()["client_id"] == 2
+
+
+def test_link_to_acquisition_then_idempotent(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Orfano"))
+    s.commit()
+    r = c.post("/contacts/api/1/link", data={"target_type": "acquisition", "target_id": "1", "role": "referente"})
+    assert r.status_code == 200
+    assert r.json() == {"ok": True, "already_linked": False}
+    r2 = c.post("/contacts/api/1/link", data={"target_type": "acquisition", "target_id": "1"})
+    assert r2.json() == {"ok": True, "already_linked": True}
+    assert s.query(ContactAcquisition).count() == 1
+
+
+def test_link_to_project(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Orfano"))
+    s.commit()
+    r = c.post("/contacts/api/1/link", data={"target_type": "project", "target_id": "1"})
+    assert r.status_code == 200
+    assert s.query(ContactProject).filter_by(contact_id=1, project_id=1).count() == 1
+
+
+def test_link_to_client_sets_fk_directly(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Orfano"))
+    s.commit()
+    r = c.post("/contacts/api/1/link", data={"target_type": "client", "target_id": "1"})
+    assert r.status_code == 200
+    s.refresh(s.get(Contact, 1))
+    assert s.get(Contact, 1).client_id == 1
+
+
+def test_unlink_acquisition(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Orfano"))
+    s.commit()
+    s.add(ContactAcquisition(tenant_id=1, contact_id=1, acquisition_id=1))
+    s.commit()
+    r = c.request("DELETE", "/contacts/api/1/link", data={"target_type": "acquisition", "target_id": "1"})
+    assert r.status_code == 200
+    assert s.query(ContactAcquisition).count() == 0
+
+
+def test_link_invalid_target_type_400(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Orfano"))
+    s.commit()
+    r = c.post("/contacts/api/1/link", data={"target_type": "bogus", "target_id": "1"})
+    assert r.status_code == 400

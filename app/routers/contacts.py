@@ -138,6 +138,9 @@ async def update_contact(
     phone: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     is_primary: Optional[str] = Form(None),
+    client_id: Optional[str] = Form(None),
+    company_text: Optional[str] = Form(None),
+    source: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     c = db.query(Contact).filter(
@@ -159,6 +162,21 @@ async def update_contact(
         c.notes = notes
     if is_primary is not None:
         c.is_primary = _bool(is_primary)
+    if client_id is not None:
+        # sentinel: "" o "0" -> pulisce (memoria feedback_empty_multipart_is_none)
+        if client_id.strip() in ("", "0"):
+            c.client_id = None
+        else:
+            cid_int = int(client_id)
+            cl = db.query(Client).filter(
+                Client.id == cid_int, Client.tenant_id == current_tenant_id()).first()
+            if not cl:
+                raise HTTPException(404, "Cliente non trovato")
+            c.client_id = cid_int
+    if company_text is not None:
+        c.company_text = company_text
+    if source is not None:
+        c.source = source
     if c.is_primary:
         _sync_primary(db, c)
     db.commit()
@@ -353,3 +371,105 @@ async def create_contact_standalone(
     db.commit()
     db.refresh(c)
     return _contact_dict(c)
+
+
+_LINK_TYPES = ("client", "acquisition", "project")
+
+
+def _check_link_permission(user, target_type: str) -> None:
+    if not has_permission(user, "edit_clients"):
+        raise HTTPException(403, "Permesso negato")
+    if target_type == "acquisition" and not has_permission(user, "manage_acquisitions"):
+        raise HTTPException(403, "Permesso negato (manage_acquisitions)")
+    if target_type == "project" and not has_permission(user, "edit_projects"):
+        raise HTTPException(403, "Permesso negato (edit_projects)")
+
+
+@router.post("/contacts/api/{cid}/link")
+async def link_contact(
+    cid: int,
+    request: Request,
+    target_type: str = Form(...),
+    target_id: int = Form(...),
+    role: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    if target_type not in _LINK_TYPES:
+        raise HTTPException(400, "target_type deve essere client|acquisition|project")
+    user = current_user(request)
+    _check_link_permission(user, target_type)
+    c = fetch_or_404(db, Contact, cid, error="Contatto non trovato")
+
+    if target_type == "client":
+        cl = db.query(Client).filter(
+            Client.id == target_id, Client.tenant_id == current_tenant_id()).first()
+        if not cl:
+            raise HTTPException(404, "Cliente non trovato")
+        already = c.client_id == target_id
+        c.client_id = target_id
+        db.commit()
+        return {"ok": True, "already_linked": already}
+
+    if target_type == "acquisition":
+        fetch_or_404(db, Acquisition, target_id, error="Trattativa non trovata")
+        existing = db.query(ContactAcquisition).filter(
+            ContactAcquisition.tenant_id == current_tenant_id(),
+            ContactAcquisition.contact_id == cid,
+            ContactAcquisition.acquisition_id == target_id,
+        ).first()
+        if existing:
+            return {"ok": True, "already_linked": True}
+        db.add(ContactAcquisition(tenant_id=current_tenant_id(), contact_id=cid,
+                                   acquisition_id=target_id, role=role))
+        db.commit()
+        return {"ok": True, "already_linked": False}
+
+    # project
+    fetch_or_404(db, Project, target_id, error="Progetto non trovato")
+    existing = db.query(ContactProject).filter(
+        ContactProject.tenant_id == current_tenant_id(),
+        ContactProject.contact_id == cid,
+        ContactProject.project_id == target_id,
+    ).first()
+    if existing:
+        return {"ok": True, "already_linked": True}
+    db.add(ContactProject(tenant_id=current_tenant_id(), contact_id=cid,
+                          project_id=target_id, role=role))
+    db.commit()
+    return {"ok": True, "already_linked": False}
+
+
+@router.delete("/contacts/api/{cid}/link")
+async def unlink_contact(
+    cid: int,
+    request: Request,
+    target_type: str = Form(...),
+    target_id: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    if target_type not in _LINK_TYPES:
+        raise HTTPException(400, "target_type deve essere client|acquisition|project")
+    user = current_user(request)
+    _check_link_permission(user, target_type)
+    c = fetch_or_404(db, Contact, cid, error="Contatto non trovato")
+
+    if target_type == "client":
+        if c.client_id == target_id:
+            c.client_id = None
+            db.commit()
+        return {"ok": True}
+    if target_type == "acquisition":
+        db.query(ContactAcquisition).filter(
+            ContactAcquisition.tenant_id == current_tenant_id(),
+            ContactAcquisition.contact_id == cid,
+            ContactAcquisition.acquisition_id == target_id,
+        ).delete()
+        db.commit()
+        return {"ok": True}
+    db.query(ContactProject).filter(
+        ContactProject.tenant_id == current_tenant_id(),
+        ContactProject.contact_id == cid,
+        ContactProject.project_id == target_id,
+    ).delete()
+    db.commit()
+    return {"ok": True}
