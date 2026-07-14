@@ -82,3 +82,63 @@ def test_match_by_email_case_insensitive(client):
     assert r.json()["id"] == 1
     r2 = c.get("/contacts/api/match?email=nope@x.com")
     assert r2.json()["id"] is None
+
+
+def test_detail_includes_client_acquisitions_projects_activities_emails(client):
+    import datetime
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=1, name="Mario Rossi"))
+    s.commit()
+    s.add(ContactAcquisition(tenant_id=1, contact_id=1, acquisition_id=1, role="referente"))
+    s.add(ContactProject(tenant_id=1, contact_id=1, project_id=1, role="DIT"))
+    s.add(Activity(tenant_id=1, contact_id=1, subject="Chiamata",
+                   occurred_at=datetime.datetime(2026, 7, 1)))
+    s.add(EmailLink(tenant_id=1, provider="google", thread_id="T1", subject="Oggetto",
+                    acquisition_id=1, is_active=True))
+    s.commit()
+    r = c.get("/contacts/api/1")
+    assert r.status_code == 200
+    b = r.json()
+    assert b["client"] == {"id": 1, "name": "Cliente A"}
+    assert b["acquisitions"] == [{"id": 1, "title": "Trattativa", "role": "referente"}]
+    assert b["projects"] == [{"id": 1, "code": "P1", "title": "Progetto", "role": "DIT"}]
+    assert len(b["activities"]) == 1
+    assert len(b["email_links"]) == 1
+    assert b["email_links"][0]["thread_id"] == "T1"
+
+
+def test_detail_404_cross_tenant(client):
+    c, s = client
+    s.add(Tenant(id=2, name="T2", slug="t2", is_active=True))
+    s.add(Contact(id=1, tenant_id=2, client_id=None, name="Altro tenant"))
+    s.commit()
+    r = c.get("/contacts/api/1")
+    assert r.status_code == 404
+
+
+def test_create_standalone_orphan(client):
+    c, s = client
+    r = c.post("/contacts/api/create", data={
+        "name": "Nuovo Contatto", "company_text": "ACME Srl", "email": "n@acme.com"})
+    assert r.status_code == 200
+    b = r.json()
+    assert b["client_id"] is None
+    assert b["company_text"] == "ACME Srl"
+    assert b["source"] == "manual"
+
+
+def test_create_dedups_by_email_returns_existing(client):
+    c, s = client
+    s.add(Contact(id=1, tenant_id=1, client_id=None, name="Mario Rossi", email="mario@acme.com"))
+    s.commit()
+    r = c.post("/contacts/api/create", data={"name": "Mario R.", "email": "Mario@ACME.com"})
+    assert r.status_code == 200
+    b = r.json()
+    assert b["existing_id"] == 1
+    assert s.query(Contact).count() == 1
+
+
+def test_create_with_unknown_client_id_404(client):
+    c, s = client
+    r = c.post("/contacts/api/create", data={"name": "X", "client_id": "999"})
+    assert r.status_code == 404

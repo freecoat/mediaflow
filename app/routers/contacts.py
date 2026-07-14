@@ -242,3 +242,114 @@ async def match_contact(email: str, db: Session = Depends(get_db)):
         func.lower(Contact.email) == email,
     ).first()
     return {"id": match.id, "name": match.name} if match else {"id": None}
+
+
+def _activity_dict_local(a: Activity) -> dict:
+    return {
+        "id": a.id,
+        "type": a.type.value,
+        "direction": a.direction.value if a.direction else None,
+        "occurred_at": a.occurred_at.isoformat() if a.occurred_at else None,
+        "subject": a.subject,
+        "body": a.body,
+    }
+
+
+@router.get("/contacts/api/{cid}", dependencies=[RequireView])
+async def get_contact_detail(cid: int, db: Session = Depends(get_db)):
+    c = fetch_or_404(db, Contact, cid, error="Contatto non trovato")
+    client = None
+    if c.client_id:
+        cl = db.query(Client).filter(
+            Client.id == c.client_id, Client.tenant_id == current_tenant_id()).first()
+        if cl:
+            client = {"id": cl.id, "name": cl.name}
+
+    acq_rows = (
+        db.query(ContactAcquisition, Acquisition)
+        .join(Acquisition, Acquisition.id == ContactAcquisition.acquisition_id)
+        .filter(ContactAcquisition.tenant_id == current_tenant_id(),
+                ContactAcquisition.contact_id == cid)
+        .all()
+    )
+    acquisitions = [{"id": a.id, "title": a.title, "role": link.role} for link, a in acq_rows]
+
+    proj_rows = (
+        db.query(ContactProject, Project)
+        .join(Project, Project.id == ContactProject.project_id)
+        .filter(ContactProject.tenant_id == current_tenant_id(),
+                ContactProject.contact_id == cid)
+        .all()
+    )
+    projects = [{"id": p.id, "code": p.code, "title": p.title, "role": link.role}
+                for link, p in proj_rows]
+
+    activities = (
+        db.query(Activity)
+        .filter(Activity.tenant_id == current_tenant_id(), Activity.contact_id == cid,
+                Activity.is_active == True)  # noqa: E712
+        .order_by(Activity.occurred_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    aq_ids = [a["id"] for a in acquisitions]
+    email_links = []
+    if aq_ids:
+        email_links = [
+            {"id": e.id, "thread_id": e.thread_id, "subject": e.subject,
+             "acquisition_id": e.acquisition_id}
+            for e in db.query(EmailLink).filter(
+                EmailLink.tenant_id == current_tenant_id(),
+                EmailLink.acquisition_id.in_(aq_ids),
+                EmailLink.is_active == True,  # noqa: E712
+            ).order_by(EmailLink.created_at.desc()).all()
+        ]
+
+    out = _contact_dict(c)
+    out.update({
+        "client": client,
+        "acquisitions": acquisitions,
+        "projects": projects,
+        "activities": [_activity_dict_local(a) for a in activities],
+        "email_links": email_links,
+    })
+    return out
+
+
+@router.post("/contacts/api/create", dependencies=[RequireEdit])
+async def create_contact_standalone(
+    name: str = Form(...),
+    client_id: Optional[int] = Form(None),
+    company_text: Optional[str] = Form(None),
+    role: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    name = name.strip()
+    if not name:
+        raise HTTPException(400, "Nome richiesto")
+    if client_id:
+        cl = db.query(Client).filter(
+            Client.id == client_id, Client.tenant_id == current_tenant_id()).first()
+        if not cl:
+            raise HTTPException(404, "Cliente non trovato")
+    if email:
+        existing = db.query(Contact).filter(
+            Contact.tenant_id == current_tenant_id(),
+            Contact.is_active == True,  # noqa: E712
+            func.lower(Contact.email) == email.strip().lower(),
+        ).first()
+        if existing:
+            return {"existing_id": existing.id, "contact": _contact_dict(existing)}
+    c = Contact(
+        tenant_id=current_tenant_id(), client_id=client_id, name=name,
+        company_text=company_text if not client_id else None,
+        role=role, email=email, phone=phone, notes=notes, source="manual",
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return _contact_dict(c)
