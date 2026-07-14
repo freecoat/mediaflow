@@ -38,6 +38,7 @@ from app.models import (
 from app.models.models import AIAction, JCLBillingStatus
 from app.models.models import (
     Acquisition, AcquisitionStage, Activity, ActivityType, Contact,
+    ContactAcquisition, ContactProject,
 )
 from app.context import current_tenant_id
 from app.services.ai_provider import get_provider_for_user, get_provider, safe_json_parse
@@ -4514,15 +4515,45 @@ def _h_propose_activity(db: Session, data: dict) -> dict:
 @ai_capability("propose_contact")
 def _h_propose_contact(db: Session, data: dict) -> dict:
     name = (data.get("name") or "").strip()
+    if not name:
+        raise ValueError("Serve 'name'")
     cid = data.get("client_id")
-    if not name or not cid:
-        raise ValueError("Servono 'name' e 'client_id'")
-    c = Contact(tenant_id=current_tenant_id(), client_id=cid, name=name,
-                role=data.get("role"), email=data.get("email"),
-                phone=data.get("phone"), ai_extracted=True)
-    db.add(c); db.flush()
+    if cid is not None:
+        cl = db.query(Client).filter(
+            Client.id == cid, Client.tenant_id == current_tenant_id()).first()
+        if not cl:
+            raise ValueError(f"Cliente {cid} non trovato")
+    c = Contact(
+        tenant_id=current_tenant_id(), client_id=cid, name=name,
+        role=data.get("role"), email=data.get("email"), phone=data.get("phone"),
+        company_text=data.get("company_text") if not cid else None,
+        source="ai", ai_extracted=True,
+    )
+    db.add(c)
+    db.flush()
+
+    links_msg = []
+    aid = data.get("acquisition_id")
+    if aid:
+        acq = db.query(Acquisition).filter(
+            Acquisition.id == aid, Acquisition.tenant_id == current_tenant_id()).first()
+        if not acq:
+            raise ValueError(f"Trattativa {aid} non trovata")
+        db.add(ContactAcquisition(tenant_id=current_tenant_id(), contact_id=c.id, acquisition_id=aid))
+        links_msg.append(f"trattativa {aid}")
+    pid = data.get("project_id")
+    if pid:
+        proj = db.query(Project).filter(
+            Project.id == pid, Project.tenant_id == current_tenant_id()).first()
+        if not proj:
+            raise ValueError(f"Progetto {pid} non trovato")
+        db.add(ContactProject(tenant_id=current_tenant_id(), contact_id=c.id, project_id=pid))
+        links_msg.append(f"progetto {pid}")
+    db.flush()
+
+    extra = f" (collegato a {', '.join(links_msg)})" if links_msg else ""
     return {"created": True, "contact_id": c.id,
-            "message": f"Contatto '{name}' aggiunto al cliente {cid}."}
+            "message": f"Contatto '{name}' aggiunto alla rubrica{extra}."}
 
 
 @ai_capability("propose_acquisition_stage")

@@ -1215,14 +1215,22 @@ TOOLS: list[dict] = [
     {
         "name": "propose_contact",
         "category": "mutation",
-        "description": "Aggiunge un contatto (persona) a un cliente esistente (client_id PK numerico).",
+        "description": ("Aggiunge un contatto (persona) alla rubrica, opzionalmente collegato "
+                        "a un cliente, una trattativa e/o un progetto esistenti (id PK numerici)."),
         "input_schema": {"type": "object", "properties": {
-            "client_id": {"type": "integer"},
-            "name": {"type": "string"},
+            "client_id": {"type": "integer",
+                         "description": "PK numerico del cliente (azienda del contatto). Opzionale: il contatto può restare orfano."},
+            "acquisition_id": {"type": "integer",
+                               "description": "PK numerico della trattativa a cui collegare il contatto."},
+            "project_id": {"type": "integer",
+                          "description": "PK numerico del progetto a cui collegare il contatto."},
+            "name": {"type": "string", "description": "Nome della persona (obbligatorio)."},
             "role": {"type": "string"},
             "email": {"type": "string"},
             "phone": {"type": "string"},
-        }, "required": ["client_id", "name"]},
+            "company_text": {"type": "string",
+                             "description": "Azienda in testo libero, usata solo se client_id non è fornito."},
+        }, "required": ["name"]},
         "handler": "propose_contact",
     },
     {
