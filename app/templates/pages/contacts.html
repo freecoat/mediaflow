@@ -77,4 +77,5 @@
 
 {% block scripts %}
 <script src="/static/js/contacts.js?v={{ app_version }}"></script>
+<script>document.addEventListener('DOMContentLoaded', mfContactsInit);</script>
 {% endblock %}
