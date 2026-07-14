@@ -23,6 +23,9 @@ from app.models.models import (
 )
 from app.services.rbac import requires_permission, current_user, has_permission
 from app.services.tenant_guard import fetch_or_404
+from app.services import gmail
+from app.services import contact_extract
+from app.services.ai_provider import get_provider_for_user
 
 router = APIRouter(tags=["contacts"])
 RequireView = Depends(requires_permission("view_clients"))
@@ -473,3 +476,32 @@ async def unlink_contact(
     ).delete()
     db.commit()
     return {"ok": True}
+
+
+@router.post("/contacts/api/extract", dependencies=[RequireEdit])
+async def extract_contacts(
+    request: Request, thread_id: str = Form(...), db: Session = Depends(get_db),
+):
+    user = current_user(request)
+    thread = gmail.get_thread(db, user.id, thread_id)
+    if not thread:
+        return {"candidates": []}
+    return {"candidates": contact_extract.extract_from_thread(thread)}
+
+
+@router.post("/contacts/api/extract/enrich", dependencies=[RequireEdit])
+async def extract_contacts_enrich(
+    request: Request,
+    signature: str = Form(...),
+    name: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    role: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    company_text: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    user = current_user(request)
+    candidate = {"name": name, "email": email, "role": role, "phone": phone,
+                 "company_text": company_text}
+    provider = get_provider_for_user(user.id, db)
+    return contact_extract.enrich_with_ai(candidate, signature, provider)
