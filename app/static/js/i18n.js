@@ -1065,6 +1065,7 @@ window.MF_I18N = {
   'email.error':        {it: 'Errore email', en: 'Email error', fr: 'Erreur e-mail', de: 'E-Mail-Fehler', es: 'Error de correo'},
   'email.assign':       {it: 'Assegna a trattativa', en: 'Assign to deal', fr: 'Assigner à une affaire', de: 'Zu Deal zuordnen', es: 'Asignar a negociación'},
   'email.assignOk':     {it: 'Assegnata alla trattativa', en: 'Assigned to deal', fr: 'Assigné', de: 'Zugeordnet', es: 'Asignado'},
+  'email.extractContact': {it: 'Estrai contatto', en: 'Extract contact', fr: 'Extraire contact', de: 'Kontakt extrahieren', es: 'Extraer contacto'},
   // ── Rubrica Contatti (Client email F3) ────────────
   'contact.pageTitle':   {it: 'Rubrica Contatti', en: 'Contacts', fr: 'Répertoire', de: 'Kontakte', es: 'Contactos'},
   'contact.new':         {it: '+ Nuovo contatto', en: '+ New contact', fr: '+ Nouveau contact', de: '+ Neuer Kontakt', es: '+ Nuevo contacto'},
@@ -1109,6 +1110,8 @@ window.MF_I18N = {
   'contact.nameRequired':{it: 'Nome richiesto', en: 'Name required', fr: 'Nom requis', de: 'Name erforderlich', es: 'Nombre requerido'},
   'contact.created':     {it: 'Contatto creato', en: 'Contact created', fr: 'Contact créé', de: 'Kontakt erstellt', es: 'Contacto creado'},
   'contact.dedupFound':  {it: 'Contatto già esistente collegato', en: 'Existing contact linked', fr: 'Contact existant lié', de: 'Bestehender Kontakt verknüpft', es: 'Contacto existente vinculado'},
+  'contact.extracting':  {it: 'Estrazione in corso…', en: 'Extracting…', fr: 'Extraction…', de: 'Extrahiere…', es: 'Extrayendo…'},
+  'contact.saveCandidate': {it: 'Salva in rubrica', en: 'Save to contacts', fr: 'Enregistrer', de: 'In Kontakte speichern', es: 'Guardar en contactos'},
   'doc.section':       {it: 'Documenti', en: 'Documents', fr: 'Documents', de: 'Dokumente', es: 'Documentos'},
   'doc.addByUrl':      {it: 'Aggiungi da link', en: 'Add by link', fr: 'Ajouter par lien', de: 'Per Link hinzufugen', es: 'Anadir por enlace'},
   'doc.urlPlaceholder': {it: 'Incolla link Google Drive...', en: 'Paste Google Drive link...', fr: 'Collez le lien Google Drive...', de: 'Google-Drive-Link einfugen...', es: 'Pega el enlace de Google Drive...'},

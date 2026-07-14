@@ -227,5 +227,60 @@ function mfContactsInit() {
   });
 }
 
+// ── Estrazione contatti da thread (usato da /mail e email_links.js) ──
+async function mfContactExtractOpen(threadId, hostId) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  host.innerHTML = '<div class="muted">' + mfT('contact.extracting') + '</div>';
+  try {
+    const fd = new FormData();
+    fd.append('thread_id', threadId);
+    const r = await fetch('/contacts/api/extract', {method: 'POST', body: fd});
+    const d = await r.json();
+    const cands = d.candidates || [];
+    if (!cands.length) { host.innerHTML = '<div class="muted">' + mfT('contact.none') + '</div>'; return; }
+    host.innerHTML = cands.map(function (c, i) {
+      return '<div class="contact-cand" style="border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;">' +
+        '<b>' + escapeHtml(c.name || '') + '</b> <span class="muted">' + escapeHtml(c.email || '') + '</span>' +
+        (c.role ? '<div class="muted">' + escapeHtml(c.role) + '</div>' : '') +
+        (c.company_text ? '<div class="muted">' + escapeHtml(c.company_text) + '</div>' : '') +
+        (c.phone ? '<div class="muted">' + escapeHtml(c.phone) + '</div>' : '') +
+        '<button class="btn btn-sm" data-contact-cand-save="' + i + '" data-cand-host="' + escapeHtml(hostId) + '">' +
+        mfT('contact.saveCandidate') + '</button></div>';
+    }).join('');
+    host._mfCandidates = cands;
+  } catch (e) { host.innerHTML = '<div class="muted">' + mfT('contact.error') + '</div>'; }
+}
+
+async function mfContactSaveCandidate(hostId, idx) {
+  const host = document.getElementById(hostId);
+  const cand = host && host._mfCandidates && host._mfCandidates[idx];
+  if (!cand) return;
+  const fd = new FormData();
+  fd.append('name', cand.name || '');
+  if (cand.email) fd.append('email', cand.email);
+  if (cand.phone) fd.append('phone', cand.phone);
+  if (cand.role) fd.append('role', cand.role);
+  if (cand.company_text) fd.append('company_text', cand.company_text);
+  try {
+    const r = await fetch('/contacts/api/create', {method: 'POST', body: fd});
+    if (r.ok) { if (window.toast) toast(mfT('contact.created'), 'success'); }
+    else if (window.toast) toast(mfT('contact.error'), 'error');
+  } catch (e) { if (window.toast) toast(mfT('contact.error'), 'error'); }
+}
+
+if (!window._mfContactCandClickBound) {
+  window._mfContactCandClickBound = true;
+  document.addEventListener('click', function (ev) {
+    const t = ev.target;
+    const save = t.closest && t.closest('[data-contact-cand-save]');
+    if (save) {
+      mfContactSaveCandidate(save.getAttribute('data-cand-host'),
+                            parseInt(save.getAttribute('data-contact-cand-save'), 10));
+    }
+  });
+}
+
 window.mfContactsInit = mfContactsInit;
 window.mfContactOpenDetail = mfContactOpenDetail;
+window.mfContactExtractOpen = mfContactExtractOpen;

@@ -81,8 +81,9 @@ async function mfMailOpenThread(threadId) {
         '<div class="mail-msg-actions">' +
         '<button class="btn btn-sm" data-mail-reply="' + escapeHtml(m.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.reply') + '</button> ' +
         '<button class="btn btn-sm" data-mail-forward="' + escapeHtml(m.id) + '">' + mfT('mail.forward') + '</button>' +
-        '<button class="btn btn-sm" data-mail-assign="' + escapeHtml(threadId) + '">' + mfT('email.assign') + '</button>' +
-        '</div></div>';
+        '<button class="btn btn-sm" data-mail-assign="' + escapeHtml(threadId) + '">' + mfT('email.assign') + '</button> ' +
+        '<button class="btn btn-sm" data-mail-extract-contact="' + escapeHtml(threadId) + '">' + mfT('email.extractContact') + '</button>' +
+        '</div><div class="mail-contact-cands" id="mail-cands-' + escapeHtml(threadId) + '"></div></div>';
     }).join('') || '<div class="muted">' + mfT('mail.empty') + '</div>';
     // memorizza l'ultimo thread per reply/forward
     box._lastThread = t;
@@ -150,6 +151,12 @@ document.addEventListener('click', function (ev) {
   }
   const asg = t.closest && t.closest('[data-mail-assign]');
   if (asg) { mfMailAssign(asg.getAttribute('data-mail-assign')); return; }
+  const extc = t.closest && t.closest('[data-mail-extract-contact]');
+  if (extc && window.mfContactExtractOpen) {
+    const tid = extc.getAttribute('data-mail-extract-contact');
+    mfContactExtractOpen(tid, 'mail-cands-' + tid);
+    return;
+  }
 });
 
 async function mfMailAssign(threadId) {

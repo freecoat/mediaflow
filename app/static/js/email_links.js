@@ -23,8 +23,10 @@ async function mfEmailList(aid) {
         '<div style="display:flex;gap:6px;margin-top:4px;">' +
         '<button class="btn btn-sm" data-em-preview="' + escapeHtml(e.thread_id) + '">' + mfT('email.expand') + '</button>' +
         '<button class="btn btn-sm" data-em-extract="' + escapeHtml(e.thread_id) + '">' + mfT('email.extract') + '</button>' +
+        '<button class="btn btn-sm" data-em-extract-contact="' + escapeHtml(e.thread_id) + '">' + mfT('email.extractContact') + '</button>' +
         '<button class="btn btn-sm" data-em-remove="' + e.id + '" data-em-aid="' + escapeHtml(String(aid)) + '">🗑</button>' +
-        '</div><div class="em-preview" id="em-prev-' + escapeHtml(e.thread_id) + '"></div></div>';
+        '</div><div class="em-preview" id="em-prev-' + escapeHtml(e.thread_id) + '"></div>' +
+        '<div class="em-contact-cands" id="em-cands-' + escapeHtml(e.thread_id) + '"></div></div>';
     }).join('');
   } catch (err) { box.innerHTML = '<div class="muted">' + mfT('email.error') + '</div>'; }
 }
@@ -106,6 +108,12 @@ function mfEmailInit(aid) {
       if (prev) { mfEmailPreview(prev.getAttribute('data-em-preview')); return; }
       const ext = t.closest && t.closest('[data-em-extract]');
       if (ext) { mfEmailExtract(ext.getAttribute('data-em-extract')); return; }
+      const extc = t.closest && t.closest('[data-em-extract-contact]');
+      if (extc && window.mfContactExtractOpen) {
+        const tid = extc.getAttribute('data-em-extract-contact');
+        mfContactExtractOpen(tid, 'em-cands-' + tid);
+        return;
+      }
       const rem = t.closest && t.closest('[data-em-remove]');
       if (rem) { mfEmailRemove(rem.getAttribute('data-em-remove'), rem.getAttribute('data-em-aid')); return; }
     });
