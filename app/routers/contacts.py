@@ -11,13 +11,18 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException, Form, Request
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.context import current_tenant_id
-from app.models.models import Contact, Client
-from app.services.rbac import requires_permission
+from app.models.models import (
+    Contact, Client, ContactAcquisition, ContactProject, Acquisition, Project,
+    Activity, EmailLink,
+)
+from app.services.rbac import requires_permission, current_user, has_permission
+from app.services.tenant_guard import fetch_or_404
 
 router = APIRouter(tags=["contacts"])
 RequireView = Depends(requires_permission("view_clients"))
@@ -28,6 +33,8 @@ def _contact_dict(c: Contact) -> dict:
     return {
         "id": c.id,
         "client_id": c.client_id,
+        "company_text": c.company_text,
+        "source": c.source,
         "name": c.name,
         "role": c.role,
         "email": c.email,
@@ -171,3 +178,67 @@ async def delete_contact(cid: int, db: Session = Depends(get_db)):
     c.is_active = False
     db.commit()
     return {"ok": True, "id": cid}
+
+
+# ── F3 Rubrica Contatti ────────────────────────────────────────────
+# NB ordine rotte: le GET a path letterale (list/match) DEVONO precedere
+# GET /contacts/api/{cid} (detail) — Starlette scansiona in ordine e altrimenti
+# proverebbe a fare int("list")/int("match") → 422.
+
+def _link_counts(db: Session, contact_id: int) -> dict:
+    n_acq = db.query(ContactAcquisition).filter(
+        ContactAcquisition.tenant_id == current_tenant_id(),
+        ContactAcquisition.contact_id == contact_id).count()
+    n_proj = db.query(ContactProject).filter(
+        ContactProject.tenant_id == current_tenant_id(),
+        ContactProject.contact_id == contact_id).count()
+    return {"acquisitions": n_acq, "projects": n_proj}
+
+
+@router.get("/contacts/api/list", dependencies=[RequireView])
+async def list_contacts_rubrica(
+    search: str = None, client_id: int = None, triage: str = None,
+    source: str = None, db: Session = Depends(get_db),
+):
+    q = db.query(Contact).filter(
+        Contact.tenant_id == current_tenant_id(),
+        Contact.is_active == True,  # noqa: E712
+    )
+    if client_id:
+        q = q.filter(Contact.client_id == client_id)
+    if source:
+        q = q.filter(Contact.source == source)
+    if search:
+        like = f"%{search.strip().lower()}%"
+        q = q.filter(or_(
+            func.lower(Contact.name).like(like),
+            func.lower(Contact.email).like(like),
+            func.lower(Contact.company_text).like(like),
+        ))
+    rows = q.order_by(func.lower(Contact.name)).all()
+    if _bool(triage):
+        acq_ids = {r[0] for r in db.query(ContactAcquisition.contact_id).filter(
+            ContactAcquisition.tenant_id == current_tenant_id()).all()}
+        proj_ids = {r[0] for r in db.query(ContactProject.contact_id).filter(
+            ContactProject.tenant_id == current_tenant_id()).all()}
+        rows = [r for r in rows if r.client_id is None
+                and r.id not in acq_ids and r.id not in proj_ids]
+    out = []
+    for r in rows:
+        d = _contact_dict(r)
+        d["links"] = _link_counts(db, r.id)
+        out.append(d)
+    return {"items": out}
+
+
+@router.get("/contacts/api/match", dependencies=[RequireView])
+async def match_contact(email: str, db: Session = Depends(get_db)):
+    email = (email or "").strip().lower()
+    if not email:
+        return {"id": None}
+    match = db.query(Contact).filter(
+        Contact.tenant_id == current_tenant_id(),
+        Contact.is_active == True,  # noqa: E712
+        func.lower(Contact.email) == email,
+    ).first()
+    return {"id": match.id, "name": match.name} if match else {"id": None}
