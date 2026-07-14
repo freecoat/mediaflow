@@ -120,3 +120,18 @@ function mfEmailInit(aid) {
   }
   mfEmailList(aid);
 }
+
+// Badge notifica on-demand: email recenti da contatti collegati non ancora agganciate (F3).
+async function mfContactsBadgeInit(aid) {
+  const el = document.getElementById('em-contacts-badge');
+  if (!el) return;
+  el.style.display = 'none';
+  try {
+    const d = await (await fetch('/contacts/api/notify-badge?acquisition_id=' + encodeURIComponent(aid))).json();
+    const count = d.count || 0;
+    if (count > 0) {
+      el.textContent = count + ' ' + mfT('contact.badgeNewEmails');
+      el.style.display = '';
+    }
+  } catch (e) { /* best-effort: badge nascosto, mai errore visibile */ }
+}

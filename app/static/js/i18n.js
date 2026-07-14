@@ -1112,6 +1112,7 @@ window.MF_I18N = {
   'contact.dedupFound':  {it: 'Contatto già esistente collegato', en: 'Existing contact linked', fr: 'Contact existant lié', de: 'Bestehender Kontakt verknüpft', es: 'Contacto existente vinculado'},
   'contact.extracting':  {it: 'Estrazione in corso…', en: 'Extracting…', fr: 'Extraction…', de: 'Extrahiere…', es: 'Extrayendo…'},
   'contact.saveCandidate': {it: 'Salva in rubrica', en: 'Save to contacts', fr: 'Enregistrer', de: 'In Kontakte speichern', es: 'Guardar en contactos'},
+  'contact.badgeNewEmails': {it: 'email recenti da contatti noti non ancora agganciate', en: 'recent emails from known contacts not yet linked', fr: 'e-mails récents de contacts connus non liés', de: 'aktuelle E-Mails bekannter Kontakte, noch nicht verknüpft', es: 'correos recientes de contactos conocidos sin vincular'},
   'doc.section':       {it: 'Documenti', en: 'Documents', fr: 'Documents', de: 'Dokumente', es: 'Documentos'},
   'doc.addByUrl':      {it: 'Aggiungi da link', en: 'Add by link', fr: 'Ajouter par lien', de: 'Per Link hinzufugen', es: 'Anadir por enlace'},
   'doc.urlPlaceholder': {it: 'Incolla link Google Drive...', en: 'Paste Google Drive link...', fr: 'Collez le lien Google Drive...', de: 'Google-Drive-Link einfugen...', es: 'Pega el enlace de Google Drive...'},

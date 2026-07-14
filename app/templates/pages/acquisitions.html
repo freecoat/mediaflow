@@ -363,6 +363,7 @@
         <input id="em-url" class="form-input" style="flex:1;" data-i18n-attr="placeholder" data-i18n="email.urlPlaceholder" placeholder="Incolla link Gmail…">
         <button class="btn btn-secondary btn-sm" id="em-url-btn" data-i18n="email.pinUrl">Aggancia da link</button>
       </div>
+      <div id="em-contacts-badge" class="badge" style="display:none;margin-bottom:8px;"></div>
       <div id="em-list"></div>
     </div>
 
@@ -854,7 +855,7 @@ function acqDetTab(btn, tab) {
   document.getElementById('det-tab-' + tab).classList.add('active');
   if (tab === 'calendar' && _acqCurrentId) acqDetLoadCalendarEvents(_acqCurrentId);
   if (tab === 'documents' && _acqCurrentId) mfDocList('acquisition', _acqCurrentId);
-  if (tab === 'email' && _acqCurrentId) mfEmailInit(_acqCurrentId);
+  if (tab === 'email' && _acqCurrentId) { mfEmailInit(_acqCurrentId); if (window.mfContactsBadgeInit) mfContactsBadgeInit(_acqCurrentId); }
 }
 
 function _apptStatusBadge(status) {
