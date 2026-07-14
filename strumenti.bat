@@ -32,6 +32,7 @@ echo  [P] Migra OAuth calendario (Fase A) [v3.5.0-alpha.172]
 echo  [Q] Migra calendario (Fase B) [v3.5.0-alpha.172]
 echo  [R] Migra Fase D - documenti Drive [v3.5.0-alpha.172]
 echo  [S] Migra Client email F2 - email_links [v3.5.0-alpha.172]
+echo  [U] Migra Client email F3 - rubrica contatti (client_id nullable + link) [v3.5.0-alpha.172]
 echo  [T] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]
 echo  [A] Apri cartella upload
 echo  [0] Esci
@@ -65,6 +66,7 @@ if /i "%scelta%"=="P" goto migrate_oauth_calendar
 if /i "%scelta%"=="Q" goto migrate_calendar_events
 if /i "%scelta%"=="R" goto migrate_documents
 if /i "%scelta%"=="S" goto migrate_email_links
+if /i "%scelta%"=="U" goto migrate_contacts_rubrica
 if /i "%scelta%"=="T" goto seed_test_deadline
 if /i "%scelta%"=="A" goto uploads
 if "%scelta%"=="0" exit /b
@@ -416,6 +418,19 @@ set /p conferma="Procedo? (s/n): "
 if /i "%conferma%"=="s" (
     call .venv\Scripts\activate.bat
     python scripts\migrate_email_links.py
+)
+pause & goto menu
+
+:migrate_contacts_rubrica
+echo.
+echo Migrazione Client email F3: rende contacts.client_id nullable, aggiunge
+echo company_text/source, crea contact_acquisitions/contact_projects.
+echo Idempotente.
+echo.
+set /p conferma="Procedo? (s/n): "
+if /i "%conferma%"=="s" (
+    call .venv\Scripts\activate.bat
+    python scripts\migrate_contacts_rubrica.py
 )
 pause & goto menu
 

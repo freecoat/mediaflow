@@ -1220,6 +1220,16 @@ def _auto_migrate_columns():
     except Exception as e:
         print(f"[auto-migrate] deliverable audio/label FAILED: {e}")
 
+    # v3.5.0-alpha.172.246 — Client email F3: Rubrica Contatti (contacts.client_id
+    # nullable + company_text/source + contact_acquisitions/contact_projects).
+    try:
+        from scripts.migrate_contacts_rubrica import migrate as _mig_contacts_rubrica
+        _res = _mig_contacts_rubrica(engine)
+        if _res.get("columns_added") or _res.get("contacts_rebuilt") or _res.get("tables_created"):
+            print(f"[auto-migrate] contacts rubrica: {_res}")
+    except Exception as e:
+        print(f"[auto-migrate] contacts rubrica FAILED: {e}")
+
     # v3.5.0-alpha.172.206 — deliverable_assets.tenant_id (unificazione link, B).
     # Solo ADD COLUMN + backfill al boot; il reconcile pivot gira via script.
     try:
