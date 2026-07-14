@@ -265,6 +265,44 @@ async def match_contact(email: str, db: Session = Depends(get_db)):
     return {"id": match.id, "name": match.name} if match else {"id": None}
 
 
+@router.get("/contacts/api/notify-badge")
+async def contacts_notify_badge(
+    acquisition_id: int, request: Request, db: Session = Depends(get_db),
+):
+    user = current_user(request)
+    if not has_permission(user, "view_acquisitions"):
+        raise HTTPException(403, "Permesso negato")
+    acq = fetch_or_404(db, Acquisition, acquisition_id, error="Trattativa non trovata")
+
+    contacts = (
+        db.query(Contact)
+        .join(ContactAcquisition, ContactAcquisition.contact_id == Contact.id)
+        .filter(ContactAcquisition.tenant_id == current_tenant_id(),
+                ContactAcquisition.acquisition_id == acq.id,
+                Contact.tenant_id == current_tenant_id(),
+                Contact.email.isnot(None), Contact.email != "")
+        .all()
+    )
+    if not contacts:
+        return {"count": 0}
+    known_emails = sorted({c.email.strip().lower() for c in contacts if c.email})
+    if not known_emails:
+        return {"count": 0}
+
+    already_linked = {
+        e.thread_id for e in db.query(EmailLink).filter(
+            EmailLink.tenant_id == current_tenant_id(),
+            EmailLink.acquisition_id == acq.id,
+            EmailLink.is_active == True,  # noqa: E712
+        ).all()
+    }
+    query = " OR ".join(f"from:{e}" for e in known_emails)
+    res = gmail.list_threads(db, user.id, query=query, max_results=25)
+    threads = res.get("threads") or []
+    count = sum(1 for t in threads if t.get("id") not in already_linked)
+    return {"count": count}
+
+
 def _activity_dict_local(a: Activity) -> dict:
     return {
         "id": a.id,
