@@ -8,6 +8,17 @@
 
 ## Versione corrente
 
+**v3.5.0-alpha.172.246** — 14 luglio 2026 — Client email Sotto-fase 3: Rubrica Contatti (ramo `feat/mail-client-phase3`)
+
+### α.172.246 ✅ (Client email F3 — Rubrica Contatti — 14 lug, ramo feat/mail-client-phase3, 16 task TDD Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-14-mail-client-phase3-contacts-rubrica*)
+- **`Contact` standalone**: `client_id` **nullable** + `company_text`/`source`; join M:N `contact_acquisitions`/`contact_projects`. Retrocompat endpoint client-scoped + sync `is_primary`. Migrazione `scripts/migrate_contacts_rubrica.py` (rebuild tabella SQLite per NOT NULL) + auto-migrate boot + strumenti `[u]`.
+- **Pagina `/contacts`**: lista + filtri (ricerca, triage orfani) + dettaglio con Cliente/Trattative/Progetti (**associa/dissocia** via picker), timeline Activity, email agganciate. Sidebar "Rubrica". Router list/match/detail/create(dedup email)/update/link/unlink.
+- **Estrazione ibrida** `contact_extract.py` (deterministico partecipanti+firma, gratis; AI opzionale). Bottone "Estrai contatto" in `/mail` + tab Email trattativa → preview → salva. **Ponte scheda tecnica**: "Salva in rubrica" pane Crew → `POST /contacts/api/from-tech-sheet`. **Copilot** `propose_contact` esteso (client_id opzionale + acquisition_id/project_id). **Notifiche** badge on-demand tab Email trattativa.
+- **Test**: 8 file nuovi. **1196 test verdi**. **Smoke Playwright** (DB copia reale, JWT admin): crea contatto → dettaglio → picker carica trattative reali → associa → refresh con ✕ + lista "1 🎯"; `/mail`+`/acquisitions` caricano, **0 errori console**. i18n 5 lingue.
+
+**Prossimo step**: smoke Matteo sul Mac (`scripts/migrate_contacts_rubrica.py`). Poi **merge `feat/mail-client-phase3` → main** (chiude programma Client email F1+F2+F3) oppure follow-up. Ramo NON pushato. NB: anche `feat/media-library` (A+B) e `feat/mail-client-phase2` attendono merge.
+
+### α.172.245 ✅ (storico sotto)
 **v3.5.0-alpha.172.245** — 7 luglio 2026 — Client email Sotto-fase 2: integrazione CRM (trattativa)
 
 ### α.172.245 ✅ (Client email Sotto-fase 2 — CRM trattativa — 7 lug, ramo feat/mail-client-phase2, 6 task TDD; spec+plan 2026-07-07)

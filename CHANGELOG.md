@@ -1,5 +1,15 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.246 — Client email Sotto-fase 3: Rubrica Contatti (14 lug 2026)
+
+- **`Contact` standalone**: `client_id` diventa **nullable** (contatti orfani ammessi) + campi `company_text`/`source`; due join M:N `contact_acquisitions` / `contact_projects`. Retrocompat piena con gli endpoint client-scoped esistenti + sync `is_primary`. Migrazione `scripts/migrate_contacts_rubrica.py` (rebuild tabella SQLite per rilassare NOT NULL) + auto-migrate al boot + voce strumenti `[u]`/`[U]`.
+- **Pagina `/contacts`**: lista + filtri (ricerca, **triage** orfani), dettaglio con Cliente/Trattative/Progetti (**associa/dissocia** via picker), timeline Activity, email agganciate. Voce sidebar "Rubrica" (Anagrafica). Endpoint list/match/detail/create (dedup per email)/update/link/unlink su `app/routers/contacts.py`.
+- **Estrazione ibrida da email**: `app/services/contact_extract.py` (deterministico: partecipanti From/To/Cc + firma via regex, gratis/offline) + arricchimento AI opzionale. Bottone **"Estrai contatto"** in `/mail` e nella tab Email delle trattative → preview candidati → salva in rubrica.
+- **Ponte scheda tecnica**: bottone "💾 Salva in rubrica" nella pane Crew → `POST /contacts/api/from-tech-sheet` (crea `Contact` + link progetto + scrive `contact_id` nel JSON).
+- **Copilot**: `propose_contact` esteso — `client_id` opzionale + link `acquisition_id`/`project_id`.
+- **Notifiche on-demand**: badge "N email non agganciate da contatti noti" nella tab Email trattativa (best-effort, nessuna infra push).
+- i18n 5 lingue (`contact.*`, `email.extractContact`, `nav.contacts`). 16 task TDD, **1196 test verdi**, smoke Playwright verde (crea/dettaglio/associa, 0 errori console). Ramo `feat/mail-client-phase3`. Chiude il programma Client email (F1+F2+F3).
+
 ## v3.5.0-alpha.172.245 — Client email Sotto-fase 2: integrazione CRM (trattativa) (7 lug 2026)
 
 - **`EmailLink`** (`email_links`, tenant-scoped, soft-delete): aggancia thread Gmail alle **trattative** salvando solo metadata + `thread_id`.
