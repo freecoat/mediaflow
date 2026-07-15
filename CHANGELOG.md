@@ -1,5 +1,29 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.250 — Corpo email leggibile + drag&drop Google protetto da etag (15 lug 2026)
+
+Due difetti indipendenti, entrambi dichiarati come limiti noti nelle rispettive fasi.
+
+### `/mail` — il corpo email era un francobollo 300×150
+
+- **Causa**: `_mailRenderBody` emette `<iframe class="mail-body-frame">` da F1 (α.172.244), ma **la classe non esisteva in nessun CSS** — `main.css`/`sleek.css`/`mobile.css` non avevano una sola regola `mail-*`. Un `<iframe>` senza width/height cade sul default UA: **300×150 px**. Il corpo finiva lì dentro con scrollbar propria. Mai funzionante, come il bug oggetto di α.172.247: i test erano asserzioni statiche sul sorgente e nessuno aveva mai *guardato* la pagina.
+- **CSS `/mail`** nuovo in `main.css` (`.mail-label`, `.mail-thread-row`, `.mail-reading`, `.mail-msg`, `.mail-msg-head`, `.mail-msg-actions`, `.mail-body-frame`, `.mail-atts`, `.mail-att`, `.mail-cta`) su variabili di tema, niente colori hardcoded — tranne il fondo bianco del frame, che le email presuppongono anche a tema scuro.
+- **Auto-altezza** (`mfMailFitFrame`): il frame prende l'altezza reale del contenuto, niente scroll annidato. Richiede leggere il documento interno → **`sandbox="allow-same-origin"`** al posto di `sandbox=""`. **Mai `allow-scripts`**: senza quello nessun JS gira nel frame e l'HTML dell'email non diventa eseguibile. Verificato a runtime con un'email ostile (`<script>` inline + `img onerror`): entrambi bloccati dal sandbox, `parent.__pwned` resta `false`. Test `test_mail_body_frame_never_allows_scripts` presidia la coppia di flag.
+- **Stile iniettato nel frame** (`_MAIL_BODY_CSS`): le email non portano un font-size di base → cadevano su Times 16px e `<pre>` monospace 13px. Ora font di sistema 15px/1.6, `img{max-width:100%}`, `pre` a capo, blockquote.
+- **Fix collaterale**: `&` non era escapato costruendo l'attributo `srcdoc` → in un attributo `&amp;` si ri-decodifica in `&` e le entità del corpo venivano mangiate.
+
+### `/calendar` — drag&drop di eventi Google in last-write-wins
+
+- **Causa**: il modale mandava `If-Match` (via `get_external_event`, che porta l'etag), ma `_calPutTimes` no: l'overlay `list_google_events` **non esponeva l'etag**, quindi il drag&drop faceva PATCH senza `If-Match` e sovrascriveva in silenzio una modifica concorrente. Limite dichiarato in α.172.248.
+- **`etag` nell'overlay**: prodotto da `_normalize_google_event` (quindi sia in `list_google_events` sia in `get_external_event` — la riga duplicata in quest'ultimo è sparita) → `extendedProps.etag` → `fd.append('etag')` nel PUT.
+- **Etag riallineato dalla risposta** (`setExtendedProp('etag', d.event.etag)`): la PATCH produce una nuova versione, e senza riallineare **il secondo drag consecutivo dello stesso evento avrebbe dato un 409 falso**.
+- **Sul 409** l'overlay è per definizione stale → `refetchEvents()` oltre al revert, così l'utente vede la versione vera e riparte da etag freschi.
+- **Test**: 8 nuovi (`test_google_calendar` 4, `test_calendar_page` 1, `test_mail_page` 3), incluso un guard anti-regressione sull'etag del modale. **1306 verdi**.
+- **Smoke** su DB **copia scratch** (mai il reale, verificato: env `DATABASE_URL` vince su `.env`), Gmail/Google **reali** in lettura: `/mail` 25 thread con oggetti corretti, frame **419×2495** (era 300×150), font 15px, "Mostra immagini" 12/12 caricate + refit; `/calendar` overlay **5/5 eventi con etag**, 1 editabile (owner) e i calendari `reader` correttamente non editabili, PUT che manda l'etag e lo riallinea, 409 → revert + refetch + toast specifico. **0 errori console.** La PATCH è stata **stubbata**: scrivere davvero avrebbe mutato il calendario reale di Matteo.
+- **Nessuna migrazione** (etag = campo virtuale dell'overlay).
+
+**Limite residuo**: l'etag dell'overlay invecchia tra un fetch e l'altro — è esattamente ciò che il 409 intercetta, non un difetto.
+
 ## v3.5.0-alpha.172.249 — Media Library (DAM) Fase A+B — merge su main (15 lug 2026)
 
 Merge di `feat/media-library` (A+B, sviluppate 13 lug in parallelo al programma Client email). **Rinumerate**: il ramo usava α.172.244/245, numeri già assegnati a Client email F1/F2 sviluppate in parallelo sulla stessa base `a3b2893`. Contenuto invariato, cronologia sotto.

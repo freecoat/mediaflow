@@ -17,6 +17,37 @@ def test_mail_js_globals_and_sandbox():
     assert "srcdoc" in src
 
 
+def test_mail_body_frame_never_allows_scripts():
+    """allow-same-origin serve a misurare l'altezza del corpo dal parent. Da solo
+    e' innocuo: senza allow-scripts nessun JS gira nel frame. I due insieme
+    annullerebbero il sandbox e renderebbero eseguibile l'HTML di chiunque ci
+    scriva. Il controllo guarda gli attributi sandbox emessi, non il sorgente
+    grezzo: 'allow-scripts' puo' comparire nei commenti."""
+    import re
+    src = pathlib.Path("app/static/js/mail.js").read_text(encoding="utf-8")
+    sandboxes = re.findall(r'sandbox="([^"]*)"', src)
+    assert sandboxes, "nessun attributo sandbox: il corpo email deve restare in un iframe sandboxed"
+    for sb in sandboxes:
+        assert "allow-scripts" not in sb, sb
+    assert "allow-same-origin" in sandboxes[0]
+
+
+def test_mail_body_frame_is_autosized():
+    """Un iframe senza altezza esplicita cade sul default UA 300x150."""
+    src = pathlib.Path("app/static/js/mail.js").read_text(encoding="utf-8")
+    assert "mfMailFitFrame" in src
+    assert "scrollHeight" in src
+    assert "onload=" in src
+
+
+def test_mail_css_exists_and_sizes_body_frame():
+    """Da F1 le classi mail-* vivevano solo in mail.js: nessun CSS le definiva."""
+    css = pathlib.Path("app/static/css/main.css").read_text(encoding="utf-8")
+    for sel in (".mail-body-frame", ".mail-msg", ".mail-thread-row", ".mail-label",
+                ".mail-att", ".mail-cta"):
+        assert sel in css, sel
+
+
 def test_i18n_mail_keys():
     src = pathlib.Path("app/static/js/i18n.js").read_text(encoding="utf-8")
     for key in ("nav.mail", "mail.inbox", "mail.compose", "mail.send", "mail.reply",

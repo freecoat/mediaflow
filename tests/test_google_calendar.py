@@ -367,3 +367,52 @@ def test_delete_external_event_not_connected():
     res = gc.delete_external_event(_session(), 1, "cal1", "evt1")
     assert res["ok"] is False
     assert res["error"] == "not_connected"
+
+
+# ── etag nell'overlay (drag&drop protetto da If-Match, v3.5.0-alpha.172.250) ──
+
+def test_normalize_exposes_etag():
+    """Senza etag nell'overlay il drag&drop non puo' mandare If-Match e l'ultima
+    scrittura vince in silenzio (limite noto dichiarato in alpha.172.248)."""
+    g = {"id": "e1", "summary": "X", "etag": '"abc123"',
+         "start": {"dateTime": "2026-07-10T09:00:00Z"},
+         "end": {"dateTime": "2026-07-10T10:00:00Z"}}
+    out = gc._normalize_google_event(g, "Lavoro", "cal1", "writer", True)
+    assert out["etag"] == '"abc123"'
+
+
+def test_normalize_etag_none_when_absent():
+    g = {"id": "e1", "summary": "X", "start": {"date": "2026-07-10"},
+         "end": {"date": "2026-07-11"}}
+    out = gc._normalize_google_event(g, "Lavoro", "cal1", "writer", True)
+    assert out["etag"] is None
+
+
+def test_list_overlay_carries_etag(monkeypatch):
+    s = _session(); _connect(s, cal_id="claqoCal")
+
+    def fake(m, url, t, body=None, params=None):
+        if url.endswith("/users/me/calendarList"):
+            return {"items": [{"id": "primary", "summary": "Personale", "accessRole": "owner"}]}
+        if "/calendars/primary/events" in url:
+            return {"items": [{"id": "g1", "summary": "Riunione", "etag": '"v1"',
+                               "start": {"dateTime": "2026-07-10T09:00:00Z"},
+                               "end": {"dateTime": "2026-07-10T10:00:00Z"}}]}
+        return {"items": []}
+
+    monkeypatch.setattr(gc, "_google_request", fake)
+    out = gc.list_google_events(s, 1, "2026-07-01T00:00:00Z", "2026-07-31T00:00:00Z")
+    assert len(out) == 1
+    assert out[0]["etag"] == '"v1"'
+
+
+def test_get_external_event_still_carries_etag(monkeypatch):
+    """Il modale dipende da questo etag: non deve regredire ora che lo produce
+    _normalize_google_event."""
+    s = _session(); _connect(s, cal_id="claqoCal")
+    monkeypatch.setattr(gc, "_google_request", lambda m, url, t, body=None, params=None: {
+        "id": "g1", "summary": "R", "etag": '"v9"',
+        "start": {"dateTime": "2026-07-10T09:00:00Z"},
+        "end": {"dateTime": "2026-07-10T10:00:00Z"}})
+    out = gc.get_external_event(s, 1, "primary", "g1")
+    assert out["etag"] == '"v9"'

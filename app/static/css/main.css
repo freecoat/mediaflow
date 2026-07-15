@@ -1722,3 +1722,87 @@ input[type="time"]:not([data-no-time-picker="true"])::-webkit-calendar-picker-in
 .sal-prj-row.sal-row-overrun:hover > td {
   background: rgba(239, 68, 68, 0.16);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   /mail — client email (v3.5.0-alpha.172.250)
+   Dalla Sotto-fase 1 (α.172.244) le classi mail-* esistevano solo in mail.js:
+   nessun foglio di stile le definiva. .mail-body-frame senza regole cadeva sul
+   default UA dell'iframe — 300×150px — da cui il "corpo email troppo piccolo".
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Nav label ─────────────────────────────────────────────── */
+.mail-label {
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mail-label:hover { background: var(--tint-soft); color: var(--text); }
+.mail-label.active { background: var(--indigo-bg); color: var(--indigo2); }
+
+/* ── Lista thread ──────────────────────────────────────────── */
+.mail-thread-row { border: 1px solid transparent; }
+.mail-thread-row:hover { background: var(--tint-soft); }
+.mail-thread-row.active { background: var(--surface); border-color: var(--border2); }
+
+/* ── Pannello lettura ──────────────────────────────────────── */
+.mail-reading { display: flex; flex-direction: column; gap: 12px; }
+.mail-msg {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mail-msg-head {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.mail-msg-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Il corpo email vive in un iframe: l'altezza gliela assegna mfMailFitFrame()
+   misurando il contenuto (il frame non ha script propri). height qui e' solo il
+   valore iniziale, prima dell'onload. */
+.mail-body-frame {
+  display: block;
+  width: 100%;
+  height: 180px;
+  border: 0;
+  border-radius: 6px;
+  background: #fff;   /* le email presuppongono fondo chiaro, anche a tema scuro */
+}
+
+/* ── Allegati ──────────────────────────────────────────────── */
+.mail-atts { display: flex; gap: 6px; flex-wrap: wrap; }
+.mail-att {
+  display: inline-block;
+  padding: 3px 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text2);
+  text-decoration: none;
+  font-size: 12px;
+}
+.mail-att:hover { color: var(--text); border-color: var(--border2); }
+
+/* ── CTA "collega Gmail" (opt-in non concesso) ─────────────── */
+.mail-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--text2);
+  text-align: center;
+}

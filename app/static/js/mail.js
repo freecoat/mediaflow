@@ -83,14 +83,54 @@ async function mfMailLoadThreads(reset) {
   } catch (e) { box.innerHTML = '<div class="muted">' + mfT('mail.empty') + '</div>'; }
 }
 
+// Foglio di stile iniettato nel frame: l'HTML delle email non porta quasi mai
+// un font-size di base, e senza questo il corpo cade sui default UA (Times 16px
+// su fondo bianco, <pre> monospace 13px) — illeggibile accanto al resto della UI.
+const _MAIL_BODY_CSS =
+  'html,body{margin:0;padding:12px;background:#fff;color:#202124;' +
+  'font:15px/1.6 -apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;' +
+  'overflow-wrap:break-word;word-break:break-word;}' +
+  'img{max-width:100%;height:auto;}' +
+  'table{max-width:100%;}' +
+  'pre{white-space:pre-wrap;overflow-wrap:break-word;margin:0;' +
+  'font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}' +
+  'a{color:#1a73e8;}' +
+  'blockquote{margin:0 0 0 6px;padding-left:10px;border-left:2px solid #dadce0;color:#5f6368;}';
+
+// Altezza del frame = altezza reale del contenuto. Serve leggere il documento
+// interno, e per farlo il frame deve condividere l'origine del parent
+// (sandbox="allow-same-origin"). Resta SENZA allow-scripts: nessun JS gira
+// dentro, quindi l'HTML dell'email non diventa eseguibile.
+function mfMailFitFrame(fr) {
+  try {
+    const d = fr.contentDocument;
+    if (!d || !d.body) return;
+    const h = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight);
+    fr.style.height = Math.min(Math.max(h + 4, 48), 20000) + 'px';
+  } catch (e) {
+    fr.style.height = '420px';  // origine opaca (sandbox stretto): fallback fisso
+  }
+}
+
+// Le immagini finiscono di caricare dopo l'onload e allungano il documento:
+// una seconda misura le recupera senza scomodare un observer nel frame.
+function mfMailFitFrameLater(fr) {
+  mfMailFitFrame(fr);
+  setTimeout(function () { mfMailFitFrame(fr); }, 400);
+}
+
 function _mailRenderBody(html) {
   // corpo email in iframe sandboxed (no script). Immagini remote bloccate: si
   // neutralizza src http(s) sostituendolo con data-blocked-src finché l'utente non clicca "Mostra immagini".
   const blocked = (html || '').replace(/(<img\b[^>]*?)\ssrc=/gi, '$1 data-blocked-src=');
   const doc = '<!doctype html><html><head><meta charset="utf-8">' +
-    '<base target="_blank"></head><body>' + blocked + '</body></html>';
-  return '<iframe class="mail-body-frame" sandbox="" srcdoc="' +
-    doc.replace(/"/g, '&quot;') + '"></iframe>';
+    '<base target="_blank"><style>' + _MAIL_BODY_CSS + '</style></head><body>' +
+    blocked + '</body></html>';
+  // & prima di ": in un attributo srcdoc "&amp;" si decodifica in "&", quindi
+  // senza questo passaggio le entità del corpo email verrebbero mangiate.
+  const attr = doc.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  return '<iframe class="mail-body-frame" sandbox="allow-same-origin" ' +
+    'onload="mfMailFitFrameLater(this)" srcdoc="' + attr + '"></iframe>';
 }
 
 async function mfMailOpenThread(threadId) {

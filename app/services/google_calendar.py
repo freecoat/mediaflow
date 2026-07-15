@@ -172,6 +172,9 @@ def _normalize_google_event(g: dict, cal_summary: str, calendar_id: str,
     end = g.get("end", {})
     editable = (access_role in ("owner", "writer")) and write_scope_ok and not _is_recurring(g)
     return {
+        # etag anche nella lista: senza, il drag&drop non ha If-Match da mandare e
+        # l'ultima scrittura vince in silenzio (limite noto di α.172.248).
+        "etag": g.get("etag"),
         "id": g.get("id"),
         "title": g.get("summary") or "(senza titolo)",
         "start": start.get("dateTime") or start.get("date"),
@@ -236,10 +239,8 @@ def get_external_event(db: Session, user_id: int, calendar_id: str,
     if not g:
         return None
     row = get_token(db, user_id, "google")
-    out = _normalize_google_event(g, "", calendar_id, "writer",
-                                  has_calendar_write_scope(row))
-    out["etag"] = g.get("etag")
-    return out
+    return _normalize_google_event(g, "", calendar_id, "writer",
+                                   has_calendar_write_scope(row))
 
 
 def _patch_body(*, title, start_at, end_at, all_day, location) -> dict:

@@ -43,7 +43,10 @@ async function calFetchEvents(info, success, failure) {
             editable: !!g.editable,
             classNames: g.editable ? ['cal-google', 'cal-google-editable'] : ['cal-google'],
             extendedProps: { google: true, editable: !!g.editable,
-                             calendar_id: g.calendar_id, event_id: g.id }
+                             calendar_id: g.calendar_id, event_id: g.id,
+                             // etag = versione dell'evento su Google: viaggia nel PUT
+                             // come If-Match. Va riaggiornato dopo ogni scrittura.
+                             etag: g.etag || null }
           }));
         }
       } catch (e) { /* overlay best-effort */ }
@@ -92,18 +95,32 @@ function _calPutTimes(info) {
   const fd = new FormData();
   fd.append('start_at', info.event.start.toISOString());
   if (info.event.end) fd.append('end_at', info.event.end.toISOString());
+  // If-Match: se l'evento e' cambiato su Google dopo il fetch dell'overlay, Google
+  // risponde 412 -> 409 e non sovrascriviamo. Senza etag sarebbe last-write-wins.
+  if (p.google && p.etag) fd.append('etag', p.etag);
   // Drag&drop instradato sulla sorgente: evento Google → API Google, locale → API locale.
   const url = p.google
     ? '/calendar/api/google-events/' + encodeURIComponent(p.calendar_id) + '/' +
       encodeURIComponent(p.event_id)
     : '/calendar/api/events/' + info.event.id;
-  fetch(url, { method: 'PUT', body: fd }).then(r => {
-    if (r.ok) return;
+  fetch(url, { method: 'PUT', body: fd }).then(async r => {
+    if (r.ok) {
+      // La PATCH ha prodotto una nuova versione: senza riallineare l'etag il drag
+      // successivo dello stesso evento manderebbe quello vecchio -> 409 falso.
+      if (p.google) {
+        const d = await r.json().catch(() => null);
+        if (d && d.event && d.event.etag) info.event.setExtendedProp('etag', d.event.etag);
+      }
+      return;
+    }
     info.revert();
     if (window.toast) {
       // 409 = l'evento e' cambiato su Google nel frattempo (If-Match), non un errore generico.
       toast(mfT(r.status === 409 ? 'cal.google.conflict' : 'common.error'), 'error');
     }
+    // Sul conflitto l'overlay in pagina e' per definizione stale: ricaricalo, cosi'
+    // l'utente vede la versione vera e riparte da etag freschi.
+    if (r.status === 409 && _cal) _cal.refetchEvents();
   });
 }
 

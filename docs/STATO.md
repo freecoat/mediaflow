@@ -8,7 +8,16 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.249** — 15 luglio 2026 — Media Library (DAM) A+B mergiata su `main`
+**v3.5.0-alpha.172.250** — 15 luglio 2026 — Corpo email leggibile + drag&drop Google protetto da etag
+
+### α.172.250 ✅ (15 lug, su main — due difetti indipendenti, entrambi limiti noti dichiarati)
+- **`/mail` corpo email 300×150**: `.mail-body-frame` **non esisteva in nessun CSS** dalla F1 (α.244) → l'iframe cadeva sul default UA. Aggiunto il blocco `mail-*` in `main.css` + **auto-altezza** `mfMailFitFrame`. Per misurare il documento interno serve `sandbox="allow-same-origin"` (era `sandbox=""`); **mai `allow-scripts`** — verificato a runtime con email ostile (`<script>`+`img onerror` bloccati). Stile iniettato nel frame (font 15px: le email non portano font-size di base). Fix collaterale: `&` non escapato in `srcdoc` mangiava le entità.
+- **`/calendar` drag&drop last-write-wins**: l'overlay non esponeva l'`etag` → PATCH senza `If-Match`. Ora `_normalize_google_event` lo produce → `extendedProps` → PUT, **e lo riallinea dalla risposta** (senza, il 2° drag consecutivo dava un 409 falso). Sul 409: revert + `refetchEvents()` + toast specifico.
+- **Test**: 8 nuovi, **1306 verdi**. **Smoke** su DB copia scratch (mai il reale) con Gmail/Google **reali in lettura**: 25 thread oggetti corretti, frame **419×2495**, 5/5 eventi con etag, 1 editabile owner, 409 gestito, **0 errori console**. La PATCH è stata stubbata: scrivere davvero avrebbe mutato il calendario reale di Matteo. Nessuna migrazione.
+
+**Prossimo step**: **smoke Matteo** (invariato e ora più corto, l'OAuth reale è l'unico buco). (1) `/mail` → oggetti + corpo a piena larghezza; (2) `/calendar` → trascinare **davvero** un evento Google (l'unico passo che non posso fare io: scriverebbe sul calendario vero) — NB il token in DB ha già lo scope `calendar` pieno, quindi l'editing è attivo senza opt-in; (3) `/media` → Media Library (2 migrazioni, idempotenti + auto-migrate al boot). Poi: rami `feat/mail-client-phase1/2/3` + `feat/media-library` sono mergiati e **cancellabili**. `main` NON pushato (111 commit avanti).
+
+### α.172.249 ✅ (Media Library / DAM Fase A+B — MERGED su main 15 lug, merge a tre vie da `feat/media-library`)
 
 ### α.172.249 ✅ (Media Library / DAM Fase A+B — MERGED su main 15 lug, merge a tre vie da `feat/media-library`)
 - **Contenuto invariato** rispetto al ramo (sviluppato 13 lug): `/media` browser unificato `Asset`+`PhysicalAsset` con 4 gruppi di filtri (Fase A) + azioni bulk associa/archivia/scollega/export e semantica **supersede** (Fase B). Dettaglio nelle voci storiche α.244/245 sotto.
