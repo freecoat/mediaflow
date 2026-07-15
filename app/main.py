@@ -35,6 +35,8 @@ from app.routers import (
     contacts,  # feat/acquisizioni-fase1 Task 10 — Contatti multipli per cliente
     calendar as calendar_router,  # feat/calendar-phaseB Task 3 — CRUD eventi + marcatori
     documents as documents_router,  # feat/calendar-phaseB Fase D Task 3 — documenti Drive collegati
+    mail as mail_router,  # feat/mail-client-phase1 — /mail webmail standalone
+    email_links as email_links_router,  # feat/mail-client-phase2 — email agganciate CRM
 )
 
 
@@ -1218,6 +1220,16 @@ def _auto_migrate_columns():
     except Exception as e:
         print(f"[auto-migrate] deliverable audio/label FAILED: {e}")
 
+    # v3.5.0-alpha.172.246 — Client email F3: Rubrica Contatti (contacts.client_id
+    # nullable + company_text/source + contact_acquisitions/contact_projects).
+    try:
+        from scripts.migrate_contacts_rubrica import migrate as _mig_contacts_rubrica
+        _res = _mig_contacts_rubrica(engine)
+        if _res.get("columns_added") or _res.get("contacts_rebuilt") or _res.get("tables_created"):
+            print(f"[auto-migrate] contacts rubrica: {_res}")
+    except Exception as e:
+        print(f"[auto-migrate] contacts rubrica FAILED: {e}")
+
     # v3.5.0-alpha.172.206 — deliverable_assets.tenant_id (unificazione link, B).
     # Solo ADD COLUMN + backfill al boot; il reconcile pivot gira via script.
     try:
@@ -2393,7 +2405,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.243", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.246", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2841,6 +2853,8 @@ app.include_router(acquisitions.router)  # feat/acquisizioni-fase1 — Pipeline 
 app.include_router(contacts.router)  # feat/acquisizioni-fase1 Task 10 — Contatti cliente
 app.include_router(calendar_router.router)  # feat/calendar-phaseB Task 3 — CRUD eventi + marcatori
 app.include_router(documents_router.router)  # Fase D — documenti Drive collegati
+app.include_router(mail_router.router)  # Client email Sotto-fase 1 — /mail
+app.include_router(email_links_router.router)  # Client email F2 — email agganciate
 
 
 @app.get("/", response_class=HTMLResponse)

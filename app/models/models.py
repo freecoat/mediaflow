@@ -4815,7 +4815,12 @@ class Contact(Base):
     __tablename__ = "contacts"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    # F3 Rubrica: client_id nullable (azienda del contatto, 0..1). Contatti orfani
+    # (estratti da email, non ancora assegnati) hanno client_id=None + company_text.
+    client_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"), nullable=True, index=True)
+    company_text: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="manual")  # manual|email|ai
     name: Mapped[str] = mapped_column(String(255))
     role: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -4826,6 +4831,34 @@ class Contact(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc, onupdate=now_utc)
+
+
+class ContactAcquisition(Base):
+    """M:N contatto↔trattativa (Client email F3). Righe fisiche, delete su unlink."""
+    __tablename__ = "contact_acquisitions"
+    __table_args__ = (
+        UniqueConstraint("contact_id", "acquisition_id", name="uq_contact_acquisition"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True)
+    acquisition_id: Mapped[int] = mapped_column(ForeignKey("acquisitions.id", ondelete="CASCADE"), index=True)
+    role: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+
+
+class ContactProject(Base):
+    """M:N contatto↔progetto (Client email F3). Righe fisiche, delete su unlink."""
+    __tablename__ = "contact_projects"
+    __table_args__ = (
+        UniqueConstraint("contact_id", "project_id", name="uq_contact_project"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), default=1, index=True)
+    contact_id: Mapped[int] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    role: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
 
 
 class Activity(Base):
@@ -4903,6 +4936,25 @@ class DocumentLink(Base):
     acquisition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("acquisitions.id"), nullable=True, index=True)
     activity_id: Mapped[Optional[int]] = mapped_column(ForeignKey("activities.id"), nullable=True, index=True)
     client_id: Mapped[Optional[int]] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)
+    added_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class EmailLink(Base):
+    """Riferimento a un thread Gmail agganciato a una trattativa (Client email F2).
+    Nessuno storage del corpo: solo metadata + thread_id. Tenant-scoped, soft-delete."""
+    __tablename__ = "email_links"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    provider: Mapped[str] = mapped_column(String(20), default="google", nullable=False)
+    thread_id: Mapped[str] = mapped_column(String(255), index=True)
+    message_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    from_addr: Mapped[Optional[str]] = mapped_column(String(320), nullable=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    snippet: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    email_date: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    acquisition_id: Mapped[int] = mapped_column(ForeignKey("acquisitions.id"), index=True)
     added_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now_utc)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

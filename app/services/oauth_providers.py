@@ -70,6 +70,13 @@ PROVIDERS = {
     },
 }
 
+# Scope Gmail richiesti SOLO su opt-in email (autorizzazione incrementale).
+# NON inseriti nel bundle PROVIDERS["google"]["scopes"] di default.
+GMAIL_SCOPES = (
+    "https://www.googleapis.com/auth/gmail.readonly "
+    "https://www.googleapis.com/auth/gmail.compose"
+)
+
 
 def _redirect_base_url() -> str:
     return os.getenv("OAUTH_REDIRECT_BASE_URL", "http://localhost:8000").rstrip("/")
@@ -123,20 +130,27 @@ def is_configured(provider: str) -> bool:
     return bool(cid.strip()) and bool(csec.strip())
 
 
-def authorization_url(provider: str, state: str) -> str:
-    """Costruisce URL di autorizzazione del provider."""
+def authorization_url(provider: str, state: str, extra_scopes: Optional[str] = None) -> str:
+    """Costruisce URL di autorizzazione del provider.
+    Se extra_scopes è dato, li appende agli scope base e richiede
+    include_granted_scopes=true (autorizzazione incrementale)."""
     cfg = PROVIDERS.get(provider)
     if not cfg:
         raise ValueError(f"Provider OAuth sconosciuto: {provider}")
+    scope = cfg["scopes"]
+    if extra_scopes:
+        scope = scope + " " + extra_scopes
     params = {
         "client_id": os.getenv(cfg["client_id_env"], ""),
         "redirect_uri": redirect_uri(provider),
         "response_type": "code",
-        "scope": cfg["scopes"],
+        "scope": scope,
         "state": state,
         "access_type": "offline",      # Google: forza refresh_token
         "prompt": "consent",            # Forza re-consent per ottenere refresh_token
     }
+    if extra_scopes:
+        params["include_granted_scopes"] = "true"
     return cfg["auth_url"] + "?" + urllib.parse.urlencode(params)
 
 

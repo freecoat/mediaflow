@@ -8,7 +8,38 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.243** — 6 luglio 2026 — Fase D Calendario/Account: documenti Drive collegati
+**v3.5.0-alpha.172.246** — 14 luglio 2026 — Client email Sotto-fase 3: Rubrica Contatti (ramo `feat/mail-client-phase3`)
+
+### α.172.246 ✅ (Client email F3 — Rubrica Contatti — 14 lug, ramo feat/mail-client-phase3, 16 task TDD Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-14-mail-client-phase3-contacts-rubrica*)
+- **`Contact` standalone**: `client_id` **nullable** + `company_text`/`source`; join M:N `contact_acquisitions`/`contact_projects`. Retrocompat endpoint client-scoped + sync `is_primary`. Migrazione `scripts/migrate_contacts_rubrica.py` (rebuild tabella SQLite per NOT NULL) + auto-migrate boot + strumenti `[u]`.
+- **Pagina `/contacts`**: lista + filtri (ricerca, triage orfani) + dettaglio con Cliente/Trattative/Progetti (**associa/dissocia** via picker), timeline Activity, email agganciate. Sidebar "Rubrica". Router list/match/detail/create(dedup email)/update/link/unlink.
+- **Estrazione ibrida** `contact_extract.py` (deterministico partecipanti+firma, gratis; AI opzionale). Bottone "Estrai contatto" in `/mail` + tab Email trattativa → preview → salva. **Ponte scheda tecnica**: "Salva in rubrica" pane Crew → `POST /contacts/api/from-tech-sheet`. **Copilot** `propose_contact` esteso (client_id opzionale + acquisition_id/project_id). **Notifiche** badge on-demand tab Email trattativa.
+- **Test**: 8 file nuovi. **1196 test verdi**. **Smoke Playwright** (DB copia reale, JWT admin): crea contatto → dettaglio → picker carica trattative reali → associa → refresh con ✕ + lista "1 🎯"; `/mail`+`/acquisitions` caricano, **0 errori console**. i18n 5 lingue.
+
+**Prossimo step**: smoke Matteo sul Mac (`scripts/migrate_contacts_rubrica.py`). Poi **merge `feat/mail-client-phase3` → main** (chiude programma Client email F1+F2+F3) oppure follow-up. Ramo NON pushato. NB: anche `feat/media-library` (A+B) e `feat/mail-client-phase2` attendono merge.
+
+### α.172.245 ✅ (storico sotto)
+**v3.5.0-alpha.172.245** — 7 luglio 2026 — Client email Sotto-fase 2: integrazione CRM (trattativa)
+
+### α.172.245 ✅ (Client email Sotto-fase 2 — CRM trattativa — 7 lug, ramo feat/mail-client-phase2, 6 task TDD; spec+plan 2026-07-07)
+- **`EmailLink`** (tabella `email_links`, tenant-scoped, soft-delete, pattern `DocumentLink`): aggancia thread Gmail alle **trattative** (`acquisition_id`) salvando solo metadata + `thread_id`, nessuno storage corpo. Migrazione `scripts/migrate_email_links.py` + voce strumenti (tabella creata anche da `create_all` al boot).
+- **`gmail.parse_gmail_thread_id(url)`**: estrae thread id da URL Gmail (`#inbox/ID`, `#label/Nome/ID`, `#search/q/ID`, `?th=ID`); non-Gmail/senza id → `None`.
+- **Router** `app/routers/email_links.py`: `POST /acquisitions/api/{aid}/emails/link` (pin da `thread_id` o `url`, metadata best-effort dal primo messaggio via `get_thread`, fallback subject "Email"), `GET /acquisitions/api/{aid}/emails`, `DELETE /email-links/{id}` (soft). RBAC acquisitions (`view`/`manage`), tenant-scope. Il pin logga un'**`Activity(type=email, direction=inbound)`** automatica in timeline trattativa.
+- **Tab "Email"** nel detail `/acquisitions` (`email_links.js`): ricerca Gmail nel tab (`/mail/api/threads`) + incolla-link → **Aggancia**; lista pinnati con **anteprima** (iframe `sandbox=""`, immagini remote bloccate), **Estrai con AI** (inietta corpo nel copilot → riusa estrazione Acquisizioni Fase 2, nessun backend AI nuovo), 🗑.
+- **"Assegna a trattativa"** dal client `/mail` (pannello lettura): picker trattative (`/acquisitions/api/list`) → pin. i18n 5 lingue (`email.*`).
+- Test nuovi: `test_email_link_model` (2), `test_gmail_parse_thread` (6), `test_email_links_api` (6), `test_email_links_page` (3), `test_mail_assign` (2).
+
+**Prossimo step**: smoke Matteo (tab Email trattativa: incolla link Gmail → Aggancia → lista + Activity "email"; anteprima; 🗑. `/mail` degrada a CTA senza opt-in Gmail). Poi **Client email Sotto-fase 3** (auto-flow: auto-associazione per indirizzo mittente, AI senza pin manuale, notifiche). Ramo `feat/mail-client-phase2` NON pushato.
+
+### α.172.244 ✅ (Client email Sotto-fase 1 — /mail — 7 lug, ramo feat/mail-client-phase1, 7 task TDD; spec+plan 2026-07-07)
+- **Pagina `/mail`** = client webmail su Gmail a 3 pannelli (nav label | lista thread | lettura) + compose modal. Lettura: lista/ricerca thread (query Gmail passthrough), vista conversazione, nav label (Inbox/Inviati/Bozze + label utente), scarica allegati. Compose: Nuovo/Rispondi/Rispondi-a-tutti/Inoltra + allegati (multipart) + bozze; invio via Gmail API.
+- **Opt-in Gmail incrementale**: scope `gmail.readonly` + `gmail.compose` richiesti SOLO su azione esplicita (`GET /auth/oauth/google/start?scopes=email` con `include_granted_scopes=true`), NON nel bundle OAuth di default. Spento di default; bottone "Collega Gmail" nella card Google di `/settings → Account`. `UserOAuthToken.scopes` = fonte di verità (`/mail/api/status` verifica `gmail.readonly`).
+- **Service** `app/services/gmail.py` (urllib, unico `_gmail_request` mockabile; MIME via `email.message.EmailMessage` stdlib; base64url): `list_threads`/`get_thread` (normalizza MIME html/text/allegati)/`list_labels`/`send_message`/`save_draft`/`list_drafts`/`delete_draft`/`get_attachment`. Best-effort: token assente/401/403/rete → vuoto/None, mai eccezione.
+- **Router** `app/routers/mail.py` (proxy STATELESS, nessuna tabella/migrazione, per-utente non tenant-scoped): `/mail` page + `/mail/api/{status,threads,thread/{id},labels,attachment/{msg}/{att},send,draft,drafts,draft/{id}}`.
+- **Sicurezza**: corpo email in iframe `sandbox=""` (no script) via `srcdoc`; immagini remote bloccate di default (`src`→`data-blocked-src`, toggle "Mostra immagini"); conferma invio; allegati `Content-Disposition: attachment`; nessun token al client. Valori interpolati via `escapeHtml`.
+- 30 test nuovi (`test_oauth_gmail_optin` 3, `test_gmail_read` 5, `test_gmail_send` 6, `test_mail_api_read` 7, `test_mail_api_send` 5, `test_mail_page` 4). i18n 5 lingue (`nav.mail`+`mail.*`). Voce sidebar Email. **Trappola risolta**: i test router devono usare JWT cookie reale + monkeypatch `database.engine`/`SessionLocal` (il middleware `auth_guard` risolve l'utente PRIMA del router — override `current_user` non basta; pattern di `test_documents_api`).
+
+**Prossimo step**: smoke Matteo (`/mail` degrada a CTA "Collega Gmail" senza opt-in; live richiede Gmail API abilitata su Google Cloud + opt-in email). Poi **Client email Sotto-fase 2** (integrazione CRM: tab Email nel detail cliente/trattativa, pin `EmailLink` pattern DocumentLink, "Estrai con AI" riusa estrazione Acquisizioni Fase 2 → `propose_activity/contact/update_client`, log `Activity`). Ramo `feat/mail-client-phase1` NON pushato. Nota: `feat/calendar-phaseB` (A/B/C/D) già MERGED su main (a3b2893), non pushato.
 
 ### α.172.243 ✅ (Fase D — documenti Drive — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
 - **`DocumentLink`** (tabella `document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo riferimento (metadata + link), nessuno storage locale. Link nullable a project/acquisition/activity/client.

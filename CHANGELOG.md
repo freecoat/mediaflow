@@ -1,5 +1,31 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.246 — Client email Sotto-fase 3: Rubrica Contatti (14 lug 2026)
+
+- **`Contact` standalone**: `client_id` diventa **nullable** (contatti orfani ammessi) + campi `company_text`/`source`; due join M:N `contact_acquisitions` / `contact_projects`. Retrocompat piena con gli endpoint client-scoped esistenti + sync `is_primary`. Migrazione `scripts/migrate_contacts_rubrica.py` (rebuild tabella SQLite per rilassare NOT NULL) + auto-migrate al boot + voce strumenti `[u]`/`[U]`.
+- **Pagina `/contacts`**: lista + filtri (ricerca, **triage** orfani), dettaglio con Cliente/Trattative/Progetti (**associa/dissocia** via picker), timeline Activity, email agganciate. Voce sidebar "Rubrica" (Anagrafica). Endpoint list/match/detail/create (dedup per email)/update/link/unlink su `app/routers/contacts.py`.
+- **Estrazione ibrida da email**: `app/services/contact_extract.py` (deterministico: partecipanti From/To/Cc + firma via regex, gratis/offline) + arricchimento AI opzionale. Bottone **"Estrai contatto"** in `/mail` e nella tab Email delle trattative → preview candidati → salva in rubrica.
+- **Ponte scheda tecnica**: bottone "💾 Salva in rubrica" nella pane Crew → `POST /contacts/api/from-tech-sheet` (crea `Contact` + link progetto + scrive `contact_id` nel JSON).
+- **Copilot**: `propose_contact` esteso — `client_id` opzionale + link `acquisition_id`/`project_id`.
+- **Notifiche on-demand**: badge "N email non agganciate da contatti noti" nella tab Email trattativa (best-effort, nessuna infra push).
+- i18n 5 lingue (`contact.*`, `email.extractContact`, `nav.contacts`). 16 task TDD, **1196 test verdi**, smoke Playwright verde (crea/dettaglio/associa, 0 errori console). Ramo `feat/mail-client-phase3`. Chiude il programma Client email (F1+F2+F3).
+
+## v3.5.0-alpha.172.245 — Client email Sotto-fase 2: integrazione CRM (trattativa) (7 lug 2026)
+
+- **`EmailLink`** (`email_links`, tenant-scoped, soft-delete): aggancia thread Gmail alle **trattative** salvando solo metadata + `thread_id`.
+- **Tab "Email"** nel detail trattativa `/acquisitions`: ricerca Gmail nel tab + incolla-link → **Pin**; lista pinnati con **anteprima** (iframe sandbox), **Estrai con AI**, 🗑. Il pin logga un'**Activity(type=email)** automatica in timeline.
+- **"Assegna a trattativa"** dal client `/mail` (pannello lettura) → picker trattative → pin.
+- **Estrai con AI** = iniezione nel copilot (riusa l'estrazione email di Acquisizioni Fase 2 → `propose_activity/contact/update_client/acquisition_stage`), nessun backend AI nuovo.
+- Router `app/routers/email_links.py` (pin/list/delete, RBAC acquisitions, tenant-scope) + `gmail.parse_gmail_thread_id`. Migrazione `scripts/migrate_email_links.py` + voce strumenti. i18n 5 lingue (`email.*`). Seconda delle 3 sotto-fasi Client email.
+
+## v3.5.0-alpha.172.244 — Client email Sotto-fase 1: /mail webmail standalone (7 lug 2026)
+
+- **Pagina `/mail`**: client webmail su Gmail — lista/ricerca thread, vista conversazione, nav label, scarica allegati; compose Nuovo/Rispondi/Rispondi-a-tutti/Inoltra + allegati + bozze; invio via Gmail API.
+- **Opt-in Gmail incrementale**: scope `gmail.readonly` + `gmail.compose` richiesti solo su azione esplicita (`/auth/oauth/google/start?scopes=email`, `include_granted_scopes=true`), NON nel bundle di default. Spento di default, bottone "Collega Gmail" in `/settings → Account`.
+- **Servizio** `app/services/gmail.py` (urllib, `_gmail_request` mockabile, MIME via `email.message` stdlib) + **router** `app/routers/mail.py` (proxy stateless, nessuna tabella/migrazione, per-utente).
+- **Sicurezza**: corpo email in iframe `sandbox=""` (no script), immagini remote bloccate di default con toggle "Mostra immagini", conferma invio, allegati come download, nessun token al client.
+- Best-effort: chiamate Gmail fallite → risposta vuota, mai 500. i18n 5 lingue (`mail.*`). Prima delle 3 sotto-fasi Client email (2 = integrazione CRM tab/pin/AI/Activity, 3 = auto-flow).
+
 ## v3.5.0-alpha.172.243 — Fase D Calendario/Account: documenti Drive collegati (6 lug 2026)
 
 - **DocumentLink** (`document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo un riferimento (metadata + link), nessuno storage locale.

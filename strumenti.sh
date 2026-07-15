@@ -50,11 +50,13 @@ while true; do
     echo "  [p] Migra OAuth calendario (Fase A) [v3.5.0-alpha.172]"
     echo "  [q] Migra calendario (Fase B) [v3.5.0-alpha.172]"
     echo "  [r] Migra Fase D - documenti Drive [v3.5.0-alpha.172]"
+    echo "  [s] Migra Client email F2 - email_links [v3.5.0-alpha.172]"
+    echo "  [u] Migra Client email F3 - rubrica contatti (client_id nullable + link) [v3.5.0-alpha.172]"
     echo "  [t] Seed Job di test per notifica deadline (scadenza fra 2 giorni) [v3.4.28]"
     echo "  [a] Apri cartella upload"
     echo "  [0] Esci"
     echo ""
-    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, t): " scelta
+    read -p "Scegli un'opzione (0-9, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, s, t, u): " scelta
 
     case $scelta in
         1)
@@ -323,6 +325,26 @@ while true; do
             read -p "Procedo? (s/n): " conferma
             if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
                 python scripts/migrate_documents.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        s|S)
+            echo ""
+            echo "Migrazione Client email F2: crea la tabella email_links (thread agganciati a trattative)."
+            echo "Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_email_links.py
+            fi
+            read -p "Premi INVIO per continuare..."
+            ;;
+        u|U)
+            echo ""
+            echo "Migrazione Client email F3: rende contacts.client_id nullable, aggiunge"
+            echo "company_text/source, crea contact_acquisitions/contact_projects. Idempotente."
+            read -p "Procedo? (s/n): " conferma
+            if [ "$conferma" = "s" ] || [ "$conferma" = "S" ]; then
+                python scripts/migrate_contacts_rubrica.py
             fi
             read -p "Premi INVIO per continuare..."
             ;;

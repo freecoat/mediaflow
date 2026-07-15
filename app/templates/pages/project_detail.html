@@ -1722,7 +1722,12 @@ function tsRenderContacts() {
     host.innerHTML = '<div class="text-muted text-sm" style="padding:12px;text-align:center;">Nessun contatto. Clicca "+ Aggiungi contatto".</div>';
     return;
   }
-  host.innerHTML = arr.map((c, i) => `
+  host.innerHTML = arr.map((c, i) => {
+    const saved = !!c.contact_id;
+    const saveBtn = saved
+      ? '<span class="badge" title="In rubrica #' + c.contact_id + '">✓ Rubrica</span>'
+      : '<button class="btn btn-ghost btn-sm" onclick="tsSaveContactToRubrica(' + i + ')">💾 Salva in rubrica</button>';
+    return `
     <div class="card mb-3" style="background:var(--bg);">
       <div class="form-row">
         <div class="form-group"><label class="form-label">Ruolo</label><input class="form-input" value="${escapeHtml(c.role||'')}" onchange="tsContactChange(${i},'role',this.value)" placeholder="DIT / Colorist / DMT…"></div>
@@ -1733,8 +1738,31 @@ function tsRenderContacts() {
         <div class="form-group" style="flex:2;"><label class="form-label">Email</label><input class="form-input" type="email" value="${escapeHtml(c.email||'')}" onchange="tsContactChange(${i},'email',this.value)"></div>
         <div class="form-group"><label class="form-label">Telefono</label><input class="form-input" value="${escapeHtml(c.phone||'')}" onchange="tsContactChange(${i},'phone',this.value)"></div>
       </div>
+      <div class="form-row" style="justify-content:flex-end;">${saveBtn}</div>
     </div>
-  `).join('');
+  `;
+  }).join('');
+}
+
+// NB: pane Crew/Contatti (project_detail.html) precede l'adozione i18n.js;
+// stringhe qui sotto in italiano hardcoded per coerenza con il resto della pane,
+// non un'eccezione alla regola i18n per superfici NUOVE (vedi CLAUDE.md).
+async function tsSaveContactToRubrica(idx) {
+  const c = tsState.data.contacts[idx];
+  if (!c || !(c.name_text || '').trim()) { toast('Serve un nome per salvare in rubrica', 'error'); return; }
+  const fd = new FormData();
+  fd.append('project_id', PROJECT_ID);
+  fd.append('idx', idx);
+  fd.append('name', c.name_text.trim());
+  if (c.email) fd.append('email', c.email);
+  if (c.phone) fd.append('phone', c.phone);
+  if (c.role) fd.append('role', c.role);
+  try {
+    const res = await api('POST', '/contacts/api/from-tech-sheet', fd);
+    tsState.data.contacts[idx] = Object.assign({}, c, {contact_id: res.id});
+    tsRenderContacts();
+    toast(res.existing ? 'Contatto esistente collegato' : 'Contatto salvato in rubrica', 'success');
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 // ── Pubblicazione ─────────────────────────────────────────────
