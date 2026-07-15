@@ -1,0 +1,283 @@
+"""Task 2 — media_actions.associate: link + supersede + auto-reset stato (Fase B)."""
+from datetime import UTC, datetime
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.models.models import (
+    Base, Tenant, Client, Project, Asset, AssetType, AssetProposedState, User, UserRole,
+    PhysicalAsset, PhysicalAssetKind,
+    JobDeliverable, DeliverableAsset, DeliverableStatus, DeliverableNature,
+)
+from app.services import media_actions
+
+PRJ_CODE = "PRJ001"
+
+
+def _session():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine, expire_on_commit=False)()
+
+
+@pytest.fixture
+def ctx():
+    """Fixture analoga a tests/test_media_library.py: Tenant(1), Client, Project
+    (code=PRJ001), utente admin, 2 Asset video confirmed (a_old/a_new), 1
+    PhysicalAsset, 1 JobDeliverable delivered (a_old già linkato) e 1
+    JobDeliverable in_progress."""
+    db = _session()
+
+    db.add(Tenant(id=1, name="Tenant 1", slug="t1"))
+    db.add(Tenant(id=2, name="Tenant 2", slug="t2"))
+    db.flush()
+
+    client = Client(tenant_id=1, name="Cliente Uno")
+    db.add(client)
+    db.flush()
+
+    project = Project(tenant_id=1, code=PRJ_CODE, title="Progetto Uno", client_id=client.id)
+    db.add(project)
+    db.flush()
+
+    admin = User(
+        id=1, tenant_id=1, email="admin@t.local", full_name="Admin",
+        hashed_password="x", role=UserRole.admin, is_active=True,
+    )
+    db.add(admin)
+    db.flush()
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    a_old = Asset(
+        tenant_id=1, filename="old.mov", original_name="old.mov", file_path="/vol/old.mov",
+        file_size=100, mime_type="video/quicktime", asset_type=AssetType.video,
+        uploaded_by=admin.id, project_id=project.id,
+        proposed_state=AssetProposedState.confirmed, created_at=now,
+    )
+    a_new = Asset(
+        tenant_id=1, filename="new.mov", original_name="new.mov", file_path="/vol/new.mov",
+        file_size=100, mime_type="video/quicktime", asset_type=AssetType.video,
+        uploaded_by=admin.id, project_id=project.id,
+        proposed_state=AssetProposedState.confirmed, created_at=now,
+    )
+    other_tenant_asset = Asset(
+        tenant_id=2, filename="other.mov", original_name="other.mov", file_path="/vol/other.mov",
+        file_size=10, mime_type="video/quicktime", asset_type=AssetType.video,
+        uploaded_by=admin.id, project_id=None,
+        proposed_state=AssetProposedState.confirmed, created_at=now,
+    )
+    db.add_all([a_old, a_new, other_tenant_asset])
+    db.flush()
+
+    lto = PhysicalAsset(
+        tenant_id=1, kind=PhysicalAssetKind.lto, label="LTO-SMK-001",
+        project_id=project.id, created_at=now,
+    )
+    db.add(lto)
+    db.flush()
+
+    jd_delivered = JobDeliverable(
+        tenant_id=1, job_id=1, name="DCP INTEROP",
+        nature=DeliverableNature.digital, status=DeliverableStatus.delivered,
+    )
+    db.add(jd_delivered)
+    db.flush()
+
+    jd_progress = JobDeliverable(
+        tenant_id=1, job_id=1, name="ProRes Master",
+        nature=DeliverableNature.digital, status=DeliverableStatus.in_progress,
+    )
+    db.add(jd_progress)
+    db.flush()
+
+    da_old = DeliverableAsset(
+        tenant_id=1, job_deliverable_id=jd_delivered.id, asset_id=a_old.id,
+    )
+    db.add(da_old)
+    jd_delivered.digital_asset_id = a_old.id
+    db.commit()
+
+    return {
+        "db": db, "admin": admin, "project": project, "client": client,
+        "a_old": a_old, "a_new": a_new, "other_tenant_asset": other_tenant_asset,
+        "lto": lto, "jd_delivered": jd_delivered, "jd_progress": jd_progress,
+    }
+
+
+def test_associate_creates_link(ctx):
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_progress"]
+    out = media_actions.associate(db, admin, deliverable_id=jd.id,
+                                  items=[{"nature": "digital", "id": ctx["a_new"].id}])
+    db.commit()
+    assert out["linked"] == 1
+    assert jd.digital_asset_id == ctx["a_new"].id
+
+
+def test_associate_supersedes_active_same_nature(ctx):
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_delivered"]
+    # a_old già linkato attivo (nel fixture)
+    out = media_actions.associate(db, admin, deliverable_id=jd.id,
+                                  items=[{"nature": "digital", "id": ctx["a_new"].id}],
+                                  reason="QC negativo")
+    db.commit()
+    assert out["superseded"] == 1
+    from app.models.models import DeliverableAsset
+    old = db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == jd.id,
+        DeliverableAsset.asset_id == ctx["a_old"].id).first()
+    assert old.superseded_at is not None
+    assert old.supersede_reason == "QC negativo"
+    assert jd.digital_asset_id == ctx["a_new"].id
+
+
+def test_associate_auto_reset_status_from_delivered(ctx):
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_delivered"]
+    from app.models.models import DeliverableStatus
+    out = media_actions.associate(db, admin, deliverable_id=jd.id,
+                                  items=[{"nature": "digital", "id": ctx["a_new"].id}])
+    db.commit()
+    assert out["status_reset"] is True
+    assert jd.status == DeliverableStatus.in_progress
+    assert jd.qc_substatus is None
+
+
+def test_associate_no_reset_when_in_progress(ctx):
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_progress"]
+    from app.models.models import DeliverableStatus
+    out = media_actions.associate(db, admin, deliverable_id=jd.id,
+                                  items=[{"nature": "digital", "id": ctx["a_new"].id}])
+    db.commit()
+    assert out["status_reset"] is False
+    assert jd.status == DeliverableStatus.in_progress
+
+
+def test_associate_deliverable_other_tenant_raises(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    import pytest
+    with pytest.raises(media_actions.MediaActionError):
+        media_actions.associate(db, admin, deliverable_id=999999,
+                                items=[{"nature": "digital", "id": ctx["a_new"].id}])
+
+
+def test_set_flags_skips_malformed_item(ctx):
+    # id mancante/non numerico → skip, niente 500 (coerente con associate)
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_actions.set_flags(db, admin,
+        [{"nature": "digital", "id": None}, {"nature": "digital"}],
+        internal_archive=True)
+    db.commit()
+    assert out["updated"] == 0
+
+
+def test_associate_rejects_cross_tenant_asset(ctx):
+    # asset di tenant 2 su consegna tenant 1 → MediaActionError, nessun link
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_progress"]
+    with pytest.raises(media_actions.MediaActionError):
+        media_actions.associate(db, admin, deliverable_id=jd.id,
+                                items=[{"nature": "digital", "id": ctx["other_tenant_asset"].id}])
+
+
+def test_associate_multi_same_nature_supersedes_preexisting_once(ctx):
+    # jd_delivered ha a_old attivo. Associo DUE digitali nuovi in una call:
+    # solo a_old (pre-esistente) va superseded UNA volta; i due nuovi non si
+    # superseduno tra loro; primario = ultimo linkato.
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_delivered"]
+    now = datetime.now(UTC).replace(tzinfo=None)
+    a_third = Asset(
+        tenant_id=1, filename="third.mov", original_name="third.mov", file_path="/vol/third.mov",
+        file_size=100, mime_type="video/quicktime", asset_type=AssetType.video,
+        uploaded_by=admin.id, project_id=ctx["project"].id,
+        proposed_state=AssetProposedState.confirmed, created_at=now,
+    )
+    db.add(a_third)
+    db.flush()
+    out = media_actions.associate(db, admin, deliverable_id=jd.id, items=[
+        {"nature": "digital", "id": ctx["a_new"].id},
+        {"nature": "digital", "id": a_third.id},
+    ])
+    db.commit()
+    assert out["linked"] == 2
+    assert out["superseded"] == 1  # solo a_old, non a_new
+    old = db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == jd.id,
+        DeliverableAsset.asset_id == ctx["a_old"].id).first()
+    assert old.superseded_at is not None
+    a_new_link = db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == jd.id,
+        DeliverableAsset.asset_id == ctx["a_new"].id).first()
+    assert a_new_link.superseded_at is None  # nuovo non superseded intra-call
+    assert jd.digital_asset_id == a_third.id  # primario = ultimo linkato
+
+
+def test_set_flags_toggle(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_actions.set_flags(db, admin,
+        [{"nature": "digital", "id": ctx["a_new"].id},
+         {"nature": "physical", "id": ctx["lto"].id}],
+        internal_archive=True)
+    db.commit()
+    assert out["updated"] == 2
+    db.refresh(ctx["a_new"]); db.refresh(ctx["lto"])
+    assert ctx["a_new"].is_internal_archive is True
+    assert ctx["lto"].is_internal_archive is True
+
+
+def test_set_flags_tenant_scope(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    out = media_actions.set_flags(db, admin,
+        [{"nature": "digital", "id": ctx["other_tenant_asset"].id}],
+        delivered_external=True)
+    db.commit()
+    assert out["updated"] == 0  # altro tenant: non toccato
+
+
+def test_unlink_removes_pivot(ctx):
+    db, admin, jd = ctx["db"], ctx["admin"], ctx["jd_delivered"]
+    out = media_actions.unlink(db, admin, deliverable_id=jd.id,
+                               items=[{"nature": "digital", "id": ctx["a_old"].id}])
+    db.commit()
+    assert out["removed"] == 1
+    from app.models.models import DeliverableAsset
+    assert db.query(DeliverableAsset).filter(
+        DeliverableAsset.job_deliverable_id == jd.id,
+        DeliverableAsset.asset_id == ctx["a_old"].id).count() == 0
+
+
+def test_export_csv_from_filters(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin, filters={"nature": "digital"})
+    lines = csv.strip().splitlines()
+    assert lines[0].startswith("nature,name,type")
+    assert any("a.mov" in ln for ln in lines[1:]) or any("new.mov" in ln for ln in lines[1:])
+
+
+def test_export_csv_from_items(ctx):
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin,
+        items=[{"nature": "physical", "id": ctx["lto"].id}])
+    assert "LTO-SMK-001" in csv or "physical" in csv
+
+
+def test_export_csv_paginates_all(ctx):
+    # senza cap: tutti gli asset confermati tenant 1 (a_old, a_new digitali +
+    # lto fisico) = 3 righe dati + header
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin, filters={})
+    lines = [ln for ln in csv.strip().splitlines() if ln]
+    assert len(lines) == 4  # header + 3
+
+
+def test_export_csv_respects_cap(ctx):
+    # cap=1 → header + 1 riga soltanto, nessun duplicato dalla paginazione
+    db, admin = ctx["db"], ctx["admin"]
+    csv = media_actions.export_manifest_csv(db, admin, filters={}, cap=1)
+    lines = [ln for ln in csv.strip().splitlines() if ln]
+    assert len(lines) == 2  # header + 1

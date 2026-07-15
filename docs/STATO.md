@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.248** — 15 luglio 2026 — Eventi Google Calendar editabili (su `main`)
+**v3.5.0-alpha.172.249** — 15 luglio 2026 — Media Library (DAM) A+B mergiata su `main`
+
+### α.172.249 ✅ (Media Library / DAM Fase A+B — MERGED su main 15 lug, merge a tre vie da `feat/media-library`)
+- **Contenuto invariato** rispetto al ramo (sviluppato 13 lug): `/media` browser unificato `Asset`+`PhysicalAsset` con 4 gruppi di filtri (Fase A) + azioni bulk associa/archivia/scollega/export e semantica **supersede** (Fase B). Dettaglio nelle voci storiche α.244/245 sotto.
+- **Rinumerato** da α.244/245 → α.249: quei numeri erano già di Client email F1/F2, sviluppate in parallelo sulla stessa base `a3b2893`. Collisione risolta al merge.
+- **Merge a tre vie** (il ramo non conteneva i 38 commit di main): 3 conflitti risolti a mano — `main.py` (versione + registrazione router, entrambi i blocchi tenuti), `CHANGELOG.md` e `STATO.md` (voci giustapposte). `models.py`/`i18n.js`/`base.html` auto-mergiati.
+- **2 migrazioni pendenti** per chi aggiorna: `scripts/migrate_manage_assets.py` (permesso RBAC `manage_assets`) e `scripts/migrate_deliverable_asset_supersede.py` (3 colonne su `deliverable_assets`) — entrambe idempotenti + auto-migrate al boot.
+
+### α.172.248 ✅ (Eventi Google editabili — 15 lug, su main, Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-15-google-calendar-writable*)
 
 ### α.172.248 ✅ (Eventi Google editabili — 15 lug, su main, Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-15-google-calendar-writable*)
 - **Contesto**: Matteo segnala "nel calendario non ho più accesso agli appuntamenti e non posso editarli". **Non era una regressione**: i 3 `CalendarEvent` in DB risultano soft-deleted da UI il 5–7 lug (unico writer di `is_active=False` è il DELETE a `calendar.py:218`); l'overlay Google funzionava ma era `editable:false` **by design** (Fase C). Diagnosi verificata a runtime contro il DB reale. Da lì la decisione di renderli editabili.
@@ -57,6 +65,29 @@
 - 30 test nuovi (`test_oauth_gmail_optin` 3, `test_gmail_read` 5, `test_gmail_send` 6, `test_mail_api_read` 7, `test_mail_api_send` 5, `test_mail_page` 4). i18n 5 lingue (`nav.mail`+`mail.*`). Voce sidebar Email. **Trappola risolta**: i test router devono usare JWT cookie reale + monkeypatch `database.engine`/`SessionLocal` (il middleware `auth_guard` risolve l'utente PRIMA del router — override `current_user` non basta; pattern di `test_documents_api`).
 
 **Prossimo step**: smoke Matteo (`/mail` degrada a CTA "Collega Gmail" senza opt-in; live richiede Gmail API abilitata su Google Cloud + opt-in email). Poi **Client email Sotto-fase 2** (integrazione CRM: tab Email nel detail cliente/trattativa, pin `EmailLink` pattern DocumentLink, "Estrai con AI" riusa estrazione Acquisizioni Fase 2 → `propose_activity/contact/update_client`, log `Activity`). Ramo `feat/mail-client-phase1` NON pushato. Nota: `feat/calendar-phaseB` (A/B/C/D) già MERGED su main (a3b2893), non pushato.
+### α.172.244/245 → rinumerate α.172.249 ✅ (Media Library A+B — MERGED su main il 15 lug)
+> Storico delle due fasi come sviluppate sul ramo `feat/media-library`. **Rinumerate ad α.172.249** al merge: i numeri 244/245 erano già stati assegnati a Client email F1/F2, sviluppate in parallelo sulla stessa base `a3b2893`.
+
+### α.172.245 ✅ (Media Library Fase B — 13 lug, ramo feat/media-library, 6 task TDD; spec+plan docs/superpowers/…/2026-07-13-media-library-phaseB.md)
+- **Azioni bulk attive** in `/media` (Fase A le aveva disabilitate): **Associa a consegna**, **Archivia**/**Smarca** (`is_internal_archive`), **Scollega**, **Esporta CSV**. Gate `manage_assets` (viewer 403).
+- **Supersede**: associare un asset a una consegna con già un attivo della stessa natura → il vecchio link diventa **superseduto** (storico conservato, `superseded_at`/`superseded_by_id`/`supersede_reason`) e lo stato consegna torna da `qc/delivered/closed` → `in_progress` (+ notifica `deliverable_reopened_supersede` → `view_finance`). `_resync_primary` ignora i superati.
+- **Servizio** `app/services/media_actions.py` (read-write, riusa `deliverable_assets.link_asset/unlink_asset`): `associate`/`set_flags`/`unlink`/`export_manifest_csv` (CSV cap 5000, da filtri o selezione). **Router**: `POST /media/api/{associate,flags,unlink}` (Form, `items` JSON) + `GET /media/api/{export,deliverables}`.
+- **UI**: modal Associa/Scollega (cascata Progetto→ricerca→Consegna, riusa `openModal/closeModal`), badge **superseduto** barrato nel dettaglio (`_deliverables_list` espone `superseded`). i18n 5 lingue (`media.assocBtn`…`media.superseded`). Esteso `media_library.js` (nessun nuovo static).
+- **Migrazione** `scripts/migrate_deliverable_asset_supersede.py` (idempotente) + auto-migrate boot. 3 colonne su `deliverable_assets`.
+- **Test**: `test_media_supersede_model` (3) + `test_media_actions` + `test_media_api` (endpoint nuovi) = **59 test media verdi**. Smoke Playwright (DB copia + SMK001/SMOKE DCP delivered + a_old linkato + a_new): seleziona a_new → Associa a SMOKE DCP → vecchio link superseduto (`superseded_by`=nuovo), `digital_asset_id`→a_new, stato `delivered`→`in_progress`, `superseded:true` nel dettaglio, **0 errori console**.
+
+**Prossimo step**: smoke Matteo sul Mac (`scripts/migrate_deliverable_asset_supersede.py` + prova associa/archivia/scollega/export con dati reali). Poi **merge `feat/media-library` → main** (contiene Fase A + B) oppure Fase C (filtri saved-view / azioni avanzate). Ramo NON pushato.
+
+### α.172.244 ✅ (Media Library Fase A — 13 lug, ramo feat/media-library, 7 task TDD; spec+plan docs/superpowers/…/2026-07-12-media-library-phaseA.md)
+- **`/media`** browser **read-only** che fonde `Asset` (digitale) + `PhysicalAsset` (fisico) tenant-scoped in righe omogenee, `created_at DESC`, paginazione best-effort cross-natura. Zero azioni mutanti (bulk disabilitati, "disponibile a breve").
+- **Servizio** `app/services/media_library.py`: `list_assets` (merge+filtri+gating natura), `row_from_asset`/`row_from_physical`, `_delivery_info` (pivot `DeliverableAsset`→`JobDeliverable` → linked/status/department via `PriceItem.department_id`), `filter_options`, `asset_detail` (riga + `tech_specs_json` completo + `deliverables[]` + memberships/history placeholder).
+- **Filtri**: contesto (project/client/department/job) · natura (nature/asset_type/physical_kind) · consegna (linked_to_delivery yes/no, delivery_status "multi" se divergono) · tech (`json_extract` shape **nidificato** `$.video.codec/width/height/framerate` — NON flat come ipotizzava il piano) · ricerca libera · toggle proposte agent. Filtro esclusivo di una natura → elenco ristretto a quella natura.
+- **Router** `app/routers/media.py`: `GET /media` (gate) + `/media/api/assets` (whitelist filtri) + `/api/filters` + `/api/asset/{nature}/{id}` (404 su natura/asset non valido). Registrato in `main.py`.
+- **RBAC**: permesso `manage_assets` (+ default ai ruoli con `edit_planning_all`), gate `app/services/media_gate.py` (retrocompat `edit_planning_all`), migrazione idempotente `scripts/migrate_manage_assets.py`. Voce sidebar "Media Library" (gruppo Media). i18n 5 lingue `media.*`. `.media-*` in `sleek.css`.
+- **Test**: `test_media_rbac` (2) + `test_media_library` (23) + `test_media_api` (7) = 32 verdi. Smoke Playwright (DB copia + 2 asset + 1 LTO): login admin → `/media` = 3 righe merge ordinate, dropdown popolati, ricerca "wav"→1 riga, dettaglio master.mov con tech "3840x2160 · hevc · 25" + checksum, **0 errori console**.
+- Nessuna migrazione di schema (solo permesso RBAC). 6 commit `feat(media)` su `feat/media-library` (backend 1-6 + frontend 7).
+
+**Prossimo step**: smoke Matteo sul Mac (migrare ruoli con `scripts/migrate_manage_assets.py`, verificare `/media` con dati reali). Poi decidere: merge `feat/media-library` → main, oppure **Fase B** (associazioni/azioni: link asset↔consegna, archivia, export dai bulk oggi disabilitati). Ramo NON pushato. *[merge fatto il 15 lug]*
 
 ### α.172.243 ✅ (Fase D — documenti Drive — 6 lug, ramo feat/calendar-phaseB, 5 task TDD; spec+plan 2026-07-06)
 - **`DocumentLink`** (tabella `document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo riferimento (metadata + link), nessuno storage locale. Link nullable a project/acquisition/activity/client.

@@ -1,5 +1,27 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.249 — Media Library (DAM) Fase A+B — merge su main (15 lug 2026)
+
+Merge di `feat/media-library` (A+B, sviluppate 13 lug in parallelo al programma Client email). **Rinumerate**: il ramo usava α.172.244/245, numeri già assegnati a Client email F1/F2 sviluppate in parallelo sulla stessa base `a3b2893`. Contenuto invariato, cronologia sotto.
+
+### Fase B — azioni mutanti + supersede (era α.172.245)
+
+- **Azioni bulk attive in `/media`** (prima disabilitate): **Associa a consegna**, **Archivia** / **Smarca archivio** (flag `is_internal_archive`), **Scollega**, **Esporta CSV**. Gate `manage_assets`; viewer → 403.
+- **Semantica supersede**: associare un asset a una consegna che ne ha già uno attivo della stessa natura **supersede** il precedente (link vecchio conservato come storico, non cancellato) e **auto-resetta** lo stato consegna da `qc/delivered/closed` → `in_progress` (+ notifica `deliverable_reopened_supersede` a `view_finance`). 3 colonne nuove su `DeliverableAsset`: `superseded_at`, `superseded_by_id`, `supersede_reason`. `_resync_primary` ignora i link superati.
+- **Servizio** `app/services/media_actions.py` (read-write, tenant-scoped, riusa `deliverable_assets.link_asset/unlink_asset` come fonte di verità): `associate` / `set_flags` / `unlink` / `export_manifest_csv` (CSV UTF-8, cap 5000, da filtri o da selezione). **Router** `app/routers/media.py`: `POST /media/api/{associate,flags,unlink}` (Form) + `GET /media/api/{export,deliverables}`.
+- **UI**: modal Associa/Scollega con cascata Progetto → ricerca → Consegna, badge **superseduto** (barrato) nel dettaglio asset. i18n 5 lingue (`media.assocBtn`, `media.supersedeWarn`, `media.superseded`, …). Nessun nuovo static file (esteso `media_library.js`).
+- **Migrazione** `scripts/migrate_deliverable_asset_supersede.py` (idempotente) + auto-migrate al boot in `_auto_migrate_columns()`.
+- **Test**: `test_media_supersede_model` (3) + `test_media_actions` (associate/supersede/reset/flags/unlink/export) + `test_media_api` (endpoint nuovi) — 59 test media verdi. Smoke Playwright: seleziona `a_new` → Associa a `SMOKE DCP` (delivered) → vecchio link superseduto (`superseded_by`=nuovo), `digital_asset_id` = nuovo, stato → `in_progress`, badge nel dettaglio, **0 errori console**.
+
+### Fase A — browser unificato asset (era α.172.244)
+
+- **`/media`** — browser **read-only** che fonde asset **digitali** (`Asset`) e **fisici** (`PhysicalAsset`) tenant-scoped in righe omogenee, ordinate per `created_at DESC`, con paginazione best-effort cross-natura. Nessuna azione mutante (associazioni/bulk rimandate alle fasi B/C/D — pulsanti bulk visibili ma disabilitati).
+- **Servizio** `app/services/media_library.py`: `list_assets` (merge + filtri), `filter_options` (dropdown reali), `asset_detail` (riga + tech_specs completo + deliverables). **Router** `app/routers/media.py`: `GET /media` + `/media/api/{assets,filters,asset/{nature}/{id}}`.
+- **Filtri** 4 gruppi: contesto (progetto/cliente/reparto/job), natura (digitale/fisico, asset_type, physical_kind), consegna (linked_to_delivery/delivery_status via pivot `DeliverableAsset`→`JobDeliverable`, department via `PriceItem.department_id`), tech-specs (risoluzione/codec via `json_extract` sullo shape nidificato `$.video.*`) + ricerca libera + toggle proposte agent. Gating: un filtro esclusivo di una natura restringe l'elenco a quella natura.
+- **RBAC**: nuovo permesso `manage_assets` (gate `media_gate.requires_manage_assets`, retrocompat `edit_planning_all`) + migrazione idempotente `scripts/migrate_manage_assets.py`. Voce sidebar "Media Library" nel gruppo Media. i18n 5 lingue (`media.*`). Blocco `.media-*` in `sleek.css`.
+- **Test**: `test_media_rbac` + `test_media_library` (23: digital/physical/merge/paginazione/delivery/tech/filter_options/asset_detail) + `test_media_api` (7: router+gate JWT-cookie). Smoke browser verde (login → /media: 3 righe merge, filtri popolati, ricerca, dettaglio con tech-specs, 0 errori console).
+- Nessuna migrazione di schema (solo permesso RBAC). Fase A chiude read+filtri; prossimo: fase associazioni.
+
 ## v3.5.0-alpha.172.248 — Eventi Google Calendar editabili da Claqo (15 lug 2026)
 
 Prima l'overlay Google era read-only *by design* (Fase C): gli appuntamenti veri si vedevano ma non si toccavano. Ora sono modificabili, con guardrail espliciti. Design: `docs/superpowers/specs/2026-07-15-google-calendar-writable-design.md`.
@@ -52,7 +74,6 @@ Prima l'overlay Google era read-only *by design* (Fase C): gli appuntamenti veri
 - **Servizio** `app/services/gmail.py` (urllib, `_gmail_request` mockabile, MIME via `email.message` stdlib) + **router** `app/routers/mail.py` (proxy stateless, nessuna tabella/migrazione, per-utente).
 - **Sicurezza**: corpo email in iframe `sandbox=""` (no script), immagini remote bloccate di default con toggle "Mostra immagini", conferma invio, allegati come download, nessun token al client.
 - Best-effort: chiamate Gmail fallite → risposta vuota, mai 500. i18n 5 lingue (`mail.*`). Prima delle 3 sotto-fasi Client email (2 = integrazione CRM tab/pin/AI/Activity, 3 = auto-flow).
-
 ## v3.5.0-alpha.172.243 — Fase D Calendario/Account: documenti Drive collegati (6 lug 2026)
 
 - **DocumentLink** (`document_links`, tenant-scoped, soft-delete): collega file Google Drive a **progetti** e **trattative** salvando solo un riferimento (metadata + link), nessuno storage locale.

@@ -1302,6 +1302,20 @@ def _auto_migrate_columns():
                     print(f"[auto-migrate] user_oauth_tokens.{col} mancante -> ALTER TABLE")
                     conn.execute(text(f"ALTER TABLE user_oauth_tokens ADD COLUMN {col} {ddl}"))
 
+    # v3.5.0-alpha.172.245 — Fase B Media Library: supersede su deliverable_assets
+    if "deliverable_assets" in insp.get_table_names():
+        da_cols = {c["name"] for c in insp.get_columns("deliverable_assets")}
+        da_alter = [
+            ("superseded_at", "DATETIME NULL"),
+            ("superseded_by_id", "INTEGER NULL REFERENCES deliverable_assets(id)"),
+            ("supersede_reason", "VARCHAR(255) NULL"),
+        ]
+        with engine.begin() as conn:
+            for col, ddl in da_alter:
+                if col not in da_cols:
+                    print(f"[auto-migrate] deliverable_assets.{col} mancante -> ALTER TABLE")
+                    conn.execute(text(f"ALTER TABLE deliverable_assets ADD COLUMN {col} {ddl}"))
+
 
 def _rebuild_asset_memberships_nullable(engine=None):
     """F4 (2026-06-11) — Rende AssetMembership.asset_id nullable per supportare
@@ -2405,7 +2419,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Claqo", version="3.5.0-alpha.172.248", lifespan=lifespan)
+app = FastAPI(title="Claqo", version="3.5.0-alpha.172.249", lifespan=lifespan)
 
 BASE_DIR = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2855,6 +2869,8 @@ app.include_router(calendar_router.router)  # feat/calendar-phaseB Task 3 — CR
 app.include_router(documents_router.router)  # Fase D — documenti Drive collegati
 app.include_router(mail_router.router)  # Client email Sotto-fase 1 — /mail
 app.include_router(email_links_router.router)  # Client email F2 — email agganciate
+from app.routers import media as media_router  # feat/media-library Fase A — browser unificato asset
+app.include_router(media_router.router)
 
 
 @app.get("/", response_class=HTMLResponse)

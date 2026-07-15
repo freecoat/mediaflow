@@ -39,12 +39,16 @@ def _resync_primary(db: Session, deliverable: JobDeliverable) -> None:
     )
     prim_digital = next(
         (r.asset_id for r in rows
-         if r.asset_id is not None and (r.source or "") not in _NON_PRIMARY_SOURCES),
+         if r.asset_id is not None
+         and r.superseded_at is None
+         and (r.source or "") not in _NON_PRIMARY_SOURCES),
         None,
     )
     prim_physical = next(
         (r.physical_asset_id for r in rows
-         if r.physical_asset_id is not None and (r.source or "") not in _NON_PRIMARY_SOURCES),
+         if r.physical_asset_id is not None
+         and r.superseded_at is None
+         and (r.source or "") not in _NON_PRIMARY_SOURCES),
         None,
     )
     deliverable.digital_asset_id = prim_digital
