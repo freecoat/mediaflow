@@ -1047,6 +1047,7 @@ window.MF_I18N = {
   'mail.connect':      {it: 'Collega Gmail', en: 'Connect Gmail', fr: 'Connecter Gmail', de: 'Gmail verbinden', es: 'Conectar Gmail'},
   'mail.showImages':   {it: 'Mostra immagini', en: 'Show images', fr: 'Afficher les images', de: 'Bilder anzeigen', es: 'Mostrar imágenes'},
   'mail.empty':        {it: 'Nessun messaggio', en: 'No messages', fr: 'Aucun message', de: 'Keine Nachrichten', es: 'Sin mensajes'},
+  'mail.nosubject':    {it: '(nessun oggetto)', en: '(no subject)', fr: '(sans objet)', de: '(kein Betreff)', es: '(sin asunto)'},
   'mail.sendConfirm':  {it: 'Inviare questa email?', en: 'Send this email?', fr: 'Envoyer cet e-mail ?', de: 'Diese E-Mail senden?', es: '¿Enviar este correo?'},
   'mail.sentOk':       {it: 'Email inviata', en: 'Email sent', fr: 'E-mail envoyé', de: 'E-Mail gesendet', es: 'Correo enviado'},
   'mail.sendError':    {it: 'Invio fallito', en: 'Send failed', fr: 'Échec de l’envoi', de: 'Senden fehlgeschlagen', es: 'Error al enviar'},
@@ -1131,6 +1132,7 @@ function mfCurrentLang() {
   const v = localStorage.getItem('mf_lang') || 'it';
   return window.MF_LANGS.includes(v) ? v : 'it';
 }
+window.mfCurrentLang = mfCurrentLang;
 
 /**
  * Traduzione singola key. Fallback: it → key letterale.

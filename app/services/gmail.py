@@ -55,7 +55,9 @@ def _gmail_request(method: str, path: str, token: str, params=None, body=None) -
     Ritorna dict JSON (o {} se vuoto). Solleva su status >=400."""
     url = _API_BASE + path
     if params:
-        url = url + "?" + urllib.parse.urlencode(params)
+        # doseq: i parametri ripetuti (metadataHeaders, labelIds) sono liste e
+        # senza doseq verrebbero stringificati come "['Subject', 'From']".
+        url = url + "?" + urllib.parse.urlencode(params, doseq=True)
     data = None
     headers = {"Authorization": "Bearer " + token}
     if body is not None:
@@ -109,6 +111,25 @@ def _normalize_message(msg: dict) -> dict:
     }
 
 
+def _thread_headers(db_token: str, thread_id: str) -> dict:
+    """Header del thread via fetch metadata (no corpo, no allegati).
+
+    `users.threads.list` restituisce solo id/snippet/historyId: l'oggetto NON
+    c'è. Va preso da `threads.get`, che è l'unico modo previsto dall'API Gmail.
+    Come nella UI Gmail: oggetto = primo messaggio (il thread conserva quello
+    originale), mittente/data = messaggio più recente."""
+    res = _gmail_request("GET", "/threads/" + urllib.parse.quote(thread_id), db_token,
+                         params={"format": "metadata",
+                                 "metadataHeaders": ["Subject", "From", "Date"]}) or {}
+    msgs = res.get("messages") or []
+    if not msgs:
+        return {"subject": "", "from": "", "date": "", "message_count": 0}
+    first = (msgs[0].get("payload") or {}).get("headers") or []
+    last = (msgs[-1].get("payload") or {}).get("headers") or []
+    return {"subject": _header(first, "Subject"), "from": _header(last, "From"),
+            "date": _header(last, "Date"), "message_count": len(msgs)}
+
+
 def list_threads(db: Session, user_id: int, *, query=None, label_ids=None,
                  page_token=None, max_results=25) -> dict:
     token = get_valid_access_token(db, user_id, "google")
@@ -126,7 +147,20 @@ def list_threads(db: Session, user_id: int, *, query=None, label_ids=None,
     except Exception as e:
         log.warning(f"list_threads fallita user={user_id}: {e}")
         return {"threads": [], "next_page_token": None}
-    return {"threads": res.get("threads") or [], "next_page_token": res.get("nextPageToken")}
+    # N+1 fetch metadata: è il costo previsto dall'API per avere l'oggetto in
+    # lista. Limitato a max_results (25/pagina) e senza corpo/allegati.
+    out = []
+    for t in res.get("threads") or []:
+        row = {"id": t.get("id"), "snippet": t.get("snippet") or ""}
+        try:
+            row.update(_thread_headers(token, t.get("id")))
+        except Exception as e:
+            # Best-effort: il thread resta in lista con oggetto ignoto, mai lo
+            # snippet spacciato per oggetto.
+            log.warning(f"metadata thread {t.get('id')} falliti user={user_id}: {e}")
+            row.update({"subject": "", "from": "", "date": "", "message_count": 0})
+        out.append(row)
+    return {"threads": out, "next_page_token": res.get("nextPageToken")}
 
 
 def get_thread(db: Session, user_id: int, thread_id: str) -> Optional[dict]:

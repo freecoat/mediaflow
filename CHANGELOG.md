@@ -1,5 +1,16 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.247 — Fix: in `/mail` l'oggetto mostrava il corpo (15 lug 2026)
+
+- **Bug**: nella lista thread di `/mail` al posto dell'oggetto compariva il corpo del messaggio. Presente fin da F1 (α.172.244), mai funzionante.
+- **Causa**: `users.threads.list` dell'API Gmail restituisce solo `{id, snippet, historyId}` — **nessun header, quindi nessun subject**. `gmail.list_threads()` passava la risposta grezza al frontend e `mail.js` ripiegava su `t.snippet || '(…)'` come titolo: lo snippet *è* il corpo. Il normalizzatore `_normalize_message` (che estrae il Subject) esisteva ma era usato solo in `get_thread`.
+- **Perché i test non l'hanno visto**: `test_threads` mockava `gmail.list_threads` **a livello di router**, quindi la logica vera non veniva mai eseguita e il mock inventava una forma di risposta che Gmail non manda. I nuovi test mockano `_gmail_request` (punto unico di mock dichiarato in `gmail.py`) con le forme **reali** dell'API.
+- **Fix**: `_thread_headers()` fa fetch `threads.get` con `format=metadata&metadataHeaders=Subject,From,Date` per ogni thread della pagina (N+1 previsto dall'API, max 25/pagina, senza corpo né allegati). Oggetto = primo messaggio, mittente/data = più recente, `message_count` per i thread multipli — come la UI Gmail. Se il metadata di un thread fallisce, il thread resta in lista con oggetto vuoto: **mai lo snippet spacciato per oggetto**.
+- **`_gmail_request`**: aggiunto `doseq=True` a `urlencode` — i parametri ripetuti (`metadataHeaders`, `labelIds`) sono liste e senza `doseq` venivano stringificati come `"['Subject', 'From']"`, rompendo la chiamata reale (invisibile ai test col mock).
+- **UI**: riga thread ora mostra mittente / data breve / **oggetto** / anteprima come campi distinti. `mfCurrentLang` esportata su `window` (era usata solo internamente a `i18n.js`). i18n 5 lingue (`mail.nosubject`).
+- 5 test nuovi, **1201 verdi**. Smoke browser su Gmail reale: 25 thread, 0 errori console, oggetto ≠ anteprima verificato.
+- **Nota calendario**: verificata *non* regressione. I 3 `CalendarEvent` in DB risultano soft-deleted da UI il 5–7 lug (unico writer di `is_active=False` è il DELETE a `calendar.py:218`); l'overlay Google funziona (10 eventi) ma è `editable: false` **by design** (Fase C, `calendar_page.js:39`). Editabilità eventi Google: design in `docs/superpowers/specs/2026-07-15-google-calendar-writable-design.md`.
+
 ## v3.5.0-alpha.172.246 — Client email Sotto-fase 3: Rubrica Contatti (14 lug 2026)
 
 - **`Contact` standalone**: `client_id` diventa **nullable** (contatti orfani ammessi) + campi `company_text`/`source`; due join M:N `contact_acquisitions` / `contact_projects`. Retrocompat piena con gli endpoint client-scoped esistenti + sync `is_primary`. Migrazione `scripts/migrate_contacts_rubrica.py` (rebuild tabella SQLite per rilassare NOT NULL) + auto-migrate al boot + voce strumenti `[u]`/`[U]`.

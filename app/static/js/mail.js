@@ -32,6 +32,27 @@ async function mfMailLoadLabels() {
   } catch (e) { /* best-effort */ }
 }
 
+function _mailFromName(from) {
+  // "Anna Rossi <anna@a24.com>" -> "Anna Rossi"; "anna@a24.com" -> "anna@a24.com"
+  if (!from) return '';
+  const m = from.match(/^\s*"?([^"<]*?)"?\s*<[^>]+>\s*$/);
+  const name = m && m[1].trim();
+  return name || from.replace(/[<>]/g, '').trim();
+}
+
+function _mailShortDate(d) {
+  // Date RFC2822 dagli header. Oggi -> ora, altrimenti giorno/mese.
+  if (!d) return '';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  const now = new Date();
+  const sameDay = dt.getDate() === now.getDate() && dt.getMonth() === now.getMonth()
+    && dt.getFullYear() === now.getFullYear();
+  const lang = (window.mfCurrentLang ? mfCurrentLang() : 'it');
+  return sameDay ? dt.toLocaleTimeString(lang, {hour: '2-digit', minute: '2-digit'})
+                 : dt.toLocaleDateString(lang, {day: '2-digit', month: 'short'});
+}
+
 async function mfMailLoadThreads(reset) {
   if (reset) { _mailNextPage = null; }
   const box = document.getElementById('mail-thread-list');
@@ -43,8 +64,19 @@ async function mfMailLoadThreads(reset) {
   try {
     const d = await (await fetch('/mail/api/threads?' + params.toString())).json();
     const rows = (d.threads || []).map(function (t) {
-      return '<div class="mail-thread-row" data-thread="' + escapeHtml(t.id) + '">' +
-        escapeHtml(t.snippet || '(…)') + '</div>';
+      // Oggetto e anteprima sono cose diverse: l'oggetto viene dagli header,
+      // lo snippet è il corpo. Mai usare il secondo al posto del primo.
+      const count = (t.message_count || 0) > 1 ? ' (' + t.message_count + ')' : '';
+      const ell = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      return '<div class="mail-thread-row" data-thread="' + escapeHtml(t.id) + '" ' +
+        'style="display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:6px;cursor:pointer;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85em;">' +
+        '<span style="' + ell + '">' + escapeHtml(_mailFromName(t.from)) + '</span>' +
+        '<span class="muted" style="flex:none;">' + escapeHtml(_mailShortDate(t.date)) + '</span></div>' +
+        '<div style="font-weight:600;' + ell + '">' +
+        escapeHtml(t.subject || mfT('mail.nosubject')) + count + '</div>' +
+        '<div class="muted" style="font-size:.85em;' + ell + '">' + escapeHtml(t.snippet || '') + '</div>' +
+        '</div>';
     }).join('');
     box.innerHTML = (reset ? '' : box.innerHTML) + (rows || '<div class="muted">' + mfT('mail.empty') + '</div>');
     _mailNextPage = d.next_page_token || null;
