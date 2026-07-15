@@ -26,7 +26,8 @@ async function calFetchEvents(info, success, failure) {
       title: '• ' + m.title, start: m.date, allDay: true, display: 'background',
       classNames: ['cal-marker'], editable: false, extendedProps: { marker: m.kind }
     }));
-    // Overlay Google read-only (best-effort, non blocca il calendario)
+    // Overlay Google (best-effort, non blocca il calendario). Editabile solo dove
+    // il server lo concede: accessRole owner/writer + opt-in scope + non ricorrente.
     const showG = document.getElementById('cal-show-google');
     if (showG && showG.checked) {
       try {
@@ -34,9 +35,15 @@ async function calFetchEvents(info, success, failure) {
           encodeURIComponent(info.startStr) + '&end=' + encodeURIComponent(info.endStr));
         if (gr.ok) {
           const gd = await gr.json();
+          if (gd.error && window.toast) toast(mfT('cal.google.overlayError'), 'error');
           (gd.events || []).forEach(g => evs.push({
+            // id composito: gli id locali sono interi puri, nessuna collisione.
+            id: 'g:' + g.calendar_id + ':' + g.id,
             title: g.title, start: g.start, end: g.end, allDay: g.all_day,
-            editable: false, classNames: ['cal-google'], extendedProps: { google: true }
+            editable: !!g.editable,
+            classNames: g.editable ? ['cal-google', 'cal-google-editable'] : ['cal-google'],
+            extendedProps: { google: true, editable: !!g.editable,
+                             calendar_id: g.calendar_id, event_id: g.id }
           }));
         }
       } catch (e) { /* overlay best-effort */ }
@@ -80,12 +87,24 @@ async function calSyncNow() {
 }
 
 function _calPutTimes(info) {
-  if (info.event.extendedProps.marker) { info.revert(); return; }
+  const p = info.event.extendedProps;
+  if (p.marker) { info.revert(); return; }
   const fd = new FormData();
   fd.append('start_at', info.event.start.toISOString());
   if (info.event.end) fd.append('end_at', info.event.end.toISOString());
-  fetch('/calendar/api/events/' + info.event.id, { method: 'PUT', body: fd })
-    .then(r => { if (!r.ok) { info.revert(); if (window.toast) toast(mfT('common.error'), 'error'); } });
+  // Drag&drop instradato sulla sorgente: evento Google → API Google, locale → API locale.
+  const url = p.google
+    ? '/calendar/api/google-events/' + encodeURIComponent(p.calendar_id) + '/' +
+      encodeURIComponent(p.event_id)
+    : '/calendar/api/events/' + info.event.id;
+  fetch(url, { method: 'PUT', body: fd }).then(r => {
+    if (r.ok) return;
+    info.revert();
+    if (window.toast) {
+      // 409 = l'evento e' cambiato su Google nel frattempo (If-Match), non un errore generico.
+      toast(mfT(r.status === 409 ? 'cal.google.conflict' : 'common.error'), 'error');
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -107,8 +126,17 @@ document.addEventListener('DOMContentLoaded', function () {
     eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
     events: calFetchEvents,
     eventClick: function (info) {
-      if (info.event.extendedProps.marker || info.event.extendedProps.google) return;
+      const p = info.event.extendedProps;
+      if (p.marker) return;
+      if (p.google && !p.editable) return;  // read-only: nessuna azione, come prima
       info.jsEvent.preventDefault();
+      if (p.google) {
+        window.openEventModal({
+          external: { calendar_id: p.calendar_id, event_id: p.event_id },
+          onSaved: () => _cal.refetchEvents()
+        });
+        return;
+      }
       window.openEventModal({ event: _fcEventToObj(info.event), onSaved: () => _cal.refetchEvents() });
     },
     select: function (info) {

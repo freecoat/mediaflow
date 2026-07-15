@@ -8,7 +8,24 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.246** — 14 luglio 2026 — Client email Sotto-fase 3: Rubrica Contatti (ramo `feat/mail-client-phase3`)
+**v3.5.0-alpha.172.248** — 15 luglio 2026 — Eventi Google Calendar editabili (su `main`)
+
+### α.172.248 ✅ (Eventi Google editabili — 15 lug, su main, Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-15-google-calendar-writable*)
+- **Contesto**: Matteo segnala "nel calendario non ho più accesso agli appuntamenti e non posso editarli". **Non era una regressione**: i 3 `CalendarEvent` in DB risultano soft-deleted da UI il 5–7 lug (unico writer di `is_active=False` è il DELETE a `calendar.py:218`); l'overlay Google funzionava ma era `editable:false` **by design** (Fase C). Diagnosi verificata a runtime contro il DB reale. Da lì la decisione di renderli editabili.
+- **Scope opt-in `calendar.events`** (non `calendar` pieno, non nel bundle base): `?scopes=calendar_write`, pattern incrementale identico a Gmail. `has_calendar_write_scope()` accetta `calendar` pieno come superset.
+- **`accessRole` ora onorato** (era nella risposta `calendarList` ma **ignorato**): `editable` server-side per-evento = owner/writer AND opt-in AND non ricorrente. Ricorrenze escluse (semantica questo/tutti/successivi non modellata).
+- **Scrittura**: `get/update/delete_external_event`, **PATCH** non PUT, **If-Match/etag** → 412 Google = **409** client, niente sovrascrittura. Endpoint `GET/PUT/DELETE /calendar/api/google-events/{cal}/{eid}` sotto `manage_calendar`.
+- **Eliminazione a due passi** (irreversibile su Google, nessun soft-delete). `confirm()` nativo resta per gli eventi Claqo.
+- **Overlay diagnosticabile**: il bare `except` inghiottiva tutto → ora logga + `error:true`, resta 200.
+- **Fix collaterale**: `common.error` mancava in i18n dalla Fase B (i toast mostravano la stringa letterale).
+- **Test**: 38 nuovi, **1239 verdi**. Smoke browser su **DB scratch** (mai il reale) con Google mockato: 3 stati distinti, PATCH applicato, 2 passi verificati, 0 errori console. Nessuna migrazione (overlay virtuale).
+- **Limite noto**: drag&drop eventi Google senza etag → last-write-wins (l'overlay non espone l'etag per-evento). Modale protetto da If-Match.
+
+### α.172.247 ✅ (Fix oggetto /mail — 15 lug, su main)
+- In `/mail` al posto dell'oggetto c'era il corpo. **Causa**: `users.threads.list` non restituisce header → nessun subject; `mail.js` ripiegava su `t.snippet` (= corpo). Bug presente da F1, mai funzionante. I test mockavano `list_threads` a livello di router inventando una forma che Gmail non manda.
+- **Fix**: `_thread_headers()` con `threads.get format=metadata` (oggetto = primo msg, from/data = più recente, `message_count`). `_gmail_request` con `urlencode(doseq=True)` — senza, `metadataHeaders` veniva stringificato e la chiamata reale si rompeva (invisibile ai mock). 5 test, smoke su Gmail reale (25 thread, 0 errori console).
+
+### α.172.246 ✅ (Client email F3 — Rubrica Contatti — MERGED su main con F1+F2 il 15 lug, commit `175b42b`)
 
 ### α.172.246 ✅ (Client email F3 — Rubrica Contatti — 14 lug, ramo feat/mail-client-phase3, 16 task TDD Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-14-mail-client-phase3-contacts-rubrica*)
 - **`Contact` standalone**: `client_id` **nullable** + `company_text`/`source`; join M:N `contact_acquisitions`/`contact_projects`. Retrocompat endpoint client-scoped + sync `is_primary`. Migrazione `scripts/migrate_contacts_rubrica.py` (rebuild tabella SQLite per NOT NULL) + auto-migrate boot + strumenti `[u]`.
@@ -16,7 +33,7 @@
 - **Estrazione ibrida** `contact_extract.py` (deterministico partecipanti+firma, gratis; AI opzionale). Bottone "Estrai contatto" in `/mail` + tab Email trattativa → preview → salva. **Ponte scheda tecnica**: "Salva in rubrica" pane Crew → `POST /contacts/api/from-tech-sheet`. **Copilot** `propose_contact` esteso (client_id opzionale + acquisition_id/project_id). **Notifiche** badge on-demand tab Email trattativa.
 - **Test**: 8 file nuovi. **1196 test verdi**. **Smoke Playwright** (DB copia reale, JWT admin): crea contatto → dettaglio → picker carica trattative reali → associa → refresh con ✕ + lista "1 🎯"; `/mail`+`/acquisitions` caricano, **0 errori console**. i18n 5 lingue.
 
-**Prossimo step**: smoke Matteo sul Mac (`scripts/migrate_contacts_rubrica.py`). Poi **merge `feat/mail-client-phase3` → main** (chiude programma Client email F1+F2+F3) oppure follow-up. Ramo NON pushato. NB: anche `feat/media-library` (A+B) e `feat/mail-client-phase2` attendono merge.
+**Prossimo step**: **smoke Matteo** — è il passo saltato che ha lasciato passare il bug oggetto `/mail`. Da verificare: (1) `/mail` con oggetti corretti; (2) `/settings` → "Attiva editing calendario" → consenso Google reale → `/calendar` con eventi Google editabili (finora provato solo con Google mockato: il percorso OAuth reale non è mai stato esercitato). Poi valutare l'etag nel drag&drop. Ramo `main` NON pushato (86+ commit avanti). NB: `feat/media-library` (A+B) attende ancora merge; i rami `feat/mail-client-phase1/2/3` sono mergiati e cancellabili.
 
 ### α.172.245 ✅ (storico sotto)
 **v3.5.0-alpha.172.245** — 7 luglio 2026 — Client email Sotto-fase 2: integrazione CRM (trattativa)

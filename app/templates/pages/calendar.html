@@ -7,7 +7,10 @@
   #calendar-root { max-width: 1100px; margin: 0 auto; }
   .cal-toolbar { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
   .cal-marker { border:1px dashed var(--accent, #6272f5); opacity:.7; }
-  .cal-google { opacity:.55; border:1px solid var(--text3, #888) !important; }
+  /* Google read-only: tratteggiato e smorzato. Editabile: solido e pieno, come
+     gli eventi Claqo — la differenza visiva dice cosa si può toccare. */
+  .cal-google { opacity:.55; border:1px dashed var(--text3, #888) !important; cursor:default; }
+  .cal-google-editable { opacity:.9; border-style:solid !important; cursor:pointer; }
   .fc-event.cal-synced .fc-event-title::after { content:' ⟲'; font-size:10px; opacity:.8; }
 </style>
 {% endblock %}

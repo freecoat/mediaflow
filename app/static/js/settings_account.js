@@ -41,6 +41,16 @@ async function loadAccountSettings() {
           ? ' <span class="badge badge-active" style="font-size:11px;">Email ✓</span>'
           : ' <a class="btn btn-secondary btn-sm" href="/auth/oauth/google/start?scopes=email" ' +
             'data-i18n="mail.connect">Collega Gmail</a>';
+        // Opt-in editing calendario: calendar.events in aggiunta. Riconosce anche
+        // lo scope 'calendar' pieno (superset) che Google concede su alcuni account.
+        const sc = p.scopes || '';
+        const hasCalWrite = sc.indexOf('calendar.events') !== -1 ||
+                            sc.split(/\s+/).some(s => s.endsWith('/auth/calendar'));
+        actions += hasCalWrite
+          ? ' <span class="badge badge-active" style="font-size:11px;" ' +
+            'data-i18n="settings.account.calendarWriteActive">Editing calendario ✓</span>'
+          : ' <a class="btn btn-secondary btn-sm" href="/auth/oauth/google/start?scopes=calendar_write" ' +
+            'data-i18n="settings.account.calendarWrite">Attiva editing calendario</a>';
       }
     } else {
       const notCfgTitle = window.mfT ? mfT('settings.account.notConfigured') : 'client_id non configurato';

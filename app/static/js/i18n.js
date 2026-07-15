@@ -566,6 +566,8 @@ window.MF_I18N = {
   'settings.account.disconnect':{it: 'Scollega',                   en: 'Disconnect',            fr: 'Déconnecter',         de: 'Trennen',            es: 'Desconectar'},
   'settings.account.notLinked': {it: 'Non collegato',              en: 'Not linked',            fr: 'Non lié',             de: 'Nicht verknüpft',    es: 'No vinculada'},
   'settings.account.autoSync':  {it: 'Sync calendario automatico', en: 'Auto calendar sync',    fr: 'Sync agenda auto',    de: 'Auto-Kalender-Sync', es: 'Sinc. calendario auto'},
+  'settings.account.calendarWrite':       {it: 'Attiva editing calendario', en: 'Enable calendar editing', fr: 'Activer edition agenda', de: 'Kalenderbearbeitung aktivieren', es: 'Activar edicion de calendario'},
+  'settings.account.calendarWriteActive': {it: 'Editing calendario ✓', en: 'Calendar editing ✓', fr: 'Edition agenda ✓', de: 'Kalenderbearbeitung ✓', es: 'Edicion de calendario ✓'},
   'settings.account.comingSoon':     {it: 'Prossimamente',                                                                                                                                        en: 'Coming soon',                                                            fr: 'Bientôt',                                                                        de: 'Demnächst',                                                                             es: 'Próximamente'},
   'settings.account.connected':      {it: 'Connesso',                                                                                                                                              en: 'Connected',                                                              fr: 'Connecté',                                                                       de: 'Verbunden',                                                                             es: 'Conectado'},
   'settings.account.noProviders':    {it: 'Nessun provider OAuth configurato.',                                                                                                                     en: 'No OAuth providers configured.',                                         fr: 'Aucun fournisseur OAuth configuré.',                                             de: 'Keine OAuth-Anbieter konfiguriert.',                                             es: 'Ningún proveedor OAuth configurado.'},
@@ -1029,6 +1031,15 @@ window.MF_I18N = {
   'cal.google.readonly': {it: 'Evento Google (sola lettura)', en: 'Google event (read-only)', fr: 'Evenement Google (lecture seule)', de: 'Google-Termin (schreibgeschutzt)', es: 'Evento de Google (solo lectura)'},
   'cal.synced':        {it: 'Sincronizzato con Google', en: 'Synced with Google', fr: 'Synchronise avec Google', de: 'Mit Google synchronisiert', es: 'Sincronizado con Google'},
 
+  // ── Eventi Google editabili (design 2026-07-15) ───
+  'cal.google.source':          {it: 'Evento Google Calendar', en: 'Google Calendar event', fr: 'Evenement Google Agenda', de: 'Google Kalender-Termin', es: 'Evento de Google Calendar'},
+  'cal.google.conflict':        {it: 'Evento modificato nel frattempo su Google: ricarica e riprova', en: 'Event changed on Google meanwhile: reload and retry', fr: 'Evenement modifie entre-temps sur Google : rechargez et reessayez', de: 'Termin wurde zwischenzeitlich in Google geandert: neu laden und erneut versuchen', es: 'Evento modificado mientras tanto en Google: recarga y reintenta'},
+  'cal.google.readonly':        {it: 'Solo lettura (Google)', en: 'Read-only (Google)', fr: 'Lecture seule (Google)', de: 'Nur Lesen (Google)', es: 'Solo lectura (Google)'},
+  'cal.google.notEditable':     {it: 'Evento non modificabile', en: 'Event not editable', fr: 'Evenement non modifiable', de: 'Termin nicht bearbeitbar', es: 'Evento no editable'},
+  'cal.google.overlayError':    {it: 'Eventi Google non caricati', en: 'Google events not loaded', fr: 'Evenements Google non charges', de: 'Google-Termine nicht geladen', es: 'Eventos de Google no cargados'},
+  'cal.google.deleteWarning':   {it: 'Eliminazione definitiva da Google Calendar, non recuperabile.', en: 'Permanent deletion from Google Calendar, not recoverable.', fr: 'Suppression definitive de Google Agenda, non recuperable.', de: 'Endgultiges Loschen aus Google Kalender, nicht wiederherstellbar.', es: 'Eliminacion definitiva de Google Calendar, no recuperable.'},
+  'cal.google.deleteConfirmBtn': {it: 'Elimina definitivamente da Google', en: 'Delete permanently from Google', fr: 'Supprimer definitivement de Google', de: 'Endgultig aus Google loschen', es: 'Eliminar definitivamente de Google'},
+
   // ── Documenti Drive collegati (Fase D) ────────────
   'mail.inbox':        {it: 'Posta in arrivo', en: 'Inbox', fr: 'Boîte de réception', de: 'Posteingang', es: 'Bandeja de entrada'},
   'mail.sent':         {it: 'Inviati', en: 'Sent', fr: 'Envoyés', de: 'Gesendet', es: 'Enviados'},
@@ -1190,6 +1201,9 @@ window.applyI18n = applyI18n;
 // o batch AI: vedi tools/i18n_patch_suggestions.md.
 window.MF_I18N_AUTO_SWAP = {
   'common.annulla': { it: 'Annulla', en: 'Cancel', fr: 'Annuler', de: 'Abbrechen', es: 'Cancelar', },
+  // Usata dai toast di errore di calendar_page/event_modal fin dalla Fase B: mancava,
+  // quindi mfT ripiegava sulla chiave letterale e l'utente leggeva "common.error".
+  'common.error': { it: 'Errore', en: 'Error', fr: 'Erreur', de: 'Fehler', es: 'Error', },
   'common.caricamento': { it: 'Caricamento…', en: 'Loading…', fr: 'Chargement…', de: 'Laden…', es: 'Cargando…', },
   'common.stato': { it: 'Stato', en: 'Status', fr: 'Statut', de: 'Status', es: 'Estado', },
   'common.salva': { it: 'Salva', en: 'Save', fr: 'Enregistrer', de: 'Speichern', es: 'Guardar', },

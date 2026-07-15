@@ -1,5 +1,21 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.248 — Eventi Google Calendar editabili da Claqo (15 lug 2026)
+
+Prima l'overlay Google era read-only *by design* (Fase C): gli appuntamenti veri si vedevano ma non si toccavano. Ora sono modificabili, con guardrail espliciti. Design: `docs/superpowers/specs/2026-07-15-google-calendar-writable-design.md`.
+
+- **Scope opt-in `calendar.events`** (`CALENDAR_WRITE_SCOPES`), **non** `calendar` pieno (che darebbe anche la gestione dei calendari) e **non** nel bundle base: `/auth/oauth/google/start?scopes=calendar_write`, stesso pattern incrementale già in produzione per Gmail. Chi non lo attiva non subisce re-consent. `has_calendar_write_scope()` accetta anche `calendar` pieno come superset funzionale (concesso da Google su alcuni account reali), ma non `readonly`/`app.created`.
+- **`accessRole` finalmente onorato**: era già nella risposta `calendarList` ma veniva **ignorato**, quindi anche i calendari condivisi in sola lettura (festivi, "Kalenderwochen") sarebbero risultati editabili. Ora `editable` è calcolato **server-side** per-evento: serve `owner`/`writer` **AND** opt-in scope **AND** non ricorrente. Nessuna logica di permesso duplicata in JS.
+- **Ricorrenze escluse** dall'editing (`recurrence`/`recurringEventId`): modificare una serie ha semantiche multiple su Google (questo/tutti/successivi) che Claqo non modella — riduzione di scope esplicita, non un edge case dimenticato.
+- **Scrittura**: `get/update/delete_external_event` in `google_calendar.py` (stesso layer HTTP unico). **PATCH** e non PUT, per non azzerare i campi che Claqo non modella (partecipanti, allegati, conferenza). **If-Match/etag**: se l'evento è cambiato nel frattempo Google risponde 412 → **409** al client e non sovrascriviamo. `403`→forbidden, `404` su DELETE = successo idempotente.
+- **Endpoint** `GET/PUT/DELETE /calendar/api/google-events/{calendar_id}/{event_id}` sotto `manage_calendar` (nessun permesso nuovo). `db.commit()` per persistere il token eventualmente rinfrescato.
+- **Eliminazione a due passi**: su Google è **irreversibile**, non c'è soft-delete da cui recuperare. Il primo click su Elimina mostra un pannello con avviso esplicito; solo il secondo bottone cancella. Il `confirm()` nativo resta per gli eventi Claqo (recuperabili).
+- **UI**: read-only tratteggiato/smorzato, editabile solido e pieno. `event_modal.js` guadagna una modalità esterna che riusa lo stesso markup e nasconde i campi Claqo-only (stato, link riunione). Drag&drop instradato per sorgente. Opt-in "Attiva editing calendario" in `/settings`.
+- **Diagnosticabilità**: il bare `except` di `google_overlay` inghiottiva ogni errore rendendolo indistinguibile dal "non connesso". Ora logga e ritorna `error: true`, restando 200 (best-effort invariato: l'overlay non deve rompere `/calendar`).
+- **Fix i18n preesistente**: `common.error` mancava fin dalla Fase B — i toast d'errore del calendario mostravano letteralmente la stringa "common.error". i18n 5 lingue per tutte le nuove chiavi (`cal.google.*`, `settings.account.calendarWrite*`).
+- Nessuna migrazione: l'overlay resta **virtuale** (nessun import in `CalendarEvent`), mirror one-way Fase C intatto. 38 test nuovi, **1239 verdi**. Smoke browser su DB scratch con Google mockato: 3 stati visivi distinti, PATCH applicato, conferma a due passi verificata (l'evento sopravvive al 1° click, sparisce al 2°), 0 errori console.
+- **Limite noto**: il drag&drop di un evento Google non manda l'`etag` (l'overlay non lo espone per-evento) → last-write-wins sullo spostamento. La modifica dal modale è protetta da If-Match. Da chiudere esponendo l'etag nell'overlay.
+
 ## v3.5.0-alpha.172.247 — Fix: in `/mail` l'oggetto mostrava il corpo (15 lug 2026)
 
 - **Bug**: nella lista thread di `/mail` al posto dell'oggetto compariva il corpo del messaggio. Presente fin da F1 (α.172.244), mai funzionante.

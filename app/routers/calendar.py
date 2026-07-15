@@ -5,6 +5,7 @@ derivati (Activity.next_action_date, Acquisition.expected_close_date).
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -19,6 +20,9 @@ from app.models.models import (
 )
 from app.services.rbac import requires_permission, current_user_optional
 from app.services.calendar_sync import maybe_autosync_event, sync_user_pending
+from app.services import google_calendar
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["calendar"])
 
@@ -235,9 +239,67 @@ async def google_overlay(start: Optional[str] = None, end: Optional[str] = None,
                          request: Request = None, db: Session = Depends(get_db)):
     u = current_user_optional(request)
     if not u or not start or not end:
-        return {"events": []}
-    from app.services import google_calendar
+        return {"events": []}  # non connesso/parametri assenti: non e' un errore
     try:
         return {"events": google_calendar.list_google_events(db, u.id, start, end)}
-    except Exception:
-        return {"events": []}
+    except Exception as e:
+        # Best-effort invariato (mai 502: l'overlay non deve rompere /calendar), ma
+        # un fallimento vero va distinto dal "non connesso" e deve lasciare traccia.
+        log.warning(f"google_overlay fallito user={u.id}: {e}")
+        return {"events": [], "error": True}
+
+
+# ── Eventi Google esterni: editabili se accessRole owner/writer + opt-in scope ──
+# Path con prefisso letterale distinto da /calendar/api/events/{id} (locale):
+# nessuna collisione di routing possibile.
+
+_ERROR_STATUS = {"conflict": 409, "forbidden": 403, "not_found": 404,
+                 "not_connected": 404, "http_error": 502}
+
+
+@router.get("/calendar/api/google-events/{calendar_id}/{event_id}", dependencies=[RequireView])
+async def get_google_event(calendar_id: str, event_id: str, request: Request,
+                           db: Session = Depends(get_db)):
+    u = current_user_optional(request)
+    if not u:
+        raise HTTPException(401, "Non autenticato")
+    ev = google_calendar.get_external_event(db, u.id, calendar_id, event_id)
+    if not ev:
+        raise HTTPException(404, "Evento Google non trovato o non collegato")
+    return ev
+
+
+@router.put("/calendar/api/google-events/{calendar_id}/{event_id}", dependencies=[RequireManage])
+async def put_google_event(
+    calendar_id: str, event_id: str, request: Request,
+    title: Optional[str] = Form(None), start_at: Optional[str] = Form(None),
+    end_at: Optional[str] = Form(None), all_day: Optional[str] = Form(None),
+    location: Optional[str] = Form(None), etag: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+):
+    u = current_user_optional(request)
+    if not u:
+        raise HTTPException(401, "Non autenticato")
+    allday_bool = None if all_day is None else str(all_day).lower() in ("1", "true", "on", "yes")
+    res = google_calendar.update_external_event(
+        db, u.id, calendar_id, event_id, title=title, start_at=start_at, end_at=end_at,
+        all_day=allday_bool, location=location, etag=etag or None)
+    db.commit()  # persiste l'eventuale token rinfrescato (get_valid_access_token non committa)
+    if not res["ok"]:
+        raise HTTPException(_ERROR_STATUS.get(res["error"], 502), res["error"] or "Errore Google")
+    return res
+
+
+@router.delete("/calendar/api/google-events/{calendar_id}/{event_id}", dependencies=[RequireManage])
+async def delete_google_event(calendar_id: str, event_id: str, request: Request,
+                              etag: Optional[str] = Form(None), db: Session = Depends(get_db)):
+    """IRREVERSIBILE: Google non ha soft-delete. La conferma a due passi e' nella UI."""
+    u = current_user_optional(request)
+    if not u:
+        raise HTTPException(401, "Non autenticato")
+    res = google_calendar.delete_external_event(db, u.id, calendar_id, event_id,
+                                                etag=etag or None)
+    db.commit()  # persiste l'eventuale token rinfrescato
+    if not res["ok"]:
+        raise HTTPException(_ERROR_STATUS.get(res["error"], 502), res["error"] or "Errore Google")
+    return res
