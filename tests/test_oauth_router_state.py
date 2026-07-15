@@ -3,6 +3,32 @@ from tests.test_acquisitions_api import client  # noqa: F401
 from app.services import oauth_providers as oauth
 
 
+def test_start_with_calendar_write_includes_extra_scope(client):
+    """?scopes=calendar_write → opt-in incrementale editing calendario (α.172.249)."""
+    c, _ = client
+    r = c.get("/auth/oauth/google/start?scopes=calendar_write", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    loc = r.headers["location"]
+    assert "calendar.events" in loc
+    assert "include_granted_scopes=true" in loc
+
+
+def test_start_without_scopes_param_excludes_calendar_write(client):
+    c, _ = client
+    r = c.get("/auth/oauth/google/start", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert "calendar.events" not in r.headers["location"]
+
+
+def test_start_with_email_scope_non_regredisce(client):
+    """L'opt-in Gmail preesistente resta intatto e non porta scope calendario."""
+    c, _ = client
+    r = c.get("/auth/oauth/google/start?scopes=email", follow_redirects=False)
+    loc = r.headers["location"]
+    assert "gmail.readonly" in loc
+    assert "calendar.events" not in loc
+
+
 def test_callback_rejects_bad_state(client):
     c, _ = client
     r = c.get("/auth/oauth/google/callback?code=x&state=forged.deadbeef",

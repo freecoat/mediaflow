@@ -77,6 +77,12 @@ GMAIL_SCOPES = (
     "https://www.googleapis.com/auth/gmail.compose"
 )
 
+# Scope scrittura calendario richiesti SOLO su opt-in esplicito (design 2026-07-15,
+# Domanda 1). NON nel bundle base. `calendar.events` e non `calendar` pieno: copre
+# il minimo per editare/eliminare eventi sui calendari dove l'utente ha accessRole
+# owner/writer, senza concedere la gestione dei calendari stessi.
+CALENDAR_WRITE_SCOPES = "https://www.googleapis.com/auth/calendar.events"
+
 
 def _redirect_base_url() -> str:
     return os.getenv("OAUTH_REDIRECT_BASE_URL", "http://localhost:8000").rstrip("/")
