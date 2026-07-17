@@ -4,32 +4,48 @@
 {% block head %}
 {# FullCalendar 6 (standard bundle) inietta il proprio CSS via JS: nessun index.global.min.css nel pacchetto npm. #}
 <style>
-  #calendar-root { max-width: 1100px; margin: 0 auto; }
+  .cal-shell { display: grid; grid-template-columns: 220px 1fr; gap: 16px; align-items: start; }
+  #cal-sidebar { position: sticky; top: 12px; }
+  #cal-sidebar h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text3, #888); margin: 0 0 8px; }
+  #cal-list { display: flex; flex-direction: column; gap: 2px; }
+  .cal-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .cal-item:hover { background: var(--bg3, #222); }
+  .cal-item input { margin: 0; }
+  .cal-dot { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(255,255,255,.15); }
+  .cal-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-empty { font-size: 12px; color: var(--text3, #888); padding: 6px; }
   .cal-toolbar { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
   .cal-marker { border:1px dashed var(--accent, #6272f5); opacity:.7; }
   /* Google read-only: tratteggiato e smorzato. Editabile: solido e pieno, come
      gli eventi Claqo — la differenza visiva dice cosa si può toccare. */
   .cal-google { opacity:.55; border:1px dashed var(--text3, #888) !important; cursor:default; }
   .cal-google-editable { opacity:.9; border-style:solid !important; cursor:pointer; }
+  .cal-google-ro { opacity:.6; }
   .fc-event.cal-synced .fc-event-title::after { content:' ⟲'; font-size:10px; opacity:.8; }
+  @media (max-width: 768px) { .cal-shell { grid-template-columns: 1fr; } #cal-sidebar { position: static; } }
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-header">
   <h1 data-i18n="cal.title">Calendario</h1>
 </div>
-<div class="cal-toolbar">
-  <select id="cal-scope" class="input">
-    <option value="team" data-i18n="cal.filter.team">Team</option>
-    <option value="mine" data-i18n="cal.filter.mine">Solo miei</option>
-  </select>
-  <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
-    <input type="checkbox" id="cal-show-google" checked> <span data-i18n="cal.showGoogle">Mostra Google</span>
-  </label>
-  <button class="btn btn-secondary" onclick="calSyncNow()" data-i18n="cal.sync.now">Sincronizza</button>
-  <button class="btn btn-primary" onclick="calNewEvent()" data-i18n="cal.new">Nuovo appuntamento</button>
+<div class="cal-shell">
+  <aside id="cal-sidebar">
+    <h3 data-i18n="cal.myCalendars">I miei calendari</h3>
+    <div id="cal-list"></div>
+  </aside>
+  <div>
+    <div class="cal-toolbar">
+      <select id="cal-scope" class="input">
+        <option value="team" data-i18n="cal.filter.team">Team</option>
+        <option value="mine" data-i18n="cal.filter.mine">Solo miei</option>
+      </select>
+      <button class="btn btn-secondary" onclick="calSyncNow()" data-i18n="cal.sync.now">Sincronizza</button>
+      <button class="btn btn-primary" onclick="calNewEvent()" data-i18n="cal.new">Nuovo appuntamento</button>
+    </div>
+    <div id="calendar-root"></div>
+  </div>
 </div>
-<div id="calendar-root"></div>
 {% endblock %}
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"

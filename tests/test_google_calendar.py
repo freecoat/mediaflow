@@ -312,6 +312,64 @@ def test_update_external_event_sends_patch_with_if_match(monkeypatch):
     assert seen["body"]["summary"] == "Nuovo titolo"
 
 
+def test_update_external_event_porta_attendees_e_description_con_if_match(monkeypatch):
+    """I campi del ramo mobile-responsive-email (partecipanti/descrizione/stato)
+    devono passare dall'endpoint etag-protetto di main, non da uno parallelo:
+    l'invito Google (`sendUpdates=all`) NON deve costare la protezione If-Match."""
+    s = _session(); _connect(s, cal_id="cal1")
+    seen = {}
+
+    def fake(m, u, t, body=None, params=None, extra_headers=None):
+        seen["method"] = m; seen["headers"] = extra_headers
+        seen["body"] = body; seen["params"] = params
+        return {"id": "evt1"}
+
+    monkeypatch.setattr(gc, "_google_request", fake)
+    res = gc.update_external_event(
+        s, 1, "cal1", "evt1", title="Riunione", description="Ordine del giorno",
+        meeting_url="https://meet.example/x", status="confirmed",
+        attendees=["a@x.it", "b@x.it"], etag='"abc123"')
+    assert res["ok"] is True
+    assert seen["method"] == "PATCH"
+    assert seen["headers"] == {"If-Match": '"abc123"'}, "If-Match perso: torna il last-write-wins"
+    assert seen["body"]["attendees"] == [{"email": "a@x.it"}, {"email": "b@x.it"}]
+    assert seen["params"] == {"sendUpdates": "all"}, "senza sendUpdates Google non manda l'invito"
+    # meeting_url non ha campo nativo su Google: si appende alla descrizione.
+    assert "Ordine del giorno" in seen["body"]["description"]
+    assert "https://meet.example/x" in seen["body"]["description"]
+    assert seen["body"]["status"] == "confirmed"
+
+
+def test_update_external_event_senza_attendees_non_manda_inviti(monkeypatch):
+    """sendUpdates solo se ci sono partecipanti: un drag&drop non deve spammare."""
+    s = _session(); _connect(s, cal_id="cal1")
+    seen = {}
+
+    def fake(m, u, t, body=None, params=None, extra_headers=None):
+        seen["params"] = params
+        return {"id": "evt1"}
+
+    monkeypatch.setattr(gc, "_google_request", fake)
+    gc.update_external_event(s, 1, "cal1", "evt1", start_at="2026-07-10T09:00:00",
+                             end_at="2026-07-10T10:00:00", etag='"e"')
+    assert seen["params"] is None
+
+
+def test_normalize_espone_description_location_attendees():
+    """Campi portati dal ramo: senza, il modale di modifica resta cieco."""
+    g = {"id": "e1", "etag": '"t"', "summary": "X",
+         "start": {"dateTime": "2026-07-10T09:00:00Z"},
+         "end": {"dateTime": "2026-07-10T10:00:00Z"},
+         "description": "note", "location": "Sala 1", "status": "confirmed",
+         "attendees": [{"email": "a@x.it"}, {"displayName": "senza email"}]}
+    out = gc._normalize_google_event(g, "Cal", "cal1", "owner", True, cal_color="#fff")
+    assert out["description"] == "note"
+    assert out["location"] == "Sala 1"
+    assert out["attendees"] == ["a@x.it"], "i partecipanti senza email vanno scartati"
+    assert out["color"] == "#fff"
+    assert out["editable"] is True and out["read_only"] is False
+
+
 def test_update_external_event_conflict_412(monkeypatch):
     s = _session(); _connect(s, cal_id="cal1")
 

@@ -4,8 +4,10 @@
 Layer HTTP isolato (urllib, coerente con oauth_providers). Tutte le chiamate
 passano da `_google_request` → punto unico di mock nei test.
 
-Scope (Fase A): calendar.app.created (crea/gestisce il calendario secondario
-'Claqo' e i suoi eventi), calendar.readonly (overlay degli altri calendari).
+Scope (α.172.247): `calendar` full — read/write su TUTTI i calendari
+dell'utente. Permette di editare eventi Google esistenti e invitare
+partecipanti (`attendees` + `sendUpdates=all`), oltre a gestire il calendario
+secondario 'Claqo' per gli appuntamenti creati in Claqo.
 """
 from __future__ import annotations
 
@@ -86,12 +88,19 @@ def ensure_claqo_calendar(db: Session, user_id: int) -> Optional[str]:
 
 def _event_to_google(ev) -> dict:
     status = "cancelled" if (ev.status and getattr(ev.status, "value", ev.status) == "cancelled") else "confirmed"
+    desc = ev.description or ""
+    # meeting_url non ha un campo nativo su Google: lo appendiamo alla descrizione.
+    if getattr(ev, "meeting_url", None):
+        desc = (desc + "\n\n" + ev.meeting_url).strip() if desc else ev.meeting_url
     body = {
         "summary": ev.title or "",
-        "description": ev.description or "",
+        "description": desc,
         "location": ev.location or "",
         "status": status,
     }
+    attendees = getattr(ev, "attendees", None) or []
+    if attendees:
+        body["attendees"] = [{"email": e} for e in attendees if e]
     if ev.all_day:
         body["start"] = {"date": ev.start_at.date().isoformat()}
         body["end"] = {"date": ev.end_at.date().isoformat()}
@@ -110,11 +119,14 @@ def push_event(db: Session, user_id: int, ev) -> bool:
         return False
     try:
         body = _event_to_google(ev)
+        # Notifica i partecipanti solo se presenti (invito via email).
+        params = {"sendUpdates": "all"} if body.get("attendees") else None
         base = _API_BASE + "/calendars/" + urllib.parse.quote(cal) + "/events"
         if ev.external_event_id:
-            _google_request("PUT", base + "/" + urllib.parse.quote(ev.external_event_id), token, body=body)
+            _google_request("PUT", base + "/" + urllib.parse.quote(ev.external_event_id),
+                            token, body=body, params=params)
         else:
-            res = _google_request("POST", base, token, body=body)
+            res = _google_request("POST", base, token, body=body, params=params)
             ev.external_event_id = (res or {}).get("id")
             ev.external_calendar_id = cal
         ev.sync_state = "synced"
@@ -125,6 +137,44 @@ def push_event(db: Session, user_id: int, ev) -> bool:
         log.warning(f"push_event fallito ev={getattr(ev, 'id', '?')}: {e}")
         ev.sync_state = "error"
         ev.sync_error = str(e)[:500]
+        return False
+
+
+def update_google_event(db: Session, user_id: int, calendar_id: str, event_id: str,
+                        fields: dict) -> Optional[dict]:
+    """PATCH parziale di un evento Google ESISTENTE sul suo calendario di origine
+    (scope `calendar` full). `fields` = dict già in formato Google (summary,
+    description, location, start, end, status, attendees). Best-effort: None su errore."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token or not calendar_id or not event_id:
+        return None
+    url = (_API_BASE + "/calendars/" + urllib.parse.quote(calendar_id) +
+           "/events/" + urllib.parse.quote(event_id))
+    params = {"sendUpdates": "all"} if fields.get("attendees") else None
+    try:
+        return _google_request("PATCH", url, token, body=fields, params=params)
+    except Exception as e:
+        log.warning(f"update_google_event fallito cal={calendar_id} ev={event_id}: {e}")
+        return None
+
+
+def delete_google_event(db: Session, user_id: int, calendar_id: str, event_id: str) -> bool:
+    """Elimina un evento Google esistente sul suo calendario. Idempotente su 404."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token or not calendar_id or not event_id:
+        return False
+    url = (_API_BASE + "/calendars/" + urllib.parse.quote(calendar_id) +
+           "/events/" + urllib.parse.quote(event_id))
+    try:
+        _google_request("DELETE", url, token, params={"sendUpdates": "all"})
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return True
+        log.warning(f"delete_google_event fallito cal={calendar_id} ev={event_id}: {e}")
+        return False
+    except Exception as e:
+        log.warning(f"delete_google_event fallito cal={calendar_id} ev={event_id}: {e}")
         return False
 
 
@@ -164,10 +214,42 @@ def _is_recurring(g: dict) -> bool:
     return bool(g.get("recurrence")) or bool(g.get("recurringEventId"))
 
 
+def list_calendars(db: Session, user_id: int) -> list:
+    """Lista dei calendari dell'utente (per la sidebar 'I miei calendari').
+    Esclude il calendario secondario 'Claqo' (mostrato a parte come eventi locali).
+    Best-effort: token/rete/403 → []."""
+    token = get_valid_access_token(db, user_id, "google")
+    if not token:
+        return []
+    row = get_token(db, user_id, "google")
+    claqo_id = row.claqo_calendar_id if row else None
+    try:
+        cal_list = _google_request("GET", _API_BASE + "/users/me/calendarList", token) or {}
+    except Exception as e:
+        log.warning(f"list_calendars fallita user={user_id}: {e}")
+        return []
+    out = []
+    for cal in cal_list.get("items", []):
+        cid = cal.get("id")
+        if not cid or cid == claqo_id:
+            continue
+        out.append({
+            "id": cid,
+            "summary": cal.get("summary") or cid,
+            "color": cal.get("backgroundColor"),
+            "access_role": cal.get("accessRole") or "",
+            "primary": bool(cal.get("primary")),
+        })
+    return out
+
+
 def _normalize_google_event(g: dict, cal_summary: str, calendar_id: str,
-                            access_role: Optional[str], write_scope_ok: bool) -> dict:
+                            access_role: Optional[str], write_scope_ok: bool,
+                            cal_color: Optional[str] = None) -> dict:
     """Un evento è editabile solo se TUTTE e tre: accessRole owner/writer sul
-    calendario, opt-in scope scrittura concesso, e non è ricorrente."""
+    calendario, opt-in scope scrittura concesso, e non è ricorrente.
+    `cal_color` è opzionale e sesto: i test chiamano questa funzione con 5
+    posizionali, aggiungerlo prima li romperebbe."""
     start = g.get("start", {})
     end = g.get("end", {})
     editable = (access_role in ("owner", "writer")) and write_scope_ok and not _is_recurring(g)
@@ -185,10 +267,18 @@ def _normalize_google_event(g: dict, cal_summary: str, calendar_id: str,
         "access_role": access_role,
         "read_only": not editable,
         "editable": editable,
+        "color": cal_color,
+        "description": g.get("description") or "",
+        "location": g.get("location") or "",
+        "status": g.get("status") or "confirmed",
+        "attendees": [a.get("email") for a in (g.get("attendees") or []) if a.get("email")],
     }
 
 
 def list_google_events(db: Session, user_id: int, time_min: str, time_max: str) -> list:
+    """Overlay eventi Google di TUTTI i calendari (escluso il secondario 'Claqo',
+    già rappresentato dagli eventi locali). Con scope `calendar` full gli eventi
+    su calendari con accessRole owner/writer sono editabili in Claqo."""
     token = get_valid_access_token(db, user_id, "google")
     if not token:
         return []
@@ -207,6 +297,7 @@ def list_google_events(db: Session, user_id: int, time_min: str, time_max: str) 
         if not cid or cid == claqo_id:
             continue
         access_role = cal.get("accessRole")
+        cal_color = cal.get("backgroundColor")
         try:
             res = _google_request(
                 "GET", _API_BASE + "/calendars/" + urllib.parse.quote(cid) + "/events", token,
@@ -219,7 +310,8 @@ def list_google_events(db: Session, user_id: int, time_min: str, time_max: str) 
             if g.get("status") == "cancelled":
                 continue
             out.append(_normalize_google_event(g, cal.get("summary") or cid, cid,
-                                               access_role, write_scope_ok))
+                                               access_role, write_scope_ok,
+                                               cal_color=cal_color))
     return out
 
 
@@ -243,14 +335,27 @@ def get_external_event(db: Session, user_id: int, calendar_id: str,
                                    has_calendar_write_scope(row))
 
 
-def _patch_body(*, title, start_at, end_at, all_day, location) -> dict:
+def _patch_body(*, title, start_at, end_at, all_day, location,
+                description=None, meeting_url=None, status=None, attendees=None) -> dict:
     """Solo i campi passati finiscono nel body: PATCH parziale, così i campi che
-    Claqo non modella (partecipanti, allegati, conferenza…) restano intatti."""
+    Claqo non modella (allegati, conferenza…) restano intatti.
+    `attendees` = lista di email (il parsing della stringa form sta nel router).
+    `meeting_url` non ha campo nativo su Google: si appende alla descrizione,
+    stessa convenzione di `_event_to_google`."""
     body = {}
     if title is not None:
         body["summary"] = title
     if location is not None:
         body["location"] = location
+    desc = (description or "").strip()
+    if meeting_url and meeting_url.strip():
+        desc = (desc + "\n\n" + meeting_url.strip()).strip()
+    if description is not None or (meeting_url and meeting_url.strip()):
+        body["description"] = desc
+    if status is not None and str(status).strip():
+        body["status"] = str(status).strip()
+    if attendees is not None:
+        body["attendees"] = [{"email": e} for e in attendees if e]
     if start_at is not None and end_at is not None:
         if all_day:
             body["start"] = {"date": start_at[:10]}
@@ -266,19 +371,25 @@ _HTTP_ERROR_MAP = {412: "conflict", 403: "forbidden", 404: "not_found"}
 
 def update_external_event(db: Session, user_id: int, calendar_id: str, event_id: str, *,
                           title=None, start_at=None, end_at=None, all_day=None,
-                          location=None, etag=None) -> dict:
+                          location=None, etag=None, description=None,
+                          meeting_url=None, status=None, attendees=None) -> dict:
     """PATCH (non PUT) di un evento Google. `etag` → If-Match: se l'evento è
-    cambiato nel frattempo Google risponde 412 e noi NON sovrascriviamo."""
+    cambiato nel frattempo Google risponde 412 e noi NON sovrascriviamo.
+    Con `attendees` valorizzati Google manda l'invito (`sendUpdates=all`)."""
     token = get_valid_access_token(db, user_id, "google")
     if not token:
         return {"ok": False, "error": "not_connected", "http_status": None, "event": None}
     body = _patch_body(title=title, start_at=start_at, end_at=end_at,
-                       all_day=all_day, location=location)
+                       all_day=all_day, location=location, description=description,
+                       meeting_url=meeting_url, status=status, attendees=attendees)
+    # Notifica i partecipanti solo se presenti: senza, Google non manda inviti.
+    params = {"sendUpdates": "all"} if body.get("attendees") else None
     headers = {"If-Match": etag} if etag else None
     url = (_API_BASE + "/calendars/" + urllib.parse.quote(calendar_id) +
            "/events/" + urllib.parse.quote(event_id))
     try:
-        res = _google_request("PATCH", url, token, body=body, extra_headers=headers)
+        res = _google_request("PATCH", url, token, body=body, params=params,
+                              extra_headers=headers)
         log.info(f"update_external_event ok user={user_id} cal={calendar_id} evt={event_id}")
         return {"ok": True, "error": None, "http_status": 200, "event": res}
     except urllib.error.HTTPError as e:

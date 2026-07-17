@@ -288,3 +288,140 @@ body.sleek-mode #media-detail {
 body.sleek-mode #media-detail-body .badge {
   border-radius: 6px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Client email /mail — Sotto-fase 3 (restyle sleek, α.172.255)
+ * Allinea le classi .mail-* al linguaggio sleek (radius, border tenui,
+ * hover morbido, micro-label, accent indigo). Override-only.
+ * ───────────────────────────────────────────────────────────────────── */
+
+/* Lista thread */
+body.sleek-mode .mail-thread-row {
+  border-radius: 10px;
+  border-color: transparent;
+  transition: background 130ms ease, border-color 130ms ease;
+}
+body.sleek-mode .mail-thread-row:hover {
+  background: rgba(255,255,255,0.03);
+}
+body.sleek-mode .mail-thread-row.mail-unread {
+  border-left: 2px solid var(--indigo);
+  background: linear-gradient(90deg, rgba(98,114,245,0.06), transparent);
+}
+body.sleek-mode .mail-row-count,
+body.sleek-mode .mail-label-count {
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+body.sleek-mode .mail-label-count {
+  background: linear-gradient(180deg, var(--indigo2), var(--indigo));
+}
+
+/* Etichette + sistema */
+body.sleek-mode .mail-label,
+body.sleek-mode .mail-lb-row {
+  border-radius: 8px;
+  transition: background 140ms ease, color 140ms ease;
+  font-weight: 500;
+}
+body.sleek-mode .mail-label:hover,
+body.sleek-mode .mail-lb-row:hover {
+  background: rgba(255,255,255,0.05);
+}
+body.sleek-mode .mail-label-active {
+  background: linear-gradient(90deg, rgba(98,114,245,0.18), rgba(98,114,245,0.05));
+  color: var(--indigo2);
+  font-weight: 600;
+}
+body.sleek-mode .mail-lb-head,
+body.sleek-mode .mail-set-tab {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+body.sleek-mode .mail-labels-sep { background: rgba(255,255,255,0.06); }
+
+/* Nav strumenti + ricerca avanzata toggle */
+body.sleek-mode .mail-nav-tool,
+body.sleek-mode .mail-adv-toggle {
+  border-radius: 8px;
+  border-color: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+body.sleek-mode .mail-nav-tool:hover,
+body.sleek-mode .mail-adv-toggle:hover {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-1px);
+}
+
+/* Messaggio in lettura = card sleek */
+body.sleek-mode .mail-msg {
+  border-radius: 12px;
+  border-color: rgba(255,255,255,0.06);
+  background: linear-gradient(180deg, rgba(255,255,255,0.012), transparent), var(--bg2);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+}
+body.sleek-mode .mail-att {
+  border-radius: 8px;
+  border-color: rgba(255,255,255,0.08);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+body.sleek-mode .mail-att:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.14);
+}
+
+/* Compose: toolbar, editor, chip, header */
+body.sleek-mode .mail-toolbar {
+  border-radius: 10px;
+  border-color: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.025);
+}
+body.sleek-mode .mail-tb-btn { border-radius: 6px; }
+body.sleek-mode .mail-tb-btn:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.10);
+}
+body.sleek-mode .mail-tb-sel {
+  border-radius: 6px;
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+body.sleek-mode .mail-editor {
+  border-radius: 10px;
+  border-color: rgba(255,255,255,0.10);
+}
+body.sleek-mode .mail-att-chip {
+  border-radius: 8px;
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  font-weight: 500;
+}
+
+/* Impostazioni: tab attivo indigo */
+body.sleek-mode .mail-set-tab-active {
+  color: var(--indigo2);
+  border-bottom-color: var(--indigo);
+}
+body.sleek-mode .mail-filter-row,
+body.sleek-mode .mail-contact-row {
+  border-radius: 8px;
+  transition: background 130ms ease;
+}
+body.sleek-mode .mail-contact-row:hover { background: rgba(255,255,255,0.03); }
+
+/* Bottoni AI (Sotto-fase 4): tinta indigo discreta */
+body.sleek-mode .mail-ai-btn {
+  border-color: rgba(98,114,245,0.35);
+  color: var(--indigo2);
+  background: rgba(98,114,245,0.08);
+}
+body.sleek-mode .mail-ai-btn:hover {
+  background: rgba(98,114,245,0.16);
+  border-color: rgba(98,114,245,0.5);
+}
+body.sleek-mode .mail-ai-search { color: var(--indigo2); }

@@ -85,9 +85,113 @@ def test_labels(client, monkeypatch):
     c, s = client
     import app.routers.mail as mailmod
     monkeypatch.setattr(mailmod.gmail, "list_labels",
-                        lambda db, uid: [{"id": "INBOX", "name": "INBOX", "type": "system"}])
+                        lambda db, uid, counts=False: [{"id": "INBOX", "name": "INBOX", "type": "system"}])
     r = c.get("/mail/api/labels")
     assert r.json()["labels"][0]["id"] == "INBOX"
+
+
+def test_label_create(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "create_label",
+                        lambda db, uid, name, parent=None: {"id": "L9", "name": name, "type": "user"})
+    r = c.post("/mail/api/labels", data={"name": "Clienti"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert r.json()["label"]["id"] == "L9"
+
+
+def test_label_rename(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "rename_label",
+                        lambda db, uid, lid, name: {"id": lid, "name": name, "type": "user"})
+    r = c.put("/mail/api/labels/L1", data={"name": "Fornitori"})
+    assert r.json()["label"]["name"] == "Fornitori"
+
+
+def test_label_delete(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "delete_label", lambda db, uid, lid: True)
+    assert c.delete("/mail/api/labels/L1").json()["ok"] is True
+
+
+def test_filter_create_builds_action(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    captured = {}
+    monkeypatch.setattr(mailmod.gmail, "create_filter",
+                        lambda db, uid, criteria, action: captured.update(criteria=criteria, action=action) or {"id": "F1", "criteria": criteria, "action": action})
+    r = c.post("/mail/api/filters", data={"from_addr": "boss@x.com", "add_label_id": "L1",
+                                          "mark_read": "1", "archive": "1"})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert captured["criteria"]["from"] == "boss@x.com"
+    assert "L1" in captured["action"]["addLabelIds"]
+    assert "UNREAD" in captured["action"]["removeLabelIds"]
+    assert "INBOX" in captured["action"]["removeLabelIds"]
+
+
+def test_filter_list_delete(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "list_filters", lambda db, uid: [{"id": "F1"}])
+    monkeypatch.setattr(mailmod.gmail, "delete_filter", lambda db, uid, fid: True)
+    assert c.get("/mail/api/filters").json()["filters"][0]["id"] == "F1"
+    assert c.delete("/mail/api/filters/F1").json()["ok"] is True
+
+
+def test_vacation_get_set(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod.gmail, "get_vacation", lambda db, uid: {"enableAutoReply": False})
+    assert c.get("/mail/api/vacation").json()["vacation"]["enableAutoReply"] is False
+    captured = {}
+    monkeypatch.setattr(mailmod.gmail, "set_vacation",
+                        lambda db, uid, **k: captured.update(k) or {"enableAutoReply": k["enabled"]})
+    r = c.post("/mail/api/vacation", data={"enabled": "1", "subject": "Ferie", "body": "<p>ciao</p>",
+                                           "start": "2026-08-01"})
+    assert r.json()["ok"] is True
+    assert captured["enabled"] is True
+    assert captured["start_ms"] is not None  # data convertita in ms
+
+
+class _FakeProvider:
+    def __init__(self, out): self._out = out
+    def complete(self, system, user, max_tokens=2000, temperature=0.3): return self._out
+
+
+def test_ai_reply_generates_html(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod, "get_provider_for_user",
+                        lambda uid, db: _FakeProvider("```html\n<p>Grazie, confermo.</p>\n```"))
+    monkeypatch.setattr(mailmod.gmail, "get_thread", lambda db, uid, tid: {
+        "id": tid, "messages": [{"id": "M1", "from": "anna@x.com", "subject": "Consegna",
+                                 "body_text": "Mi confermi la consegna?"}]})
+    r = c.post("/mail/api/ai/reply", data={"thread_id": "T1", "instruction": "conferma"})
+    b = r.json()
+    assert b["ok"] is True
+    assert b["html"] == "<p>Grazie, confermo.</p>"  # fence rimosso
+    assert b["to"] == "anna@x.com"
+    assert b["subject"] == "Re: Consegna"
+
+
+def test_ai_reply_no_provider(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod, "get_provider_for_user", lambda uid, db: None)
+    assert c.post("/mail/api/ai/reply", data={"thread_id": "T1"}).json()["ok"] is False
+
+
+def test_ai_search_translates(client, monkeypatch):
+    c, s = client
+    import app.routers.mail as mailmod
+    monkeypatch.setattr(mailmod, "get_provider_for_user",
+                        lambda uid, db: _FakeProvider('  "from:anna subject:A24"\n'))
+    r = c.post("/mail/api/ai/search", data={"q": "email di anna sul progetto A24"})
+    b = r.json()
+    assert b["ok"] is True
+    assert b["query"] == "from:anna subject:A24"  # virgolette/newline ripulite
 
 
 def test_attachment_download(client, monkeypatch):

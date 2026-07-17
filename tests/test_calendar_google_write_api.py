@@ -58,6 +58,92 @@ def test_put_google_event_updates(client, monkeypatch):
     assert r.json()["ok"] is True
 
 
+def test_put_google_event_invia_attendees_e_description(client, monkeypatch):
+    """Campi portati dal ramo mobile-responsive-email: devono arrivare a Google
+    passando dall'endpoint etag-protetto."""
+    c, s = client
+    _connect(s)
+    seen = {}
+    from app.services import google_calendar as gc
+
+    def fake(m, u, t, body=None, params=None, extra_headers=None):
+        seen["body"] = body; seen["params"] = params
+        return {"id": "e1"}
+
+    monkeypatch.setattr(gc, "_google_request", fake)
+    r = c.put("/calendar/api/google-events/cal1/e1", data={
+        "title": "Riunione", "description": "note",
+        "attendees": "a@x.it, b@x.it", "location": "Sala 1"})
+    assert r.status_code == 200, r.text
+    assert seen["body"]["attendees"] == [{"email": "a@x.it"}, {"email": "b@x.it"}]
+    assert seen["body"]["description"] == "note"
+    assert seen["body"]["location"] == "Sala 1"
+    assert seen["params"] == {"sendUpdates": "all"}
+
+
+def test_put_google_event_full_edit_svuota_i_campi(client, monkeypatch):
+    """Trappola multipart: una stringa vuota arriva a FastAPI come None, identica
+    a un campo non inviato. Col marker `full_edit` il modale dichiara di possedere
+    quei campi, quindi il vuoto è voluto e deve svuotarli davvero."""
+    c, s = client
+    _connect(s)
+    seen = {}
+    from app.services import google_calendar as gc
+
+    def fake(m, u, t, body=None, params=None, extra_headers=None):
+        seen["body"] = body
+        return {"id": "e1"}
+
+    monkeypatch.setattr(gc, "_google_request", fake)
+    r = c.put("/calendar/api/google-events/cal1/e1",
+              data={"title": "X", "attendees": "", "description": "", "full_edit": "1"})
+    assert r.status_code == 200, r.text
+    assert seen["body"]["attendees"] == [], "lista svuotata, non lasciata intatta"
+    assert seen["body"]["description"] == "", "descrizione svuotata, non lasciata intatta"
+
+
+def test_put_google_event_senza_full_edit_il_vuoto_non_tocca_nulla(client, monkeypatch):
+    """Il drag&drop non manda full_edit: deve toccare solo le date, mai azzerare
+    partecipanti o descrizione dell'evento trascinato."""
+    c, s = client
+    _connect(s)
+    seen = {}
+    from app.services import google_calendar as gc
+
+    def fake(m, u, t, body=None, params=None, extra_headers=None):
+        seen["body"] = body
+        return {"id": "e1"}
+
+    monkeypatch.setattr(gc, "_google_request", fake)
+    r = c.put("/calendar/api/google-events/cal1/e1", data={
+        "start_at": "2026-07-10T09:00:00", "end_at": "2026-07-10T10:00:00",
+        "etag": '"abc"'})
+    assert r.status_code == 200, r.text
+    assert "attendees" not in seen["body"]
+    assert "description" not in seen["body"]
+    assert "location" not in seen["body"]
+
+
+def test_put_google_event_campi_non_inviati_non_finiscono_nel_body(client, monkeypatch):
+    """PATCH parziale: ciò che il modale non manda non deve essere toccato su
+    Google (altrimenti si azzerano i campi che Claqo non modella)."""
+    c, s = client
+    _connect(s)
+    seen = {}
+    from app.services import google_calendar as gc
+
+    def fake(m, u, t, body=None, params=None, extra_headers=None):
+        seen["body"] = body
+        return {"id": "e1"}
+
+    monkeypatch.setattr(gc, "_google_request", fake)
+    r = c.put("/calendar/api/google-events/cal1/e1", data={"title": "Solo titolo"})
+    assert r.status_code == 200, r.text
+    assert "attendees" not in seen["body"]
+    assert "description" not in seen["body"]
+    assert "location" not in seen["body"]
+
+
 def test_put_google_event_conflict_returns_409(client, monkeypatch):
     """412 di Google -> 409 al client: l'evento e' cambiato, non sovrascrivere."""
     c, s = client

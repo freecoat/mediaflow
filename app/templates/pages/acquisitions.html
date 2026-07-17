@@ -150,6 +150,17 @@
   .acq-layout { flex-direction: column; }
   .acq-detail-panel { width: 100%; position: static; max-height: none; }
 }
+@media (max-width: 768px) {
+  .acq-detail-panel {
+    position: fixed; inset: 0; width: 100vw; height: 100dvh; max-height: none;
+    border-radius: 0; z-index: 1300; padding: 14px; overflow-y: auto;
+  }
+  .acq-det-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .acq-det-tab { flex: 0 0 auto; white-space: nowrap; }
+  .acq-kanban { scroll-snap-type: x mandatory; }
+  .acq-kanban-col { min-width: 78vw; scroll-snap-align: start; }
+  .acq-detail-actions .btn, .acq-det-tab { min-height: 40px; }
+}
 </style>
 {% endblock %}
 

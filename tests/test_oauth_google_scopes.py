@@ -3,10 +3,13 @@ from app.services import oauth_providers as oauth
 
 def test_google_scopes_include_calendar_and_drive():
     scopes = oauth.PROVIDERS["google"]["scopes"]
-    assert "https://www.googleapis.com/auth/calendar.app.created" in scopes
-    assert "https://www.googleapis.com/auth/calendar.readonly" in scopes
-    # full read/write calendar scope must NOT be granted (least privilege)
-    assert "auth/calendar " not in (scopes + " ")  # no bare 'calendar' scope token
+    # α.172.262 (merge): bundle base least-privilege. La scrittura eventi Google è
+    # opt-in via CALENDAR_WRITE_SCOPES (calendar.events), MAI `calendar` pieno nel
+    # default — l'architettura opt-in di main vince sul ramo (che usava full calendar).
+    assert "calendar.app.created" in scopes
+    assert "calendar.readonly" in scopes
+    assert "/auth/calendar\"" not in scopes  # nessuno scope 'calendar' pieno
+    assert not scopes.rstrip().endswith("/auth/calendar")
     assert "https://www.googleapis.com/auth/drive.file" in scopes
     assert "gmail.send" in scopes
     assert "email" in scopes and "profile" in scopes

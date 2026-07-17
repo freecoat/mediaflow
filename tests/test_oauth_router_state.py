@@ -25,7 +25,10 @@ def test_start_with_email_scope_non_regredisce(client):
     c, _ = client
     r = c.get("/auth/oauth/google/start?scopes=email", follow_redirects=False)
     loc = r.headers["location"]
-    assert "gmail.readonly" in loc
+    # α.172.262: opt-in Gmail esteso a gmail.modify (supersede readonly) per le feature
+    # mail-client mergiate dal ramo (etichette/filtri/vacation CRUD). Nessuno scope
+    # calendario deve trapelare da un opt-in solo-email.
+    assert "gmail.modify" in loc
     assert "calendar.events" not in loc
 
 

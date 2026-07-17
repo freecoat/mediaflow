@@ -1835,6 +1835,14 @@ function mfWrapDateTimeLocal(input) {
 function mfToggleSidebar() {
   const sb = document.getElementById('sidebar');
   if (!sb) return;
+  if (window.matchMedia && window.matchMedia('(max-width:768px)').matches) {
+    // Mobile: off-canvas via classe .open + backdrop
+    const open = !sb.classList.contains('open');
+    sb.classList.toggle('open', open);
+    const bd = document.getElementById('mf-sidebar-backdrop');
+    if (bd) bd.classList.toggle('visible', open);
+    return;
+  }
   const collapsed = !sb.classList.contains('collapsed');
   sb.classList.toggle('collapsed', collapsed);
   document.body.classList.toggle('sidebar-collapsed', collapsed);
@@ -1843,6 +1851,12 @@ function mfToggleSidebar() {
   // Nascondi tooltip eventuale al toggle
   const tip = document.getElementById('mf-sidebar-tip');
   if (tip) tip.classList.remove('visible');
+}
+function mfCloseSidebarMobile() {
+  const sb = document.getElementById('sidebar');
+  if (sb) sb.classList.remove('open');
+  const bd = document.getElementById('mf-sidebar-backdrop');
+  if (bd) bd.classList.remove('visible');
 }
 function _mfUpdateSidebarToggleIcon(collapsed) {
   const wrap = document.getElementById('mf-sidebar-toggle');

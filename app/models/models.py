@@ -555,6 +555,12 @@ class User(Base):
     # None = automatico (modello più forte configurato, via rank_parse_models).
     # Valorizzato = forza quel provider per il parser (parse/reparse/auto-extract).
     parse_ai_provider: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    # v3.5.0-alpha.172.251 — Firma email (HTML) per-utente, auto-inserita nel
+    # compose /mail. None = nessuna firma.
+    email_signature: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # v3.5.0-alpha.172.252 — Preferenze client email (JSON): mark_read_on_open,
+    # autosave, auto_refresh_sec, compose_new_window, default_font. None = default.
+    mail_prefs: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # v3.5.0-alpha.70.4 — MFA TOTP (pyotp). Secret Fernet-encrypted con
     # AI_KEY_ENCRYPTION_KEY (riuso chiave per non aggiungere env var nuova).
     # mfa_enabled è True solo dopo verify-setup riuscito.

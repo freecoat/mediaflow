@@ -52,3 +52,16 @@ def test_acquisitions_page_loads(client):
     assert "acq-agenda-list" in html
     # Must have the new button
     assert "acq-btn-new" in html
+
+
+def test_acquisitions_has_mobile_media_query():
+    import pathlib
+    html = pathlib.Path("app/templates/pages/acquisitions.html").read_text(encoding="utf-8")
+    assert "max-width: 768px" in html
+    assert "position: fixed" in html
+
+
+def test_acquisitions_tabs_scrollable_mobile():
+    import pathlib
+    html = pathlib.Path("app/templates/pages/acquisitions.html").read_text(encoding="utf-8")
+    assert "overflow-x" in html

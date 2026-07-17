@@ -60,6 +60,20 @@ def _int_or_none(v: Optional[str]) -> Optional[int]:
     return int(v)
 
 
+def _parse_attendees(s: Optional[str]) -> list:
+    """Stringa (virgole/newline/;) → lista di email deduplicate, ordine preservato."""
+    if not s:
+        return []
+    import re
+    seen, out = set(), []
+    for p in re.split(r"[,\n;]+", s):
+        e = p.strip()
+        if e and e.lower() not in seen:
+            seen.add(e.lower())
+            out.append(e)
+    return out
+
+
 @router.get("/calendar", response_class=HTMLResponse, dependencies=[RequireView])
 async def calendar_page(request: Request):
     from app.main import templates
@@ -126,7 +140,8 @@ async def list_events(
 
 
 def _apply_fields(ev: CalendarEvent, *, title, start_at, end_at, all_day, location,
-                  meeting_url, status, acquisition_id, project_id, activity_id, client_id):
+                  meeting_url, status, acquisition_id, project_id, activity_id, client_id,
+                  description=None, attendees=None):
     if title is not None:
         ev.title = title.strip()
     if start_at is not None:
@@ -139,6 +154,10 @@ def _apply_fields(ev: CalendarEvent, *, title, start_at, end_at, all_day, locati
         ev.location = location.strip() or None
     if meeting_url is not None:
         ev.meeting_url = meeting_url.strip() or None
+    if description is not None:
+        ev.description = description.strip() or None
+    if attendees is not None:
+        ev.attendees = _parse_attendees(attendees)
     if status is not None and status.strip():
         ev.status = CalendarEventStatus(status.strip())
     if acquisition_id is not None:
@@ -161,6 +180,8 @@ async def create_event(
     location: Optional[str] = Form(None),
     meeting_url: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    attendees: Optional[str] = Form(None),
     acquisition_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
     activity_id: Optional[str] = Form(None),
@@ -173,6 +194,7 @@ async def create_event(
                        owner_user_id=(u.id if u else None), created_by=(u.id if u else None))
     _apply_fields(ev, title=None, start_at=None, end_at=None, all_day=all_day,
                   location=location, meeting_url=meeting_url, status=status,
+                  description=description, attendees=attendees,
                   acquisition_id=acquisition_id, project_id=project_id,
                   activity_id=activity_id, client_id=client_id)
     db.add(ev); db.commit(); db.refresh(ev)
@@ -191,6 +213,8 @@ async def update_event(
     location: Optional[str] = Form(None),
     meeting_url: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    attendees: Optional[str] = Form(None),
     acquisition_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),
     activity_id: Optional[str] = Form(None),
@@ -204,6 +228,7 @@ async def update_event(
         raise HTTPException(404, "Appuntamento non trovato")
     _apply_fields(ev, title=title, start_at=start_at, end_at=end_at, all_day=all_day,
                   location=location, meeting_url=meeting_url, status=status,
+                  description=description, attendees=attendees,
                   acquisition_id=acquisition_id, project_id=project_id,
                   activity_id=activity_id, client_id=client_id)
     db.commit(); db.refresh(ev)
@@ -232,6 +257,19 @@ async def sync_now(request: Request, db: Session = Depends(get_db)):
     if not u:
         raise HTTPException(401, "Non autenticato")
     return sync_user_pending(db, u.id)
+
+
+@router.get("/calendar/api/google-calendars", dependencies=[RequireView])
+async def google_calendars(request: Request, db: Session = Depends(get_db)):
+    """Lista calendari Google dell'utente per la sidebar. Best-effort."""
+    u = current_user_optional(request)
+    if not u:
+        return {"calendars": []}
+    from app.services import google_calendar
+    try:
+        return {"calendars": google_calendar.list_calendars(db, u.id)}
+    except Exception:
+        return {"calendars": []}
 
 
 @router.get("/calendar/api/google-overlay", dependencies=[RequireView])
@@ -275,15 +313,30 @@ async def put_google_event(
     title: Optional[str] = Form(None), start_at: Optional[str] = Form(None),
     end_at: Optional[str] = Form(None), all_day: Optional[str] = Form(None),
     location: Optional[str] = Form(None), etag: Optional[str] = Form(None),
+    description: Optional[str] = Form(None), meeting_url: Optional[str] = Form(None),
+    status: Optional[str] = Form(None), attendees: Optional[str] = Form(None),
+    full_edit: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     u = current_user_optional(request)
     if not u:
         raise HTTPException(401, "Non autenticato")
     allday_bool = None if all_day is None else str(all_day).lower() in ("1", "true", "on", "yes")
+    # Trappola multipart: un campo con stringa vuota arriva a FastAPI come None,
+    # esattamente come un campo NON inviato. Senza distinguerli, svuotare
+    # descrizione/luogo/partecipanti dal modale sarebbe impossibile (il PATCH
+    # parziale li ignorerebbe). `full_edit` = "il modale possiede questi campi,
+    # il vuoto è voluto"; il drag&drop non lo manda e tocca solo le date.
+    if str(full_edit or "").lower() in ("1", "true", "on", "yes"):
+        description = description or ""
+        location = location or ""
+        attendees = attendees or ""
+    attendees_list = None if attendees is None else _parse_attendees(attendees)
     res = google_calendar.update_external_event(
         db, u.id, calendar_id, event_id, title=title, start_at=start_at, end_at=end_at,
-        all_day=allday_bool, location=location, etag=etag or None)
+        all_day=allday_bool, location=location, etag=etag or None,
+        description=description, meeting_url=meeting_url, status=status,
+        attendees=attendees_list)
     db.commit()  # persiste l'eventuale token rinfrescato (get_valid_access_token non committa)
     if not res["ok"]:
         raise HTTPException(_ERROR_STATUS.get(res["error"], 502), res["error"] or "Errore Google")

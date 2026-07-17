@@ -1419,12 +1419,25 @@ input[type="number"]::-webkit-inner-spin-button {
 
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .sidebar { transform: translateX(-100%); }
+  .sidebar {
+    transform: translateX(-100%);
+    position: fixed; top: 0; left: 0; height: 100dvh; z-index: 1200;
+    transition: transform .2s ease;
+  }
   .sidebar.open { transform: none; }
   .main-area { margin-left: 0; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
+  .mf-sidebar-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    z-index: 1150; opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .mf-sidebar-backdrop.visible { opacity: 1; pointer-events: auto; }
+  .topbar { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+  .topbar-title { font-size: 15px; }
 }
+.mf-sidebar-backdrop { display: none; }
+@media (max-width: 768px) { .mf-sidebar-backdrop { display: block; } }
 
 
 /* ── v3.4.40 — Searchable select ─────────────────────────────── */

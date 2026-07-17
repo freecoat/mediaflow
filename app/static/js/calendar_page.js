@@ -6,6 +6,41 @@ function calScope() {
   return s ? s.value : 'team';
 }
 
+// ── Visibilità calendari (localStorage: array di id NASCOSTI; 'claqo' = eventi locali) ──
+function _calHidden() {
+  try { return new Set(JSON.parse(localStorage.getItem('mf_cal_hidden') || '[]')); }
+  catch (e) { return new Set(); }
+}
+function _calSetHidden(id, hidden) {
+  const s = _calHidden();
+  if (hidden) s.add(id); else s.delete(id);
+  try { localStorage.setItem('mf_cal_hidden', JSON.stringify([...s])); } catch (e) { /* quota */ }
+}
+
+async function calLoadCalendars() {
+  const box = document.getElementById('cal-list');
+  if (!box) return;
+  const hidden = _calHidden();
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent') || '#6272f5';
+  let rows = '<label class="cal-item"><input type="checkbox" data-cal-id="claqo"' +
+    (hidden.has('claqo') ? '' : ' checked') + '>' +
+    '<span class="cal-dot" style="background:' + accent.trim() + '"></span>' +
+    '<span class="cal-item-name">' + mfT('cal.claqoCalendar') + '</span></label>';
+  try {
+    const d = await (await fetch('/calendar/api/google-calendars')).json();
+    const cals = d.calendars || [];
+    cals.forEach(function (c) {
+      const color = c.color || '#888';
+      rows += '<label class="cal-item"><input type="checkbox" data-cal-id="' + escapeHtml(c.id) + '"' +
+        (hidden.has(c.id) ? '' : ' checked') + '>' +
+        '<span class="cal-dot" style="background:' + escapeHtml(color) + '"></span>' +
+        '<span class="cal-item-name">' + escapeHtml(c.summary) + '</span></label>';
+    });
+    if (!cals.length) rows += '<div class="cal-empty">' + mfT('cal.noCalendars') + '</div>';
+  } catch (e) { /* best-effort */ }
+  box.innerHTML = rows;
+}
+
 async function calFetchEvents(info, success, failure) {
   try {
     const url = '/calendar/api/events?start=' + encodeURIComponent(info.startStr) +
@@ -13,7 +48,9 @@ async function calFetchEvents(info, success, failure) {
     const r = await fetch(url);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
-    const evs = (data.events || []).map(e => ({
+    const hidden = _calHidden();
+    // Eventi locali (calendario "Claqo") — nascondibili dalla sidebar.
+    const evs = hidden.has('claqo') ? [] : (data.events || []).map(e => ({
       id: e.id, title: e.title, start: e.start, end: e.end, allDay: e.all_day,
       classNames: e.external_event_id ? ['cal-synced'] : [],
       extendedProps: {
@@ -28,25 +65,35 @@ async function calFetchEvents(info, success, failure) {
     }));
     // Overlay Google (best-effort, non blocca il calendario). Editabile solo dove
     // il server lo concede: accessRole owner/writer + opt-in scope + non ricorrente.
-    const showG = document.getElementById('cal-show-google');
-    if (showG && showG.checked) {
+    // Sempre fetchato: la visibilita' si sceglie per-calendario dalla sidebar
+    // "I miei calendari", non piu' con un interruttore unico mostra/nascondi.
+    {
       try {
         const gr = await fetch('/calendar/api/google-overlay?start=' +
           encodeURIComponent(info.startStr) + '&end=' + encodeURIComponent(info.endStr));
         if (gr.ok) {
           const gd = await gr.json();
           if (gd.error && window.toast) toast(mfT('cal.google.overlayError'), 'error');
-          (gd.events || []).forEach(g => evs.push({
+          (gd.events || []).filter(g => !hidden.has(g.calendar_id)).forEach(g => evs.push({
             // id composito: gli id locali sono interi puri, nessuna collisione.
             id: 'g:' + g.calendar_id + ':' + g.id,
             title: g.title, start: g.start, end: g.end, allDay: g.all_day,
+            // `editable` deciso dal server (accessRole + opt-in + non ricorrente):
+            // non ricavarlo dal solo read_only, perde la regola dello scope.
             editable: !!g.editable,
-            classNames: g.editable ? ['cal-google', 'cal-google-editable'] : ['cal-google'],
-            extendedProps: { google: true, editable: !!g.editable,
-                             calendar_id: g.calendar_id, event_id: g.id,
-                             // etag = versione dell'evento su Google: viaggia nel PUT
-                             // come If-Match. Va riaggiornato dopo ogni scrittura.
-                             etag: g.etag || null }
+            classNames: g.editable ? ['cal-google', 'cal-google-editable']
+                                   : ['cal-google', 'cal-google-ro'],
+            backgroundColor: g.color || undefined,
+            borderColor: g.color || undefined,
+            extendedProps: {
+              google: true, editable: !!g.editable, read_only: !g.editable,
+              calendar_id: g.calendar_id, event_id: g.id,
+              // etag = versione dell'evento su Google: viaggia nel PUT come
+              // If-Match. Va riaggiornato dopo ogni scrittura.
+              etag: g.etag || null,
+              description: g.description, location: g.location,
+              status: g.status, attendees: g.attendees, calendar: g.calendar
+            }
           }));
         }
       } catch (e) { /* overlay best-effort */ }
@@ -64,10 +111,15 @@ function _fcEventToObj(fc) {
     end: fc.end ? fc.end.toISOString() : null,
     location: p.location || '', meeting_url: p.meeting_url || '',
     status: p.status || 'confirmed', description: p.description || '',
+    attendees: p.attendees || [],
     acquisition_id: p.acquisition_id || null, client_id: p.client_id || null,
     project_id: p.project_id || null
   };
 }
+
+// NB: gli eventi Google NON passano da un converter dell'overlay. Il modale li
+// apre con `external:` e rifa' una GET: i dati dell'overlay possono essere vecchi
+// di minuti, e salvare partendo da quelli rimanderebbe a Google valori stale.
 
 function calNewEvent(prefill) {
   window.openEventModal({ prefill: prefill || {}, onSaved: () => _cal && _cal.refetchEvents() });
@@ -145,9 +197,15 @@ document.addEventListener('DOMContentLoaded', function () {
     eventClick: function (info) {
       const p = info.event.extendedProps;
       if (p.marker) return;
-      if (p.google && !p.editable) return;  // read-only: nessuna azione, come prima
+      // Read-only: dirlo, invece di non fare nulla in silenzio.
+      if (p.google && !p.editable) {
+        if (window.toast) toast(mfT('cal.google.readonly'), 'error');
+        return;
+      }
       info.jsEvent.preventDefault();
       if (p.google) {
+        // `external` (non `event`): il modale rifà una GET e mostra dati freschi.
+        // Passare l'oggetto dell'overlay mostrerebbe partecipanti/descrizione stale.
         window.openEventModal({
           external: { calendar_id: p.calendar_id, event_id: p.event_id },
           onSaved: () => _cal.refetchEvents()
@@ -178,6 +236,12 @@ document.addEventListener('DOMContentLoaded', function () {
   _cal.render();
   const sc = document.getElementById('cal-scope');
   if (sc) sc.addEventListener('change', () => _cal.refetchEvents());
-  const shg = document.getElementById('cal-show-google');
-  if (shg) shg.addEventListener('change', () => _cal.refetchEvents());
+  const list = document.getElementById('cal-list');
+  if (list) list.addEventListener('change', function (ev) {
+    const cb = ev.target.closest('[data-cal-id]');
+    if (!cb) return;
+    _calSetHidden(cb.getAttribute('data-cal-id'), !cb.checked);
+    _cal.refetchEvents();
+  });
+  calLoadCalendars();
 });

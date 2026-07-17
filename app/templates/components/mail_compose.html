@@ -1,0 +1,106 @@
+{# Compose email riusabile: /mail (overlay) + /mail/compose (pop-out standalone). #}
+<style>
+  .mail-compose-modal { display: flex; flex-direction: column; gap: 8px; width: min(760px, 94vw); max-height: 92vh; }
+  .mail-compose-modal.mail-compose-max { width: 96vw; height: 94vh; max-height: 94vh; }
+  .mail-compose-modal.mail-compose-max .mail-editor { max-height: none; flex: 1; }
+  .mail-compose-head { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border2, #333); }
+  .mail-compose-title { font-weight: 600; font-size: 14px; }
+  .mail-draft-status { font-size: 11px; color: var(--text3, #888); margin-left: auto; }
+  .mail-win-btns { display: flex; gap: 2px; }
+  .mail-win-btn { background: none; border: 0; cursor: pointer; color: var(--text3, #888); font-size: 15px; padding: 2px 6px; border-radius: 4px; }
+  .mail-win-btn:hover { background: var(--bg3, #222); color: var(--text, #eee); }
+  .mail-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 4px; border: 1px solid var(--border2, #333); border-radius: 6px; background: var(--bg3, #222); }
+  .mail-tb-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 0 6px; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; color: var(--text, #eee); font-size: 13px; }
+  .mail-tb-btn:hover { background: var(--bg2, #1a1a1a); border-color: var(--border2, #333); }
+  .mail-tb-wide { min-width: auto; }
+  .mail-tb-sel { height: 28px; padding: 0 4px; font-size: 12px; background: var(--bg2, #1a1a1a); color: var(--text, #eee); border: 1px solid var(--border2, #333); border-radius: 4px; }
+  .mail-tb-sep { width: 1px; height: 20px; background: var(--border2, #333); margin: 0 3px; }
+  .mail-tb-color { position: relative; font-weight: 700; }
+  .mail-tb-color input[type=color] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .mail-editor { min-height: 260px; max-height: 50vh; overflow: auto; padding: 10px 12px; border: 1px solid var(--border2, #333); border-radius: 6px; background: #fff; color: #111; font-size: 14px; line-height: 1.5; }
+  .mail-editor:focus { outline: 2px solid var(--accent, #6272f5); }
+  .mail-editor blockquote { border-left: 3px solid #ccc; margin: 6px 0; padding-left: 10px; color: #555; }
+  .mail-editor.mail-drop-hover { outline: 2px dashed var(--accent, #6272f5); outline-offset: -4px; }
+  .mail-att-tray { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mail-att-tray:empty { display: none; }
+  .mail-att-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 8px; background: var(--bg3, #222); border: 1px solid var(--border2, #333); border-radius: 4px; }
+  .mail-att-chip button { background: none; border: 0; color: var(--text3, #888); cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
+  .mail-att-chip button:hover { color: var(--danger, #e5484d); }
+</style>
+<div id="mail-compose" class="modal-overlay">
+  <div class="modal mail-compose-modal">
+    <div class="mail-compose-head">
+      <span class="mail-compose-title" id="mail-compose-title" data-i18n="mail.newMessage">Nuovo messaggio</span>
+      <span class="mail-draft-status" id="mail-draft-status"></span>
+      <span class="mail-win-btns">
+        <button type="button" class="mail-win-btn" data-mail-maximize data-i18n-attr="title" data-i18n="mail.maximize" title="Massimizza">⤢</button>
+        <button type="button" class="mail-win-btn" data-mail-popout data-i18n-attr="title" data-i18n="mail.popout" title="Finestra separata">⧉</button>
+        <button type="button" class="mail-win-btn" onclick="mfMailCloseCompose()" data-i18n-attr="title" data-i18n="mail.close" title="Chiudi">✕</button>
+      </span>
+    </div>
+    <input name="to" class="form-input" list="mail-contacts" autocomplete="off" data-i18n-attr="placeholder" data-i18n="mail.to" placeholder="A">
+    <input name="cc" class="form-input" list="mail-contacts" autocomplete="off" placeholder="Cc">
+    <input name="bcc" class="form-input" list="mail-contacts" autocomplete="off" placeholder="Bcc">
+    <datalist id="mail-contacts"></datalist>
+    <input name="subject" class="form-input" data-i18n-attr="placeholder" data-i18n="mail.subject" placeholder="Oggetto">
+
+    <div class="mail-toolbar" id="mail-toolbar">
+      <select class="mail-tb-sel" data-mail-cmd="fontName" data-i18n-attr="title" data-i18n="mail.tbFont" title="Font">
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="Calibri, sans-serif">Calibri</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+        <option value="Tahoma, sans-serif">Tahoma</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', serif">Times</option>
+        <option value="Garamond, serif">Garamond</option>
+        <option value="'Courier New', monospace">Courier</option>
+      </select>
+      <select class="mail-tb-sel" data-mail-cmd="fontSize" data-i18n-attr="title" data-i18n="mail.tbSize" title="Dimensione">
+        <option value="1" data-i18n="mail.sizeXS">Minuscolo</option>
+        <option value="2" data-i18n="mail.sizeS">Piccolo</option>
+        <option value="3" selected data-i18n="mail.sizeM">Normale</option>
+        <option value="4" data-i18n="mail.sizeL">Medio</option>
+        <option value="5" data-i18n="mail.sizeXL">Grande</option>
+        <option value="6" data-i18n="mail.sizeXXL">Molto grande</option>
+        <option value="7" data-i18n="mail.sizeHuge">Enorme</option>
+      </select>
+      <button type="button" class="mail-tb-btn" data-mail-cmd="bold" data-i18n-attr="title" data-i18n="mail.tbBold" title="Grassetto"><b>B</b></button>
+      <button type="button" class="mail-tb-btn" data-mail-cmd="italic" data-i18n-attr="title" data-i18n="mail.tbItalic" title="Corsivo"><i>I</i></button>
+      <button type="button" class="mail-tb-btn" data-mail-cmd="underline" data-i18n-attr="title" data-i18n="mail.tbUnderline" title="Sottolineato"><u>U</u></button>
+      <label class="mail-tb-btn mail-tb-color" data-i18n-attr="title" data-i18n="mail.tbColor" title="Colore testo">A<input type="color" data-mail-color value="#000000"></label>
+      <span class="mail-tb-sep"></span>
+      <button type="button" class="mail-tb-btn" data-mail-cmd="insertUnorderedList" data-i18n-attr="title" data-i18n="mail.tbBullets" title="Elenco puntato">•</button>
+      <button type="button" class="mail-tb-btn" data-mail-cmd="insertOrderedList" data-i18n-attr="title" data-i18n="mail.tbNumbers" title="Elenco numerato">1.</button>
+      <button type="button" class="mail-tb-btn" data-mail-cmd="formatBlock:blockquote" data-i18n-attr="title" data-i18n="mail.tbQuote" title="Citazione">❝</button>
+      <button type="button" class="mail-tb-btn" data-mail-link data-i18n-attr="title" data-i18n="mail.tbLink" title="Link">🔗</button>
+      <button type="button" class="mail-tb-btn" data-mail-cmd="removeFormat" data-i18n-attr="title" data-i18n="mail.tbClear" title="Rimuovi formattazione">⌫</button>
+      <span class="mail-tb-sep"></span>
+      <button type="button" class="mail-tb-btn" data-mail-attach data-i18n-attr="title" data-i18n="mail.tbAttach" title="Allega file">📎</button>
+      <button type="button" class="mail-tb-btn mail-tb-wide" data-mail-signature data-i18n="mail.tbSignature" title="Firma">✎ Firma</button>
+    </div>
+
+    <div name="body" id="mail-body-editor" class="mail-editor" contenteditable="true"></div>
+
+    <input type="hidden" name="thread_id"><input type="hidden" name="in_reply_to"><input type="hidden" name="references"><input type="hidden" name="draft_id">
+    <input type="file" id="mail-file-input" multiple hidden>
+    <div id="mail-att-tray" class="mail-att-tray"></div>
+
+    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-primary" onclick="mfMailSend()" data-i18n="mail.send">Invia</button>
+      <button class="btn btn-secondary" onclick="mfMailSaveDraftNow()" data-i18n="mail.saveDraft">Salva bozza</button>
+    </div>
+  </div>
+</div>
+
+<div id="mail-signature-modal" class="modal-overlay">
+  <div class="modal" style="display:flex;flex-direction:column;gap:8px;min-width:min(520px,92vw);">
+    <h3 style="margin:0" data-i18n="mail.signatureTitle">Firma email</h3>
+    <p class="muted" style="font-size:12px;margin:0" data-i18n="mail.signatureHint">Inserita automaticamente in fondo ai nuovi messaggi.</p>
+    <div id="mail-signature-editor" class="mail-editor" contenteditable="true" style="min-height:120px"></div>
+    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-primary" onclick="mfMailSaveSignature()" data-i18n="mail.save">Salva</button>
+      <button class="btn btn-secondary" onclick="closeModal('mail-signature-modal')" data-i18n="mail.cancel">Annulla</button>
+    </div>
+  </div>
+</div>

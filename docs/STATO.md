@@ -8,7 +8,32 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.250** — 15 luglio 2026 — Corpo email leggibile + drag&drop Google protetto da etag
+**v3.5.0-alpha.172.262** — 15 luglio 2026 — Merge `feat/mobile-responsive-email` → main (programma email+calendario fasi 2/3/4 + mobile responsive)
+
+### α.172.262 ✅ (merge del ramo orfano — 15 lug, su main)
+
+**Perché**: Matteo segnala 4 problemi (`/mail` lenta, colonne non ridimensionabili; `/calendar` senza "i miei calendari" e con modifica evento incompleta; `/contacts` brutta e senza import/export). Diagnosi: **3 su 4 erano già risolti** sul ramo `feat/mobile-responsive-email`, mai mergiato. Il ramo si stacca il 7 lug (`1eb7fdd`); da lì main è andato avanti 45 commit e ha **re-implementato** il calendario Google per conto suo. Prova: sia `8400115` (ramo) sia `1beff59` (main) si dichiaravano **α.172.248**.
+
+**Cosa arriva dal ramo** (22 commit, 107 file, +5477): perf mail parallelizzata, sidebar "I miei calendari" con toggle per-calendario, partecipanti+descrizione sugli eventi, compose pro, etichette ad albero, filtri Gmail, risposta automatica, restyle sleek, AI copilot mail, mobile responsive.
+
+**Regola di merge applicata**: l'architettura **etag/If-Match/accessRole di main vince**; il valore del ramo è stato **portato sopra**, mai al posto. 105 file auto-mergiati, 12 conflitti risolti a mano.
+- **Calendario**: gli endpoint singolari del ramo (`/calendar/api/google-event`, senza etag) **cancellati**; `update_external_event` di main **esteso** con `description`/`attendees`/`status`/`meeting_url` + `sendUpdates=all`, mantenendo `If-Match`. `_normalize_google_event` tiene la firma di main (6 test la pinnano posizionalmente) + `cal_color` come 6° kwarg opzionale, ed espone i campi del ramo.
+- **Mail**: parallelismo del ramo (`ThreadPoolExecutor`, 25 round-trip seriali → pochi batch) **+** correttezza di main (oggetto dal primo messaggio, `doseq`, default sempre presenti). `_thread_headers` emette sia `message_count` sia `msg_count`: i due renderer leggono nomi diversi.
+- **Sicurezza mail intatta**: `_mailRenderBody` resta quello di main — `sandbox="allow-same-origin"` e **mai `allow-scripts`**, escaping di `&` in `srcdoc`, CSS iniettato, auto-altezza. La versione del ramo avrebbe rotto `test_mail_body_frame_never_allows_scripts`.
+
+**Difetti trovati e chiusi durante il merge** (nessuno dei due lati li aveva):
+- **Overlay Google morto in silenzio**: il gate `#cal-show-google` di main puntava a una spunta che il template del ramo elimina → `null` → overlay mai renderizzato, senza errori né test rossi. Ora la visibilità è per-calendario dalla sidebar.
+- **Luogo/descrizione/partecipanti ciechi sugli eventi Google**: il modale li lasciava hardcoded vuoti e non li inviava → modifiche perse in silenzio. Ora popolati dalla GET fresca e salvati.
+- **Trappola multipart**: un campo con stringa vuota arriva a FastAPI come `None`, **identico a un campo non inviato** (verificato). Senza distinguerli, svuotare descrizione/luogo/partecipanti sarebbe stato impossibile. Introdotto il marker `full_edit` (il modale possiede quei campi, il vuoto è voluto); il drag&drop non lo manda e tocca solo le date.
+- **Chiavi i18n duplicate** dall'auto-merge: `cal.google.readonly` e `mail.noSubject`/`mail.nosubject` definite da entrambi i lati (in JS vince l'ultima, in silenzio). Deduplicate. Rimosse `cal.showGoogle` (spunta non più esistente) e `_fcGoogleToObj` (dead code che avrebbe servito dati stale).
+- **Semantica editable**: il ramo guardava il solo `accessRole`; main richiede **anche** l'opt-in dello scope. Vince main; i test del ramo aggiornati alla regola più stretta, + caso nuovo che documenta "owner senza opt-in = read-only".
+- **Scope OAuth regrediti** (2 test rossi alla chiusura merge): la risoluzione aveva preso il bundle base del ramo — `calendar` **pieno** nel default — che contraddice l'intera architettura opt-in α.248 (write eventi solo via `calendar.events` esplicito) e rende ridondante `CALENDAR_WRITE_SCOPES`. Ripristinato il bundle least-privilege di main (`calendar.app.created`+`calendar.readonly`); write resta opt-in. `GMAIL_SCOPES` invece **resta esteso dal ramo** (`gmail.modify`+`settings.basic`+`contacts.readonly`): è richiesto dalle feature mail-client mergiate (etichette/filtri/vacation/rubrica), non un errore. Aggiornati 3 test stale (`test_oauth_google_scopes` del ramo asseriva full calendar; `test_oauth_router_state` asseriva `gmail.readonly`). 1380 verdi.
+
+**Rinumerazione**: le versioni del ramo α.246-257 → **α.251-262** (α.248 del ramo = sidebar → α.253; da non confondere con α.248 di main = eventi Google editabili).
+
+**Debito noto lasciato aperto** (fuori scope, tracciato): nomi campo doppi (`message_count`/`msg_count`, `read_only`/`editable`) mantenuti entrambi per non rompere nessuno dei due renderer; hidden input `evm-g-calendar`/`evm-g-event` orfani; `update_google_event`/`delete_google_event` senza router ma ancora coperte da test unit.
+
+### α.172.250 ✅ (15 lug, su main — due difetti indipendenti, entrambi limiti noti dichiarati)
 
 ### α.172.250 ✅ (15 lug, su main — due difetti indipendenti, entrambi limiti noti dichiarati)
 - **`/mail` corpo email 300×150**: `.mail-body-frame` **non esisteva in nessun CSS** dalla F1 (α.244) → l'iframe cadeva sul default UA. Aggiunto il blocco `mail-*` in `main.css` + **auto-altezza** `mfMailFitFrame`. Per misurare il documento interno serve `sandbox="allow-same-origin"` (era `sandbox=""`); **mai `allow-scripts`** — verificato a runtime con email ostile (`<script>`+`img onerror` bloccati). Stile iniettato nel frame (font 15px: le email non portano font-size di base). Fix collaterale: `&` non escapato in `srcdoc` mangiava le entità.
@@ -54,6 +79,96 @@
 
 ### α.172.245 ✅ (storico sotto)
 **v3.5.0-alpha.172.245** — 7 luglio 2026 — Client email Sotto-fase 2: integrazione CRM (trattativa)
+
+---
+
+## Storico ramo `feat/mobile-responsive-email` (mergiato in α.172.262)
+
+> Voci come scritte sul ramo, **rinumerate** al merge (α.246-257 → α.251-262): i numeri
+> originali collidevano con α.248-250 di main. Il "Prossimo step" di ogni voce è quello
+> di allora e va letto come storia, non come piano corrente.
+
+### α.172.261 ✅ (era α.256 — Sotto-fase 4 — AI copilot mail — 12 lug, TDD+smoke browser)
+- **Rispondi con AI** (`POST /mail/api/ai/reply`, `provider.complete`→bozza HTML dal thread→compose precompilato, AI-propone-utente-invia). **Ricerca semantica** (`POST /mail/api/ai/search`, NL→query Gmail). **Estrai** (inietta corpo nel copilot globale `#cp-input`+`copilotSend`, riusa registry `propose_*` verso quotazioni/acquisizioni/contatti). Provider per-utente (`get_provider_for_user`), degrada senza config. +3 test (1217 tot). i18n +9. Smoke browser reale verde (bottoni AI, flusso ricerca, 0 errori console). **CHIUDE programma email+calendario (fasi 1→4).**
+
+**Prossimo step**: **smoke live completo Matteo** (reconnect Google, prova tutto 250-256 incl. Rispondi-AI/Ricerca-AI/Estrai — richiedono provider AI configurato in Impostazioni→AI). Poi decidere: merge ramo `feat/mobile-responsive-email` su main + push, oppure **Asset Library redesign** (backlog, [[project_asset_library_redesign_backlog]]). Nota: Fase 4 qui = slice mail (reply/search/extract); estensioni AI più profonde (azioni mailbox proposte, calendario semantico) restano possibili follow-up. Ramo NON pushato.
+
+### α.172.260 ✅ (era α.255 — Sotto-fase 3 — restyle sleek — 12 lug, ramo feat/mobile-responsive-email, CSS-only + smoke visivo)
+- Blocco `.mail-*` in `sleek.css` (`body.sleek-mode`): righe thread/etichette/albero/lettura/compose/tab allineati al linguaggio sleek (radius, border tenui, hover morbido, accent indigo, micro-label). Pop-out applica sleek da `localStorage.mf_sleek`. Nessun cambio funzionale. Smoke browser reale verde (lista+compose coerenti, 0 errori console, screenshot ok).
+
+**Prossimo step**: **Sotto-fase 4 — AI copilot profondo** (mail+calendario). Capacità: ricerca semantica (NL→query Gmail), bozze/risposte AI (con conferma), estrazione dati email → quotazioni/acquisizioni/contatti (riusa registry `propose_*`), azioni mailbox con conferma, assegnazione email/contatti a progetto. Riusa infra copilot esistente (drawer FAB, AIAction propose/apply). Asset Library = backlog. Ramo NON pushato. **AZIONE MATTEO smoke 250-255**: reconnect Google; poi /mail completo + verifica look sleek.
+
+### α.172.259 ✅ (era α.254 — Sotto-fase 2d — rubrica/filtri/auto-reply — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser)
+- Impostazioni ⚙️ **a tab** (Generali/Rubrica/Filtri/Risposta automatica). **Rubrica** read-only People (ricerca+Scrivi). **Filtri Gmail CRUD** (criteri→azioni, `gmail.list/create/delete_filter` + `GET/POST/DELETE /mail/api/filters`). **Vacation responder** (attiva/oggetto/corpo/solo-contatti/date, `get/set_vacation` + `GET/POST /mail/api/vacation`). Scope `gmail.settings.basic`+`contacts.readonly` già presenti. +10 test (1214 tot). i18n +20 chiavi. Smoke browser reale verde (4 tab, rubrica, filtri, vacation, 0 errori console). **CHIUDE Sotto-fase 2 (Email client core: 2a+2b+2c+2d).**
+
+**Prossimo step**: **Sotto-fase 3 — Restyle sleek** del client email (+calendario): allineare a `sleek.css` esistente (densità, colori, spaziature, coerenza componenti) — NON nuovo design. Poi **4 — AI copilot profondo** (ricerca semantica mail, bozze AI con conferma, estrazione→quotazioni/acquisizioni/contatti, azioni mailbox, assegnazione email/contatti a progetto). Asset Library = backlog. Ramo NON pushato. **AZIONE MATTEO smoke 250-254**: reconnect Google (`gmail.modify`+`gmail.settings.basic`); poi /mail completo: lista veloce, mark-read, compose pro (font/massimizza/pop-out/allegati/drag&drop/autosave/firma), etichette albero+ricerca avanzata, ⚙️ tab (rubrica/filtri/auto-reply).
+
+### α.172.258 ✅ (era α.253 — Sotto-fase 2b — cartelle/etichette — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser)
+- **Sidebar etichette ad albero** (Gmail `Parent/Child`) collassabile + badge non-letti + evidenza attiva. **CRUD**: + Nuova (modal nome+parent), rinomina ✎ (prompt, `/` annida/sposta), elimina 🗑 (conferma). Backend `gmail.create/rename/delete_label` + `POST/PUT/DELETE /mail/api/labels[/{id}]` (scope `gmail.modify`). **Ricerca avanzata** (⋯): Da/A/Oggetto/parole/allegati/date → query Gmail. +9 test (1204 tot). i18n +22 chiavi. Smoke browser reale verde (tree/collapse/query/modal, 0 errori console).
+
+**Prossimo step**: **Sotto-fase 2d — rubrica/filtri/auto-reply** (contatti gestibili, filtri Gmail, risposta automatica; scope `gmail.settings.basic` già richiesto). Poi **3 restyle sleek completo** (`sleek.css`) → **4 AI copilot profondo**. Asset Library = backlog. Ramo NON pushato. **AZIONE MATTEO smoke 250-253**: reconnect Google (`gmail.modify`); poi /mail: albero etichette (crea/annida/rinomina/elimina), ricerca avanzata, + tutto 250-252 (lista veloce, mark-read, ⚙️ impostazioni, compose pro).
+
+### α.172.257 ✅ (era α.252 — Compose pro + impostazioni + auto-sync — 12 lug, ramo feat/mobile-responsive-email, TDD+smoke browser; feedback Matteo /remote-control 2° giro)
+- **Mark-read auto** all'apertura thread (leggero, no reload). **Pannello ⚙️ impostazioni** in /mail (mark-read/autosave/finestra/auto-refresh/font/firma → `users.mail_prefs` JSON, `GET/POST /mail/api/prefs`, auto-migrate boot). **Auto-sync** polling+focus (no refresh manuale; ↻ per sync immediato). **Autosave bozze** debounce 2.5s (`PUT /mail/api/draft/{id}`+`gmail.update_draft`). **Compose 760px + massimizza ⤢ + pop-out ⧉** (`/mail/compose` standalone riusa partial `components/mail_compose.html`). **9 font + 7 size**, font default nel corpo inviato. **Icone SVG** azione (stella/archivia/cestino). +6 test (1195 tot). i18n +28 chiavi. Smoke browser reale verde (toolbar/pop-out/settings, 0 errori console).
+
+**Prossimo step**: **Sotto-fase 2b — cartelle/etichette** (albero, crea/rinomina/annida sottocartelle) + ricerca avanzata. Poi 2d rubrica/filtri/auto-reply → 3 restyle sleek completo (`sleek.css`) → 4 AI copilot. Asset Library = backlog (dopo email+calendar). Ramo NON pushato. **AZIONE MATTEO smoke 250-252**: reconnect Google (`gmail.modify`), poi `/mail`: lista veloce+auto-refresh, apri thread→si segna letto, ⚙️ impostazioni, "Scrivi" toolbar/9 font/massimizza/pop-out/allega multipli/drag&drop/autosave bozza/firma.
+
+### α.172.256 ✅ (era α.251 — Compose Gmail-like — 12 lug, ramo feat/mobile-responsive-email, TDD; feedback Matteo /remote-control)
+- **Editor WYSIWYG** `contentEditable`+toolbar `execCommand` (bold/italic/underline/colore/liste/quote/link/clear/font/size), invio **HTML**. **Allegati multipli accumulanti** (array `_mailAtts`, chip rimovibili — risolve limite "1 file" del FileList nativo). **Drag&drop** file sull'editor. **Firma persistente** `users.email_signature` (modal ✎ Firma, auto-inserita nei nuovi msg, `GET/POST /mail/api/signature`, auto-migrate al boot). Backend send invariato. +3 test (1189 tot). i18n 5 lingue (23 chiavi).
+
+**Prossimo step**: **Sotto-fase 2b — cartelle/etichette** (albero, crea/rinomina/annida sottocartelle) + ricerca avanzata. Poi 2d rubrica/filtri/auto-reply → 3 sleek → 4 AI copilot. Asset Library = backlog (dopo email+calendar). Ramo NON pushato. **AZIONE MATTEO smoke 250+251**: 1) riconnetti Google (scope `gmail.modify`); 2) `/mail` → lista veloce (no più 5s); apri "Scrivi" → toolbar formattazione, allega 2+ file, drag&drop, ✎ Firma salva+auto-inserisce; invia HTML.
+
+### α.172.255 ✅ (era α.250 — Hotfix perf email — 12 lug, ramo feat/mobile-responsive-email, TDD; feedback Matteo /remote-control)
+- **Fix lentezza 5s**: `gmail.list_threads(enrich)` e `list_labels(counts)` facevano N+1 chiamate HTTP **sequenziali** (urllib bloccante) → parallelizzate con `ThreadPoolExecutor` (8 worker). Refresh post-invio eredita il guadagno. Nessun cambio API/scope/migrazione. +2 test.
+
+### α.172.249 ✅ (Sotto-fase 2a/4 — azioni & organizzazione email — 11 lug, ramo feat/mobile-responsive-email, TDD; spec 2026-07-11)
+- **`/mail` operativo Gmail-native**: letto/non-letto, stella, archivia, cestino, sposta-in-etichetta (singolo hover + bulk multi-select con barra azioni). Conteggi non-letti in nav. Paginazione "Carica altro". Rispondi-a-tutti.
+- Backend: `modify_thread`/`trash_thread`/`untrash_thread`/`apply_action` + `list_labels(counts)` + `POST /mail/api/threads/action`. Enrichment `starred`.
+- **OAuth**: scope email → `gmail.modify` + `gmail.settings.basic` (riconnessione necessaria).
+- 1184 test verdi (+7). i18n 5 lingue.
+
+**Prossimo step**: **Sotto-fase 2b** — cartelle/etichette (albero, crea/rinomina/annida sottocartelle) + ricerca avanzata. Poi 2c compose avanzato, 2d rubrica/filtri/auto-reply, poi 3 sleek, 4 AI. Prereq smoke 2a: riconnettere Google (scope `gmail.modify`). Ramo NON pushato.
+
+### α.172.248 ✅ (storico sotto)
+**v3.5.0-alpha.172.248** — 11 luglio 2026 — Calendario: i miei calendari (sidebar Google)
+
+### α.172.248 ✅ (Sotto-fase 1/4 — i miei calendari — 11 lug, ramo feat/mobile-responsive-email, TDD; spec 2026-07-11)
+Programma 4 sotto-fasi (post-decisioni Matteo): **1. Calendari** ✅ → 2. Email client core (Thunderbird: stato/organizzazione/compose avanzato/rubrica/filtri/cartelle+sottocartelle/auto-reply/ricerca) → 3. Restyling sleek (allineo `sleek.css`) → 4. AI copilot profondo (ricerca semantica + compilazione/bozze + estrazione dati per quotazioni/acquisizioni/contatti + azioni mailbox + assegnazione email/contatti a progetto).
+
+- **Sidebar "I miei calendari"** in `/calendar`: lista calendari Google (pallino colore + toggle per-calendario), sostituisce checkbox "Mostra Google". Voce fissa "Claqo". Overlay filtrato per calendario visibile, visibilità in `localStorage`. Layout 2-col responsive.
+- Endpoint `GET /calendar/api/google-calendars` → `list_calendars` (best-effort). i18n 5 lingue. Test `test_calendar_list` (4). 1178+ test verdi.
+
+**Prossimo step**: **Sotto-fase 2 — Email client core** (brainstorming+spec propri). Prereq smoke α.248: account Google riconnesso + People API → lista calendari popolata; toggle per-calendario funzionanti. Ramo `feat/mobile-responsive-email` NON pushato.
+
+### α.172.247 ✅ (storico sotto)
+**v3.5.0-alpha.172.247** — 7 luglio 2026 — Fix email + calendario reale (edit eventi Google, inviti, autocomplete)
+
+### α.172.247 ✅ (Fix email + calendario reale — 7 lug, ramo feat/mobile-responsive-email, TDD)
+Debug su segnalazioni Matteo (email visualizzazione/compose rotti, calendario limitato).
+
+- **Email `/mail`**: (E4) **compose riparato** — modal non si apriva mai: `mfMailCompose` toglieva `.hidden` ma `.modal-overlay` si mostra solo con `.open`. Ora `openModal`/`closeModal`. (E1) **corpo visibile** — iframe `.mail-body-frame` senza dimensioni → `width:100%`+`min-height:420px`+sandbox `allow-popups`. (E2) **lista arricchita** — mittente/oggetto/data/non-letto (`list_threads(enrich=True)`→`_thread_headers`). (E3) **autocomplete** `<datalist>` da `list_contacts` (People API connections+otherContacts), endpoint `/mail/api/contacts`.
+- **Calendario `/calendar`**: (C2) **edit eventi Google esistenti** — overlay editabile (owner/writer), click→modal, drag→PATCH origine; `PUT/DELETE /calendar/api/google-event`. (C4) **inviti** — campo Partecipanti→`attendees`+`sendUpdates=all`; +descrizione nel modal. (C1) tutti i calendari con colore; read-only tenui.
+- **OAuth ⚠️**: scope Calendar → **`calendar` full**; +`contacts.readonly`/`contacts.other.readonly` opt-in email. Modello least-privilege Fase-A superato per volontà utente (client reale).
+- 1174 test verdi (+13). i18n 5 lingue. `_normalize_google_event`/`list_threads`/`_event_to_google` firma cambiata.
+
+**Prossimo step / AZIONE MATTEO (prereq smoke)**:
+1. **Google Cloud**: abilitare **People API** (oltre Calendar+Gmail). 2. **Riconnettere account Google** (`/settings → Account`, disconnetti+riconnetti) per re-consenso nuovi scope. 3. Smoke: `/mail` (compose apre, lista con mittente/oggetto, autocomplete A:, corpo email visibile); `/calendar` (vedi calendari Google, click evento Google→modifica, aggiungi partecipante→invito, drag). Ramo `feat/mobile-responsive-email` NON pushato.
+
+### α.172.246 ✅ (storico sotto)
+**v3.5.0-alpha.172.246** — 7 luglio 2026 — Mobile responsive Sotto-fase A: email + trattative
+
+### α.172.246 ✅ (Mobile responsive Sotto-fase A — email + trattative — 7 lug, ramo feat/mobile-responsive-email, 6 task TDD; spec+plan 2026-07-07)
+- **`/mail` e `/acquisitions` raggiungibili da smartphone**: esentate dal redirect mobile (`_MOBILE_REDIR_EXEMPT` in main.py) → isole desktop-responsive; linkate dal drawer `/m` (gruppo "Commerciale": Email + Trattative).
+- **Shell desktop responsive** (`base.html`+`main.css`, `@media ≤768px`): sidebar off-canvas (`position:fixed`+`translateX`), backdrop `#mf-sidebar-backdrop`, `mfToggleSidebar()` viewport-aware (mobile→`.open`, desktop→`.collapsed`), `mfCloseSidebarMobile()`, topbar compatta + safe-area. Fondamenta riusabili per le prossime sotto-fasi.
+- **`/mail` colonna singola** (`mail.html`+`mail.js`): stili inline spostati in `<style>` (per override responsive); attributo `data-mail-view` ∈ {list,read,labels} + `mailMobileView(view)`; barra mobile "☰ Etichette"/"← Indietro"; compose full-screen. Apertura thread→`read`, click etichetta→`list`.
+- **`/acquisitions` touch** (`@media ≤768px`): dettaglio trattativa full-screen overlay, tab (incl. Email F2) `overflow-x` scrollabili, kanban `scroll-snap` (colonne 78vw). Porta l'intera pipeline CRM su mobile (bonus "anche manager").
+- Nessun modello/endpoint/migrazione nuovi. Test: `test_mobile` (esenzione redirect UA mobile + backdrop + drawer), `test_mail_page` (vista-stato), `test_acquisitions_page` (media query).
+
+**Prossimo step**: smoke Matteo su telefono reale, poi **Sotto-fase mobile B** (Calendario `/calendar` + Documenti Drive responsive). Ramo `feat/mobile-responsive-email` NON pushato (parte da feat/mail-client-phase2 = F2 non ancora mergiato).
+
+---
+
+## Storico main (pre-merge)
 
 ### α.172.245 ✅ (Client email Sotto-fase 2 — CRM trattativa — 7 lug, ramo feat/mail-client-phase2, 6 task TDD; spec+plan 2026-07-07)
 - **`EmailLink`** (tabella `email_links`, tenant-scoped, soft-delete, pattern `DocumentLink`): aggancia thread Gmail alle **trattative** (`acquisition_id`) salvando solo metadata + `thread_id`, nessuno storage corpo. Migrazione `scripts/migrate_email_links.py` + voce strumenti (tabella creata anche da `create_all` al boot).

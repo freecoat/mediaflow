@@ -13,6 +13,11 @@ Scope di default:
 - google: openid email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.readonly
 - microsoft: openid email profile offline_access User.Read Mail.Send Files.ReadWrite
 
+Nota (α.172.262, merge feat/mobile-responsive-email): il bundle base resta
+least-privilege (calendar.app.created+calendar.readonly). La scrittura su eventi
+Google esistenti è opt-in esplicito via CALENDAR_WRITE_SCOPES (calendar.events),
+mai `calendar` pieno nel default — l'architettura opt-in di main vince sul ramo.
+
 Refresh token: cifrato via Fernet AI_KEY_ENCRYPTION_KEY (riuso α.137).
 """
 from __future__ import annotations
@@ -72,9 +77,17 @@ PROVIDERS = {
 
 # Scope Gmail richiesti SOLO su opt-in email (autorizzazione incrementale).
 # NON inseriti nel bundle PROVIDERS["google"]["scopes"] di default.
+# contacts.readonly + contacts.other.readonly: alimentano l'autocomplete indirizzi
+# in /mail — rubrica Google (connections) + contatti auto-salvati dalle email
+# scambiate (otherContacts = "indirizzi recenti"). Opt-in con l'email.
+# α.172.249: gmail.modify (azioni: letto/stella/archivia/cestino/sposta/etichetta,
+# include readonly) + gmail.settings.basic (filtri + auto-reply, Sotto-fase 2d).
 GMAIL_SCOPES = (
-    "https://www.googleapis.com/auth/gmail.readonly "
-    "https://www.googleapis.com/auth/gmail.compose"
+    "https://www.googleapis.com/auth/gmail.modify "
+    "https://www.googleapis.com/auth/gmail.compose "
+    "https://www.googleapis.com/auth/gmail.settings.basic "
+    "https://www.googleapis.com/auth/contacts.readonly "
+    "https://www.googleapis.com/auth/contacts.other.readonly"
 )
 
 # Scope scrittura calendario richiesti SOLO su opt-in esplicito (design 2026-07-15,
