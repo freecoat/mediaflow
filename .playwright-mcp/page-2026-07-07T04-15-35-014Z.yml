@@ -1,0 +1,225 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - generic "Info versione" [ref=f1e4] [cursor=pointer]:
+        - generic [ref=f1e5]: claqo
+      - navigation [ref=f1e6]:
+        - generic [ref=f1e7]:
+          - generic [ref=f1e8]: Main
+          - link "Dashboard" [ref=f1e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=f1e11]
+            - generic [ref=f1e16]: Dashboard
+        - generic [ref=f1e17]:
+          - generic [ref=f1e18]: Records
+          - link "Clients" [ref=f1e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=f1e21]
+            - generic [ref=f1e25]: Clients
+          - link "Projects" [ref=f1e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=f1e28]
+            - generic [ref=f1e33]: Projects
+          - link "Acquisitions" [ref=f1e34] [cursor=pointer]:
+            - /url: /acquisitions
+            - img [ref=f1e36]
+            - generic [ref=f1e40]: Acquisitions
+          - link "Calendar" [ref=f1e41] [cursor=pointer]:
+            - /url: /calendar
+            - img [ref=f1e43]
+            - generic [ref=f1e45]: Calendar
+          - link "Email" [ref=f1e46] [cursor=pointer]:
+            - /url: /mail
+            - img [ref=f1e48]
+            - generic [ref=f1e51]: Email
+        - generic [ref=f1e52]:
+          - generic [ref=f1e53]: Operations
+          - link "Planning" [ref=f1e54] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=f1e56]
+            - generic [ref=f1e58]: Planning
+          - link "Team" [ref=f1e59] [cursor=pointer]:
+            - /url: /team
+            - img [ref=f1e61]
+            - generic [ref=f1e66]: Team
+          - link "Work hours" [ref=f1e67] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=f1e69]
+            - generic [ref=f1e72]: Work hours
+        - generic [ref=f1e73]:
+          - generic [ref=f1e74]: Quotes
+          - link "Price List" [ref=f1e75] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=f1e77]
+            - generic [ref=f1e80]: Price List
+          - link "Quotes" [ref=f1e81] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=f1e83]
+            - generic [ref=f1e86]: Quotes
+        - generic [ref=f1e87]:
+          - generic [ref=f1e88]: Finance
+          - link "Cost Report" [ref=f1e89] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=f1e91]
+            - generic [ref=f1e93]: Cost Report
+          - link "SAL — Avanzamento" [ref=f1e94] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=f1e96]
+            - generic [ref=f1e99]: SAL — Avanzamento
+          - link "Invoicing" [ref=f1e100] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=f1e102]
+            - generic [ref=f1e104]: Invoicing
+          - link "Cashflow & Forecast" [ref=f1e105] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=f1e107]
+            - generic [ref=f1e110]: Cashflow & Forecast
+          - link "YoY Reports + Export" [ref=f1e111] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=f1e113]
+            - generic [ref=f1e116]: YoY Reports + Export
+          - link "Suppliers" [ref=f1e117] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=f1e119]
+            - generic [ref=f1e122]: Suppliers
+          - link "Overhead costs" [ref=f1e123] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=f1e125]
+            - generic [ref=f1e128]: Overhead costs
+        - generic [ref=f1e129]:
+          - generic [ref=f1e130]: Media
+          - link "Asset Library" [ref=f1e131] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=f1e133]
+            - generic [ref=f1e135]: Asset Library
+          - link "Filesystem scan" [ref=f1e136] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=f1e138]
+            - generic [ref=f1e142]: Filesystem scan
+          - link "Asset In/Out" [ref=f1e143] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=f1e145]
+            - generic [ref=f1e150]: Asset In/Out
+          - link "Physical Assets" [ref=f1e151] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=f1e153]
+            - generic [ref=f1e155]: Physical Assets
+          - link "Delivery Specs" [ref=f1e156] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=f1e158]
+            - generic [ref=f1e163]: Delivery Specs
+          - link "Import → Quote" [ref=f1e164] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=f1e166]
+            - generic [ref=f1e169]: Import → Quote
+          - link "Storage" [ref=f1e170] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=f1e172]
+            - generic [ref=f1e176]: Storage
+          - link "KDM/DKDM" [ref=f1e177] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=f1e179]
+            - generic [ref=f1e182]: KDM/DKDM
+        - generic [ref=f1e183]:
+          - generic [ref=f1e184]: Platform
+          - link "Tenants" [ref=f1e185] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=f1e187]
+            - generic [ref=f1e191]: Tenants
+        - generic [ref=f1e192]:
+          - generic [ref=f1e193]: Configuration
+          - link "Departments" [ref=f1e194] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=f1e196]
+            - generic [ref=f1e200]: Departments
+          - link "Settings" [ref=f1e201] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=f1e203]
+            - generic [ref=f1e206]: Settings
+        - generic [ref=f1e207]:
+          - generic [ref=f1e208]: Help
+          - link "Manual" [ref=f1e209] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=f1e211]
+            - generic [ref=f1e213]: Manual
+        - generic [ref=f1e214]:
+          - generic [ref=f1e215]: Administration
+          - link "Users" [ref=f1e216] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=f1e218]
+            - generic [ref=f1e221]: Users
+          - link "Roles & Permissions" [ref=f1e222] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=f1e224]
+            - generic [ref=f1e227]: Roles & Permissions
+          - link "Trash" [ref=f1e228] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=f1e230]
+            - generic [ref=f1e233]: Trash
+          - link "Audit log" [ref=f1e234] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=f1e236]
+            - generic [ref=f1e239]: Audit log
+      - link "Logout" [ref=f1e241] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=f1e243]
+        - generic [ref=f1e246]: Logout
+    - generic [ref=f1e247]:
+      - banner [ref=f1e248]:
+        - button "Mostra/nascondi menu (Ctrl+B)" [ref=f1e250] [cursor=pointer]:
+          - img [ref=f1e251]
+        - generic [ref=f1e254]:
+          - button "Open theme palette" [ref=f1e256] [cursor=pointer]:
+            - img [ref=f1e258]
+          - button "Ingrandisci visualizzazione" [ref=f1e265] [cursor=pointer]:
+            - img [ref=f1e267]
+          - button "🇬🇧" [ref=f1e271] [cursor=pointer]:
+            - generic [ref=f1e272]: 🇬🇧
+          - button "8" [ref=f1e273] [cursor=pointer]:
+            - img [ref=f1e275]
+            - generic [ref=f1e278]: "8"
+          - generic "admin@mediaflow.it" [ref=f1e279]:
+            - generic [ref=f1e280]: Admin MediaFlow
+            - generic [ref=f1e281]: admin
+            - link "Logout" [ref=f1e282] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=f1e283]
+      - main [ref=f1e286]:
+        - generic [ref=f1e287]:
+          - complementary [ref=f1e288]:
+            - button "Compose" [ref=f1e289] [cursor=pointer]
+          - textbox "Search mail…" [ref=f1e291]
+          - generic [ref=f1e293]:
+            - paragraph [ref=f1e294]: Connect Gmail to use mail
+            - link "Connect Gmail" [ref=f1e295] [cursor=pointer]:
+              - /url: /auth/oauth/google/start?scopes=email
+  - button "Apri Claqo Bot" [ref=f1e296] [cursor=pointer]:
+    - img "Claqo bot" [ref=f1e297]
+  - dialog "Copilot AI" [ref=f1e298]:
+    - generic [ref=f1e299]:
+      - img "Claqo bot" [ref=f1e301]
+      - heading "Copilot" [level=3] [ref=f1e302]
+      - generic [ref=f1e303]: —
+      - button "Nuova conversazione" [ref=f1e304] [cursor=pointer]:
+        - img [ref=f1e305]
+      - button "Chiudi" [ref=f1e306] [cursor=pointer]:
+        - img [ref=f1e307]
+    - generic [ref=f1e310]:
+      - generic [ref=f1e311]: "Storia:"
+      - button "(new) ▾" [ref=f1e313] [cursor=pointer]
+    - generic [ref=f1e316]:
+      - button "📥" [ref=f1e317] [cursor=pointer]
+      - button "🔎" [ref=f1e318] [cursor=pointer]
+    - generic [ref=f1e319]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=f1e320] [cursor=pointer]:
+        - img [ref=f1e321]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=f1e323]
+      - button "Send" [ref=f1e324] [cursor=pointer]
+  - generic [ref=f1e325]:
+    - generic [ref=f1e326]:
+      - generic [ref=f1e327]: 🔔 Notifiche
+      - generic [ref=f1e328]:
+        - button "✓ Tutte lette" [ref=f1e329] [cursor=pointer]
+        - button "✕" [ref=f1e330] [cursor=pointer]
+    - generic [ref=f1e332]: Loading…
+  - text: ▾ ▾

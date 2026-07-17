@@ -1,0 +1,25 @@
+- generic [ref=f2e3]:
+  - generic [ref=f2e4]:
+    - img "Claqo" [ref=f2e5]
+    - generic [ref=f2e6]: claqo
+  - paragraph [ref=f2e7]: Sign in
+  - generic [ref=f2e8]:
+    - generic [ref=f2e9]:
+      - generic [ref=f2e10]: Email
+      - textbox "nome@azienda.it" [active] [ref=f2e11]: admin@mediaflow.it
+    - generic [ref=f2e12]:
+      - generic [ref=f2e13]: Password
+      - textbox "••••••••" [ref=f2e14]: admin123
+    - button "Sign in" [ref=f2e15] [cursor=pointer]
+  - generic [ref=f2e16]:
+    - strong [ref=f2e17]: "Account demo:"
+    - text: •
+    - code [ref=f2e18]: admin@mediaflow.it
+    - text: /
+    - code [ref=f2e19]: admin123
+    - text: (admin)
+    - text: •
+    - code [ref=f2e20]: editor@mediaflow.it
+    - text: /
+    - code [ref=f2e21]: editor123
+    - text: (Luca Bianchi · staff)

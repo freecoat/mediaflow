@@ -1,4 +1,28 @@
 {% extends "base.html" %}
+{% block head %}
+<style>
+  .mail-thread-row {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 8px 10px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent; transition: background .15s;
+  }
+  .mail-thread-row:hover { background: var(--hover, rgba(255,255,255,.06)); }
+  .mail-thread-row.active { border-color: var(--accent, #6272f5); }
+  .mail-thread-from { font-size: 13px; font-weight: 600; color: var(--text, #fff); }
+  .mail-thread-subject { font-size: 13px; color: var(--text, #fff); }
+  .mail-thread-snippet { font-size: 11px; color: var(--text3, #888); }
+  .mail-thread-date { font-size: 10px; color: var(--text3, #888); align-self: flex-end; }
+  .mail-msg-head { margin-bottom: 8px; }
+  .mail-msg-head b { font-size: 14px; }
+  .mail-msg-head .muted { font-size: 12px; color: var(--text3, #888); }
+  .mail-body-frame { width: 100%; min-height: 240px; border: 1px solid var(--border, #333); border-radius: 6px; }
+  .mail-att { display: inline-block; margin: 2px 6px; font-size: 12px; }
+  .mail-msg-actions { margin-top: 10px; display: flex; gap: 6px; }
+  .mail-label { display: block; padding: 4px 8px; border-radius: 4px; font-size: 13px; text-decoration: none; color: var(--text, #fff); }
+  .mail-label.active { background: var(--accent2, rgba(98,114,245,.2)); }
+  .mail-label:hover { background: var(--hover, rgba(255,255,255,.06)); }
+</style>
+{% endblock %}
 {% block content %}
 <div id="mail-mobile-bar" class="mail-mobile-bar">
   <button class="btn btn-secondary btn-sm" id="mail-mb-labels" onclick="mailMobileView('labels')">☰ Etichette</button>

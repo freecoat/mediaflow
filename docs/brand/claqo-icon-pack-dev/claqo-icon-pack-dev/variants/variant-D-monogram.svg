@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>Claqo variant D — monogram</title>
+  <rect width="200" height="200" rx="44" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="5"/>
+  <path d="M 100 44 A 56 56 0 1 0 156 100 L 100 100 Z" fill="#1A1A1A"/>
+  <circle cx="100" cy="100" r="9" fill="#D85A30"/>
+</svg>

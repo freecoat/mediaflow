@@ -1,0 +1,377 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - generic "Info versione" [ref=f1e4] [cursor=pointer]:
+        - generic [ref=f1e5]: claqo
+      - navigation [ref=f1e6]:
+        - generic [ref=f1e7]:
+          - generic [ref=f1e8]: Principale
+          - link "Dashboard" [ref=f1e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=f1e11]
+            - generic [ref=f1e16]: Dashboard
+        - generic [ref=f1e17]:
+          - generic [ref=f1e18]: Anagrafica
+          - link "Clienti" [ref=f1e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=f1e21]
+            - generic [ref=f1e25]: Clienti
+          - link "Progetti" [ref=f1e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=f1e28]
+            - generic [ref=f1e33]: Progetti
+          - link "Acquisizioni" [ref=f1e34] [cursor=pointer]:
+            - /url: /acquisitions
+            - img [ref=f1e36]
+            - generic [ref=f1e40]: Acquisizioni
+          - link "Calendario" [ref=f1e41] [cursor=pointer]:
+            - /url: /calendar
+            - img [ref=f1e43]
+            - generic [ref=f1e45]: Calendario
+          - link "Email" [ref=f1e46] [cursor=pointer]:
+            - /url: /mail
+            - img [ref=f1e48]
+            - generic [ref=f1e51]: Email
+        - generic [ref=f1e52]:
+          - generic [ref=f1e53]: Operativo
+          - link "Pianificazione" [ref=f1e54] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=f1e56]
+            - generic [ref=f1e58]: Pianificazione
+          - link "Team" [ref=f1e59] [cursor=pointer]:
+            - /url: /team
+            - img [ref=f1e61]
+            - generic [ref=f1e66]: Team
+          - link "Ore lavoro" [ref=f1e67] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=f1e69]
+            - generic [ref=f1e72]: Ore lavoro
+        - generic [ref=f1e73]:
+          - generic [ref=f1e74]: Preventivi
+          - link "Listino Prezzi" [ref=f1e75] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=f1e77]
+            - generic [ref=f1e80]: Listino Prezzi
+          - link "Quotazioni" [ref=f1e81] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=f1e83]
+            - generic [ref=f1e86]: Quotazioni
+        - generic [ref=f1e87]:
+          - generic [ref=f1e88]: Finanza
+          - link "Cost Report" [ref=f1e89] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=f1e91]
+            - generic [ref=f1e93]: Cost Report
+          - link "SAL — Avanzamento" [ref=f1e94] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=f1e96]
+            - generic [ref=f1e99]: SAL — Avanzamento
+          - link "Fatturazione" [ref=f1e100] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=f1e102]
+            - generic [ref=f1e104]: Fatturazione
+          - link "Cashflow & Forecast" [ref=f1e105] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=f1e107]
+            - generic [ref=f1e110]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=f1e111] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=f1e113]
+            - generic [ref=f1e116]: Report YoY + Export
+          - link "Fornitori" [ref=f1e117] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=f1e119]
+            - generic [ref=f1e122]: Fornitori
+          - link "Spese aziendali" [ref=f1e123] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=f1e125]
+            - generic [ref=f1e128]: Spese aziendali
+        - generic [ref=f1e129]:
+          - generic [ref=f1e130]: Media
+          - link "Asset Library" [ref=f1e131] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=f1e133]
+            - generic [ref=f1e135]: Asset Library
+          - link "Scan filesystem" [ref=f1e136] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=f1e138]
+            - generic [ref=f1e142]: Scan filesystem
+          - link "In/Out Asset" [ref=f1e143] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=f1e145]
+            - generic [ref=f1e150]: In/Out Asset
+          - link "Asset Fisici" [ref=f1e151] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=f1e153]
+            - generic [ref=f1e155]: Asset Fisici
+          - link "Capitolati" [ref=f1e156] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=f1e158]
+            - generic [ref=f1e163]: Capitolati
+          - link "Import → Quote" [ref=f1e164] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=f1e166]
+            - generic [ref=f1e169]: Import → Quote
+          - link "Storage" [ref=f1e170] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=f1e172]
+            - generic [ref=f1e176]: Storage
+          - link "KDM/DKDM" [ref=f1e177] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=f1e179]
+            - generic [ref=f1e182]: KDM/DKDM
+        - generic [ref=f1e183]:
+          - generic [ref=f1e184]: Platform
+          - link "Tenants" [ref=f1e185] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=f1e187]
+            - generic [ref=f1e191]: Tenants
+        - generic [ref=f1e192]:
+          - generic [ref=f1e193]: Configurazione
+          - link "Reparti" [ref=f1e194] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=f1e196]
+            - generic [ref=f1e200]: Reparti
+          - link "Impostazioni" [ref=f1e201] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=f1e203]
+            - generic [ref=f1e206]: Impostazioni
+        - generic [ref=f1e207]:
+          - generic [ref=f1e208]: Aiuto
+          - link "Manuale" [ref=f1e209] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=f1e211]
+            - generic [ref=f1e213]: Manuale
+        - generic [ref=f1e214]:
+          - generic [ref=f1e215]: Amministrazione
+          - link "Utenti" [ref=f1e216] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=f1e218]
+            - generic [ref=f1e221]: Utenti
+          - link "Ruoli & Permessi" [ref=f1e222] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=f1e224]
+            - generic [ref=f1e227]: Ruoli & Permessi
+          - link "Cestino" [ref=f1e228] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=f1e230]
+            - generic [ref=f1e233]: Cestino
+          - link "Audit log" [ref=f1e234] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=f1e236]
+            - generic [ref=f1e239]: Audit log
+      - link "Logout" [ref=f1e241] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=f1e243]
+        - generic [ref=f1e246]: Logout
+    - generic [ref=f1e247]:
+      - banner [ref=f1e248]:
+        - generic [ref=f1e249]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=f1e250] [cursor=pointer]:
+            - img [ref=f1e251]
+          - generic [ref=f1e254]: Pipeline Commerciale
+        - generic [ref=f1e255]:
+          - button "+ Nuova trattativa" [ref=f1e256] [cursor=pointer]
+          - button "Apri palette tema" [ref=f1e258] [cursor=pointer]:
+            - img [ref=f1e260]
+          - button "Ingrandisci visualizzazione" [ref=f1e267] [cursor=pointer]:
+            - img [ref=f1e269]
+          - button "🇮🇹" [ref=f1e273] [cursor=pointer]:
+            - generic [ref=f1e274]: 🇮🇹
+          - button "8" [ref=f1e275] [cursor=pointer]:
+            - img [ref=f1e277]
+            - generic [ref=f1e280]: "8"
+          - generic "admin@mediaflow.it" [ref=f1e281]:
+            - generic [ref=f1e282]: Admin MediaFlow
+            - generic [ref=f1e283]: admin
+            - link "Logout" [ref=f1e284] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=f1e285]
+      - main [ref=f1e288]:
+        - generic [ref=f1e289]:
+          - generic [ref=f1e290]:
+            - generic [ref=f1e291]: Potenziale pesato
+            - generic [ref=f1e292]: € 8000
+            - generic [ref=f1e293]: 2 Trattative aperte
+          - generic [ref=f1e294]:
+            - generic [ref=f1e295]: Per reparto
+            - generic [ref=f1e296]:
+              - generic [ref=f1e297]:
+                - strong [ref=f1e298]: DI / Video
+                - text: ": € 8000"
+              - generic [ref=f1e299]:
+                - strong [ref=f1e300]: VFX / Finishing
+                - text: ": € 3000"
+              - generic [ref=f1e301]:
+                - strong [ref=f1e302]: Audio
+                - text: ": € 8000"
+        - generic [ref=f1e303]:
+          - generic [ref=f1e304]: Agenda — prossimi 30 gg
+          - generic [ref=f1e305]:
+            - generic [ref=f1e306] [cursor=pointer]:
+              - generic [ref=f1e307]: 2026-06-10
+              - generic [ref=f1e308]: Meeting
+            - generic [ref=f1e309] [cursor=pointer]:
+              - generic [ref=f1e310]: 2026-06-26
+              - generic [ref=f1e311]: Quote
+            - generic [ref=f1e312] [cursor=pointer]:
+              - generic [ref=f1e313]: 2026-07-24
+              - generic [ref=f1e314]: Meeting Definizione Progetto
+            - generic [ref=f1e315] [cursor=pointer]:
+              - generic [ref=f1e316]: 2026-07-24
+              - generic [ref=f1e317]: Chiamata con produttore esecutivo
+        - generic [ref=f1e318]:
+          - button "— tutti — ▾" [ref=f1e320] [cursor=pointer]
+          - button "— tutti — ▾" [ref=f1e322] [cursor=pointer]
+          - textbox "Cerca…" [ref=f1e323]
+        - generic [ref=f1e324]:
+          - button "Kanban" [ref=f1e325] [cursor=pointer]
+          - button "Tabella" [ref=f1e326] [cursor=pointer]
+        - generic [ref=f1e327]:
+          - generic [ref=f1e330]:
+            - generic [ref=f1e509]:
+              - generic [ref=f1e510]:
+                - generic [ref=f1e511]: Lead
+                - generic [ref=f1e512]: "2"
+              - generic [ref=f1e513] [cursor=pointer]:
+                - generic [ref=f1e514]: Filmino
+                - generic [ref=f1e515]: Picomedia
+                - generic [ref=f1e516]:
+                  - generic [ref=f1e517]: € 30.000
+                  - generic [ref=f1e518]: 10.0%
+                  - generic [ref=f1e519]: DI / Video
+                  - generic [ref=f1e520]: VFX / Finishing
+                  - generic [ref=f1e521]: Audio
+                - generic [ref=f1e522]: Meeting · 2026-06-10
+              - generic [ref=f1e523] [cursor=pointer]:
+                - generic [ref=f1e524]: Filmetto
+                - generic [ref=f1e525]: Cattleya
+                - generic [ref=f1e526]:
+                  - generic [ref=f1e527]: € 50.000
+                  - generic [ref=f1e528]: 10.0%
+                  - generic [ref=f1e529]: DI / Video
+                  - generic [ref=f1e530]: Audio
+                - generic [ref=f1e531]: Quote · 2026-06-26
+            - generic [ref=f1e532]:
+              - generic [ref=f1e533]:
+                - generic [ref=f1e534]: Qualificato
+                - generic [ref=f1e535]: "0"
+              - generic [ref=f1e536]: Nessuna trattativa
+            - generic [ref=f1e537]:
+              - generic [ref=f1e538]:
+                - generic [ref=f1e539]: In quotazione
+                - generic [ref=f1e540]: "0"
+              - generic [ref=f1e541]: Nessuna trattativa
+            - generic [ref=f1e542]:
+              - generic [ref=f1e543]:
+                - generic [ref=f1e544]: Negoziazione
+                - generic [ref=f1e545]: "0"
+              - generic [ref=f1e546]: Nessuna trattativa
+            - generic [ref=f1e547]:
+              - generic [ref=f1e548]:
+                - generic [ref=f1e549]: Vinto
+                - generic [ref=f1e550]: "0"
+              - generic [ref=f1e551]: Nessuna trattativa
+            - generic [ref=f1e552]:
+              - generic [ref=f1e553]:
+                - generic [ref=f1e554]: Perso
+                - generic [ref=f1e555]: "0"
+              - generic [ref=f1e556]: Nessuna trattativa
+          - generic [ref=f1e464]:
+            - generic [ref=f1e465]:
+              - generic [ref=f1e466]: Dettaglio trattativa
+              - button "×" [ref=f1e467] [cursor=pointer]
+            - generic [ref=f1e468]:
+              - heading "Filmino" [level=3] [ref=f1e557]
+              - generic [ref=f1e558]: Picomedia
+            - generic [ref=f1e559]:
+              - generic [ref=f1e560]: Lead
+              - generic [ref=f1e561]: € 30.000
+              - generic [ref=f1e562]: 10.0% → € 3000
+              - generic [ref=f1e563]: 📅 2026-07-31
+              - generic [ref=f1e564]: ▶ Meeting
+              - generic [ref=f1e565]: DI / Video
+              - generic [ref=f1e566]: VFX / Finishing
+              - generic [ref=f1e567]: Audio
+            - generic [ref=f1e470]:
+              - button "Attività" [ref=f1e471] [cursor=pointer]
+              - button "Contatti" [ref=f1e472] [cursor=pointer]
+              - button "Quotazioni" [ref=f1e473] [cursor=pointer]
+              - button "Appuntamenti" [ref=f1e474] [cursor=pointer]
+              - button "Documenti" [ref=f1e475] [cursor=pointer]
+              - button "Email" [ref=f1e476] [cursor=pointer]
+            - generic [ref=f1e477]:
+              - generic [ref=f1e568]:
+                - generic [ref=f1e569]:
+                  - generic [ref=f1e570]: Nota
+                  - strong [ref=f1e571]: Meeting Definizione Progetto
+                  - text: 2026-07-14
+                  - generic [ref=f1e572]: ▶ 2026-07-24
+                - generic [ref=f1e573]:
+                  - generic [ref=f1e574]: Nota
+                  - strong [ref=f1e575]: Chiamata con produttore esecutivo
+                  - text: 2026-07-05
+                  - generic [ref=f1e576]: ▶ 2026-07-24
+                - generic [ref=f1e577]:
+                  - generic [ref=f1e578]: Nota
+                  - strong [ref=f1e579]: Follow-up call
+                  - text: 2026-07-05
+              - generic [ref=f1e478]:
+                - generic [ref=f1e479]: + Aggiungi attività
+                - generic [ref=f1e480]:
+                  - generic [ref=f1e481]:
+                    - generic [ref=f1e482]: Tipo
+                    - button "Nota ▾" [ref=f1e484] [cursor=pointer]
+                  - generic [ref=f1e485]:
+                    - generic [ref=f1e486]: Oggetto
+                    - textbox "es. Chiamata di follow-up" [ref=f1e487]
+                - generic [ref=f1e488]:
+                  - generic [ref=f1e489]: Corpo / Note
+                  - textbox [ref=f1e490]
+                - generic [ref=f1e491]:
+                  - generic [ref=f1e492]:
+                    - generic [ref=f1e493]: Data
+                    - generic [ref=f1e494]:
+                      - textbox [ref=f1e495]
+                      - textbox [ref=f1e496]
+                  - generic [ref=f1e497]:
+                    - generic [ref=f1e498]: Prossima azione al
+                    - textbox [ref=f1e499]
+                - button "Aggiungi" [ref=f1e500] [cursor=pointer]
+            - generic [ref=f1e501]:
+              - button "Modifica" [ref=f1e502] [cursor=pointer]
+              - button "Segna come Vinta" [ref=f1e503] [cursor=pointer]
+              - button "Segna come Persa" [ref=f1e504] [cursor=pointer]
+              - button "Converti in progetto" [ref=f1e505] [cursor=pointer]
+              - button "Elimina" [ref=f1e506] [cursor=pointer]
+        - text: ▾ ▾
+  - button "Apri Claqo Bot" [ref=f1e379] [cursor=pointer]:
+    - img "Claqo bot" [ref=f1e380]
+  - dialog "Copilot AI" [ref=f1e381]:
+    - generic [ref=f1e382]:
+      - img "Claqo bot" [ref=f1e384]
+      - heading "Copilot" [level=3] [ref=f1e385]
+      - generic [ref=f1e386]: —
+      - button "Nuova conversazione" [ref=f1e387] [cursor=pointer]:
+        - img [ref=f1e388]
+      - button "Chiudi" [ref=f1e389] [cursor=pointer]:
+        - img [ref=f1e390]
+    - generic [ref=f1e393]:
+      - generic [ref=f1e394]: "Storia:"
+      - button "(nuova) ▾" [ref=f1e396] [cursor=pointer]
+    - generic [ref=f1e399]:
+      - button "📥" [ref=f1e400] [cursor=pointer]
+      - button "🔎" [ref=f1e401] [cursor=pointer]
+    - generic [ref=f1e402]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=f1e403] [cursor=pointer]:
+        - img [ref=f1e404]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=f1e406]
+      - button "Invia" [ref=f1e407] [cursor=pointer]
+  - generic [ref=f1e408]:
+    - generic [ref=f1e409]:
+      - generic [ref=f1e410]: 🔔 Notifiche
+      - generic [ref=f1e411]:
+        - button "✓ Tutte lette" [ref=f1e412] [cursor=pointer]
+        - button "✕" [ref=f1e413] [cursor=pointer]
+    - generic [ref=f1e415]: Caricamento…
+  - text: ▾ ▾

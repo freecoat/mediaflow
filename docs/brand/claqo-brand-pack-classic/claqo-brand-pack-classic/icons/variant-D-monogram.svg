@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>Variant D — monogram</title>
+  <rect width="200" height="200" rx="44" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="4"/>
+  <path d="M 100 40 A 60 60 0 1 0 160 100 L 100 100 Z" fill="#1A1A1A"/>
+  <circle cx="100" cy="100" r="8" fill="#D85A30"/>
+</svg>

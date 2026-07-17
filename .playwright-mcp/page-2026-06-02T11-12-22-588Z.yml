@@ -1,0 +1,97 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - button "Menu" [ref=e3] [cursor=pointer]:
+      - img [ref=e4]
+    - generic [ref=e5]: Oggi
+    - link "Cerca" [ref=e6] [cursor=pointer]:
+      - /url: /m/cerca
+      - img [ref=e7]
+    - link "Notifiche" [ref=e10] [cursor=pointer]:
+      - /url: /m/notifiche
+      - img [ref=e11]
+  - complementary [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]: Claqo
+      - generic [ref=e17]: Admin MediaFlow
+    - navigation [ref=e18]:
+      - generic [ref=e19]: Operativo
+      - link [ref=e20] [cursor=pointer]:
+        - /url: /m
+        - img [ref=e21]
+        - text: Oggi
+      - link [ref=e24] [cursor=pointer]:
+        - /url: /m/assegnazioni
+        - img [ref=e25]
+        - text: Assegnazioni
+      - link [ref=e28] [cursor=pointer]:
+        - /url: /m/booking/new
+        - img [ref=e29]
+        - text: Nuovo booking
+      - link [ref=e31] [cursor=pointer]:
+        - /url: /m/timbra
+        - img [ref=e32]
+        - text: Timbratura
+      - link [ref=e35] [cursor=pointer]:
+        - /url: /m/ferie
+        - img [ref=e36]
+        - text: Ferie
+      - link [ref=e41] [cursor=pointer]:
+        - /url: /m/notifiche
+        - img [ref=e42]
+        - text: Notifiche
+      - generic [ref=e45]: Business
+      - link [ref=e46] [cursor=pointer]:
+        - /url: /m/progetti
+        - img [ref=e47]
+        - text: Progetti
+      - link [ref=e49] [cursor=pointer]:
+        - /url: /m/clienti
+        - img [ref=e50]
+        - text: Clienti
+      - link [ref=e54] [cursor=pointer]:
+        - /url: /m/quote
+        - img [ref=e55]
+        - text: Quotazioni
+      - link [ref=e58] [cursor=pointer]:
+        - /url: /m/finance
+        - img [ref=e59]
+        - text: Finance
+      - link [ref=e62] [cursor=pointer]:
+        - /url: /m/cerca
+        - img [ref=e63]
+        - text: Cerca
+    - link [ref=e66] [cursor=pointer]:
+      - /url: /prefer-desktop?next=/dashboard
+      - img [ref=e67]
+      - text: Versione desktop
+    - link [ref=e69] [cursor=pointer]:
+      - /url: /auth/logout
+      - img [ref=e70]
+      - text: Esci
+  - main [ref=e73]:
+    - link "Nuovo booking" [ref=e74] [cursor=pointer]:
+      - /url: /m/booking/new
+      - img [ref=e75]
+      - text: Nuovo booking
+    - strong [ref=e82]: Business
+    - generic [ref=e83]:
+      - link "Progetti Schede & deliverable" [ref=e84] [cursor=pointer]:
+        - /url: /m/progetti
+        - img [ref=e85]
+        - generic [ref=e87]: Progetti
+        - generic [ref=e88]: Schede & deliverable
+      - link "Clienti Contatti & anagrafica" [ref=e89] [cursor=pointer]:
+        - /url: /m/clienti
+        - img [ref=e90]
+        - generic [ref=e94]: Clienti
+        - generic [ref=e95]: Contatti & anagrafica
+      - link "Finance Quotato/maturato" [ref=e96] [cursor=pointer]:
+        - /url: /m/finance
+        - img [ref=e97]
+        - generic [ref=e100]: Finance
+        - generic [ref=e101]: Quotato/maturato
+      - link "Cerca Ricerca globale" [ref=e102] [cursor=pointer]:
+        - /url: /m/cerca
+        - img [ref=e103]
+        - generic [ref=e106]: Cerca
+        - generic [ref=e107]: Ricerca globale

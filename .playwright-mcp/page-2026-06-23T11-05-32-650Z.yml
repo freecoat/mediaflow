@@ -1,0 +1,50 @@
+- generic [active] [ref=e1]:
+  - heading "🔑 Richiesta chiavi DCP (KDM / DKDM)" [level=2] [ref=e2]
+  - paragraph [ref=e3]:
+    - text: "Progetto:"
+    - strong [ref=e4]: Test Project Banner
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - text: Tipo chiave
+      - combobox "Tipo chiave" [ref=e7]:
+        - option "KDM (cinema)" [selected]
+        - option "DKDM (distributore)"
+    - generic [ref=e8]:
+      - text: Titolo film
+      - textbox "Titolo film" [ref=e9]:
+        - /placeholder: es. QUEER_FTR_IT-XX_EN_51_2K_20240901
+    - generic [ref=e10]:
+      - text: CPL UUID del DCP (opzionale — aiuta il matching automatico)
+      - textbox "CPL UUID del DCP (opzionale — aiuta il matching automatico)" [ref=e11]:
+        - /placeholder: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    - generic [ref=e12]:
+      - text: Sblocco DA (data+ora)
+      - textbox "Sblocco DA (data+ora)" [ref=e13]
+    - generic [ref=e14]:
+      - text: Sblocco A (data+ora)
+      - textbox "Sblocco A (data+ora)" [ref=e15]
+    - generic [ref=e16]:
+      - text: Certificato server (.pem) (opzionale)
+      - button "Certificato server (.pem) (opzionale)" [ref=e17]
+    - group "Contatti" [ref=e18]:
+      - generic [ref=e19]: Contatti
+      - generic [ref=e20]:
+        - text: Cinema / Lab destinatario — nome
+        - textbox "Cinema / Lab destinatario — nome" [ref=e21]
+      - generic [ref=e22]:
+        - text: Cinema / Lab destinatario — email
+        - textbox "Cinema / Lab destinatario — email" [ref=e23]:
+          - /placeholder: proiettore@cinema.it
+      - generic [ref=e24]:
+        - text: Lab email (opzionale)
+        - textbox "Lab email (opzionale)" [ref=e25]
+      - generic [ref=e26]:
+        - text: Produzione — nome referente
+        - textbox "Produzione — nome referente" [ref=e27]
+      - generic [ref=e28]:
+        - text: Produzione — email referente
+        - textbox "Produzione — email referente" [ref=e29]
+    - generic [ref=e30]:
+      - text: Note
+      - textbox "Note" [ref=e31]
+    - button "Invia richiesta" [ref=e32] [cursor=pointer]

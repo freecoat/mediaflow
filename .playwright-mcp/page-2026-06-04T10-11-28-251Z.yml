@@ -1,0 +1,2589 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Principale
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Anagrafica
+          - link "Clienti" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clienti
+          - link "Progetti" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Progetti
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operativo
+          - link "Pianificazione" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Pianificazione
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Ore lavoro" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Ore lavoro
+        - generic [ref=e55]:
+          - generic [ref=e56]: Preventivi
+          - link "Listino Prezzi" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Listino Prezzi
+          - link "Quotazioni" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotazioni
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finanza
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "Fatturazione" [ref=e76] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e78]
+            - generic [ref=e80]: Fatturazione
+          - link "Cashflow & Forecast" [ref=e81] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e83]
+            - generic [ref=e86]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=e87] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e89]
+            - generic [ref=e92]: Report YoY + Export
+          - link "Fornitori" [ref=e93] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e95]
+            - generic [ref=e98]: Fornitori
+          - link "Spese aziendali" [ref=e99] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e101]
+            - generic [ref=e104]: Spese aziendali
+        - generic [ref=e105]:
+          - generic [ref=e106]: Media
+          - link "Asset Library" [ref=e107] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e109]
+            - generic [ref=e111]: Asset Library
+          - link "Scan filesystem" [ref=e112] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e114]
+            - generic [ref=e118]: Scan filesystem
+          - link "In/Out Asset" [ref=e119] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e121]
+            - generic [ref=e126]: In/Out Asset
+          - link "Asset Fisici" [ref=e127] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e129]
+            - generic [ref=e131]: Asset Fisici
+          - link "Capitolati" [ref=e132] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e134]
+            - generic [ref=e139]: Capitolati
+          - link "Import → Quote" [ref=e140] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e142]
+            - generic [ref=e145]: Import → Quote
+        - generic [ref=e146]:
+          - generic [ref=e147]: Platform
+          - link "Tenants" [ref=e148] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e150]
+            - generic [ref=e154]: Tenants
+        - generic [ref=e155]:
+          - generic [ref=e156]: Configurazione
+          - link "Reparti" [ref=e157] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e159]
+            - generic [ref=e163]: Reparti
+          - link "Impostazioni" [ref=e164] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e166]
+            - generic [ref=e169]: Impostazioni
+        - generic [ref=e170]:
+          - generic [ref=e171]: Aiuto
+          - link "Manuale" [ref=e172] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e174]
+            - generic [ref=e176]: Manuale
+        - generic [ref=e177]:
+          - generic [ref=e178]: Amministrazione
+          - link "Utenti" [ref=e179] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e181]
+            - generic [ref=e184]: Utenti
+          - link "Ruoli & Permessi" [ref=e185] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e187]
+            - generic [ref=e190]: Ruoli & Permessi
+          - link "Cestino" [ref=e191] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e193]
+            - generic [ref=e196]: Cestino
+          - link "Audit log" [ref=e197] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e199]
+            - generic [ref=e202]: Audit log
+      - link "Logout" [ref=e204] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e206]
+        - generic [ref=e209]: Logout
+    - generic [ref=e210]:
+      - banner [ref=e211]:
+        - generic [ref=e212]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e213] [cursor=pointer]:
+            - img [ref=e214]
+          - generic [ref=e217]: Quotazioni
+        - generic [ref=e218]:
+          - button "✨ Crea da capitolato" [ref=e219] [cursor=pointer]
+          - button "+ Nuova quotazione" [ref=e220] [cursor=pointer]
+          - button "Apri palette tema" [ref=e222] [cursor=pointer]:
+            - img [ref=e224]
+          - button "Ingrandisci visualizzazione" [ref=e231] [cursor=pointer]:
+            - img [ref=e233]
+          - button "🇮🇹" [ref=e237] [cursor=pointer]:
+            - generic [ref=e238]: 🇮🇹
+          - button "6" [ref=e239] [cursor=pointer]:
+            - img [ref=e241]
+            - generic [ref=e244]: "6"
+          - generic "admin@mediaflow.it" [ref=e245]:
+            - generic [ref=e246]: Admin MediaFlow
+            - generic [ref=e247]: admin
+            - link "Logout" [ref=e248] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e249]
+      - main [ref=e252]:
+        - text: ▾ ▾ ▾
+        - generic [ref=e395]:
+          - generic [ref=e396]:
+            - generic [ref=e397]:
+              - generic [ref=e398]:
+                - heading "Q-2026-008-v3 — Gomorra - Le Origini – Postproduzione 6 episodi HDR" [level=2] [ref=e399]:
+                  - generic "Click per rinominare il numero (solo bozze)" [ref=e400]: Q-2026-008-v3
+                  - generic [ref=e401]: —
+                  - generic "Click per rinominare il titolo" [ref=e402]: Gomorra - Le Origini – Postproduzione 6 episodi HDR
+                - generic [ref=e403]: Bozza
+              - generic [ref=e404]:
+                - button "← Lista" [ref=e405] [cursor=pointer]
+                - button "↺ Annulla" [disabled] [ref=e406] [cursor=pointer]
+                - button "💾 Salva" [ref=e407] [cursor=pointer]
+                - button "📋 Duplica" [ref=e408] [cursor=pointer]
+                - button "📐 Versione" [ref=e409] [cursor=pointer]
+                - button "🚚 Sposta" [ref=e410] [cursor=pointer]
+                - button "🗑 Elimina" [ref=e411] [cursor=pointer]
+                - button "⬇ Esporta ▾" [ref=e413] [cursor=pointer]
+                - button "📋 Listino" [ref=e414] [cursor=pointer]
+            - generic [ref=e415]:
+              - generic [ref=e416]: Critical Assumptions
+              - textbox "Production Material" [ref=e417]:
+                - /placeholder: Material
+              - textbox "Delivery Format" [ref=e418]:
+                - /placeholder: Delivery
+              - spinbutton "Durata in minuti" [ref=e419]
+              - textbox "Frame per secondo (24/25)" [ref=e420]:
+                - /placeholder: FPS
+          - generic [ref=e421]:
+            - generic [ref=e422]:
+              - generic [ref=e423]:
+                - generic [ref=e424]:
+                  - generic [ref=e425]:
+                    - text: Riepilogo economico
+                    - button "▲ comprimi" [ref=e426] [cursor=pointer]
+                  - generic [ref=e427]:
+                    - 'generic "Cambio valuta: NON converte voci/totali/PDF. I valori restano espressi nella nuova valuta." [ref=e429]':
+                      - generic [ref=e430]: "Valuta:"
+                      - combobox [ref=e431]:
+                        - option "EUR" [selected]
+                        - option "USD"
+                        - option "GBP"
+                        - option "CHF"
+                        - option "JPY"
+                        - option "CAD"
+                        - option "AUD"
+                        - option "CNY"
+                      - generic [ref=e432]: stessa della base · no conversione
+                    - generic [ref=e433]:
+                      - generic [ref=e434]:
+                        - generic [ref=e435]: Totale lordo (no sconti)
+                        - generic [ref=e436]: 177.860,00 €
+                      - generic [ref=e437]:
+                        - generic [ref=e438]: ↳ Lavorazioni (JCL)
+                        - generic [ref=e439]: 162.900,00 €
+                      - generic [ref=e440]:
+                        - generic [ref=e441]: ↳ Consegne (Deliverable)
+                        - generic [ref=e442]: 14.960,00 €
+                      - generic [ref=e443]:
+                        - generic [ref=e444]: Subtotale
+                        - generic [ref=e445]: 177.860,00 €
+                      - generic [ref=e446]:
+                        - generic [ref=e447]:
+                          - text: Sconto pacchetto
+                          - spinbutton [ref=e448]: "0.0"
+                          - text: "%"
+                        - generic [ref=e449]: —
+                      - generic [ref=e450]:
+                        - generic [ref=e451]: Totale netto (base IVA)
+                        - generic [ref=e452]: 177.860,00 €
+                      - generic [ref=e453]:
+                        - generic [ref=e454]:
+                          - text: IVA
+                          - spinbutton [ref=e455]: "22.0"
+                          - text: "%"
+                        - generic [ref=e456]: 39.129,20 €
+                      - generic [ref=e457]:
+                        - generic [ref=e458]: TOTALE
+                        - generic [ref=e459]: 216.989,20 €
+                - generic [ref=e460]:
+                  - generic [ref=e461]:
+                    - text: Stato & azioni
+                    - button "▲ comprimi" [ref=e462] [cursor=pointer]
+                  - generic [ref=e463]:
+                    - generic [ref=e464]:
+                      - generic [ref=e465]: Versioni quotazione
+                      - generic [ref=e466]:
+                        - generic [ref=e467]:
+                          - generic [ref=e468]:
+                            - link "v1 · Q-2026-008-v1" [ref=e469] [cursor=pointer]:
+                              - /url: "#"
+                            - text: (2026-05-31) · €174.910,00
+                          - generic [ref=e470]: Sostituita
+                        - generic [ref=e471]:
+                          - generic [ref=e472]:
+                            - link "v2 · Q-2026-008-v2" [ref=e473] [cursor=pointer]:
+                              - /url: "#"
+                            - text: (2026-06-03) · €179.890,00
+                            - generic [ref=e474]: Job GLO-J007
+                          - generic [ref=e475]: Approvata
+                        - generic [ref=e476]:
+                          - generic [ref=e477]: v3 · Q-2026-008-v3 (2026-06-04) · €177.860,00
+                          - generic [ref=e478]: Bozza
+                    - generic [ref=e479]:
+                      - button "📤 Inviata" [ref=e480] [cursor=pointer]
+                      - button "✅ Approvata" [disabled] [ref=e481]
+                      - button "❌ Rifiutata" [ref=e482] [cursor=pointer]
+                      - button "⏰ Scaduta" [ref=e483] [cursor=pointer]
+                    - button "↪ Migra Job a questa versione" [ref=e484] [cursor=pointer]
+                    - generic [ref=e485]: ⚠️ Versione legata a un Job esistente sul parent. Usa Migra Job per propagare le modifiche al Job; Approvata diretto è bloccato (creerebbe un Job duplicato).
+              - generic [ref=e486]:
+                - generic [ref=e487]:
+                  - text: Condizioni economiche & scadenze
+                  - button "▲ comprimi" [ref=e488] [cursor=pointer]
+                - generic [ref=e489]:
+                  - generic [ref=e490]:
+                    - generic [ref=e491]:
+                      - generic [ref=e492]: Note
+                      - textbox "Note interne / per cliente" [ref=e493]
+                    - generic [ref=e494]:
+                      - generic [ref=e495]: Termini di pagamento
+                      - textbox "es. 20% Project Start / 40% Grading / 40% Mix" [ref=e496]: 20% inizio progetto e 30% a picture lock 1° episodio. Restante 50% alla consegna.
+                    - generic [ref=e497]:
+                      - generic [ref=e498]:
+                        - generic [ref=e499]: Ricarico spedizioni %
+                        - spinbutton "Ricarico spedizioni % costi vettore riaddebitati" [ref=e500]: "15"
+                        - generic [ref=e501]: costi vettore riaddebitati
+                      - generic [ref=e502]: Default 15%. Esplicitata in PDF/condizioni quando > 0.
+                    - generic [ref=e503]:
+                      - generic [ref=e504]:
+                        - generic [ref=e505]: Scadenza fattura (giorni DF)
+                        - spinbutton "Scadenza fattura (giorni DF) giorni dalla data fattura" [ref=e506]
+                        - generic [ref=e507]: giorni dalla data fattura
+                      - generic [ref=e508]: Es. 30/60/90. Vuoto = default Tenant.
+                    - generic [ref=e509]:
+                      - generic [ref=e510]: Periodicità fatturazione
+                      - button "— eredita default Project — ▾" [ref=e512] [cursor=pointer]
+                      - generic [ref=e513]: "All'approvazione della quote, viene propagata sul Progetto. Strettamente collegata ai Termini di acconto sotto: rate strutturate per periodo."
+                  - generic [ref=e514]:
+                    - generic [ref=e515]:
+                      - generic [ref=e516]: 💰 Termini di acconto strutturati
+                      - button "+ Aggiungi rata" [ref=e517] [cursor=pointer]
+                    - generic [ref=e519]: Nessuna rata di acconto. Click "+ Aggiungi rata" per definire i termini.
+                    - generic [ref=e520]: Rate con pct/importo, ancora scadenza (approvazione/inizio/data/milestone), opzionale allocazione a voci specifiche del preventivo. Al converti quote→job verranno generati AdvancePayment pending per ogni rata.
+              - text: ▾
+              - generic [ref=e521]:
+                - generic [ref=e522]:
+                  - generic [ref=e523]:
+                    - text: Voci preventivo
+                    - button "▲ comprimi" [ref=e524] [cursor=pointer]
+                  - generic [ref=e525]:
+                    - button "🎯 Picker capitolato" [ref=e526] [cursor=pointer]
+                    - button "📋 Carica da template" [ref=e527] [cursor=pointer]
+                - generic [ref=e528]:
+                  - tablist [ref=e529]:
+                    - tab "Tutto 21" [selected] [ref=e530] [cursor=pointer]:
+                      - text: Tutto
+                      - generic [ref=e531]: "21"
+                    - tab "🔧 Lavorazioni 5 · 162.900,00 €" [ref=e532] [cursor=pointer]:
+                      - text: 🔧 Lavorazioni
+                      - generic [ref=e533]: "5"
+                      - generic [ref=e534]: · 162.900,00 €
+                    - tab "📦 Consegne 16 · 14.960,00 €" [ref=e535] [cursor=pointer]:
+                      - text: 📦 Consegne
+                      - generic [ref=e536]: "16"
+                      - generic [ref=e537]: · 14.960,00 €
+                  - table [ref=e539]:
+                    - rowgroup [ref=e540]:
+                      - row "Descrizione Q.tà Unità Prezzo € Sconto % Totale €" [ref=e541]:
+                        - columnheader [ref=e542]
+                        - columnheader "Descrizione" [ref=e543]
+                        - columnheader "Q.tà" [ref=e544]
+                        - columnheader "Unità" [ref=e545]
+                        - columnheader "Prezzo €" [ref=e546]
+                        - columnheader "Sconto %" [ref=e547]
+                        - columnheader "Totale €" [ref=e548]
+                        - columnheader [ref=e549]
+                    - rowgroup [ref=e550]:
+                      - row "⋮⋮ DAILIES" [ref=e551]:
+                        - cell "⋮⋮" [ref=e552]
+                        - cell "DAILIES" [ref=e553]
+                      - 'row "⠿ Dailies workflow Turnaround dailies completo: sync audio, color base con LUT, transcoding proxy editing, QC operatore, upload su piattaforma review (Frame.io / Pix / Aspera). Dettagliare nella descrizione di riga: piattaforma upload, eventuali limiti di accesso, frame range giornaliero, LUT custom. 62 day Lav 450 0.0 27.900,00 € 🏷 ○ 📁 ✕" [ref=e554]':
+                        - cell "⠿" [ref=e555]:
+                          - checkbox [ref=e556]
+                          - text: ⠿
+                        - 'cell "Dailies workflow Turnaround dailies completo: sync audio, color base con LUT, transcoding proxy editing, QC operatore, upload su piattaforma review (Frame.io / Pix / Aspera). Dettagliare nella descrizione di riga: piattaforma upload, eventuali limiti di accesso, frame range giornaliero, LUT custom." [ref=e557]':
+                          - textbox [ref=e559]: Dailies workflow
+                          - textbox "dettaglio…" [ref=e560]: "Turnaround dailies completo: sync audio, color base con LUT, transcoding proxy editing, QC operatore, upload su piattaforma review (Frame.io / Pix / Aspera). Dettagliare nella descrizione di riga: piattaforma upload, eventuali limiti di accesso, frame range giornaliero, LUT custom."
+                        - cell "62" [ref=e561]:
+                          - spinbutton [ref=e562]: "62"
+                        - cell "day Lav" [ref=e563]:
+                          - generic [ref=e564]:
+                            - combobox [ref=e565]:
+                              - option "day" [selected]
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc"
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Lavorazione: maturato da ore booking" [ref=e566]': Lav
+                        - cell "450" [ref=e567]:
+                          - spinbutton [ref=e568]: "450"
+                        - cell "0.0" [ref=e569]:
+                          - spinbutton [ref=e570]: "0.0"
+                        - cell "27.900,00 €" [ref=e571]
+                        - cell "🏷 ○ 📁 ✕" [ref=e572]:
+                          - button "🏷" [ref=e573] [cursor=pointer]
+                          - button "○" [ref=e574] [cursor=pointer]
+                          - button "📁" [ref=e575] [cursor=pointer]
+                          - button "✕" [ref=e576] [cursor=pointer]
+                      - 'row "Subtotale DAILIES: 27.900,00 €" [ref=e577]':
+                        - cell "Subtotale DAILIES:" [ref=e578]:
+                          - text: Subtotale
+                          - strong [ref=e579]: DAILIES
+                          - text: ":"
+                        - cell "27.900,00 €" [ref=e580]
+                        - cell [ref=e581]
+                      - 'row "Sconto categoria DAILIES: 0.0 —" [ref=e582]':
+                        - cell "Sconto categoria DAILIES:" [ref=e583]:
+                          - text: Sconto categoria
+                          - strong [ref=e584]: DAILIES
+                          - text: ":"
+                        - cell "0.0" [ref=e585]:
+                          - spinbutton [ref=e586]: "0.0"
+                        - cell "—" [ref=e587]
+                        - cell [ref=e588]
+                    - rowgroup [ref=e589]:
+                      - row "⋮⋮ ARCHIVE / TRANSFER" [ref=e590]:
+                        - cell "⋮⋮" [ref=e591]
+                        - cell "ARCHIVE / TRANSFER" [ref=e592]
+                      - row "⠿ Data management Gestione e archiviazione dati su server di produzione 120 TB Cons 50 0.0 6000,00 € 🏷 ○ 📁 ✕" [ref=e593]:
+                        - cell "⠿" [ref=e594]:
+                          - checkbox [ref=e595]
+                          - text: ⠿
+                        - cell "Data management Gestione e archiviazione dati su server di produzione" [ref=e596]:
+                          - textbox [ref=e598]: Data management
+                          - textbox "dettaglio…" [ref=e599]: Gestione e archiviazione dati su server di produzione
+                        - cell "120" [ref=e600]:
+                          - spinbutton [ref=e601]: "120"
+                        - cell "TB Cons" [ref=e602]:
+                          - generic [ref=e603]:
+                            - combobox [ref=e604]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc"
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB" [selected]
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e605]': Cons
+                        - cell "50" [ref=e606]:
+                          - spinbutton [ref=e607]: "50"
+                        - cell "0.0" [ref=e608]:
+                          - spinbutton [ref=e609]: "0.0"
+                        - cell "6000,00 €" [ref=e610]
+                        - cell "🏷 ○ 📁 ✕" [ref=e611]:
+                          - button "🏷" [ref=e612] [cursor=pointer]
+                          - button "○" [ref=e613] [cursor=pointer]
+                          - button "📁" [ref=e614] [cursor=pointer]
+                          - button "✕" [ref=e615] [cursor=pointer]
+                      - row "⠿ LTO LTFS archive Archive su nastri LTO7/8 LTFS con verifica MD5. Dettagliare nella riga il tipo di materiale archiviato (camera original ≈€120/TB, DPX graded ≈€150/TB, DPX ungraded ≈€130/TB, Dolby Vision master ≈€180/TB, ProRes deliverables ≈€100/TB) — il prezzo varia con la natura del materiale. 20 TB Cons 130 0.0 2600,00 € 🏷 ○ 📁 ✕" [ref=e616]:
+                        - cell "⠿" [ref=e617]:
+                          - checkbox [ref=e618]
+                          - text: ⠿
+                        - cell "LTO LTFS archive Archive su nastri LTO7/8 LTFS con verifica MD5. Dettagliare nella riga il tipo di materiale archiviato (camera original ≈€120/TB, DPX graded ≈€150/TB, DPX ungraded ≈€130/TB, Dolby Vision master ≈€180/TB, ProRes deliverables ≈€100/TB) — il prezzo varia con la natura del materiale." [ref=e619]:
+                          - textbox [ref=e621]: LTO LTFS archive
+                          - textbox "dettaglio…" [ref=e622]: Archive su nastri LTO7/8 LTFS con verifica MD5. Dettagliare nella riga il tipo di materiale archiviato (camera original ≈€120/TB, DPX graded ≈€150/TB, DPX ungraded ≈€130/TB, Dolby Vision master ≈€180/TB, ProRes deliverables ≈€100/TB) — il prezzo varia con la natura del materiale.
+                        - cell "20" [ref=e623]:
+                          - spinbutton [ref=e624]: "20"
+                        - cell "TB Cons" [ref=e625]:
+                          - generic [ref=e626]:
+                            - combobox [ref=e627]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc"
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB" [selected]
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e628]': Cons
+                        - cell "130" [ref=e629]:
+                          - spinbutton [ref=e630]: "130"
+                        - cell "0.0" [ref=e631]:
+                          - spinbutton [ref=e632]: "0.0"
+                        - cell "2600,00 €" [ref=e633]
+                        - cell "🏷 ○ 📁 ✕" [ref=e634]:
+                          - button "🏷" [ref=e635] [cursor=pointer]
+                          - button "○" [ref=e636] [cursor=pointer]
+                          - button "📁" [ref=e637] [cursor=pointer]
+                          - button "✕" [ref=e638] [cursor=pointer]
+                      - 'row "Subtotale ARCHIVE / TRANSFER: 8600,00 €" [ref=e639]':
+                        - cell "Subtotale ARCHIVE / TRANSFER:" [ref=e640]:
+                          - text: Subtotale
+                          - strong [ref=e641]: ARCHIVE / TRANSFER
+                          - text: ":"
+                        - cell "8600,00 €" [ref=e642]
+                        - cell [ref=e643]
+                      - 'row "Sconto categoria ARCHIVE / TRANSFER: 0.0 —" [ref=e644]':
+                        - cell "Sconto categoria ARCHIVE / TRANSFER:" [ref=e645]:
+                          - text: Sconto categoria
+                          - strong [ref=e646]: ARCHIVE / TRANSFER
+                          - text: ":"
+                        - cell "0.0" [ref=e647]:
+                          - spinbutton [ref=e648]: "0.0"
+                        - cell "—" [ref=e649]
+                        - cell [ref=e650]
+                    - rowgroup [ref=e651]:
+                      - row "⋮⋮ PICTURE / DI" [ref=e652]:
+                        - cell "⋮⋮" [ref=e653]
+                        - cell "PICTURE / DI" [ref=e654]
+                      - 'row "⠿ Online conform Conform da EDL/AAF con riferimento offline, gestione VFX shots. Dettagliare: risoluzione (2K ≈€900/day, 4K ≈€1100/day, IMF), frame rate, sorgente offline (Avid/Resolve/Premiere). 18 day Lav 1000 0.0 18.000,00 € 🏷 ○ 📁 ✕" [ref=e655]':
+                        - cell "⠿" [ref=e656]:
+                          - checkbox [ref=e657]
+                          - text: ⠿
+                        - 'cell "Online conform Conform da EDL/AAF con riferimento offline, gestione VFX shots. Dettagliare: risoluzione (2K ≈€900/day, 4K ≈€1100/day, IMF), frame rate, sorgente offline (Avid/Resolve/Premiere)." [ref=e658]':
+                          - textbox [ref=e660]: Online conform
+                          - textbox "dettaglio…" [ref=e661]: "Conform da EDL/AAF con riferimento offline, gestione VFX shots. Dettagliare: risoluzione (2K ≈€900/day, 4K ≈€1100/day, IMF), frame rate, sorgente offline (Avid/Resolve/Premiere)."
+                        - cell "18" [ref=e662]:
+                          - spinbutton [ref=e663]: "18"
+                        - cell "day Lav" [ref=e664]:
+                          - generic [ref=e665]:
+                            - combobox [ref=e666]:
+                              - option "day" [selected]
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc"
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Lavorazione: maturato da ore booking" [ref=e667]': Lav
+                        - cell "1000" [ref=e668]:
+                          - spinbutton [ref=e669]: "1000"
+                        - cell "0.0" [ref=e670]:
+                          - spinbutton [ref=e671]: "0.0"
+                        - cell "18.000,00 €" [ref=e672]
+                        - cell "🏷 ○ 📁 ✕" [ref=e673]:
+                          - button "🏷" [ref=e674] [cursor=pointer]
+                          - button "○" [ref=e675] [cursor=pointer]
+                          - button "📁" [ref=e676] [cursor=pointer]
+                          - button "✕" [ref=e677] [cursor=pointer]
+                      - row "⠿ Color grading HDR Dolby Vision (incl. trim pass) Sessione HDR P3 D65 PQ con monitor Dolby e generazione metadata Dolby Vision. Trim pass per ogni target HDR/SDR aggiuntivo (1000nit / 600nit / 100nit / Rec.709) ≈€600/pass. 30 day Lav 2200 0.0 66.000,00 € 🏷 ○ 📁 ✕" [ref=e678]:
+                        - cell "⠿" [ref=e679]:
+                          - checkbox [ref=e680]
+                          - text: ⠿
+                        - cell "Color grading HDR Dolby Vision (incl. trim pass) Sessione HDR P3 D65 PQ con monitor Dolby e generazione metadata Dolby Vision. Trim pass per ogni target HDR/SDR aggiuntivo (1000nit / 600nit / 100nit / Rec.709) ≈€600/pass." [ref=e681]:
+                          - textbox [ref=e683]: Color grading HDR Dolby Vision (incl. trim pass)
+                          - textbox "dettaglio…" [ref=e684]: Sessione HDR P3 D65 PQ con monitor Dolby e generazione metadata Dolby Vision. Trim pass per ogni target HDR/SDR aggiuntivo (1000nit / 600nit / 100nit / Rec.709) ≈€600/pass.
+                        - cell "30" [ref=e685]:
+                          - spinbutton [ref=e686]: "30"
+                        - cell "day Lav" [ref=e687]:
+                          - generic [ref=e688]:
+                            - combobox [ref=e689]:
+                              - option "day" [selected]
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc"
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Lavorazione: maturato da ore booking" [ref=e690]': Lav
+                        - cell "2200" [ref=e691]:
+                          - spinbutton [ref=e692]: "2200"
+                        - cell "0.0" [ref=e693]:
+                          - spinbutton [ref=e694]: "0.0"
+                        - cell "66.000,00 €" [ref=e695]
+                        - cell "🏷 ○ 📁 ✕" [ref=e696]:
+                          - button "🏷" [ref=e697] [cursor=pointer]
+                          - button "○" [ref=e698] [cursor=pointer]
+                          - button "📁" [ref=e699] [cursor=pointer]
+                          - button "✕" [ref=e700] [cursor=pointer]
+                      - row "⠿ Finishing/Mastering Dedicated operator with Colorfront Transkoder 60 hr Lav 100 0.0 6000,00 € 🏷 ○ 📁 ✕" [ref=e701]:
+                        - cell "⠿" [ref=e702]:
+                          - checkbox [ref=e703]
+                          - text: ⠿
+                        - cell "Finishing/Mastering Dedicated operator with Colorfront Transkoder" [ref=e704]:
+                          - textbox [ref=e706]: Finishing/Mastering
+                          - textbox "dettaglio…" [ref=e707]: Dedicated operator with Colorfront Transkoder
+                        - cell "60" [ref=e708]:
+                          - spinbutton [ref=e709]: "60"
+                        - cell "hr Lav" [ref=e710]:
+                          - generic [ref=e711]:
+                            - combobox [ref=e712]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr" [selected]
+                              - option "pc"
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Lavorazione: maturato da ore booking" [ref=e713]': Lav
+                        - cell "100" [ref=e714]:
+                          - spinbutton [ref=e715]: "100"
+                        - cell "0.0" [ref=e716]:
+                          - spinbutton [ref=e717]: "0.0"
+                        - cell "6000,00 €" [ref=e718]
+                        - cell "🏷 ○ 📁 ✕" [ref=e719]:
+                          - button "🏷" [ref=e720] [cursor=pointer]
+                          - button "○" [ref=e721] [cursor=pointer]
+                          - button "📁" [ref=e722] [cursor=pointer]
+                          - button "✕" [ref=e723] [cursor=pointer]
+                      - 'row "Subtotale PICTURE / DI: 90.000,00 €" [ref=e724]':
+                        - cell "Subtotale PICTURE / DI:" [ref=e725]:
+                          - text: Subtotale
+                          - strong [ref=e726]: PICTURE / DI
+                          - text: ":"
+                        - cell "90.000,00 €" [ref=e727]
+                        - cell [ref=e728]
+                      - 'row "Sconto categoria PICTURE / DI: 0.0 —" [ref=e729]':
+                        - cell "Sconto categoria PICTURE / DI:" [ref=e730]:
+                          - text: Sconto categoria
+                          - strong [ref=e731]: PICTURE / DI
+                          - text: ":"
+                        - cell "0.0" [ref=e732]:
+                          - spinbutton [ref=e733]: "0.0"
+                        - cell "—" [ref=e734]
+                        - cell [ref=e735]
+                    - rowgroup [ref=e736]:
+                      - row "⋮⋮ SOUND EDIT" [ref=e737]:
+                        - cell "⋮⋮" [ref=e738]
+                        - cell "SOUND EDIT" [ref=e739]
+                      - 'row "⠿ Sound editorial day Sessione sound editorial in Pro Tools. Dettagliare ruolo: dialogue editing ≈€750/day / sound design + FX editing ≈€750/day / music editing ≈€700/day. Tariffa simile, scelta per disponibilità sala/figura. 60 day Lav 750 0.0 45.000,00 € 🏷 ○ 📁 ✕" [ref=e740]':
+                        - cell "⠿" [ref=e741]:
+                          - checkbox [ref=e742]
+                          - text: ⠿
+                        - 'cell "Sound editorial day Sessione sound editorial in Pro Tools. Dettagliare ruolo: dialogue editing ≈€750/day / sound design + FX editing ≈€750/day / music editing ≈€700/day. Tariffa simile, scelta per disponibilità sala/figura." [ref=e743]':
+                          - textbox [ref=e745]: Sound editorial day
+                          - textbox "dettaglio…" [ref=e746]: "Sessione sound editorial in Pro Tools. Dettagliare ruolo: dialogue editing ≈€750/day / sound design + FX editing ≈€750/day / music editing ≈€700/day. Tariffa simile, scelta per disponibilità sala/figura."
+                        - cell "60" [ref=e747]:
+                          - spinbutton [ref=e748]: "60"
+                        - cell "day Lav" [ref=e749]:
+                          - generic [ref=e750]:
+                            - combobox [ref=e751]:
+                              - option "day" [selected]
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc"
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Lavorazione: maturato da ore booking" [ref=e752]': Lav
+                        - cell "750" [ref=e753]:
+                          - spinbutton [ref=e754]: "750"
+                        - cell "0.0" [ref=e755]:
+                          - spinbutton [ref=e756]: "0.0"
+                        - cell "45.000,00 €" [ref=e757]
+                        - cell "🏷 ○ 📁 ✕" [ref=e758]:
+                          - button "🏷" [ref=e759] [cursor=pointer]
+                          - button "○" [ref=e760] [cursor=pointer]
+                          - button "📁" [ref=e761] [cursor=pointer]
+                          - button "✕" [ref=e762] [cursor=pointer]
+                      - 'row "Subtotale SOUND EDIT: 45.000,00 €" [ref=e763]':
+                        - cell "Subtotale SOUND EDIT:" [ref=e764]:
+                          - text: Subtotale
+                          - strong [ref=e765]: SOUND EDIT
+                          - text: ":"
+                        - cell "45.000,00 €" [ref=e766]
+                        - cell [ref=e767]
+                      - 'row "Sconto categoria SOUND EDIT: 0.0 —" [ref=e768]':
+                        - cell "Sconto categoria SOUND EDIT:" [ref=e769]:
+                          - text: Sconto categoria
+                          - strong [ref=e770]: SOUND EDIT
+                          - text: ":"
+                        - cell "0.0" [ref=e771]:
+                          - spinbutton [ref=e772]: "0.0"
+                        - cell "—" [ref=e773]
+                        - cell [ref=e774]
+                    - rowgroup [ref=e775]:
+                      - row "⋮⋮ Deliveries" [ref=e776]:
+                        - cell "⋮⋮" [ref=e777]
+                        - cell "Deliveries" [ref=e778]
+                      - row "📦 Sky Italia" [ref=e779]:
+                        - cell [ref=e780]
+                        - cell "📦 Sky Italia" [ref=e781]
+                      - row "⠿ Full Mix (Final Mix) / 5.1 SMPTE 📦 Sky Italia Audio scorporato UHD XAVC - file wave multicanale per lingua · Audio scorporato IMF - file MXF Op1A per lingua 1 pc Cons 480 0.0 480,00 € 🏷 ○ 📁 ✕" [ref=e782]:
+                        - cell "⠿" [ref=e783]:
+                          - checkbox [ref=e784]
+                          - text: ⠿
+                        - cell "Full Mix (Final Mix) / 5.1 SMPTE 📦 Sky Italia Audio scorporato UHD XAVC - file wave multicanale per lingua · Audio scorporato IMF - file MXF Op1A per lingua" [ref=e785]:
+                          - generic [ref=e786]:
+                            - textbox [ref=e787]: Full Mix (Final Mix) / 5.1 SMPTE
+                            - button "📦 Sky Italia" [ref=e788] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e789]: Audio scorporato UHD XAVC - file wave multicanale per lingua · Audio scorporato IMF - file MXF Op1A per lingua
+                        - cell "1" [ref=e790]:
+                          - spinbutton [ref=e791]: "1"
+                        - cell "pc Cons" [ref=e792]:
+                          - generic [ref=e793]:
+                            - combobox [ref=e794]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e795]': Cons
+                        - cell "480" [ref=e796]:
+                          - spinbutton [ref=e797]: "480"
+                        - cell "0.0" [ref=e798]:
+                          - spinbutton [ref=e799]: "0.0"
+                        - cell "480,00 €" [ref=e800]
+                        - cell "🏷 ○ 📁 ✕" [ref=e801]:
+                          - button "🏷" [ref=e802] [cursor=pointer]
+                          - button "○" [ref=e803] [cursor=pointer]
+                          - button "📁" [ref=e804] [cursor=pointer]
+                          - button "✕" [ref=e805] [cursor=pointer]
+                      - row "⠿ MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG 📦 Sky Italia UHD 4K Master XAVC Intra MXF Op1A 1 pc Cons 550 0.0 550,00 € 🏷 ○ 📁 ✕" [ref=e806]:
+                        - cell "⠿" [ref=e807]:
+                          - checkbox [ref=e808]
+                          - text: ⠿
+                        - cell "MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG 📦 Sky Italia UHD 4K Master XAVC Intra MXF Op1A" [ref=e809]:
+                          - generic [ref=e810]:
+                            - textbox [ref=e811]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG
+                            - button "📦 Sky Italia" [ref=e812] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e813]: UHD 4K Master XAVC Intra MXF Op1A
+                        - cell "1" [ref=e814]:
+                          - spinbutton [ref=e815]: "1"
+                        - cell "pc Cons" [ref=e816]:
+                          - generic [ref=e817]:
+                            - combobox [ref=e818]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e819]': Cons
+                        - cell "550" [ref=e820]:
+                          - spinbutton [ref=e821]: "550"
+                        - cell "0.0" [ref=e822]:
+                          - spinbutton [ref=e823]: "0.0"
+                        - cell "550,00 €" [ref=e824]
+                        - cell "🏷 ○ 📁 ✕" [ref=e825]:
+                          - button "🏷" [ref=e826] [cursor=pointer]
+                          - button "○" [ref=e827] [cursor=pointer]
+                          - button "📁" [ref=e828] [cursor=pointer]
+                          - button "✕" [ref=e829] [cursor=pointer]
+                      - row "⠿ MXF OP1a / XDCam HD422 50 / HD 1080p 📦 Sky Italia HD Master XDCAM MPEG-2 MXF Op1A · HD Master XDCAM MPEG-2 MXF RDD9 1 pc Cons 350 0.0 350,00 € 🏷 ○ 📁 ✕" [ref=e830]:
+                        - cell "⠿" [ref=e831]:
+                          - checkbox [ref=e832]
+                          - text: ⠿
+                        - cell "MXF OP1a / XDCam HD422 50 / HD 1080p 📦 Sky Italia HD Master XDCAM MPEG-2 MXF Op1A · HD Master XDCAM MPEG-2 MXF RDD9" [ref=e833]:
+                          - generic [ref=e834]:
+                            - textbox [ref=e835]: MXF OP1a / XDCam HD422 50 / HD 1080p
+                            - button "📦 Sky Italia" [ref=e836] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e837]: HD Master XDCAM MPEG-2 MXF Op1A · HD Master XDCAM MPEG-2 MXF RDD9
+                        - cell "1" [ref=e838]:
+                          - spinbutton [ref=e839]: "1"
+                        - cell "pc Cons" [ref=e840]:
+                          - generic [ref=e841]:
+                            - combobox [ref=e842]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e843]': Cons
+                        - cell "350" [ref=e844]:
+                          - spinbutton [ref=e845]: "350"
+                        - cell "0.0" [ref=e846]:
+                          - spinbutton [ref=e847]: "0.0"
+                        - cell "350,00 €" [ref=e848]
+                        - cell "🏷 ○ 📁 ✕" [ref=e849]:
+                          - button "🏷" [ref=e850] [cursor=pointer]
+                          - button "○" [ref=e851] [cursor=pointer]
+                          - button "📁" [ref=e852] [cursor=pointer]
+                          - button "✕" [ref=e853] [cursor=pointer]
+                      - 'row "Subtotale sezione Sky Italia: 1380,00 €" [ref=e854]':
+                        - cell [ref=e855]
+                        - cell "Subtotale sezione Sky Italia:" [ref=e856]:
+                          - text: Subtotale sezione
+                          - strong [ref=e857]: Sky Italia
+                          - text: ":"
+                        - cell "1380,00 €" [ref=e858]
+                        - cell [ref=e859]
+                      - row "📦 Fremantle" [ref=e860]:
+                        - cell [ref=e861]
+                        - cell "📦 Fremantle" [ref=e862]
+                      - row "⠿ Dialogue Stem / 5.1 SMPTE 📦 Fremantle DME separato sincronizzato con ProRes (Foreign Theatrical Sales) 1 pc Cons 250 0.0 250,00 € 🏷 ○ 📁 ✕" [ref=e863]:
+                        - cell "⠿" [ref=e864]:
+                          - checkbox [ref=e865]
+                          - text: ⠿
+                        - cell "Dialogue Stem / 5.1 SMPTE 📦 Fremantle DME separato sincronizzato con ProRes (Foreign Theatrical Sales)" [ref=e866]:
+                          - generic [ref=e867]:
+                            - textbox [ref=e868]: Dialogue Stem / 5.1 SMPTE
+                            - button "📦 Fremantle" [ref=e869] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e870]: DME separato sincronizzato con ProRes (Foreign Theatrical Sales)
+                        - cell "1" [ref=e871]:
+                          - spinbutton [ref=e872]: "1"
+                        - cell "pc Cons" [ref=e873]:
+                          - generic [ref=e874]:
+                            - combobox [ref=e875]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e876]': Cons
+                        - cell "250" [ref=e877]:
+                          - spinbutton [ref=e878]: "250"
+                        - cell "0.0" [ref=e879]:
+                          - spinbutton [ref=e880]: "0.0"
+                        - cell "250,00 €" [ref=e881]
+                        - cell "🏷 ○ 📁 ✕" [ref=e882]:
+                          - button "🏷" [ref=e883] [cursor=pointer]
+                          - button "○" [ref=e884] [cursor=pointer]
+                          - button "📁" [ref=e885] [cursor=pointer]
+                          - button "✕" [ref=e886] [cursor=pointer]
+                      - row "⠿ Full Mix (Final Mix) / 5.1 SMPTE 📦 Fremantle 5.1 Printmaster 24fps DCP reels + single reel · 5.1 Printmaster 25fps · Mix 5.1, M&E 5.1 e DME Stems DCP (International Distribution) 1 pc Cons 600 0.0 600,00 € 🏷 ○ 📁 ✕" [ref=e887]:
+                        - cell "⠿" [ref=e888]:
+                          - checkbox [ref=e889]
+                          - text: ⠿
+                        - cell "Full Mix (Final Mix) / 5.1 SMPTE 📦 Fremantle 5.1 Printmaster 24fps DCP reels + single reel · 5.1 Printmaster 25fps · Mix 5.1, M&E 5.1 e DME Stems DCP (International Distribution)" [ref=e890]:
+                          - generic [ref=e891]:
+                            - textbox [ref=e892]: Full Mix (Final Mix) / 5.1 SMPTE
+                            - button "📦 Fremantle" [ref=e893] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e894]: 5.1 Printmaster 24fps DCP reels + single reel · 5.1 Printmaster 25fps · Mix 5.1, M&E 5.1 e DME Stems DCP (International Distribution)
+                        - cell "1" [ref=e895]:
+                          - spinbutton [ref=e896]: "1"
+                        - cell "pc Cons" [ref=e897]:
+                          - generic [ref=e898]:
+                            - combobox [ref=e899]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e900]': Cons
+                        - cell "600" [ref=e901]:
+                          - spinbutton [ref=e902]: "600"
+                        - cell "0.0" [ref=e903]:
+                          - spinbutton [ref=e904]: "0.0"
+                        - cell "600,00 €" [ref=e905]
+                        - cell "🏷 ○ 📁 ✕" [ref=e906]:
+                          - button "🏷" [ref=e907] [cursor=pointer]
+                          - button "○" [ref=e908] [cursor=pointer]
+                          - button "📁" [ref=e909] [cursor=pointer]
+                          - button "✕" [ref=e910] [cursor=pointer]
+                      - row "⠿ M&E (Music + Effects) / 5.1 SMPTE 📦 Fremantle 5.1 M&E 24fps DCP reels + single reel · 5.1 M&E 25fps 1 pc Cons 450 0.0 450,00 € 🏷 ○ 📁 ✕" [ref=e911]:
+                        - cell "⠿" [ref=e912]:
+                          - checkbox [ref=e913]
+                          - text: ⠿
+                        - cell "M&E (Music + Effects) / 5.1 SMPTE 📦 Fremantle 5.1 M&E 24fps DCP reels + single reel · 5.1 M&E 25fps" [ref=e914]:
+                          - generic [ref=e915]:
+                            - textbox [ref=e916]: M&E (Music + Effects) / 5.1 SMPTE
+                            - button "📦 Fremantle" [ref=e917] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e918]: 5.1 M&E 24fps DCP reels + single reel · 5.1 M&E 25fps
+                        - cell "1" [ref=e919]:
+                          - spinbutton [ref=e920]: "1"
+                        - cell "pc Cons" [ref=e921]:
+                          - generic [ref=e922]:
+                            - combobox [ref=e923]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e924]': Cons
+                        - cell "450" [ref=e925]:
+                          - spinbutton [ref=e926]: "450"
+                        - cell "0.0" [ref=e927]:
+                          - spinbutton [ref=e928]: "0.0"
+                        - cell "450,00 €" [ref=e929]
+                        - cell "🏷 ○ 📁 ✕" [ref=e930]:
+                          - button "🏷" [ref=e931] [cursor=pointer]
+                          - button "○" [ref=e932] [cursor=pointer]
+                          - button "📁" [ref=e933] [cursor=pointer]
+                          - button "✕" [ref=e934] [cursor=pointer]
+                      - row "⠿ Music Stem / Stereo 2.0 📦 Fremantle WAV Colonna Sonora libera da diritti 1 pc Cons 250 0.0 250,00 € 🏷 ○ 📁 ✕" [ref=e935]:
+                        - cell "⠿" [ref=e936]:
+                          - checkbox [ref=e937]
+                          - text: ⠿
+                        - cell "Music Stem / Stereo 2.0 📦 Fremantle WAV Colonna Sonora libera da diritti" [ref=e938]:
+                          - generic [ref=e939]:
+                            - textbox [ref=e940]: Music Stem / Stereo 2.0
+                            - button "📦 Fremantle" [ref=e941] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e942]: WAV Colonna Sonora libera da diritti
+                        - cell "1" [ref=e943]:
+                          - spinbutton [ref=e944]: "1"
+                        - cell "pc Cons" [ref=e945]:
+                          - generic [ref=e946]:
+                            - combobox [ref=e947]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e948]': Cons
+                        - cell "250" [ref=e949]:
+                          - spinbutton [ref=e950]: "250"
+                        - cell "0.0" [ref=e951]:
+                          - spinbutton [ref=e952]: "0.0"
+                        - cell "250,00 €" [ref=e953]
+                        - cell "🏷 ○ 📁 ✕" [ref=e954]:
+                          - button "🏷" [ref=e955] [cursor=pointer]
+                          - button "○" [ref=e956] [cursor=pointer]
+                          - button "📁" [ref=e957] [cursor=pointer]
+                          - button "✕" [ref=e958] [cursor=pointer]
+                      - row "⠿ QuickTime / Apple ProRes 422 HQ 📦 Fremantle Backstage / Deleted Scenes / Interviste ProRes 422 HQ 1 pc Cons 350 0.0 350,00 € 🏷 ○ 📁 ✕" [ref=e959]:
+                        - cell "⠿" [ref=e960]:
+                          - checkbox [ref=e961]
+                          - text: ⠿
+                        - cell "QuickTime / Apple ProRes 422 HQ 📦 Fremantle Backstage / Deleted Scenes / Interviste ProRes 422 HQ" [ref=e962]:
+                          - generic [ref=e963]:
+                            - textbox [ref=e964]: QuickTime / Apple ProRes 422 HQ
+                            - button "📦 Fremantle" [ref=e965] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e966]: Backstage / Deleted Scenes / Interviste ProRes 422 HQ
+                        - cell "1" [ref=e967]:
+                          - spinbutton [ref=e968]: "1"
+                        - cell "pc Cons" [ref=e969]:
+                          - generic [ref=e970]:
+                            - combobox [ref=e971]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e972]': Cons
+                        - cell "350" [ref=e973]:
+                          - spinbutton [ref=e974]: "350"
+                        - cell "0.0" [ref=e975]:
+                          - spinbutton [ref=e976]: "0.0"
+                        - cell "350,00 €" [ref=e977]
+                        - cell "🏷 ○ 📁 ✕" [ref=e978]:
+                          - button "🏷" [ref=e979] [cursor=pointer]
+                          - button "○" [ref=e980] [cursor=pointer]
+                          - button "📁" [ref=e981] [cursor=pointer]
+                          - button "✕" [ref=e982] [cursor=pointer]
+                      - row "⠿ QuickTime / Apple ProRes 422 HQ / HD 1080p 📦 Fremantle ProRes Feature HD (Home Entertainment) · ProRes Textless HD/UHD (Home Entertainment) 1 pc Cons 350 0.0 350,00 € 🏷 ○ 📁 ✕" [ref=e983]:
+                        - cell "⠿" [ref=e984]:
+                          - checkbox [ref=e985]
+                          - text: ⠿
+                        - cell "QuickTime / Apple ProRes 422 HQ / HD 1080p 📦 Fremantle ProRes Feature HD (Home Entertainment) · ProRes Textless HD/UHD (Home Entertainment)" [ref=e986]:
+                          - generic [ref=e987]:
+                            - textbox [ref=e988]: QuickTime / Apple ProRes 422 HQ / HD 1080p
+                            - button "📦 Fremantle" [ref=e989] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e990]: ProRes Feature HD (Home Entertainment) · ProRes Textless HD/UHD (Home Entertainment)
+                        - cell "1" [ref=e991]:
+                          - spinbutton [ref=e992]: "1"
+                        - cell "pc Cons" [ref=e993]:
+                          - generic [ref=e994]:
+                            - combobox [ref=e995]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e996]': Cons
+                        - cell "350" [ref=e997]:
+                          - spinbutton [ref=e998]: "350"
+                        - cell "0.0" [ref=e999]:
+                          - spinbutton [ref=e1000]: "0.0"
+                        - cell "350,00 €" [ref=e1001]
+                        - cell "🏷 ○ 📁 ✕" [ref=e1002]:
+                          - button "🏷" [ref=e1003] [cursor=pointer]
+                          - button "○" [ref=e1004] [cursor=pointer]
+                          - button "📁" [ref=e1005] [cursor=pointer]
+                          - button "✕" [ref=e1006] [cursor=pointer]
+                      - row "⠿ QuickTime / Apple ProRes 422 HQ / UHD 3840 📦 Fremantle ProRes Feature UHD SDR (Home Entertainment) 1 pc Cons 550 0.0 550,00 € 🏷 ○ 📁 ✕" [ref=e1007]:
+                        - cell "⠿" [ref=e1008]:
+                          - checkbox [ref=e1009]
+                          - text: ⠿
+                        - cell "QuickTime / Apple ProRes 422 HQ / UHD 3840 📦 Fremantle ProRes Feature UHD SDR (Home Entertainment)" [ref=e1010]:
+                          - generic [ref=e1011]:
+                            - textbox [ref=e1012]: QuickTime / Apple ProRes 422 HQ / UHD 3840
+                            - button "📦 Fremantle" [ref=e1013] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e1014]: ProRes Feature UHD SDR (Home Entertainment)
+                        - cell "1" [ref=e1015]:
+                          - spinbutton [ref=e1016]: "1"
+                        - cell "pc Cons" [ref=e1017]:
+                          - generic [ref=e1018]:
+                            - combobox [ref=e1019]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e1020]': Cons
+                        - cell "550" [ref=e1021]:
+                          - spinbutton [ref=e1022]: "550"
+                        - cell "0.0" [ref=e1023]:
+                          - spinbutton [ref=e1024]: "0.0"
+                        - cell "550,00 €" [ref=e1025]
+                        - cell "🏷 ○ 📁 ✕" [ref=e1026]:
+                          - button "🏷" [ref=e1027] [cursor=pointer]
+                          - button "○" [ref=e1028] [cursor=pointer]
+                          - button "📁" [ref=e1029] [cursor=pointer]
+                          - button "✕" [ref=e1030] [cursor=pointer]
+                      - row "⠿ QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 📦 Fremantle ProRes Feature UHD HDR (Home Entertainment) 1 pc Cons 550 0.0 550,00 € 🏷 ○ 📁 ✕" [ref=e1031]:
+                        - cell "⠿" [ref=e1032]:
+                          - checkbox [ref=e1033]
+                          - text: ⠿
+                        - cell "QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10 📦 Fremantle ProRes Feature UHD HDR (Home Entertainment)" [ref=e1034]:
+                          - generic [ref=e1035]:
+                            - textbox [ref=e1036]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10
+                            - button "📦 Fremantle" [ref=e1037] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e1038]: ProRes Feature UHD HDR (Home Entertainment)
+                        - cell "1" [ref=e1039]:
+                          - spinbutton [ref=e1040]: "1"
+                        - cell "pc Cons" [ref=e1041]:
+                          - generic [ref=e1042]:
+                            - combobox [ref=e1043]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e1044]': Cons
+                        - cell "550" [ref=e1045]:
+                          - spinbutton [ref=e1046]: "550"
+                        - cell "0.0" [ref=e1047]:
+                          - spinbutton [ref=e1048]: "0.0"
+                        - cell "550,00 €" [ref=e1049]
+                        - cell "🏷 ○ 📁 ✕" [ref=e1050]:
+                          - button "🏷" [ref=e1051] [cursor=pointer]
+                          - button "○" [ref=e1052] [cursor=pointer]
+                          - button "📁" [ref=e1053] [cursor=pointer]
+                          - button "✕" [ref=e1054] [cursor=pointer]
+                      - row "⠿ QuickTime / Apple ProRes 4444 / HD 1080p 📦 Fremantle ProRes Feature HD 4444 (Foreign Theatrical Sales) · ProRes Textless Elements (Foreign Theatrical Sales) 1 pc Cons 750 0.0 750,00 € 🏷 ○ 📁 ✕" [ref=e1055]:
+                        - cell "⠿" [ref=e1056]:
+                          - checkbox [ref=e1057]
+                          - text: ⠿
+                        - cell "QuickTime / Apple ProRes 4444 / HD 1080p 📦 Fremantle ProRes Feature HD 4444 (Foreign Theatrical Sales) · ProRes Textless Elements (Foreign Theatrical Sales)" [ref=e1058]:
+                          - generic [ref=e1059]:
+                            - textbox [ref=e1060]: QuickTime / Apple ProRes 4444 / HD 1080p
+                            - button "📦 Fremantle" [ref=e1061] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e1062]: ProRes Feature HD 4444 (Foreign Theatrical Sales) · ProRes Textless Elements (Foreign Theatrical Sales)
+                        - cell "1" [ref=e1063]:
+                          - spinbutton [ref=e1064]: "1"
+                        - cell "pc Cons" [ref=e1065]:
+                          - generic [ref=e1066]:
+                            - combobox [ref=e1067]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e1068]': Cons
+                        - cell "750" [ref=e1069]:
+                          - spinbutton [ref=e1070]: "750"
+                        - cell "0.0" [ref=e1071]:
+                          - spinbutton [ref=e1072]: "0.0"
+                        - cell "750,00 €" [ref=e1073]
+                        - cell "🏷 ○ 📁 ✕" [ref=e1074]:
+                          - button "🏷" [ref=e1075] [cursor=pointer]
+                          - button "○" [ref=e1076] [cursor=pointer]
+                          - button "📁" [ref=e1077] [cursor=pointer]
+                          - button "✕" [ref=e1078] [cursor=pointer]
+                      - row "⠿ QuickTime / H.264 High Profile / HD 1080p 📦 Fremantle Feature H.264 Stereo + Subtitles IT · H.264 Feature con TC burn-in in reels (Home Entertainment) · Feature MOV H.264 TC burn-in reels (International Distribution) 1 pc Cons 180 0.0 180,00 € 🏷 ○ 📁 ✕" [ref=e1079]:
+                        - cell "⠿" [ref=e1080]:
+                          - checkbox [ref=e1081]
+                          - text: ⠿
+                        - cell "QuickTime / H.264 High Profile / HD 1080p 📦 Fremantle Feature H.264 Stereo + Subtitles IT · H.264 Feature con TC burn-in in reels (Home Entertainment) · Feature MOV H.264 TC burn-in reels (International Distribution)" [ref=e1082]:
+                          - generic [ref=e1083]:
+                            - textbox [ref=e1084]: QuickTime / H.264 High Profile / HD 1080p
+                            - button "📦 Fremantle" [ref=e1085] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e1086]: Feature H.264 Stereo + Subtitles IT · H.264 Feature con TC burn-in in reels (Home Entertainment) · Feature MOV H.264 TC burn-in reels (International Distribution)
+                        - cell "1" [ref=e1087]:
+                          - spinbutton [ref=e1088]: "1"
+                        - cell "pc Cons" [ref=e1089]:
+                          - generic [ref=e1090]:
+                            - combobox [ref=e1091]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e1092]': Cons
+                        - cell "180" [ref=e1093]:
+                          - spinbutton [ref=e1094]: "180"
+                        - cell "0.0" [ref=e1095]:
+                          - spinbutton [ref=e1096]: "0.0"
+                        - cell "180,00 €" [ref=e1097]
+                        - cell "🏷 ○ 📁 ✕" [ref=e1098]:
+                          - button "🏷" [ref=e1099] [cursor=pointer]
+                          - button "○" [ref=e1100] [cursor=pointer]
+                          - button "📁" [ref=e1101] [cursor=pointer]
+                          - button "✕" [ref=e1102] [cursor=pointer]
+                      - row "⠿ Stems (DME bundle) / 5.1 SMPTE 📦 Fremantle 5.1 DME Stems 24fps DCP reels + single reel 1 pc Cons 700 0.0 700,00 € 🏷 ○ 📁 ✕" [ref=e1103]:
+                        - cell "⠿" [ref=e1104]:
+                          - checkbox [ref=e1105]
+                          - text: ⠿
+                        - cell "Stems (DME bundle) / 5.1 SMPTE 📦 Fremantle 5.1 DME Stems 24fps DCP reels + single reel" [ref=e1106]:
+                          - generic [ref=e1107]:
+                            - textbox [ref=e1108]: Stems (DME bundle) / 5.1 SMPTE
+                            - button "📦 Fremantle" [ref=e1109] [cursor=pointer]
+                          - textbox "dettaglio…" [ref=e1110]: 5.1 DME Stems 24fps DCP reels + single reel
+                        - cell "1" [ref=e1111]:
+                          - spinbutton [ref=e1112]: "1"
+                        - cell "pc Cons" [ref=e1113]:
+                          - generic [ref=e1114]:
+                            - combobox [ref=e1115]:
+                              - option "day"
+                              - option "trn 3h"
+                              - option "hr"
+                              - option "pc" [selected]
+                              - option "lot"
+                              - option "shot"
+                              - option "ver"
+                              - option "TB"
+                              - option "GB"
+                              - option "lump"
+                              - option "allow"
+                              - option "fix"
+                              - option "min"
+                            - 'generic "Consegna: maturato manuale o auto-fill" [ref=e1116]': Cons
+                        - cell "700" [ref=e1117]:
+                          - spinbutton [ref=e1118]: "700"
+                        - cell "0.0" [ref=e1119]:
+                          - spinbutton [ref=e1120]: "0.0"
+                        - cell "700,00 €" [ref=e1121]
+                        - cell "🏷 ○ 📁 ✕" [ref=e1122]:
+                          - button "🏷" [ref=e1123] [cursor=pointer]
+                          - button "○" [ref=e1124] [cursor=pointer]
+                          - button "📁" [ref=e1125] [cursor=pointer]
+                          - button "✕" [ref=e1126] [cursor=pointer]
+                      - 'row "Subtotale sezione Fremantle: 4980,00 €" [ref=e1127]':
+                        - cell [ref=e1128]
+                        - cell "Subtotale sezione Fremantle:" [ref=e1129]:
+                          - text: Subtotale sezione
+                          - strong [ref=e1130]: Fremantle
+                          - text: ":"
+                        - cell "4980,00 €" [ref=e1131]
+                        - cell [ref=e1132]
+                      - 'row "Subtotale Deliveries: 6360,00 €" [ref=e1133]':
+                        - cell "Subtotale Deliveries:" [ref=e1134]:
+                          - text: Subtotale
+                          - strong [ref=e1135]: Deliveries
+                          - text: ":"
+                        - cell "6360,00 €" [ref=e1136]
+                        - cell [ref=e1137]
+                      - 'row "Sconto categoria Deliveries: 0.0 —" [ref=e1138]':
+                        - cell "Sconto categoria Deliveries:" [ref=e1139]:
+                          - text: Sconto categoria
+                          - strong [ref=e1140]: Deliveries
+                          - text: ":"
+                        - cell "0.0" [ref=e1141]:
+                          - spinbutton [ref=e1142]: "0.0"
+                        - cell "—" [ref=e1143]
+                        - cell [ref=e1144]
+                  - generic [ref=e1145]:
+                    - text: "Modifica i campi: si salva automaticamente al blur. Maniglia ⠿ riordina voci · maniglia ⋮⋮ sull'header categoria riordina i blocchi. Apri il pannello"
+                    - strong [ref=e1146]: 📋 Listino
+                    - text: e trascina una voce qui per aggiungerla.
+            - complementary [ref=e1148]:
+              - generic [ref=e1149]:
+                - generic [ref=e1150]: 📋 Listino & aggiungi voce
+                - button "✕" [ref=e1151] [cursor=pointer]
+              - generic [ref=e1152]:
+                - generic [ref=e1153]:
+                  - textbox "🔍 Cerca per nome, descrizione, keyword…" [active] [ref=e1154]
+                  - generic [ref=e1155]: 80 di 100 voci
+                - generic [ref=e1156]:
+                  - generic [ref=e1157]:
+                    - generic [ref=e1158] [cursor=pointer]:
+                      - generic [ref=e1159]: 📋 Tutte le voci
+                      - generic [ref=e1160]: "100"
+                    - button "+ voce libera (non in listino)" [ref=e1161] [cursor=pointer]
+                    - generic [ref=e1162]:
+                      - generic [ref=e1163]: Audio
+                      - generic [ref=e1165] [cursor=pointer]:
+                        - generic [ref=e1166]: Deliveries
+                        - generic [ref=e1167]: "19"
+                      - generic [ref=e1168] [cursor=pointer]:
+                        - generic [ref=e1169]: LOCALIZATION
+                        - generic [ref=e1170]: "4"
+                      - generic [ref=e1171] [cursor=pointer]:
+                        - generic [ref=e1172]: MIX
+                        - generic [ref=e1173]: "3"
+                      - generic [ref=e1174] [cursor=pointer]:
+                        - generic [ref=e1175]: SOUND EDIT
+                        - generic [ref=e1176]: "3"
+                    - generic [ref=e1177]:
+                      - generic [ref=e1178]: Commercial / Produzione
+                      - generic [ref=e1180] [cursor=pointer]:
+                        - generic [ref=e1181]: PROJECT MANAGEMENT
+                        - generic [ref=e1182]: "3"
+                    - generic [ref=e1183]:
+                      - generic [ref=e1184]: DI / Video
+                      - generic [ref=e1186] [cursor=pointer]:
+                        - generic [ref=e1187]: ARCHIVE / TRANSFER
+                        - generic [ref=e1188]: "5"
+                      - generic [ref=e1189] [cursor=pointer]:
+                        - generic [ref=e1190]: DAILIES
+                        - generic [ref=e1191]: "2"
+                      - generic [ref=e1192] [cursor=pointer]:
+                        - generic [ref=e1193]: Deliveries
+                        - generic [ref=e1194]: "47"
+                      - generic [ref=e1195] [cursor=pointer]:
+                        - generic [ref=e1196]: PICTURE / DI
+                        - generic [ref=e1197]: "7"
+                      - generic [ref=e1198] [cursor=pointer]:
+                        - generic [ref=e1199]: QC / METADATA
+                        - generic [ref=e1200]: "3"
+                    - generic [ref=e1201]:
+                      - generic [ref=e1202]: VFX / Finishing
+                      - generic [ref=e1204] [cursor=pointer]:
+                        - generic [ref=e1205]: VFX
+                        - generic [ref=e1206]: "4"
+                  - generic [ref=e1207]:
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1208]:
+                      - generic [ref=e1209]:
+                        - generic [ref=e1210]: ⋮⋮ trascina
+                        - generic [ref=e1211]:
+                          - generic [ref=e1212]: Dailies workflow
+                          - generic [ref=e1213]: 450,00 € / day
+                        - generic [ref=e1214]:
+                          - generic [ref=e1215]: DAILIES
+                          - generic [ref=e1216]: DI / Video
+                        - generic [ref=e1217]: "Turnaround dailies completo: sync audio, color base con LUT, transcoding proxy editing, QC operatore, upload su piattaforma review (Frame.io / Pix / Aspera). Dettagliare nella descrizione di riga: piattaforma upload, eventuali limiti di accesso, frame range giornaliero, LUT custom."
+                        - generic [ref=e1218]:
+                          - generic [ref=e1219]: dailies
+                          - generic [ref=e1220]: sync
+                          - generic [ref=e1221]: color
+                          - generic [ref=e1222]: proxy
+                          - generic [ref=e1223]: qc
+                          - generic [ref=e1224]: upload
+                          - generic [ref=e1225]: frameio
+                          - generic [ref=e1226]: pix
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1227]:
+                      - generic [ref=e1228]:
+                        - generic [ref=e1229]: ⋮⋮ trascina
+                        - generic [ref=e1230]:
+                          - generic [ref=e1231]: Camera card offload + verify
+                          - generic [ref=e1232]: 280,00 € / day
+                        - generic [ref=e1233]:
+                          - generic [ref=e1234]: DAILIES
+                          - generic [ref=e1235]: DI / Video
+                        - generic [ref=e1236]: "Offload card camera con generazione MHL/MD5, verifica integrità, backup ridondante. Dettagliare: tipo card, quantità per turno, destinazione storage primaria + secondaria."
+                        - generic [ref=e1237]:
+                          - generic [ref=e1238]: camera
+                          - generic [ref=e1239]: cards
+                          - generic [ref=e1240]: offload
+                          - generic [ref=e1241]: mhl
+                          - generic [ref=e1242]: md5
+                          - generic [ref=e1243]: verify
+                          - generic [ref=e1244]: ingest
+                          - generic [ref=e1245]: backup
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1246]:
+                      - generic [ref=e1247]:
+                        - generic [ref=e1248]: ⋮⋮ trascina
+                        - generic [ref=e1249]:
+                          - generic [ref=e1250]: Online conform
+                          - generic [ref=e1251]: 1000,00 € / day
+                        - generic [ref=e1252]:
+                          - generic [ref=e1253]: PICTURE / DI
+                          - generic [ref=e1254]: DI / Video
+                        - generic [ref=e1255]: "Conform da EDL/AAF con riferimento offline, gestione VFX shots. Dettagliare: risoluzione (2K ≈€900/day, 4K ≈€1100/day, IMF), frame rate, sorgente offline (Avid/Resolve/Premiere)."
+                        - generic [ref=e1256]:
+                          - generic [ref=e1257]: conform
+                          - generic [ref=e1258]: online
+                          - generic [ref=e1259]: finishing
+                          - generic [ref=e1260]: edl
+                          - generic [ref=e1261]: aaf
+                          - generic [ref=e1262]: 2k
+                          - generic [ref=e1263]: 4k
+                          - generic [ref=e1264]: imf
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1265]:
+                      - generic [ref=e1266]:
+                        - generic [ref=e1267]: ⋮⋮ trascina
+                        - generic [ref=e1268]:
+                          - generic [ref=e1269]: Color grading SDR
+                          - generic [ref=e1270]: 1650,00 € / day
+                        - generic [ref=e1271]:
+                          - generic [ref=e1272]: PICTURE / DI
+                          - generic [ref=e1273]: DI / Video
+                        - generic [ref=e1274]: "Sessione color grading SDR Rec.709 con colorist e sala certificata. Dettagliare: risoluzione (2K ≈€1500/day, 4K ≈€1800/day), durata sessione, nome colorist."
+                        - generic [ref=e1275]:
+                          - generic [ref=e1276]: color
+                          - generic [ref=e1277]: grading
+                          - generic [ref=e1278]: sdr
+                          - generic [ref=e1279]: rec709
+                          - generic [ref=e1280]: colorist
+                          - generic [ref=e1281]: di
+                          - generic [ref=e1282]: 2k
+                          - generic [ref=e1283]: 4k
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1284]:
+                      - generic [ref=e1285]:
+                        - generic [ref=e1286]: ⋮⋮ trascina
+                        - generic [ref=e1287]:
+                          - generic [ref=e1288]: Color grading HDR Dolby Vision (incl. trim pass)
+                          - generic [ref=e1289]: 2200,00 € / day
+                        - generic [ref=e1290]:
+                          - generic [ref=e1291]: PICTURE / DI
+                          - generic [ref=e1292]: DI / Video
+                        - generic [ref=e1293]: Sessione HDR P3 D65 PQ con monitor Dolby e generazione metadata Dolby Vision. Trim pass per ogni target HDR/SDR aggiuntivo (1000nit / 600nit / 100nit / Rec.709) ≈€600/pass.
+                        - generic [ref=e1294]:
+                          - generic [ref=e1295]: hdr
+                          - generic [ref=e1296]: dolby
+                          - generic [ref=e1297]: vision
+                          - generic [ref=e1298]: grading
+                          - generic [ref=e1299]: p3
+                          - generic [ref=e1300]: pq
+                          - generic [ref=e1301]: metadata
+                          - generic [ref=e1302]: trim
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1303]:
+                      - generic [ref=e1304]:
+                        - generic [ref=e1305]: ⋮⋮ trascina
+                        - generic [ref=e1306]:
+                          - generic [ref=e1307]: Versioning / textless / alternative cuts
+                          - generic [ref=e1308]: 400,00 € / version
+                        - generic [ref=e1309]:
+                          - generic [ref=e1310]: PICTURE / DI
+                          - generic [ref=e1311]: DI / Video
+                        - generic [ref=e1312]: Creazione versione textless o alternative cut (VF, OAR, festival cut) con conform aggiuntivo.
+                        - generic [ref=e1313]:
+                          - generic [ref=e1314]: textless
+                          - generic [ref=e1315]: version
+                          - generic [ref=e1316]: recompositing
+                          - generic [ref=e1317]: vf
+                          - generic [ref=e1318]: oar
+                          - generic [ref=e1319]: alternative
+                          - generic [ref=e1320]: festival
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1321]:
+                      - generic [ref=e1322]:
+                        - generic [ref=e1323]: ⋮⋮ trascina
+                        - generic [ref=e1324]:
+                          - generic [ref=e1325]: LTO LTFS archive
+                          - generic [ref=e1326]: 130,00 € / TB
+                        - generic [ref=e1327]:
+                          - generic [ref=e1328]: ARCHIVE / TRANSFER
+                          - generic [ref=e1329]: DI / Video
+                        - generic [ref=e1330]: Archive su nastri LTO7/8 LTFS con verifica MD5. Dettagliare nella riga il tipo di materiale archiviato (camera original ≈€120/TB, DPX graded ≈€150/TB, DPX ungraded ≈€130/TB, Dolby Vision master ≈€180/TB, ProRes deliverables ≈€100/TB) — il prezzo varia con la natura del materiale.
+                        - generic [ref=e1331]:
+                          - generic [ref=e1332]: lto
+                          - generic [ref=e1333]: ltfs
+                          - generic [ref=e1334]: archive
+                          - generic [ref=e1335]: md5
+                          - generic [ref=e1336]: dpx
+                          - generic [ref=e1337]: prores
+                          - generic [ref=e1338]: dolby
+                          - generic [ref=e1339]: vision
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1340]:
+                      - generic [ref=e1341]:
+                        - generic [ref=e1342]: ⋮⋮ trascina
+                        - generic [ref=e1343]:
+                          - generic [ref=e1344]: Drive consegna fisica + shipping
+                          - generic [ref=e1345]: 170,00 € / pc
+                        - generic [ref=e1346]:
+                          - generic [ref=e1347]: ARCHIVE / TRANSFER
+                          - generic [ref=e1348]: DI / Video
+                        - generic [ref=e1349]: "Drive di consegna materiali al cliente: USB 3.0 exFAT/NTFS, CRU EXT3 per DCP, o equivalente. Dettagliare: tipo, capacità, shipping incluso o a parte. Hardcost del supporto stimato 80-100€/drive (verrà ridiscusso in α.66.9 cost-rate)."
+                        - generic [ref=e1350]:
+                          - generic [ref=e1351]: usb
+                          - generic [ref=e1352]: hdd
+                          - generic [ref=e1353]: drive
+                          - generic [ref=e1354]: delivery
+                          - generic [ref=e1355]: exfat
+                          - generic [ref=e1356]: ntfs
+                          - generic [ref=e1357]: cru
+                          - generic [ref=e1358]: ext3
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1359]:
+                      - generic [ref=e1360]:
+                        - generic [ref=e1361]: ⋮⋮ trascina
+                        - generic [ref=e1362]:
+                          - generic [ref=e1363]: Transfer elettronico (Aspera/Signiant/Mediashuttle)
+                          - generic [ref=e1364]: 80,00 € / TB
+                        - generic [ref=e1365]:
+                          - generic [ref=e1366]: ARCHIVE / TRANSFER
+                          - generic [ref=e1367]: DI / Video
+                        - generic [ref=e1368]: Trasferimento elettronico via Signiant/Aspera/Mediashuttle. Tariffa per TB trasferito.
+                        - generic [ref=e1369]:
+                          - generic [ref=e1370]: signiant
+                          - generic [ref=e1371]: mediashuttle
+                          - generic [ref=e1372]: aspera
+                          - generic [ref=e1373]: transfer
+                          - generic [ref=e1374]: upload
+                          - generic [ref=e1375]: download
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1376]:
+                      - generic [ref=e1377]:
+                        - generic [ref=e1378]: ⋮⋮ trascina
+                        - generic [ref=e1379]:
+                          - generic [ref=e1380]: Checksum generation MD5/xxHash
+                          - generic [ref=e1381]: 150,00 € / allow
+                        - generic [ref=e1382]:
+                          - generic [ref=e1383]: ARCHIVE / TRANSFER
+                          - generic [ref=e1384]: DI / Video
+                        - generic [ref=e1385]: Generazione e verifica checksum MD5 / xxHash su deliverables/archive. Forfait per consegna.
+                        - generic [ref=e1386]:
+                          - generic [ref=e1387]: md5
+                          - generic [ref=e1388]: xxhash
+                          - generic [ref=e1389]: checksum
+                          - generic [ref=e1390]: hash
+                          - generic [ref=e1391]: verify
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1392]:
+                      - generic [ref=e1393]:
+                        - generic [ref=e1394]: ⋮⋮ trascina
+                        - generic [ref=e1395]:
+                          - generic [ref=e1396]: VFX shot composite
+                          - generic [ref=e1397]: 700,00 € / shot
+                        - generic [ref=e1398]:
+                          - generic [ref=e1399]: VFX
+                          - generic [ref=e1400]: VFX / Finishing
+                        - generic [ref=e1401]: "Composite VFX shot per shot. Dettagliare: standard ≈€450/shot (cleanup, screen replacement, comp semplici) / complex ≈€1200/shot (hero shot, multi-layer, integrazione 3D). Negoziare per shot count totale."
+                        - generic [ref=e1402]:
+                          - generic [ref=e1403]: vfx
+                          - generic [ref=e1404]: composite
+                          - generic [ref=e1405]: shot
+                          - generic [ref=e1406]: comp
+                          - generic [ref=e1407]: cleanup
+                          - generic [ref=e1408]: hero
+                          - generic [ref=e1409]: complex
+                          - generic [ref=e1410]: 3d
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1411]:
+                      - generic [ref=e1412]:
+                        - generic [ref=e1413]: ⋮⋮ trascina
+                        - generic [ref=e1414]:
+                          - generic [ref=e1415]: VFX plates pull / handles export
+                          - generic [ref=e1416]: 600,00 € / allow
+                        - generic [ref=e1417]:
+                          - generic [ref=e1418]: VFX
+                          - generic [ref=e1419]: VFX / Finishing
+                        - generic [ref=e1420]: Estrazione plates da DI con maniglie configurabili per VFX vendor. Forfait per progetto.
+                        - generic [ref=e1421]:
+                          - generic [ref=e1422]: vfx
+                          - generic [ref=e1423]: plates
+                          - generic [ref=e1424]: pull
+                          - generic [ref=e1425]: handles
+                          - generic [ref=e1426]: export
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1427]:
+                      - generic [ref=e1428]:
+                        - generic [ref=e1429]: ⋮⋮ trascina
+                        - generic [ref=e1430]:
+                          - generic [ref=e1431]: Title design / motion graphics
+                          - generic [ref=e1432]: 1100,00 € / day
+                        - generic [ref=e1433]:
+                          - generic [ref=e1434]: VFX
+                          - generic [ref=e1435]: VFX / Finishing
+                        - generic [ref=e1436]: Sessione design titoli, lower thirds, end roller, motion graphics.
+                        - generic [ref=e1437]:
+                          - generic [ref=e1438]: titles
+                          - generic [ref=e1439]: motion
+                          - generic [ref=e1440]: graphics
+                          - generic [ref=e1441]: opening
+                          - generic [ref=e1442]: credits
+                          - generic [ref=e1443]: lower thirds
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1444]:
+                      - generic [ref=e1445]:
+                        - generic [ref=e1446]: ⋮⋮ trascina
+                        - generic [ref=e1447]:
+                          - generic [ref=e1448]: Roto / paint / cleanup
+                          - generic [ref=e1449]: 315,00 € / shot
+                        - generic [ref=e1450]:
+                          - generic [ref=e1451]: VFX
+                          - generic [ref=e1452]: VFX / Finishing
+                        - generic [ref=e1453]: "Lavorazione shot per shot. Dettagliare: roto (mask/isolation/holdouts) ≈€350 / paint (cleanup wire/rig, beauty fix) ≈€280 / stabilization."
+                        - generic [ref=e1454]:
+                          - generic [ref=e1455]: roto
+                          - generic [ref=e1456]: rotoscope
+                          - generic [ref=e1457]: paint
+                          - generic [ref=e1458]: cleanup
+                          - generic [ref=e1459]: stabilize
+                          - generic [ref=e1460]: beauty
+                          - generic [ref=e1461]: rig
+                          - generic [ref=e1462]: wire
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1463]:
+                      - generic [ref=e1464]:
+                        - generic [ref=e1465]: ⋮⋮ trascina
+                        - generic [ref=e1466]:
+                          - generic [ref=e1467]: Sound editorial day
+                          - generic [ref=e1468]: 750,00 € / day
+                        - generic [ref=e1469]:
+                          - generic [ref=e1470]: SOUND EDIT
+                          - generic [ref=e1471]: Audio
+                        - generic [ref=e1472]: "Sessione sound editorial in Pro Tools. Dettagliare ruolo: dialogue editing ≈€750/day / sound design + FX editing ≈€750/day / music editing ≈€700/day. Tariffa simile, scelta per disponibilità sala/figura."
+                        - generic [ref=e1473]:
+                          - generic [ref=e1474]: dialogue
+                          - generic [ref=e1475]: sound
+                          - generic [ref=e1476]: design
+                          - generic [ref=e1477]: sfx
+                          - generic [ref=e1478]: music
+                          - generic [ref=e1479]: edit
+                          - generic [ref=e1480]: audio
+                          - generic [ref=e1481]: protools
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1482]:
+                      - generic [ref=e1483]:
+                        - generic [ref=e1484]: ⋮⋮ trascina
+                        - generic [ref=e1485]:
+                          - generic [ref=e1486]: Foley session
+                          - generic [ref=e1487]: 900,00 € / day
+                        - generic [ref=e1488]:
+                          - generic [ref=e1489]: SOUND EDIT
+                          - generic [ref=e1490]: Audio
+                        - generic [ref=e1491]: Registrazione foley con artist, engineer e sala foley.
+                        - generic [ref=e1492]:
+                          - generic [ref=e1493]: foley
+                          - generic [ref=e1494]: recording
+                          - generic [ref=e1495]: footsteps
+                          - generic [ref=e1496]: props
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1497]:
+                      - generic [ref=e1498]:
+                        - generic [ref=e1499]: ⋮⋮ trascina
+                        - generic [ref=e1500]:
+                          - generic [ref=e1501]: ADR session
+                          - generic [ref=e1502]: 1100,00 € / day
+                        - generic [ref=e1503]:
+                          - generic [ref=e1504]: SOUND EDIT
+                          - generic [ref=e1505]: Audio
+                        - generic [ref=e1506]: Sessione ADR con sound engineer, sala ADR e direttore.
+                        - generic [ref=e1507]:
+                          - generic [ref=e1508]: adr
+                          - generic [ref=e1509]: looping
+                          - generic [ref=e1510]: dub
+                          - generic [ref=e1511]: recording
+                          - generic [ref=e1512]: vocal
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1513]:
+                      - generic [ref=e1514]:
+                        - generic [ref=e1515]: ⋮⋮ trascina
+                        - generic [ref=e1516]:
+                          - generic [ref=e1517]: Re-recording mix surround
+                          - generic [ref=e1518]: 1950,00 € / day
+                        - generic [ref=e1519]:
+                          - generic [ref=e1520]: MIX
+                          - generic [ref=e1521]: Audio
+                        - generic [ref=e1522]: "Mix theatrical con re-recording mixer e sala certificata. Dettagliare formato: 5.1 ≈€1800/day / 7.1 ≈€2100/day. Hardcost (consumabili sala / setup) ≈€500/day."
+                        - generic [ref=e1523]:
+                          - generic [ref=e1524]: mix
+                          - generic [ref=e1525]: "5.1"
+                          - generic [ref=e1526]: "7.1"
+                          - generic [ref=e1527]: surround
+                          - generic [ref=e1528]: rerecord
+                          - generic [ref=e1529]: theater
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1530]:
+                      - generic [ref=e1531]:
+                        - generic [ref=e1532]: ⋮⋮ trascina
+                        - generic [ref=e1533]:
+                          - generic [ref=e1534]: Re-recording mix Dolby Atmos
+                          - generic [ref=e1535]: 2800,00 € / day
+                        - generic [ref=e1536]:
+                          - generic [ref=e1537]: MIX
+                          - generic [ref=e1538]: Audio
+                        - generic [ref=e1539]: Mix immersivo Dolby Atmos con sala certificata e renderer. Hardcost (license renderer / setup) ≈€800/day.
+                        - generic [ref=e1540]:
+                          - generic [ref=e1541]: atmos
+                          - generic [ref=e1542]: dolby
+                          - generic [ref=e1543]: immersive
+                          - generic [ref=e1544]: mix
+                          - generic [ref=e1545]: renderer
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1546]:
+                      - generic [ref=e1547]:
+                        - generic [ref=e1548]: ⋮⋮ trascina
+                        - generic [ref=e1549]:
+                          - generic [ref=e1550]: Mix theater rental
+                          - generic [ref=e1551]: 900,00 € / day
+                        - generic [ref=e1552]:
+                          - generic [ref=e1553]: MIX
+                          - generic [ref=e1554]: Audio
+                        - generic [ref=e1555]: Affitto sala mix certificata Dolby — solo struttura, no mixer. Per sessioni con team esterno.
+                        - generic [ref=e1556]:
+                          - generic [ref=e1557]: theater
+                          - generic [ref=e1558]: dub
+                          - generic [ref=e1559]: stage
+                          - generic [ref=e1560]: room
+                          - generic [ref=e1561]: rental
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1562]:
+                      - generic [ref=e1563]:
+                        - generic [ref=e1564]: ⋮⋮ trascina
+                        - generic [ref=e1565]:
+                          - generic [ref=e1566]: Subtitle translation
+                          - generic [ref=e1567]: 16,00 € / min
+                        - generic [ref=e1568]:
+                          - generic [ref=e1569]: LOCALIZATION
+                          - generic [ref=e1570]: Audio
+                        - generic [ref=e1571]: "Traduzione sottotitoli con QC linguistico. Dettagliare direzione: EN→IT ≈€15/min / IT→EN ≈€18/min / altre coppie linguistiche."
+                        - generic [ref=e1572]:
+                          - generic [ref=e1573]: subtitle
+                          - generic [ref=e1574]: translation
+                          - generic [ref=e1575]: italian
+                          - generic [ref=e1576]: english
+                          - generic [ref=e1577]: spotting
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1578]:
+                      - generic [ref=e1579]:
+                        - generic [ref=e1580]: ⋮⋮ trascina
+                        - generic [ref=e1581]:
+                          - generic [ref=e1582]: Subtitle conformance multi-format
+                          - generic [ref=e1583]: 280,00 € / pc
+                        - generic [ref=e1584]:
+                          - generic [ref=e1585]: LOCALIZATION
+                          - generic [ref=e1586]: Audio
+                        - generic [ref=e1587]: Conformance sottotitoli a IMSC1.1 / STL / SRT / iTT / TimedText XML INTEROP-SMPTE. Per ogni formato.
+                        - generic [ref=e1588]:
+                          - generic [ref=e1589]: imsc
+                          - generic [ref=e1590]: stl
+                          - generic [ref=e1591]: srt
+                          - generic [ref=e1592]: itt
+                          - generic [ref=e1593]: timedtext
+                          - generic [ref=e1594]: subtitle
+                          - generic [ref=e1595]: conform
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1596]:
+                      - generic [ref=e1597]:
+                        - generic [ref=e1598]: ⋮⋮ trascina
+                        - generic [ref=e1599]:
+                          - generic [ref=e1600]: Caption authoring (SDH / CC / forced)
+                          - generic [ref=e1601]: 400,00 € / pc
+                        - generic [ref=e1602]:
+                          - generic [ref=e1603]: LOCALIZATION
+                          - generic [ref=e1604]: Audio
+                        - generic [ref=e1605]: Authoring caption per non udenti (SDH/CC, 32 char/line standard) o sottotitoli forzati narrativi (lingue straniere in scena). Dettagliare tipo (SDH ≈€450 / forced ≈€280).
+                        - generic [ref=e1606]:
+                          - generic [ref=e1607]: sdh
+                          - generic [ref=e1608]: cc
+                          - generic [ref=e1609]: deaf
+                          - generic [ref=e1610]: accessibility
+                          - generic [ref=e1611]: closed
+                          - generic [ref=e1612]: caption
+                          - generic [ref=e1613]: forced
+                          - generic [ref=e1614]: narrative
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1615]:
+                      - generic [ref=e1616]:
+                        - generic [ref=e1617]: ⋮⋮ trascina
+                        - generic [ref=e1618]:
+                          - generic [ref=e1619]: Dubbing direction + recording
+                          - generic [ref=e1620]: 1500,00 € / day
+                        - generic [ref=e1621]:
+                          - generic [ref=e1622]: LOCALIZATION
+                          - generic [ref=e1623]: Audio
+                        - generic [ref=e1624]: Sessione doppiaggio con direttore, attori, fonico, sala. Hardcost (rimborsi attori / spese sala) ≈€200/day.
+                        - generic [ref=e1625]:
+                          - generic [ref=e1626]: dub
+                          - generic [ref=e1627]: dubbing
+                          - generic [ref=e1628]: voiceover
+                          - generic [ref=e1629]: loop
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1630]:
+                      - generic [ref=e1631]:
+                        - generic [ref=e1632]: ⋮⋮ trascina
+                        - generic [ref=e1633]:
+                          - generic [ref=e1634]: Manual QC
+                          - generic [ref=e1635]: 365,00 € / pc
+                        - generic [ref=e1636]:
+                          - generic [ref=e1637]: QC / METADATA
+                          - generic [ref=e1638]: DI / Video
+                        - generic [ref=e1639]: "QC manuale con report tecnico (artefatti video, audio, sub). Dettagliare: HD/SDR ≈€280/pc / UHD/HDR (con monitor Dolby Vision e analisi metadata) ≈€450/pc."
+                        - generic [ref=e1640]:
+                          - generic [ref=e1641]: qc
+                          - generic [ref=e1642]: manual
+                          - generic [ref=e1643]: review
+                          - generic [ref=e1644]: hd
+                          - generic [ref=e1645]: sdr
+                          - generic [ref=e1646]: uhd
+                          - generic [ref=e1647]: hdr
+                          - generic [ref=e1648]: dolby
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1649]:
+                      - generic [ref=e1650]:
+                        - generic [ref=e1651]: ⋮⋮ trascina
+                        - generic [ref=e1652]:
+                          - generic [ref=e1653]: Auto-QC Baton/Vidcheck
+                          - generic [ref=e1654]: 120,00 € / pc
+                        - generic [ref=e1655]:
+                          - generic [ref=e1656]: QC / METADATA
+                          - generic [ref=e1657]: DI / Video
+                        - generic [ref=e1658]: QC automatico Baton/Vidcheck/Aurora con report XML. Veloce ed economico, complementare al manual QC.
+                        - generic [ref=e1659]:
+                          - generic [ref=e1660]: baton
+                          - generic [ref=e1661]: vidcheck
+                          - generic [ref=e1662]: aurora
+                          - generic [ref=e1663]: autoqc
+                          - generic [ref=e1664]: automated
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1665]:
+                      - generic [ref=e1666]:
+                        - generic [ref=e1667]: ⋮⋮ trascina
+                        - generic [ref=e1668]:
+                          - generic [ref=e1669]: Metadata XML + Music Cue Sheet
+                          - generic [ref=e1670]: 315,00 € / pc
+                        - generic [ref=e1671]:
+                          - generic [ref=e1672]: QC / METADATA
+                          - generic [ref=e1673]: DI / Video
+                        - generic [ref=e1674]: Compilazione metadata XML (Sky/RAI/NBCU TechOps/IMF/IMSC) ≈€280 OR Music Cue Sheet (autori, editori, ISWC) ≈€350. Dettagliare tipo nella riga.
+                        - generic [ref=e1675]:
+                          - generic [ref=e1676]: metadata
+                          - generic [ref=e1677]: xml
+                          - generic [ref=e1678]: techops
+                          - generic [ref=e1679]: gtm
+                          - generic [ref=e1680]: sidecar
+                          - generic [ref=e1681]: imf
+                          - generic [ref=e1682]: cue
+                          - generic [ref=e1683]: sheet
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1684]:
+                      - generic [ref=e1685]:
+                        - generic [ref=e1686]: ⋮⋮ trascina
+                        - generic [ref=e1687]:
+                          - generic [ref=e1688]: Production management
+                          - generic [ref=e1689]: 575,00 € / day
+                        - generic [ref=e1690]:
+                          - generic [ref=e1691]: PROJECT MANAGEMENT
+                          - generic [ref=e1692]: Commercial / Produzione
+                        - generic [ref=e1693]: "Project manager o production coordinator dedicato al progetto. Dettagliare ruolo: PM (coordinamento, scheduling, deliverables tracking) ≈€700/day / Coordinator (liaison vendor, calendari, materiali) ≈€450/day."
+                        - generic [ref=e1694]:
+                          - generic [ref=e1695]: project
+                          - generic [ref=e1696]: manager
+                          - generic [ref=e1697]: pm
+                          - generic [ref=e1698]: coordinator
+                          - generic [ref=e1699]: production
+                          - generic [ref=e1700]: tpr
+                          - generic [ref=e1701]: liaison
+                          - generic [ref=e1702]: tracking
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1703]:
+                      - generic [ref=e1704]:
+                        - generic [ref=e1705]: ⋮⋮ trascina
+                        - generic [ref=e1706]:
+                          - generic [ref=e1707]: Quote / estimate preparation
+                          - generic [ref=e1708]: 450,00 € / pc
+                        - generic [ref=e1709]:
+                          - generic [ref=e1710]: PROJECT MANAGEMENT
+                          - generic [ref=e1711]: Commercial / Produzione
+                        - generic [ref=e1712]: Preparazione quotazione con analisi capitolato e stima risorse. Forfait per quote.
+                        - generic [ref=e1713]:
+                          - generic [ref=e1714]: quote
+                          - generic [ref=e1715]: estimate
+                          - generic [ref=e1716]: bid
+                          - generic [ref=e1717]: preventivo
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1718]:
+                      - generic [ref=e1719]:
+                        - generic [ref=e1720]: ⋮⋮ trascina
+                        - generic [ref=e1721]:
+                          - generic [ref=e1722]: Travel / shipping allowance
+                          - generic [ref=e1723]: 350,00 € / allow
+                        - generic [ref=e1724]:
+                          - generic [ref=e1725]: PROJECT MANAGEMENT
+                          - generic [ref=e1726]: Commercial / Produzione
+                        - generic [ref=e1727]: Forfait spese di trasferimento personale e shipping deliverables. Da dettagliare nella riga in base al progetto.
+                        - generic [ref=e1728]:
+                          - generic [ref=e1729]: travel
+                          - generic [ref=e1730]: shipping
+                          - generic [ref=e1731]: courier
+                          - generic [ref=e1732]: transfer
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1733]:
+                      - generic [ref=e1734]:
+                        - generic [ref=e1735]: ⋮⋮ trascina
+                        - generic [ref=e1736]:
+                          - generic [ref=e1737]: Finishing
+                          - generic [ref=e1738]: 100,00 € / day
+                        - generic [ref=e1739]:
+                          - generic [ref=e1740]: PICTURE / DI
+                          - generic [ref=e1741]: DI / Video
+                        - generic [ref=e1742]: Dedicated operator for mastering
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1743]:
+                      - generic [ref=e1744]:
+                        - generic [ref=e1745]: ⋮⋮ trascina
+                        - generic [ref=e1746]:
+                          - generic [ref=e1747]: Data Transfer
+                          - generic [ref=e1748]: 50,00 € / TB
+                        - generic [ref=e1749]:
+                          - generic [ref=e1750]: PICTURE / DI
+                          - generic [ref=e1751]: DI / Video
+                        - generic [ref=e1752]: Data Transfer / Data Copy Management per TB/GB
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1753]:
+                      - generic [ref=e1754]:
+                        - generic [ref=e1755]: ⋮⋮ trascina
+                        - generic [ref=e1756]:
+                          - generic [ref=e1757]: MXF OP1a / MPEG-2 (XDCam IMX) / SD PAL 576i/p
+                          - generic [ref=e1758]: 250,00 € / pc
+                        - generic [ref=e1759]:
+                          - generic [ref=e1760]: Deliveries
+                          - generic [ref=e1761]: DI / Video
+                        - generic [ref=e1762]: Bucket consegna generico (video).
+                        - generic [ref=e1763]:
+                          - generic [ref=e1764]: video
+                          - generic [ref=e1765]: mxf op1a
+                          - generic [ref=e1766]: mpeg-2 (xdcam imx)
+                          - generic [ref=e1767]: sd pal 576i/p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1768]:
+                      - generic [ref=e1769]:
+                        - generic [ref=e1770]: ⋮⋮ trascina
+                        - generic [ref=e1771]:
+                          - generic [ref=e1772]: MXF OP1a / XDCam HD422 50 / HD 1080p
+                          - generic [ref=e1773]: 450,00 € / pc
+                        - generic [ref=e1774]:
+                          - generic [ref=e1775]: Deliveries
+                          - generic [ref=e1776]: DI / Video
+                        - generic [ref=e1777]: Bucket consegna generico (video).
+                        - generic [ref=e1778]:
+                          - generic [ref=e1779]: video
+                          - generic [ref=e1780]: mxf op1a
+                          - generic [ref=e1781]: xdcam hd422 50
+                          - generic [ref=e1782]: hd 1080p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1783]:
+                      - generic [ref=e1784]:
+                        - generic [ref=e1785]: ⋮⋮ trascina
+                        - generic [ref=e1786]:
+                          - generic [ref=e1787]: MXF OP1a / XAVC Intra Class 100 / HD 1080p
+                          - generic [ref=e1788]: 450,00 € / pc
+                        - generic [ref=e1789]:
+                          - generic [ref=e1790]: Deliveries
+                          - generic [ref=e1791]: DI / Video
+                        - generic [ref=e1792]: Bucket consegna generico (video).
+                        - generic [ref=e1793]:
+                          - generic [ref=e1794]: video
+                          - generic [ref=e1795]: mxf op1a
+                          - generic [ref=e1796]: xavc intra class 100
+                          - generic [ref=e1797]: hd 1080p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1798]:
+                      - generic [ref=e1799]:
+                        - generic [ref=e1800]: ⋮⋮ trascina
+                        - generic [ref=e1801]:
+                          - generic [ref=e1802]: MXF OP1a / XAVC Intra Class 300 / UHD 3840
+                          - generic [ref=e1803]: 700,00 € / pc
+                        - generic [ref=e1804]:
+                          - generic [ref=e1805]: Deliveries
+                          - generic [ref=e1806]: DI / Video
+                        - generic [ref=e1807]: Bucket consegna generico (video).
+                        - generic [ref=e1808]:
+                          - generic [ref=e1809]: video
+                          - generic [ref=e1810]: mxf op1a
+                          - generic [ref=e1811]: xavc intra class 300
+                          - generic [ref=e1812]: uhd 3840
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1813]:
+                      - generic [ref=e1814]:
+                        - generic [ref=e1815]: ⋮⋮ trascina
+                        - generic [ref=e1816]:
+                          - generic [ref=e1817]: QuickTime / Apple ProRes 4444 / HD 1080p
+                          - generic [ref=e1818]: 750,00 € / pc
+                        - generic [ref=e1819]:
+                          - generic [ref=e1820]: Deliveries
+                          - generic [ref=e1821]: DI / Video
+                        - generic [ref=e1822]: Bucket consegna generico (video).
+                        - generic [ref=e1823]:
+                          - generic [ref=e1824]: video
+                          - generic [ref=e1825]: quicktime
+                          - generic [ref=e1826]: apple prores 4444
+                          - generic [ref=e1827]: hd 1080p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1828]:
+                      - generic [ref=e1829]:
+                        - generic [ref=e1830]: ⋮⋮ trascina
+                        - generic [ref=e1831]:
+                          - generic [ref=e1832]: QuickTime / Apple ProRes 4444 / UHD 3840
+                          - generic [ref=e1833]: 750,00 € / pc
+                        - generic [ref=e1834]:
+                          - generic [ref=e1835]: Deliveries
+                          - generic [ref=e1836]: DI / Video
+                        - generic [ref=e1837]: Bucket consegna generico (video).
+                        - generic [ref=e1838]:
+                          - generic [ref=e1839]: video
+                          - generic [ref=e1840]: quicktime
+                          - generic [ref=e1841]: apple prores 4444
+                          - generic [ref=e1842]: uhd 3840
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1843]:
+                      - generic [ref=e1844]:
+                        - generic [ref=e1845]: ⋮⋮ trascina
+                        - generic [ref=e1846]:
+                          - generic [ref=e1847]: QuickTime / Apple ProRes 422 HQ / HD 1080p
+                          - generic [ref=e1848]: 350,00 € / pc
+                        - generic [ref=e1849]:
+                          - generic [ref=e1850]: Deliveries
+                          - generic [ref=e1851]: DI / Video
+                        - generic [ref=e1852]: Bucket consegna generico (video).
+                        - generic [ref=e1853]:
+                          - generic [ref=e1854]: video
+                          - generic [ref=e1855]: quicktime
+                          - generic [ref=e1856]: apple prores 422 hq
+                          - generic [ref=e1857]: hd 1080p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1858]:
+                      - generic [ref=e1859]:
+                        - generic [ref=e1860]: ⋮⋮ trascina
+                        - generic [ref=e1861]:
+                          - generic [ref=e1862]: QuickTime / Apple ProRes 422 HQ / UHD 3840
+                          - generic [ref=e1863]: 550,00 € / pc
+                        - generic [ref=e1864]:
+                          - generic [ref=e1865]: Deliveries
+                          - generic [ref=e1866]: DI / Video
+                        - generic [ref=e1867]: Bucket consegna generico (video).
+                        - generic [ref=e1868]:
+                          - generic [ref=e1869]: video
+                          - generic [ref=e1870]: quicktime
+                          - generic [ref=e1871]: apple prores 422 hq
+                          - generic [ref=e1872]: uhd 3840
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1873]:
+                      - generic [ref=e1874]:
+                        - generic [ref=e1875]: ⋮⋮ trascina
+                        - generic [ref=e1876]:
+                          - generic [ref=e1877]: MXF OP1a / XAVC Intra Class 300 / UHD 3840 / HLG
+                          - generic [ref=e1878]: 700,00 € / pc
+                        - generic [ref=e1879]:
+                          - generic [ref=e1880]: Deliveries
+                          - generic [ref=e1881]: DI / Video
+                        - generic [ref=e1882]: Bucket consegna generico (video).
+                        - generic [ref=e1883]:
+                          - generic [ref=e1884]: video
+                          - generic [ref=e1885]: mxf op1a
+                          - generic [ref=e1886]: xavc intra class 300
+                          - generic [ref=e1887]: uhd 3840
+                          - generic [ref=e1888]: hlg
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1889]:
+                      - generic [ref=e1890]:
+                        - generic [ref=e1891]: ⋮⋮ trascina
+                        - generic [ref=e1892]:
+                          - generic [ref=e1893]: M&E (Music + Effects) / Stereo 2.0
+                          - generic [ref=e1894]: 450,00 € / pc
+                        - generic [ref=e1895]:
+                          - generic [ref=e1896]: Deliveries
+                          - generic [ref=e1897]: Audio
+                        - generic [ref=e1898]: Bucket consegna generico (audio).
+                        - generic [ref=e1899]:
+                          - generic [ref=e1900]: audio
+                          - generic [ref=e1901]: m&e (music + effects)
+                          - generic [ref=e1902]: stereo 2.0
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1903]:
+                      - generic [ref=e1904]:
+                        - generic [ref=e1905]: ⋮⋮ trascina
+                        - generic [ref=e1906]:
+                          - generic [ref=e1907]: Subtitle Sidecar (EBU-STL)
+                          - generic [ref=e1908]: 120,00 € / pc
+                        - generic [ref=e1909]:
+                          - generic [ref=e1910]: Deliveries
+                          - generic [ref=e1911]: DI / Video
+                        - generic [ref=e1912]: Bucket consegna generico (subtitle).
+                        - generic [ref=e1913]:
+                          - generic [ref=e1914]: subtitle
+                          - generic [ref=e1915]: subtitle sidecar (ebu-stl)
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1916]:
+                      - generic [ref=e1917]:
+                        - generic [ref=e1918]: ⋮⋮ trascina
+                        - generic [ref=e1919]:
+                          - generic [ref=e1920]: QuickTime / Apple ProRes 4444 / UHD 3840 / HDR10
+                          - generic [ref=e1921]: 750,00 € / pc
+                        - generic [ref=e1922]:
+                          - generic [ref=e1923]: Deliveries
+                          - generic [ref=e1924]: DI / Video
+                        - generic [ref=e1925]: Bucket consegna generico (video).
+                        - generic [ref=e1926]:
+                          - generic [ref=e1927]: video
+                          - generic [ref=e1928]: quicktime
+                          - generic [ref=e1929]: apple prores 4444
+                          - generic [ref=e1930]: uhd 3840
+                          - generic [ref=e1931]: hdr10
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1932]:
+                      - generic [ref=e1933]:
+                        - generic [ref=e1934]: ⋮⋮ trascina
+                        - generic [ref=e1935]:
+                          - generic [ref=e1936]: DCP Interop / JPEG 2000 (DCP) / 2K DCI Scope
+                          - generic [ref=e1937]: 1200,00 € / pc
+                        - generic [ref=e1938]:
+                          - generic [ref=e1939]: Deliveries
+                          - generic [ref=e1940]: DI / Video
+                        - generic [ref=e1941]: Bucket consegna generico (video).
+                        - generic [ref=e1942]:
+                          - generic [ref=e1943]: video
+                          - generic [ref=e1944]: dcp interop
+                          - generic [ref=e1945]: jpeg 2000 (dcp)
+                          - generic [ref=e1946]: 2k dci scope
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1947]:
+                      - generic [ref=e1948]:
+                        - generic [ref=e1949]: ⋮⋮ trascina
+                        - generic [ref=e1950]:
+                          - generic [ref=e1951]: DCP SMPTE / JPEG 2000 (DCP) / 2K DCI Scope
+                          - generic [ref=e1952]: 1200,00 € / pc
+                        - generic [ref=e1953]:
+                          - generic [ref=e1954]: Deliveries
+                          - generic [ref=e1955]: DI / Video
+                        - generic [ref=e1956]: Bucket consegna generico (video).
+                        - generic [ref=e1957]:
+                          - generic [ref=e1958]: video
+                          - generic [ref=e1959]: dcp smpte
+                          - generic [ref=e1960]: jpeg 2000 (dcp)
+                          - generic [ref=e1961]: 2k dci scope
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1962]:
+                      - generic [ref=e1963]:
+                        - generic [ref=e1964]: ⋮⋮ trascina
+                        - generic [ref=e1965]:
+                          - generic [ref=e1966]: QuickTime / H.264 High Profile / HD 1080p
+                          - generic [ref=e1967]: 180,00 € / pc
+                        - generic [ref=e1968]:
+                          - generic [ref=e1969]: Deliveries
+                          - generic [ref=e1970]: DI / Video
+                        - generic [ref=e1971]: Bucket consegna generico (video).
+                        - generic [ref=e1972]:
+                          - generic [ref=e1973]: video
+                          - generic [ref=e1974]: quicktime
+                          - generic [ref=e1975]: h.264 high profile
+                          - generic [ref=e1976]: hd 1080p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1977]:
+                      - generic [ref=e1978]:
+                        - generic [ref=e1979]: ⋮⋮ trascina
+                        - generic [ref=e1980]:
+                          - generic [ref=e1981]: KDM / DKDM
+                          - generic [ref=e1982]: 80,00 € / pc
+                        - generic [ref=e1983]:
+                          - generic [ref=e1984]: Deliveries
+                          - generic [ref=e1985]: DI / Video
+                        - generic [ref=e1986]: Bucket consegna generico (key).
+                        - generic [ref=e1987]:
+                          - generic [ref=e1988]: key
+                          - generic [ref=e1989]: kdm / dkdm
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e1990]:
+                      - generic [ref=e1991]:
+                        - generic [ref=e1992]: ⋮⋮ trascina
+                        - generic [ref=e1993]:
+                          - generic [ref=e1994]: Optical Disc Image (ISO)
+                          - generic [ref=e1995]: 150,00 € / pc
+                        - generic [ref=e1996]:
+                          - generic [ref=e1997]: Deliveries
+                          - generic [ref=e1998]: DI / Video
+                        - generic [ref=e1999]: Bucket consegna generico (disc).
+                        - generic [ref=e2000]:
+                          - generic [ref=e2001]: disc
+                          - generic [ref=e2002]: optical disc image (iso)
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2003]:
+                      - generic [ref=e2004]:
+                        - generic [ref=e2005]: ⋮⋮ trascina
+                        - generic [ref=e2006]:
+                          - generic [ref=e2007]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HDR10
+                          - generic [ref=e2008]: 550,00 € / pc
+                        - generic [ref=e2009]:
+                          - generic [ref=e2010]: Deliveries
+                          - generic [ref=e2011]: DI / Video
+                        - generic [ref=e2012]: Bucket consegna generico (video).
+                        - generic [ref=e2013]:
+                          - generic [ref=e2014]: video
+                          - generic [ref=e2015]: quicktime
+                          - generic [ref=e2016]: apple prores 422 hq
+                          - generic [ref=e2017]: uhd 3840
+                          - generic [ref=e2018]: hdr10
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2019]:
+                      - generic [ref=e2020]:
+                        - generic [ref=e2021]: ⋮⋮ trascina
+                        - generic [ref=e2022]:
+                          - generic [ref=e2023]: Image Sequence TIFF / 2K DCI Full
+                          - generic [ref=e2024]: 900,00 € / pc
+                        - generic [ref=e2025]:
+                          - generic [ref=e2026]: Deliveries
+                          - generic [ref=e2027]: DI / Video
+                        - generic [ref=e2028]: Bucket consegna generico (video).
+                        - generic [ref=e2029]:
+                          - generic [ref=e2030]: video
+                          - generic [ref=e2031]: image sequence tiff
+                          - generic [ref=e2032]: 2k dci full
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2033]:
+                      - generic [ref=e2034]:
+                        - generic [ref=e2035]: ⋮⋮ trascina
+                        - generic [ref=e2036]:
+                          - generic [ref=e2037]: Full Mix (Final Mix) / 5.1 SMPTE
+                          - generic [ref=e2038]: 600,00 € / pc
+                        - generic [ref=e2039]:
+                          - generic [ref=e2040]: Deliveries
+                          - generic [ref=e2041]: Audio
+                        - generic [ref=e2042]: Bucket consegna generico (audio).
+                        - generic [ref=e2043]:
+                          - generic [ref=e2044]: audio
+                          - generic [ref=e2045]: full mix (final mix)
+                          - generic [ref=e2046]: 5.1 smpte
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2047]:
+                      - generic [ref=e2048]:
+                        - generic [ref=e2049]: ⋮⋮ trascina
+                        - generic [ref=e2050]:
+                          - generic [ref=e2051]: M&E (Music + Effects) / 5.1 SMPTE
+                          - generic [ref=e2052]: 450,00 € / pc
+                        - generic [ref=e2053]:
+                          - generic [ref=e2054]: Deliveries
+                          - generic [ref=e2055]: Audio
+                        - generic [ref=e2056]: Bucket consegna generico (audio).
+                        - generic [ref=e2057]:
+                          - generic [ref=e2058]: audio
+                          - generic [ref=e2059]: m&e (music + effects)
+                          - generic [ref=e2060]: 5.1 smpte
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2061]:
+                      - generic [ref=e2062]:
+                        - generic [ref=e2063]: ⋮⋮ trascina
+                        - generic [ref=e2064]:
+                          - generic [ref=e2065]: Stems (DME bundle) / 5.1 SMPTE
+                          - generic [ref=e2066]: 700,00 € / pc
+                        - generic [ref=e2067]:
+                          - generic [ref=e2068]: Deliveries
+                          - generic [ref=e2069]: Audio
+                        - generic [ref=e2070]: Bucket consegna generico (audio).
+                        - generic [ref=e2071]:
+                          - generic [ref=e2072]: audio
+                          - generic [ref=e2073]: stems (dme bundle)
+                          - generic [ref=e2074]: 5.1 smpte
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2075]:
+                      - generic [ref=e2076]:
+                        - generic [ref=e2077]: ⋮⋮ trascina
+                        - generic [ref=e2078]:
+                          - generic [ref=e2079]: Optional Audio (AD/VI) / Mono 1.0
+                          - generic [ref=e2080]: 350,00 € / pc
+                        - generic [ref=e2081]:
+                          - generic [ref=e2082]: Deliveries
+                          - generic [ref=e2083]: Audio
+                        - generic [ref=e2084]: Bucket consegna generico (audio).
+                        - generic [ref=e2085]:
+                          - generic [ref=e2086]: audio
+                          - generic [ref=e2087]: optional audio (ad/vi)
+                          - generic [ref=e2088]: mono 1.0
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2089]:
+                      - generic [ref=e2090]:
+                        - generic [ref=e2091]: ⋮⋮ trascina
+                        - generic [ref=e2092]:
+                          - generic [ref=e2093]: QuickTime / Apple ProRes 422 HQ
+                          - generic [ref=e2094]: 350,00 € / pc
+                        - generic [ref=e2095]:
+                          - generic [ref=e2096]: Deliveries
+                          - generic [ref=e2097]: DI / Video
+                        - generic [ref=e2098]: Bucket consegna generico (video).
+                        - generic [ref=e2099]:
+                          - generic [ref=e2100]: video
+                          - generic [ref=e2101]: quicktime
+                          - generic [ref=e2102]: apple prores 422 hq
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2103]:
+                      - generic [ref=e2104]:
+                        - generic [ref=e2105]: ⋮⋮ trascina
+                        - generic [ref=e2106]:
+                          - generic [ref=e2107]: Full Mix (Final Mix) / Mono 1.0
+                          - generic [ref=e2108]: 600,00 € / pc
+                        - generic [ref=e2109]:
+                          - generic [ref=e2110]: Deliveries
+                          - generic [ref=e2111]: Audio
+                        - generic [ref=e2112]: Bucket consegna generico (audio).
+                        - generic [ref=e2113]:
+                          - generic [ref=e2114]: audio
+                          - generic [ref=e2115]: full mix (final mix)
+                          - generic [ref=e2116]: mono 1.0
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2117]:
+                      - generic [ref=e2118]:
+                        - generic [ref=e2119]: ⋮⋮ trascina
+                        - generic [ref=e2120]:
+                          - generic [ref=e2121]: Dialogue Stem / 5.1 SMPTE
+                          - generic [ref=e2122]: 250,00 € / pc
+                        - generic [ref=e2123]:
+                          - generic [ref=e2124]: Deliveries
+                          - generic [ref=e2125]: Audio
+                        - generic [ref=e2126]: Bucket consegna generico (audio).
+                        - generic [ref=e2127]:
+                          - generic [ref=e2128]: audio
+                          - generic [ref=e2129]: dialogue stem
+                          - generic [ref=e2130]: 5.1 smpte
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2131]:
+                      - generic [ref=e2132]:
+                        - generic [ref=e2133]: ⋮⋮ trascina
+                        - generic [ref=e2134]:
+                          - generic [ref=e2135]: Subtitle Sidecar (TTML/IMSC)
+                          - generic [ref=e2136]: 120,00 € / pc
+                        - generic [ref=e2137]:
+                          - generic [ref=e2138]: Deliveries
+                          - generic [ref=e2139]: DI / Video
+                        - generic [ref=e2140]: Bucket consegna generico (subtitle).
+                        - generic [ref=e2141]:
+                          - generic [ref=e2142]: subtitle
+                          - generic [ref=e2143]: subtitle sidecar (ttml/imsc)
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2144]:
+                      - generic [ref=e2145]:
+                        - generic [ref=e2146]: ⋮⋮ trascina
+                        - generic [ref=e2147]:
+                          - generic [ref=e2148]: Music Stem / Stereo 2.0
+                          - generic [ref=e2149]: 250,00 € / pc
+                        - generic [ref=e2150]:
+                          - generic [ref=e2151]: Deliveries
+                          - generic [ref=e2152]: Audio
+                        - generic [ref=e2153]: Bucket consegna generico (audio).
+                        - generic [ref=e2154]:
+                          - generic [ref=e2155]: audio
+                          - generic [ref=e2156]: music stem
+                          - generic [ref=e2157]: stereo 2.0
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2158]:
+                      - generic [ref=e2159]:
+                        - generic [ref=e2160]: ⋮⋮ trascina
+                        - generic [ref=e2161]:
+                          - generic [ref=e2162]: DCP SMPTE / JPEG 2000 (DCP) / 4K DCI Full
+                          - generic [ref=e2163]: 1800,00 € / pc
+                        - generic [ref=e2164]:
+                          - generic [ref=e2165]: Deliveries
+                          - generic [ref=e2166]: DI / Video
+                        - generic [ref=e2167]: Bucket consegna generico (video).
+                        - generic [ref=e2168]:
+                          - generic [ref=e2169]: video
+                          - generic [ref=e2170]: dcp smpte
+                          - generic [ref=e2171]: jpeg 2000 (dcp)
+                          - generic [ref=e2172]: 4k dci full
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2173]:
+                      - generic [ref=e2174]:
+                        - generic [ref=e2175]: ⋮⋮ trascina
+                        - generic [ref=e2176]:
+                          - generic [ref=e2177]: MP4 / H.264 High Profile / HD 1080p
+                          - generic [ref=e2178]: 180,00 € / pc
+                        - generic [ref=e2179]:
+                          - generic [ref=e2180]: Deliveries
+                          - generic [ref=e2181]: DI / Video
+                        - generic [ref=e2182]: Bucket consegna generico (video).
+                        - generic [ref=e2183]:
+                          - generic [ref=e2184]: video
+                          - generic [ref=e2185]: mp4
+                          - generic [ref=e2186]: h.264 high profile
+                          - generic [ref=e2187]: hd 1080p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2188]:
+                      - generic [ref=e2189]:
+                        - generic [ref=e2190]: ⋮⋮ trascina
+                        - generic [ref=e2191]:
+                          - generic [ref=e2192]: Image Sequence J2C / JPEG 2000 (DCP)
+                          - generic [ref=e2193]: 900,00 € / pc
+                        - generic [ref=e2194]:
+                          - generic [ref=e2195]: Deliveries
+                          - generic [ref=e2196]: DI / Video
+                        - generic [ref=e2197]: Bucket consegna generico (video).
+                        - generic [ref=e2198]:
+                          - generic [ref=e2199]: video
+                          - generic [ref=e2200]: image sequence j2c
+                          - generic [ref=e2201]: jpeg 2000 (dcp)
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2202]:
+                      - generic [ref=e2203]:
+                        - generic [ref=e2204]: ⋮⋮ trascina
+                        - generic [ref=e2205]:
+                          - generic [ref=e2206]: Full Mix (Final Mix) / Stereo 2.0
+                          - generic [ref=e2207]: 600,00 € / pc
+                        - generic [ref=e2208]:
+                          - generic [ref=e2209]: Deliveries
+                          - generic [ref=e2210]: Audio
+                        - generic [ref=e2211]: Bucket consegna generico (audio).
+                        - generic [ref=e2212]:
+                          - generic [ref=e2213]: audio
+                          - generic [ref=e2214]: full mix (final mix)
+                          - generic [ref=e2215]: stereo 2.0
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2216]:
+                      - generic [ref=e2217]:
+                        - generic [ref=e2218]: ⋮⋮ trascina
+                        - generic [ref=e2219]:
+                          - generic [ref=e2220]: Music Stem
+                          - generic [ref=e2221]: 250,00 € / pc
+                        - generic [ref=e2222]:
+                          - generic [ref=e2223]: Deliveries
+                          - generic [ref=e2224]: Audio
+                        - generic [ref=e2225]: Bucket consegna generico (audio).
+                        - generic [ref=e2226]:
+                          - generic [ref=e2227]: audio
+                          - generic [ref=e2228]: music stem
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2229]:
+                      - generic [ref=e2230]:
+                        - generic [ref=e2231]: ⋮⋮ trascina
+                        - generic [ref=e2232]:
+                          - generic [ref=e2233]: Full Mix (Final Mix)
+                          - generic [ref=e2234]: 600,00 € / pc
+                        - generic [ref=e2235]:
+                          - generic [ref=e2236]: Deliveries
+                          - generic [ref=e2237]: Audio
+                        - generic [ref=e2238]: Bucket consegna generico (audio).
+                        - generic [ref=e2239]:
+                          - generic [ref=e2240]: audio
+                          - generic [ref=e2241]: full mix (final mix)
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2242]:
+                      - generic [ref=e2243]:
+                        - generic [ref=e2244]: ⋮⋮ trascina
+                        - generic [ref=e2245]:
+                          - generic [ref=e2246]: QuickTime / Apple ProRes 4444 / 4K DCI Full
+                          - generic [ref=e2247]: 750,00 € / pc
+                        - generic [ref=e2248]:
+                          - generic [ref=e2249]: Deliveries
+                          - generic [ref=e2250]: DI / Video
+                        - generic [ref=e2251]: Bucket consegna generico (video).
+                        - generic [ref=e2252]:
+                          - generic [ref=e2253]: video
+                          - generic [ref=e2254]: quicktime
+                          - generic [ref=e2255]: apple prores 4444
+                          - generic [ref=e2256]: 4k dci full
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2257]:
+                      - generic [ref=e2258]:
+                        - generic [ref=e2259]: ⋮⋮ trascina
+                        - generic [ref=e2260]:
+                          - generic [ref=e2261]: QuickTime / Apple ProRes 4444 XQ / 4K DCI Full / HDR10
+                          - generic [ref=e2262]: 900,00 € / pc
+                        - generic [ref=e2263]:
+                          - generic [ref=e2264]: Deliveries
+                          - generic [ref=e2265]: DI / Video
+                        - generic [ref=e2266]: Bucket consegna generico (video).
+                        - generic [ref=e2267]:
+                          - generic [ref=e2268]: video
+                          - generic [ref=e2269]: quicktime
+                          - generic [ref=e2270]: apple prores 4444 xq
+                          - generic [ref=e2271]: 4k dci full
+                          - generic [ref=e2272]: hdr10
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2273]:
+                      - generic [ref=e2274]:
+                        - generic [ref=e2275]: ⋮⋮ trascina
+                        - generic [ref=e2276]:
+                          - generic [ref=e2277]: Music Stem / 5.1 SMPTE
+                          - generic [ref=e2278]: 250,00 € / pc
+                        - generic [ref=e2279]:
+                          - generic [ref=e2280]: Deliveries
+                          - generic [ref=e2281]: Audio
+                        - generic [ref=e2282]: Bucket consegna generico (audio).
+                        - generic [ref=e2283]:
+                          - generic [ref=e2284]: audio
+                          - generic [ref=e2285]: music stem
+                          - generic [ref=e2286]: 5.1 smpte
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2287]:
+                      - generic [ref=e2288]:
+                        - generic [ref=e2289]: ⋮⋮ trascina
+                        - generic [ref=e2290]:
+                          - generic [ref=e2291]: Effects Stem / 5.1 SMPTE
+                          - generic [ref=e2292]: 250,00 € / pc
+                        - generic [ref=e2293]:
+                          - generic [ref=e2294]: Deliveries
+                          - generic [ref=e2295]: Audio
+                        - generic [ref=e2296]: Bucket consegna generico (audio).
+                        - generic [ref=e2297]:
+                          - generic [ref=e2298]: audio
+                          - generic [ref=e2299]: effects stem
+                          - generic [ref=e2300]: 5.1 smpte
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2301]:
+                      - generic [ref=e2302]:
+                        - generic [ref=e2303]: ⋮⋮ trascina
+                        - generic [ref=e2304]:
+                          - generic [ref=e2305]: Foley Stem / 5.1 SMPTE
+                          - generic [ref=e2306]: 250,00 € / pc
+                        - generic [ref=e2307]:
+                          - generic [ref=e2308]: Deliveries
+                          - generic [ref=e2309]: Audio
+                        - generic [ref=e2310]: Bucket consegna generico (audio).
+                        - generic [ref=e2311]:
+                          - generic [ref=e2312]: audio
+                          - generic [ref=e2313]: foley stem
+                          - generic [ref=e2314]: 5.1 smpte
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2315]:
+                      - generic [ref=e2316]:
+                        - generic [ref=e2317]: ⋮⋮ trascina
+                        - generic [ref=e2318]:
+                          - generic [ref=e2319]: Dialogue Stem / Mono 1.0
+                          - generic [ref=e2320]: 250,00 € / pc
+                        - generic [ref=e2321]:
+                          - generic [ref=e2322]: Deliveries
+                          - generic [ref=e2323]: Audio
+                        - generic [ref=e2324]: Bucket consegna generico (audio).
+                        - generic [ref=e2325]:
+                          - generic [ref=e2326]: audio
+                          - generic [ref=e2327]: dialogue stem
+                          - generic [ref=e2328]: mono 1.0
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2329]:
+                      - generic [ref=e2330]:
+                        - generic [ref=e2331]: ⋮⋮ trascina
+                        - generic [ref=e2332]:
+                          - generic [ref=e2333]: Effects Stem / Mono 1.0
+                          - generic [ref=e2334]: 250,00 € / pc
+                        - generic [ref=e2335]:
+                          - generic [ref=e2336]: Deliveries
+                          - generic [ref=e2337]: Audio
+                        - generic [ref=e2338]: Bucket consegna generico (audio).
+                        - generic [ref=e2339]:
+                          - generic [ref=e2340]: audio
+                          - generic [ref=e2341]: effects stem
+                          - generic [ref=e2342]: mono 1.0
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2343]:
+                      - generic [ref=e2344]:
+                        - generic [ref=e2345]: ⋮⋮ trascina
+                        - generic [ref=e2346]:
+                          - generic [ref=e2347]: IMF App 2 / JPEG 2000 P-HT (IMF) / UHD 3840 / HLG
+                          - generic [ref=e2348]: 1500,00 € / pc
+                        - generic [ref=e2349]:
+                          - generic [ref=e2350]: Deliveries
+                          - generic [ref=e2351]: DI / Video
+                        - generic [ref=e2352]: Bucket consegna generico (video).
+                        - generic [ref=e2353]:
+                          - generic [ref=e2354]: video
+                          - generic [ref=e2355]: imf app 2
+                          - generic [ref=e2356]: jpeg 2000 p-ht (imf)
+                          - generic [ref=e2357]: uhd 3840
+                          - generic [ref=e2358]: hlg
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2359]:
+                      - generic [ref=e2360]:
+                        - generic [ref=e2361]: ⋮⋮ trascina
+                        - generic [ref=e2362]:
+                          - generic [ref=e2363]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / HLG
+                          - generic [ref=e2364]: 550,00 € / pc
+                        - generic [ref=e2365]:
+                          - generic [ref=e2366]: Deliveries
+                          - generic [ref=e2367]: DI / Video
+                        - generic [ref=e2368]: Bucket consegna generico (video).
+                        - generic [ref=e2369]:
+                          - generic [ref=e2370]: video
+                          - generic [ref=e2371]: quicktime
+                          - generic [ref=e2372]: apple prores 422 hq
+                          - generic [ref=e2373]: uhd 3840
+                          - generic [ref=e2374]: hlg
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2375]:
+                      - generic [ref=e2376]:
+                        - generic [ref=e2377]: ⋮⋮ trascina
+                        - generic [ref=e2378]:
+                          - generic [ref=e2379]: QuickTime / Apple ProRes 422 / SD NTSC 480i/p
+                          - generic [ref=e2380]: 250,00 € / pc
+                        - generic [ref=e2381]:
+                          - generic [ref=e2382]: Deliveries
+                          - generic [ref=e2383]: DI / Video
+                        - generic [ref=e2384]: Bucket consegna generico (video).
+                        - generic [ref=e2385]:
+                          - generic [ref=e2386]: video
+                          - generic [ref=e2387]: quicktime
+                          - generic [ref=e2388]: apple prores 422
+                          - generic [ref=e2389]: sd ntsc 480i/p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2390]:
+                      - generic [ref=e2391]:
+                        - generic [ref=e2392]: ⋮⋮ trascina
+                        - generic [ref=e2393]:
+                          - generic [ref=e2394]: QuickTime / Apple ProRes 422 HQ / UHD 3840 / Dolby Vision
+                          - generic [ref=e2395]: 550,00 € / pc
+                        - generic [ref=e2396]:
+                          - generic [ref=e2397]: Deliveries
+                          - generic [ref=e2398]: DI / Video
+                        - generic [ref=e2399]: Bucket consegna generico (video).
+                        - generic [ref=e2400]:
+                          - generic [ref=e2401]: video
+                          - generic [ref=e2402]: quicktime
+                          - generic [ref=e2403]: apple prores 422 hq
+                          - generic [ref=e2404]: uhd 3840
+                          - generic [ref=e2405]: dolby vision
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2406]:
+                      - generic [ref=e2407]:
+                        - generic [ref=e2408]: ⋮⋮ trascina
+                        - generic [ref=e2409]:
+                          - generic [ref=e2410]: QuickTime / MPEG-2 (XDCam IMX) / SD PAL 576i/p
+                          - generic [ref=e2411]: 250,00 € / pc
+                        - generic [ref=e2412]:
+                          - generic [ref=e2413]: Deliveries
+                          - generic [ref=e2414]: DI / Video
+                        - generic [ref=e2415]: Bucket consegna generico (video).
+                        - generic [ref=e2416]:
+                          - generic [ref=e2417]: video
+                          - generic [ref=e2418]: quicktime
+                          - generic [ref=e2419]: mpeg-2 (xdcam imx)
+                          - generic [ref=e2420]: sd pal 576i/p
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2421]:
+                      - generic [ref=e2422]:
+                        - generic [ref=e2423]: ⋮⋮ trascina
+                        - generic [ref=e2424]:
+                          - generic [ref=e2425]: MXF OP1a
+                          - generic [ref=e2426]: 450,00 € / pc
+                        - generic [ref=e2427]:
+                          - generic [ref=e2428]: Deliveries
+                          - generic [ref=e2429]: DI / Video
+                        - generic [ref=e2430]: Bucket consegna generico (video).
+                        - generic [ref=e2431]:
+                          - generic [ref=e2432]: video
+                          - generic [ref=e2433]: mxf op1a
+                    - generic "Click per editare · Trascina per aggiungere subito" [ref=e2434]:
+                      - generic [ref=e2435]:
+                        - generic [ref=e2436]: ⋮⋮ trascina
+                        - generic [ref=e2437]:
+                          - generic [ref=e2438]: QuickTime / H.264 High Profile / 2K DCI Scope
+                          - generic [ref=e2439]: 180,00 € / pc
+                        - generic [ref=e2440]:
+                          - generic [ref=e2441]: Deliveries
+                          - generic [ref=e2442]: DI / Video
+                        - generic [ref=e2443]: Bucket consegna generico (video).
+                        - generic [ref=e2444]:
+                          - generic [ref=e2445]: video
+                          - generic [ref=e2446]: quicktime
+                          - generic [ref=e2447]: h.264 high profile
+                          - generic [ref=e2448]: 2k dci scope
+                    - generic [ref=e2449]: Mostro le prime 80 di 100. Affina la ricerca per vedere il resto.
+                - generic [ref=e2450]:
+                  - generic [ref=e2451]:
+                    - text: Click su una voce qui sopra, oppure trascinala nelle voci preventivo a sinistra. In alternativa
+                    - button "+ crea una voce libera" [ref=e2452] [cursor=pointer]
+                  - text: ▾
+              - generic [ref=e2453]:
+                - button "Chiudi" [ref=e2454] [cursor=pointer]
+                - button "Aggiungi alla quotazione" [ref=e2455] [cursor=pointer]
+        - text: ▾ ▾ ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e303] [cursor=pointer]:
+    - img "Claqo bot" [ref=e304]
+  - dialog "Copilot AI" [ref=e305]:
+    - generic [ref=e306]:
+      - img "Claqo bot" [ref=e308]
+      - heading "Copilot" [level=3] [ref=e309]
+      - generic [ref=e310]: —
+      - button "Nuova conversazione" [ref=e311] [cursor=pointer]:
+        - img [ref=e312]
+      - button "Chiudi" [ref=e313] [cursor=pointer]:
+        - img [ref=e314]
+    - generic [ref=e317]:
+      - generic [ref=e318]: "Storia:"
+      - button "(nuova) ▾" [ref=e320] [cursor=pointer]
+    - generic [ref=e323]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e324] [cursor=pointer]:
+        - img [ref=e325]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e327]
+      - button "Invia" [ref=e328] [cursor=pointer]
+  - generic [ref=e329]:
+    - generic [ref=e330]:
+      - generic [ref=e331]: 🔔 Notifiche
+      - generic [ref=e332]:
+        - button "✓ Tutte lette" [ref=e333] [cursor=pointer]
+        - button "✕" [ref=e334] [cursor=pointer]
+    - generic [ref=e336]: Caricamento…
+  - text: ▾ ▾

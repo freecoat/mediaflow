@@ -53,6 +53,8 @@ PROVIDERS = {
         "scopes": (
             "openid email profile "
             "https://www.googleapis.com/auth/gmail.send "
+            "https://www.googleapis.com/auth/gmail.readonly "
+            "https://www.googleapis.com/auth/gmail.compose "
             "https://www.googleapis.com/auth/drive.file "
             "https://www.googleapis.com/auth/calendar.app.created "
             "https://www.googleapis.com/auth/calendar.readonly"

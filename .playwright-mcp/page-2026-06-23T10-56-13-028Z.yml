@@ -1,0 +1,1130 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Main
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Records
+          - link "Clients" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clients
+          - link "Projects" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Projects
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operations
+          - link "Planning" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Planning
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Work hours" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Work hours
+        - generic [ref=e55]:
+          - generic [ref=e56]: Quotes
+          - link "Price List" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Price List
+          - link "Quotes" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotes
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finance
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "SAL — Avanzamento" [ref=e76] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=e78]
+            - generic [ref=e81]: SAL — Avanzamento
+          - link "Invoicing" [ref=e82] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e84]
+            - generic [ref=e86]: Invoicing
+          - link "Cashflow & Forecast" [ref=e87] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e89]
+            - generic [ref=e92]: Cashflow & Forecast
+          - link "YoY Reports + Export" [ref=e93] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e95]
+            - generic [ref=e98]: YoY Reports + Export
+          - link "Suppliers" [ref=e99] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e101]
+            - generic [ref=e104]: Suppliers
+          - link "Overhead costs" [ref=e105] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e107]
+            - generic [ref=e110]: Overhead costs
+        - generic [ref=e111]:
+          - generic [ref=e112]: Media
+          - link "Asset Library" [ref=e113] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e115]
+            - generic [ref=e117]: Asset Library
+          - link "Filesystem scan" [ref=e118] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e120]
+            - generic [ref=e124]: Filesystem scan
+          - link "Asset In/Out" [ref=e125] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e127]
+            - generic [ref=e132]: Asset In/Out
+          - link "Physical Assets" [ref=e133] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e135]
+            - generic [ref=e137]: Physical Assets
+          - link "Delivery Specs" [ref=e138] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e140]
+            - generic [ref=e145]: Delivery Specs
+          - link "Import → Quote" [ref=e146] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e148]
+            - generic [ref=e151]: Import → Quote
+          - link "Storage" [ref=e152] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=e154]
+            - generic [ref=e158]: Storage
+          - link "KDM/DKDM" [ref=e159] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=e161]
+            - generic [ref=e164]: KDM/DKDM
+        - generic [ref=e165]:
+          - generic [ref=e166]: Platform
+          - link "Tenants" [ref=e167] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e169]
+            - generic [ref=e173]: Tenants
+        - generic [ref=e174]:
+          - generic [ref=e175]: Configuration
+          - link "Departments" [ref=e176] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e178]
+            - generic [ref=e182]: Departments
+          - link "Settings" [ref=e183] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e185]
+            - generic [ref=e188]: Settings
+        - generic [ref=e189]:
+          - generic [ref=e190]: Help
+          - link "Manual" [ref=e191] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e193]
+            - generic [ref=e195]: Manual
+        - generic [ref=e196]:
+          - generic [ref=e197]: Administration
+          - link "Users" [ref=e198] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e200]
+            - generic [ref=e203]: Users
+          - link "Roles & Permissions" [ref=e204] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e206]
+            - generic [ref=e209]: Roles & Permissions
+          - link "Trash" [ref=e210] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e212]
+            - generic [ref=e215]: Trash
+          - link "Audit log" [ref=e216] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e218]
+            - generic [ref=e221]: Audit log
+      - link "Logout" [ref=e223] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e225]
+        - generic [ref=e228]: Logout
+    - generic [ref=e229]:
+      - banner [ref=e230]:
+        - generic [ref=e231]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e232] [cursor=pointer]:
+            - img [ref=e233]
+          - generic [ref=e236]: Richieste KDM/DKDM
+        - generic [ref=e237]:
+          - button "+ New request" [ref=e238] [cursor=pointer]:
+            - text: +
+            - generic [ref=e239]: New request
+          - button "Open theme palette" [ref=e241] [cursor=pointer]:
+            - img [ref=e243]
+          - button "Ingrandisci visualizzazione" [ref=e250] [cursor=pointer]:
+            - img [ref=e252]
+          - button "🇬🇧" [ref=e256] [cursor=pointer]:
+            - generic [ref=e257]: 🇬🇧
+          - button "8" [ref=e258] [cursor=pointer]:
+            - img [ref=e260]
+            - generic [ref=e263]: "8"
+          - generic "admin@mediaflow.it" [ref=e264]:
+            - generic [ref=e265]: Admin MediaFlow
+            - generic [ref=e266]: admin
+            - link "Logout" [ref=e267] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e268]
+      - main [ref=e271]:
+        - generic [ref=e273]:
+          - button "Requests" [ref=e274] [cursor=pointer]
+          - button "Cinemas/Servers" [ref=e275] [cursor=pointer]
+          - button "DCP CPLs" [ref=e276] [cursor=pointer]
+        - generic [ref=e278]:
+          - generic [ref=e279]:
+            - img [ref=e280]
+            - generic [ref=e283]: kdm.link_desc
+            - textbox "Titolo pre-compilato (opzionale)" [ref=e284]
+            - button "kdm.btn.gen_link" [ref=e285] [cursor=pointer]
+            - button "kdm.btn.show_links" [ref=e286] [cursor=pointer]
+          - table [ref=e288]:
+            - rowgroup [ref=e289]:
+              - row "Status Type Film/CPL Window Match kdm.col.actions" [ref=e290]:
+                - columnheader "Status" [ref=e291]
+                - columnheader "Type" [ref=e292]
+                - columnheader "Film/CPL" [ref=e293]
+                - columnheader "Window" [ref=e294]
+                - columnheader "Match" [ref=e295]
+                - columnheader "kdm.col.actions" [ref=e296]
+                - columnheader [ref=e297]
+            - rowgroup [ref=e298]:
+              - row "Ricevuta KDM BANNER_TEST_ab8ac0b956d3 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e299]:
+                - cell "Ricevuta" [ref=e300]:
+                  - generic [ref=e301]: Ricevuta
+                - cell "KDM" [ref=e302]
+                - cell "BANNER_TEST_ab8ac0b956d3" [ref=e303]
+                - cell [ref=e304]
+                - cell "⚠" [ref=e305]
+                - cell "Match kdm.action.transition" [ref=e306]:
+                  - button "Match" [ref=e307] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e308] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e309]:
+                  - button "kdm.action.delete" [ref=e310] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_8f372c9e7266 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e311]:
+                - cell "Ricevuta" [ref=e312]:
+                  - generic [ref=e313]: Ricevuta
+                - cell "KDM" [ref=e314]
+                - cell "BOGUS_TYPE_8f372c9e7266" [ref=e315]
+                - cell [ref=e316]
+                - cell "⚠" [ref=e317]
+                - cell "Match kdm.action.transition" [ref=e318]:
+                  - button "Match" [ref=e319] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e320] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e321]:
+                  - button "kdm.action.delete" [ref=e322] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e323]:
+                - cell "Ricevuta" [ref=e324]:
+                  - generic [ref=e325]: Ricevuta
+                - cell "KDM" [ref=e326]
+                - cell "QUEER_FTR" [ref=e327]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e328]
+                - cell "⚠" [ref=e329]
+                - cell "Match kdm.action.transition" [ref=e330]:
+                  - button "Match" [ref=e331] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e332] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e333]:
+                  - button "kdm.action.delete" [ref=e334] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e335]:
+                - cell "Ricevuta" [ref=e336]:
+                  - generic [ref=e337]: Ricevuta
+                - cell "KDM" [ref=e338]
+                - cell "—" [ref=e339]
+                - cell [ref=e340]
+                - cell "⚠" [ref=e341]
+                - cell "Match kdm.action.transition" [ref=e342]:
+                  - button "Match" [ref=e343] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e344] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e345]:
+                  - button "kdm.action.delete" [ref=e346] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_038062dc37a1 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e347]:
+                - cell "Ricevuta" [ref=e348]:
+                  - generic [ref=e349]: Ricevuta
+                - cell "KDM" [ref=e350]
+                - cell "BANNER_TEST_038062dc37a1" [ref=e351]
+                - cell [ref=e352]
+                - cell "⚠" [ref=e353]
+                - cell "Match kdm.action.transition" [ref=e354]:
+                  - button "Match" [ref=e355] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e356] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e357]:
+                  - button "kdm.action.delete" [ref=e358] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_729d8c538f64 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e359]:
+                - cell "Ricevuta" [ref=e360]:
+                  - generic [ref=e361]: Ricevuta
+                - cell "KDM" [ref=e362]
+                - cell "BOGUS_TYPE_729d8c538f64" [ref=e363]
+                - cell [ref=e364]
+                - cell "⚠" [ref=e365]
+                - cell "Match kdm.action.transition" [ref=e366]:
+                  - button "Match" [ref=e367] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e368] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e369]:
+                  - button "kdm.action.delete" [ref=e370] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e371]:
+                - cell "Ricevuta" [ref=e372]:
+                  - generic [ref=e373]: Ricevuta
+                - cell "KDM" [ref=e374]
+                - cell "QUEER_FTR" [ref=e375]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e376]
+                - cell "⚠" [ref=e377]
+                - cell "Match kdm.action.transition" [ref=e378]:
+                  - button "Match" [ref=e379] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e380] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e381]:
+                  - button "kdm.action.delete" [ref=e382] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e383]:
+                - cell "Ricevuta" [ref=e384]:
+                  - generic [ref=e385]: Ricevuta
+                - cell "KDM" [ref=e386]
+                - cell "—" [ref=e387]
+                - cell [ref=e388]
+                - cell "⚠" [ref=e389]
+                - cell "Match kdm.action.transition" [ref=e390]:
+                  - button "Match" [ref=e391] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e392] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e393]:
+                  - button "kdm.action.delete" [ref=e394] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_c2aa93ab7282 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e395]:
+                - cell "Ricevuta" [ref=e396]:
+                  - generic [ref=e397]: Ricevuta
+                - cell "KDM" [ref=e398]
+                - cell "BANNER_TEST_c2aa93ab7282" [ref=e399]
+                - cell [ref=e400]
+                - cell "⚠" [ref=e401]
+                - cell "Match kdm.action.transition" [ref=e402]:
+                  - button "Match" [ref=e403] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e404] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e405]:
+                  - button "kdm.action.delete" [ref=e406] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_131c54261671 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e407]:
+                - cell "Ricevuta" [ref=e408]:
+                  - generic [ref=e409]: Ricevuta
+                - cell "KDM" [ref=e410]
+                - cell "BOGUS_TYPE_131c54261671" [ref=e411]
+                - cell [ref=e412]
+                - cell "⚠" [ref=e413]
+                - cell "Match kdm.action.transition" [ref=e414]:
+                  - button "Match" [ref=e415] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e416] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e417]:
+                  - button "kdm.action.delete" [ref=e418] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e419]:
+                - cell "Ricevuta" [ref=e420]:
+                  - generic [ref=e421]: Ricevuta
+                - cell "KDM" [ref=e422]
+                - cell "QUEER_FTR" [ref=e423]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e424]
+                - cell "⚠" [ref=e425]
+                - cell "Match kdm.action.transition" [ref=e426]:
+                  - button "Match" [ref=e427] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e428] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e429]:
+                  - button "kdm.action.delete" [ref=e430] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e431]:
+                - cell "Ricevuta" [ref=e432]:
+                  - generic [ref=e433]: Ricevuta
+                - cell "KDM" [ref=e434]
+                - cell "—" [ref=e435]
+                - cell [ref=e436]
+                - cell "⚠" [ref=e437]
+                - cell "Match kdm.action.transition" [ref=e438]:
+                  - button "Match" [ref=e439] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e440] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e441]:
+                  - button "kdm.action.delete" [ref=e442] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_0370c45394de ⚠ Match kdm.action.transition kdm.action.delete" [ref=e443]:
+                - cell "Ricevuta" [ref=e444]:
+                  - generic [ref=e445]: Ricevuta
+                - cell "KDM" [ref=e446]
+                - cell "BANNER_TEST_0370c45394de" [ref=e447]
+                - cell [ref=e448]
+                - cell "⚠" [ref=e449]
+                - cell "Match kdm.action.transition" [ref=e450]:
+                  - button "Match" [ref=e451] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e452] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e453]:
+                  - button "kdm.action.delete" [ref=e454] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_e7bb2d774899 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e455]:
+                - cell "Ricevuta" [ref=e456]:
+                  - generic [ref=e457]: Ricevuta
+                - cell "KDM" [ref=e458]
+                - cell "BOGUS_TYPE_e7bb2d774899" [ref=e459]
+                - cell [ref=e460]
+                - cell "⚠" [ref=e461]
+                - cell "Match kdm.action.transition" [ref=e462]:
+                  - button "Match" [ref=e463] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e464] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e465]:
+                  - button "kdm.action.delete" [ref=e466] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e467]:
+                - cell "Ricevuta" [ref=e468]:
+                  - generic [ref=e469]: Ricevuta
+                - cell "KDM" [ref=e470]
+                - cell "QUEER_FTR" [ref=e471]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e472]
+                - cell "⚠" [ref=e473]
+                - cell "Match kdm.action.transition" [ref=e474]:
+                  - button "Match" [ref=e475] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e476] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e477]:
+                  - button "kdm.action.delete" [ref=e478] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e479]:
+                - cell "Ricevuta" [ref=e480]:
+                  - generic [ref=e481]: Ricevuta
+                - cell "KDM" [ref=e482]
+                - cell "—" [ref=e483]
+                - cell [ref=e484]
+                - cell "⚠" [ref=e485]
+                - cell "Match kdm.action.transition" [ref=e486]:
+                  - button "Match" [ref=e487] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e488] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e489]:
+                  - button "kdm.action.delete" [ref=e490] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_bf3e9242354f ⚠ Match kdm.action.transition kdm.action.delete" [ref=e491]:
+                - cell "Ricevuta" [ref=e492]:
+                  - generic [ref=e493]: Ricevuta
+                - cell "KDM" [ref=e494]
+                - cell "BANNER_TEST_bf3e9242354f" [ref=e495]
+                - cell [ref=e496]
+                - cell "⚠" [ref=e497]
+                - cell "Match kdm.action.transition" [ref=e498]:
+                  - button "Match" [ref=e499] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e500] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e501]:
+                  - button "kdm.action.delete" [ref=e502] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_302967626731 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e503]:
+                - cell "Ricevuta" [ref=e504]:
+                  - generic [ref=e505]: Ricevuta
+                - cell "KDM" [ref=e506]
+                - cell "BOGUS_TYPE_302967626731" [ref=e507]
+                - cell [ref=e508]
+                - cell "⚠" [ref=e509]
+                - cell "Match kdm.action.transition" [ref=e510]:
+                  - button "Match" [ref=e511] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e512] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e513]:
+                  - button "kdm.action.delete" [ref=e514] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e515]:
+                - cell "Ricevuta" [ref=e516]:
+                  - generic [ref=e517]: Ricevuta
+                - cell "KDM" [ref=e518]
+                - cell "QUEER_FTR" [ref=e519]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e520]
+                - cell "⚠" [ref=e521]
+                - cell "Match kdm.action.transition" [ref=e522]:
+                  - button "Match" [ref=e523] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e524] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e525]:
+                  - button "kdm.action.delete" [ref=e526] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e527]:
+                - cell "Ricevuta" [ref=e528]:
+                  - generic [ref=e529]: Ricevuta
+                - cell "KDM" [ref=e530]
+                - cell "—" [ref=e531]
+                - cell [ref=e532]
+                - cell "⚠" [ref=e533]
+                - cell "Match kdm.action.transition" [ref=e534]:
+                  - button "Match" [ref=e535] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e536] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e537]:
+                  - button "kdm.action.delete" [ref=e538] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_4c6aba0aafe2 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e539]:
+                - cell "Ricevuta" [ref=e540]:
+                  - generic [ref=e541]: Ricevuta
+                - cell "KDM" [ref=e542]
+                - cell "BANNER_TEST_4c6aba0aafe2" [ref=e543]
+                - cell [ref=e544]
+                - cell "⚠" [ref=e545]
+                - cell "Match kdm.action.transition" [ref=e546]:
+                  - button "Match" [ref=e547] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e548] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e549]:
+                  - button "kdm.action.delete" [ref=e550] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_19b9602740d5 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e551]:
+                - cell "Ricevuta" [ref=e552]:
+                  - generic [ref=e553]: Ricevuta
+                - cell "KDM" [ref=e554]
+                - cell "BOGUS_TYPE_19b9602740d5" [ref=e555]
+                - cell [ref=e556]
+                - cell "⚠" [ref=e557]
+                - cell "Match kdm.action.transition" [ref=e558]:
+                  - button "Match" [ref=e559] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e560] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e561]:
+                  - button "kdm.action.delete" [ref=e562] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e563]:
+                - cell "Ricevuta" [ref=e564]:
+                  - generic [ref=e565]: Ricevuta
+                - cell "KDM" [ref=e566]
+                - cell "QUEER_FTR" [ref=e567]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e568]
+                - cell "⚠" [ref=e569]
+                - cell "Match kdm.action.transition" [ref=e570]:
+                  - button "Match" [ref=e571] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e572] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e573]:
+                  - button "kdm.action.delete" [ref=e574] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e575]:
+                - cell "Ricevuta" [ref=e576]:
+                  - generic [ref=e577]: Ricevuta
+                - cell "KDM" [ref=e578]
+                - cell "—" [ref=e579]
+                - cell [ref=e580]
+                - cell "⚠" [ref=e581]
+                - cell "Match kdm.action.transition" [ref=e582]:
+                  - button "Match" [ref=e583] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e584] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e585]:
+                  - button "kdm.action.delete" [ref=e586] [cursor=pointer]
+              - row "Ricevuta KDM Test Film AI ⚠ Match kdm.action.transition kdm.action.delete" [ref=e587]:
+                - cell "Ricevuta" [ref=e588]:
+                  - generic [ref=e589]: Ricevuta
+                - cell "KDM" [ref=e590]
+                - cell "Test Film AI" [ref=e591]
+                - cell [ref=e592]
+                - cell "⚠" [ref=e593]
+                - cell "Match kdm.action.transition" [ref=e594]:
+                  - button "Match" [ref=e595] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e596] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e597]:
+                  - button "kdm.action.delete" [ref=e598] [cursor=pointer]
+              - row "Ricevuta KDM Test Film AI ⚠ Match kdm.action.transition kdm.action.delete" [ref=e599]:
+                - cell "Ricevuta" [ref=e600]:
+                  - generic [ref=e601]: Ricevuta
+                - cell "KDM" [ref=e602]
+                - cell "Test Film AI" [ref=e603]
+                - cell [ref=e604]
+                - cell "⚠" [ref=e605]
+                - cell "Match kdm.action.transition" [ref=e606]:
+                  - button "Match" [ref=e607] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e608] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e609]:
+                  - button "kdm.action.delete" [ref=e610] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_8d0841c48084 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e611]:
+                - cell "Ricevuta" [ref=e612]:
+                  - generic [ref=e613]: Ricevuta
+                - cell "KDM" [ref=e614]
+                - cell "BANNER_TEST_8d0841c48084" [ref=e615]
+                - cell [ref=e616]
+                - cell "⚠" [ref=e617]
+                - cell "Match kdm.action.transition" [ref=e618]:
+                  - button "Match" [ref=e619] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e620] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e621]:
+                  - button "kdm.action.delete" [ref=e622] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_22cebb1363f8 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e623]:
+                - cell "Ricevuta" [ref=e624]:
+                  - generic [ref=e625]: Ricevuta
+                - cell "KDM" [ref=e626]
+                - cell "BOGUS_TYPE_22cebb1363f8" [ref=e627]
+                - cell [ref=e628]
+                - cell "⚠" [ref=e629]
+                - cell "Match kdm.action.transition" [ref=e630]:
+                  - button "Match" [ref=e631] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e632] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e633]:
+                  - button "kdm.action.delete" [ref=e634] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e635]:
+                - cell "Ricevuta" [ref=e636]:
+                  - generic [ref=e637]: Ricevuta
+                - cell "KDM" [ref=e638]
+                - cell "QUEER_FTR" [ref=e639]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e640]
+                - cell "⚠" [ref=e641]
+                - cell "Match kdm.action.transition" [ref=e642]:
+                  - button "Match" [ref=e643] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e644] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e645]:
+                  - button "kdm.action.delete" [ref=e646] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e647]:
+                - cell "Ricevuta" [ref=e648]:
+                  - generic [ref=e649]: Ricevuta
+                - cell "KDM" [ref=e650]
+                - cell "—" [ref=e651]
+                - cell [ref=e652]
+                - cell "⚠" [ref=e653]
+                - cell "Match kdm.action.transition" [ref=e654]:
+                  - button "Match" [ref=e655] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e656] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e657]:
+                  - button "kdm.action.delete" [ref=e658] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_7f084d6f3736 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e659]:
+                - cell "Ricevuta" [ref=e660]:
+                  - generic [ref=e661]: Ricevuta
+                - cell "KDM" [ref=e662]
+                - cell "BANNER_TEST_7f084d6f3736" [ref=e663]
+                - cell [ref=e664]
+                - cell "⚠" [ref=e665]
+                - cell "Match kdm.action.transition" [ref=e666]:
+                  - button "Match" [ref=e667] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e668] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e669]:
+                  - button "kdm.action.delete" [ref=e670] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_58ca1ca9adab ⚠ Match kdm.action.transition kdm.action.delete" [ref=e671]:
+                - cell "Ricevuta" [ref=e672]:
+                  - generic [ref=e673]: Ricevuta
+                - cell "KDM" [ref=e674]
+                - cell "BOGUS_TYPE_58ca1ca9adab" [ref=e675]
+                - cell [ref=e676]
+                - cell "⚠" [ref=e677]
+                - cell "Match kdm.action.transition" [ref=e678]:
+                  - button "Match" [ref=e679] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e680] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e681]:
+                  - button "kdm.action.delete" [ref=e682] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e683]:
+                - cell "Ricevuta" [ref=e684]:
+                  - generic [ref=e685]: Ricevuta
+                - cell "KDM" [ref=e686]
+                - cell "QUEER_FTR" [ref=e687]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e688]
+                - cell "⚠" [ref=e689]
+                - cell "Match kdm.action.transition" [ref=e690]:
+                  - button "Match" [ref=e691] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e692] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e693]:
+                  - button "kdm.action.delete" [ref=e694] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e695]:
+                - cell "Ricevuta" [ref=e696]:
+                  - generic [ref=e697]: Ricevuta
+                - cell "KDM" [ref=e698]
+                - cell "—" [ref=e699]
+                - cell [ref=e700]
+                - cell "⚠" [ref=e701]
+                - cell "Match kdm.action.transition" [ref=e702]:
+                  - button "Match" [ref=e703] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e704] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e705]:
+                  - button "kdm.action.delete" [ref=e706] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_a07c4a09dd49 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e707]:
+                - cell "Ricevuta" [ref=e708]:
+                  - generic [ref=e709]: Ricevuta
+                - cell "KDM" [ref=e710]
+                - cell "BANNER_TEST_a07c4a09dd49" [ref=e711]
+                - cell [ref=e712]
+                - cell "⚠" [ref=e713]
+                - cell "Match kdm.action.transition" [ref=e714]:
+                  - button "Match" [ref=e715] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e716] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e717]:
+                  - button "kdm.action.delete" [ref=e718] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_35e59b904382 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e719]:
+                - cell "Ricevuta" [ref=e720]:
+                  - generic [ref=e721]: Ricevuta
+                - cell "KDM" [ref=e722]
+                - cell "BOGUS_TYPE_35e59b904382" [ref=e723]
+                - cell [ref=e724]
+                - cell "⚠" [ref=e725]
+                - cell "Match kdm.action.transition" [ref=e726]:
+                  - button "Match" [ref=e727] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e728] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e729]:
+                  - button "kdm.action.delete" [ref=e730] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e731]:
+                - cell "Ricevuta" [ref=e732]:
+                  - generic [ref=e733]: Ricevuta
+                - cell "KDM" [ref=e734]
+                - cell "QUEER_FTR" [ref=e735]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e736]
+                - cell "⚠" [ref=e737]
+                - cell "Match kdm.action.transition" [ref=e738]:
+                  - button "Match" [ref=e739] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e740] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e741]:
+                  - button "kdm.action.delete" [ref=e742] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e743]:
+                - cell "Ricevuta" [ref=e744]:
+                  - generic [ref=e745]: Ricevuta
+                - cell "KDM" [ref=e746]
+                - cell "—" [ref=e747]
+                - cell [ref=e748]
+                - cell "⚠" [ref=e749]
+                - cell "Match kdm.action.transition" [ref=e750]:
+                  - button "Match" [ref=e751] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e752] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e753]:
+                  - button "kdm.action.delete" [ref=e754] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_6074260c2bbb ⚠ Match kdm.action.transition kdm.action.delete" [ref=e755]:
+                - cell "Ricevuta" [ref=e756]:
+                  - generic [ref=e757]: Ricevuta
+                - cell "KDM" [ref=e758]
+                - cell "BANNER_TEST_6074260c2bbb" [ref=e759]
+                - cell [ref=e760]
+                - cell "⚠" [ref=e761]
+                - cell "Match kdm.action.transition" [ref=e762]:
+                  - button "Match" [ref=e763] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e764] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e765]:
+                  - button "kdm.action.delete" [ref=e766] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_74338d67e089 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e767]:
+                - cell "Ricevuta" [ref=e768]:
+                  - generic [ref=e769]: Ricevuta
+                - cell "KDM" [ref=e770]
+                - cell "BOGUS_TYPE_74338d67e089" [ref=e771]
+                - cell [ref=e772]
+                - cell "⚠" [ref=e773]
+                - cell "Match kdm.action.transition" [ref=e774]:
+                  - button "Match" [ref=e775] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e776] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e777]:
+                  - button "kdm.action.delete" [ref=e778] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e779]:
+                - cell "Ricevuta" [ref=e780]:
+                  - generic [ref=e781]: Ricevuta
+                - cell "KDM" [ref=e782]
+                - cell "QUEER_FTR" [ref=e783]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e784]
+                - cell "⚠" [ref=e785]
+                - cell "Match kdm.action.transition" [ref=e786]:
+                  - button "Match" [ref=e787] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e788] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e789]:
+                  - button "kdm.action.delete" [ref=e790] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e791]:
+                - cell "Ricevuta" [ref=e792]:
+                  - generic [ref=e793]: Ricevuta
+                - cell "KDM" [ref=e794]
+                - cell "—" [ref=e795]
+                - cell [ref=e796]
+                - cell "⚠" [ref=e797]
+                - cell "Match kdm.action.transition" [ref=e798]:
+                  - button "Match" [ref=e799] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e800] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e801]:
+                  - button "kdm.action.delete" [ref=e802] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_04dcfb5eb22b ⚠ Match kdm.action.transition kdm.action.delete" [ref=e803]:
+                - cell "Ricevuta" [ref=e804]:
+                  - generic [ref=e805]: Ricevuta
+                - cell "KDM" [ref=e806]
+                - cell "BANNER_TEST_04dcfb5eb22b" [ref=e807]
+                - cell [ref=e808]
+                - cell "⚠" [ref=e809]
+                - cell "Match kdm.action.transition" [ref=e810]:
+                  - button "Match" [ref=e811] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e812] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e813]:
+                  - button "kdm.action.delete" [ref=e814] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_d12cf2e24b19 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e815]:
+                - cell "Ricevuta" [ref=e816]:
+                  - generic [ref=e817]: Ricevuta
+                - cell "KDM" [ref=e818]
+                - cell "BOGUS_TYPE_d12cf2e24b19" [ref=e819]
+                - cell [ref=e820]
+                - cell "⚠" [ref=e821]
+                - cell "Match kdm.action.transition" [ref=e822]:
+                  - button "Match" [ref=e823] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e824] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e825]:
+                  - button "kdm.action.delete" [ref=e826] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e827]:
+                - cell "Ricevuta" [ref=e828]:
+                  - generic [ref=e829]: Ricevuta
+                - cell "KDM" [ref=e830]
+                - cell "QUEER_FTR" [ref=e831]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e832]
+                - cell "⚠" [ref=e833]
+                - cell "Match kdm.action.transition" [ref=e834]:
+                  - button "Match" [ref=e835] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e836] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e837]:
+                  - button "kdm.action.delete" [ref=e838] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e839]:
+                - cell "Ricevuta" [ref=e840]:
+                  - generic [ref=e841]: Ricevuta
+                - cell "KDM" [ref=e842]
+                - cell "—" [ref=e843]
+                - cell [ref=e844]
+                - cell "⚠" [ref=e845]
+                - cell "Match kdm.action.transition" [ref=e846]:
+                  - button "Match" [ref=e847] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e848] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e849]:
+                  - button "kdm.action.delete" [ref=e850] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_a60e2fb7851b ⚠ Match kdm.action.transition kdm.action.delete" [ref=e851]:
+                - cell "Ricevuta" [ref=e852]:
+                  - generic [ref=e853]: Ricevuta
+                - cell "KDM" [ref=e854]
+                - cell "BANNER_TEST_a60e2fb7851b" [ref=e855]
+                - cell [ref=e856]
+                - cell "⚠" [ref=e857]
+                - cell "Match kdm.action.transition" [ref=e858]:
+                  - button "Match" [ref=e859] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e860] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e861]:
+                  - button "kdm.action.delete" [ref=e862] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_a7ddd5833f6b ⚠ Match kdm.action.transition kdm.action.delete" [ref=e863]:
+                - cell "Ricevuta" [ref=e864]:
+                  - generic [ref=e865]: Ricevuta
+                - cell "KDM" [ref=e866]
+                - cell "BOGUS_TYPE_a7ddd5833f6b" [ref=e867]
+                - cell [ref=e868]
+                - cell "⚠" [ref=e869]
+                - cell "Match kdm.action.transition" [ref=e870]:
+                  - button "Match" [ref=e871] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e872] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e873]:
+                  - button "kdm.action.delete" [ref=e874] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e875]:
+                - cell "Ricevuta" [ref=e876]:
+                  - generic [ref=e877]: Ricevuta
+                - cell "KDM" [ref=e878]
+                - cell "QUEER_FTR" [ref=e879]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e880]
+                - cell "⚠" [ref=e881]
+                - cell "Match kdm.action.transition" [ref=e882]:
+                  - button "Match" [ref=e883] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e884] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e885]:
+                  - button "kdm.action.delete" [ref=e886] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e887]:
+                - cell "Ricevuta" [ref=e888]:
+                  - generic [ref=e889]: Ricevuta
+                - cell "KDM" [ref=e890]
+                - cell "—" [ref=e891]
+                - cell [ref=e892]
+                - cell "⚠" [ref=e893]
+                - cell "Match kdm.action.transition" [ref=e894]:
+                  - button "Match" [ref=e895] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e896] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e897]:
+                  - button "kdm.action.delete" [ref=e898] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_490e375e0e0a ⚠ Match kdm.action.transition kdm.action.delete" [ref=e899]:
+                - cell "Ricevuta" [ref=e900]:
+                  - generic [ref=e901]: Ricevuta
+                - cell "KDM" [ref=e902]
+                - cell "BANNER_TEST_490e375e0e0a" [ref=e903]
+                - cell [ref=e904]
+                - cell "⚠" [ref=e905]
+                - cell "Match kdm.action.transition" [ref=e906]:
+                  - button "Match" [ref=e907] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e908] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e909]:
+                  - button "kdm.action.delete" [ref=e910] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_bd94fa476282 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e911]:
+                - cell "Ricevuta" [ref=e912]:
+                  - generic [ref=e913]: Ricevuta
+                - cell "KDM" [ref=e914]
+                - cell "BOGUS_TYPE_bd94fa476282" [ref=e915]
+                - cell [ref=e916]
+                - cell "⚠" [ref=e917]
+                - cell "Match kdm.action.transition" [ref=e918]:
+                  - button "Match" [ref=e919] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e920] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e921]:
+                  - button "kdm.action.delete" [ref=e922] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e923]:
+                - cell "Ricevuta" [ref=e924]:
+                  - generic [ref=e925]: Ricevuta
+                - cell "KDM" [ref=e926]
+                - cell "QUEER_FTR" [ref=e927]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e928]
+                - cell "⚠" [ref=e929]
+                - cell "Match kdm.action.transition" [ref=e930]:
+                  - button "Match" [ref=e931] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e932] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e933]:
+                  - button "kdm.action.delete" [ref=e934] [cursor=pointer]
+              - row "Ricevuta KDM BANNER_TEST_74fe2630a658 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e935]:
+                - cell "Ricevuta" [ref=e936]:
+                  - generic [ref=e937]: Ricevuta
+                - cell "KDM" [ref=e938]
+                - cell "BANNER_TEST_74fe2630a658" [ref=e939]
+                - cell [ref=e940]
+                - cell "⚠" [ref=e941]
+                - cell "Match kdm.action.transition" [ref=e942]:
+                  - button "Match" [ref=e943] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e944] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e945]:
+                  - button "kdm.action.delete" [ref=e946] [cursor=pointer]
+              - row "Ricevuta KDM BOGUS_TYPE_d32d44d20b7f ⚠ Match kdm.action.transition kdm.action.delete" [ref=e947]:
+                - cell "Ricevuta" [ref=e948]:
+                  - generic [ref=e949]: Ricevuta
+                - cell "KDM" [ref=e950]
+                - cell "BOGUS_TYPE_d32d44d20b7f" [ref=e951]
+                - cell [ref=e952]
+                - cell "⚠" [ref=e953]
+                - cell "Match kdm.action.transition" [ref=e954]:
+                  - button "Match" [ref=e955] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e956] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e957]:
+                  - button "kdm.action.delete" [ref=e958] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e959]:
+                - cell "Ricevuta" [ref=e960]:
+                  - generic [ref=e961]: Ricevuta
+                - cell "KDM" [ref=e962]
+                - cell "QUEER_FTR" [ref=e963]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e964]
+                - cell "⚠" [ref=e965]
+                - cell "Match kdm.action.transition" [ref=e966]:
+                  - button "Match" [ref=e967] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e968] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e969]:
+                  - button "kdm.action.delete" [ref=e970] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e971]:
+                - cell "Ricevuta" [ref=e972]:
+                  - generic [ref=e973]: Ricevuta
+                - cell "KDM" [ref=e974]
+                - cell "QUEER_FTR" [ref=e975]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e976]
+                - cell "⚠" [ref=e977]
+                - cell "Match kdm.action.transition" [ref=e978]:
+                  - button "Match" [ref=e979] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e980] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e981]:
+                  - button "kdm.action.delete" [ref=e982] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e983]:
+                - cell "Ricevuta" [ref=e984]:
+                  - generic [ref=e985]: Ricevuta
+                - cell "KDM" [ref=e986]
+                - cell "—" [ref=e987]
+                - cell [ref=e988]
+                - cell "⚠" [ref=e989]
+                - cell "Match kdm.action.transition" [ref=e990]:
+                  - button "Match" [ref=e991] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e992] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e993]:
+                  - button "kdm.action.delete" [ref=e994] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e995]:
+                - cell "Ricevuta" [ref=e996]:
+                  - generic [ref=e997]: Ricevuta
+                - cell "KDM" [ref=e998]
+                - cell "QUEER_FTR" [ref=e999]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1000]
+                - cell "⚠" [ref=e1001]
+                - cell "Match kdm.action.transition" [ref=e1002]:
+                  - button "Match" [ref=e1003] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1004] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1005]:
+                  - button "kdm.action.delete" [ref=e1006] [cursor=pointer]
+              - row "Ricevuta KDM QUEER_FTR 2026-09-01T20:00:00 → 2026-09-30T23:00:00 ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1007]:
+                - cell "Ricevuta" [ref=e1008]:
+                  - generic [ref=e1009]: Ricevuta
+                - cell "KDM" [ref=e1010]
+                - cell "QUEER_FTR" [ref=e1011]
+                - cell "2026-09-01T20:00:00 → 2026-09-30T23:00:00" [ref=e1012]
+                - cell "⚠" [ref=e1013]
+                - cell "Match kdm.action.transition" [ref=e1014]:
+                  - button "Match" [ref=e1015] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1016] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1017]:
+                  - button "kdm.action.delete" [ref=e1018] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1019]:
+                - cell "Ricevuta" [ref=e1020]:
+                  - generic [ref=e1021]: Ricevuta
+                - cell "KDM" [ref=e1022]
+                - cell "—" [ref=e1023]
+                - cell [ref=e1024]
+                - cell "⚠" [ref=e1025]
+                - cell "Match kdm.action.transition" [ref=e1026]:
+                  - button "Match" [ref=e1027] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1028] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1029]:
+                  - button "kdm.action.delete" [ref=e1030] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1031]:
+                - cell "Ricevuta" [ref=e1032]:
+                  - generic [ref=e1033]: Ricevuta
+                - cell "KDM" [ref=e1034]
+                - cell "—" [ref=e1035]
+                - cell [ref=e1036]
+                - cell "⚠" [ref=e1037]
+                - cell "Match kdm.action.transition" [ref=e1038]:
+                  - button "Match" [ref=e1039] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1040] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1041]:
+                  - button "kdm.action.delete" [ref=e1042] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1043]:
+                - cell "Ricevuta" [ref=e1044]:
+                  - generic [ref=e1045]: Ricevuta
+                - cell "KDM" [ref=e1046]
+                - cell "—" [ref=e1047]
+                - cell [ref=e1048]
+                - cell "⚠" [ref=e1049]
+                - cell "Match kdm.action.transition" [ref=e1050]:
+                  - button "Match" [ref=e1051] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1052] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1053]:
+                  - button "kdm.action.delete" [ref=e1054] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1055]:
+                - cell "Ricevuta" [ref=e1056]:
+                  - generic [ref=e1057]: Ricevuta
+                - cell "KDM" [ref=e1058]
+                - cell "—" [ref=e1059]
+                - cell [ref=e1060]
+                - cell "⚠" [ref=e1061]
+                - cell "Match kdm.action.transition" [ref=e1062]:
+                  - button "Match" [ref=e1063] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1064] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1065]:
+                  - button "kdm.action.delete" [ref=e1066] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1067]:
+                - cell "Ricevuta" [ref=e1068]:
+                  - generic [ref=e1069]: Ricevuta
+                - cell "KDM" [ref=e1070]
+                - cell "—" [ref=e1071]
+                - cell [ref=e1072]
+                - cell "⚠" [ref=e1073]
+                - cell "Match kdm.action.transition" [ref=e1074]:
+                  - button "Match" [ref=e1075] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1076] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1077]:
+                  - button "kdm.action.delete" [ref=e1078] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1079]:
+                - cell "Ricevuta" [ref=e1080]:
+                  - generic [ref=e1081]: Ricevuta
+                - cell "KDM" [ref=e1082]
+                - cell "—" [ref=e1083]
+                - cell [ref=e1084]
+                - cell "⚠" [ref=e1085]
+                - cell "Match kdm.action.transition" [ref=e1086]:
+                  - button "Match" [ref=e1087] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1088] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1089]:
+                  - button "kdm.action.delete" [ref=e1090] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1091]:
+                - cell "Ricevuta" [ref=e1092]:
+                  - generic [ref=e1093]: Ricevuta
+                - cell "KDM" [ref=e1094]
+                - cell "—" [ref=e1095]
+                - cell [ref=e1096]
+                - cell "⚠" [ref=e1097]
+                - cell "Match kdm.action.transition" [ref=e1098]:
+                  - button "Match" [ref=e1099] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1100] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1101]:
+                  - button "kdm.action.delete" [ref=e1102] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1103]:
+                - cell "Ricevuta" [ref=e1104]:
+                  - generic [ref=e1105]: Ricevuta
+                - cell "KDM" [ref=e1106]
+                - cell "—" [ref=e1107]
+                - cell [ref=e1108]
+                - cell "⚠" [ref=e1109]
+                - cell "Match kdm.action.transition" [ref=e1110]:
+                  - button "Match" [ref=e1111] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1112] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1113]:
+                  - button "kdm.action.delete" [ref=e1114] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1115]:
+                - cell "Ricevuta" [ref=e1116]:
+                  - generic [ref=e1117]: Ricevuta
+                - cell "KDM" [ref=e1118]
+                - cell "—" [ref=e1119]
+                - cell [ref=e1120]
+                - cell "⚠" [ref=e1121]
+                - cell "Match kdm.action.transition" [ref=e1122]:
+                  - button "Match" [ref=e1123] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1124] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1125]:
+                  - button "kdm.action.delete" [ref=e1126] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1127]:
+                - cell "Ricevuta" [ref=e1128]:
+                  - generic [ref=e1129]: Ricevuta
+                - cell "KDM" [ref=e1130]
+                - cell "—" [ref=e1131]
+                - cell [ref=e1132]
+                - cell "⚠" [ref=e1133]
+                - cell "Match kdm.action.transition" [ref=e1134]:
+                  - button "Match" [ref=e1135] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1136] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1137]:
+                  - button "kdm.action.delete" [ref=e1138] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1139]:
+                - cell "Ricevuta" [ref=e1140]:
+                  - generic [ref=e1141]: Ricevuta
+                - cell "KDM" [ref=e1142]
+                - cell "—" [ref=e1143]
+                - cell [ref=e1144]
+                - cell "⚠" [ref=e1145]
+                - cell "Match kdm.action.transition" [ref=e1146]:
+                  - button "Match" [ref=e1147] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1148] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1149]:
+                  - button "kdm.action.delete" [ref=e1150] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1151]:
+                - cell "Ricevuta" [ref=e1152]:
+                  - generic [ref=e1153]: Ricevuta
+                - cell "KDM" [ref=e1154]
+                - cell "—" [ref=e1155]
+                - cell [ref=e1156]
+                - cell "⚠" [ref=e1157]
+                - cell "Match kdm.action.transition" [ref=e1158]:
+                  - button "Match" [ref=e1159] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1160] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1161]:
+                  - button "kdm.action.delete" [ref=e1162] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1163]:
+                - cell "Ricevuta" [ref=e1164]:
+                  - generic [ref=e1165]: Ricevuta
+                - cell "KDM" [ref=e1166]
+                - cell "—" [ref=e1167]
+                - cell [ref=e1168]
+                - cell "⚠" [ref=e1169]
+                - cell "Match kdm.action.transition" [ref=e1170]:
+                  - button "Match" [ref=e1171] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1172] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1173]:
+                  - button "kdm.action.delete" [ref=e1174] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1175]:
+                - cell "Ricevuta" [ref=e1176]:
+                  - generic [ref=e1177]: Ricevuta
+                - cell "KDM" [ref=e1178]
+                - cell "—" [ref=e1179]
+                - cell [ref=e1180]
+                - cell "⚠" [ref=e1181]
+                - cell "Match kdm.action.transition" [ref=e1182]:
+                  - button "Match" [ref=e1183] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1184] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1185]:
+                  - button "kdm.action.delete" [ref=e1186] [cursor=pointer]
+              - row "Ricevuta KDM — ⚠ Match kdm.action.transition kdm.action.delete" [ref=e1187]:
+                - cell "Ricevuta" [ref=e1188]:
+                  - generic [ref=e1189]: Ricevuta
+                - cell "KDM" [ref=e1190]
+                - cell "—" [ref=e1191]
+                - cell [ref=e1192]
+                - cell "⚠" [ref=e1193]
+                - cell "Match kdm.action.transition" [ref=e1194]:
+                  - button "Match" [ref=e1195] [cursor=pointer]
+                  - button "kdm.action.transition" [ref=e1196] [cursor=pointer]
+                - cell "kdm.action.delete" [ref=e1197]:
+                  - button "kdm.action.delete" [ref=e1198] [cursor=pointer]
+        - text: ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e1199] [cursor=pointer]:
+    - img "Claqo bot" [ref=e1200]
+  - dialog "Copilot AI" [ref=e1201]:
+    - generic [ref=e1202]:
+      - img "Claqo bot" [ref=e1204]
+      - heading "Copilot" [level=3] [ref=e1205]
+      - generic [ref=e1206]: —
+      - button "Nuova conversazione" [ref=e1207] [cursor=pointer]:
+        - img [ref=e1208]
+      - button "Chiudi" [ref=e1209] [cursor=pointer]:
+        - img [ref=e1210]
+    - generic [ref=e1213]:
+      - generic [ref=e1214]: "Storia:"
+      - button "(new) ▾" [ref=e1216] [cursor=pointer]
+    - generic [ref=e1219]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e1220] [cursor=pointer]:
+        - img [ref=e1221]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e1223]
+      - button "Send" [ref=e1224] [cursor=pointer]
+  - generic [ref=e1225]:
+    - generic [ref=e1226]:
+      - generic [ref=e1227]: 🔔 Notifiche
+      - generic [ref=e1228]:
+        - button "✓ Tutte lette" [ref=e1229] [cursor=pointer]
+        - button "✕" [ref=e1230] [cursor=pointer]
+    - generic [ref=e1232]: Loading…
+  - text: ▾ ▾

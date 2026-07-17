@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <title>Claqo classic — app icon 16</title>
+  <rect width="16" height="16" rx="3" fill="#D85A30"/>
+  <polygon points="3,6 6,3 10,3 7,6" fill="#FFFFFF"/>
+  <polygon points="10,3 13,3 10,6 7,6" fill="#FFFFFF" opacity="0.7"/>
+  <rect x="3" y="6" width="11" height="7" rx="0.8" fill="#FFFFFF"/>
+</svg>

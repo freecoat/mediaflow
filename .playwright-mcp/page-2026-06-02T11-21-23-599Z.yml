@@ -1,0 +1,86 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - button "Menu" [ref=e3] [cursor=pointer]:
+      - img [ref=e4]
+    - generic [ref=e5]: Agenda
+    - link "Cerca" [ref=e6] [cursor=pointer]:
+      - /url: /m/cerca
+      - img [ref=e7]
+    - link "Notifiche" [ref=e10] [cursor=pointer]:
+      - /url: /m/notifiche
+      - img [ref=e11]
+  - complementary [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]: Claqo
+      - generic [ref=e17]: Admin MediaFlow
+    - navigation [ref=e18]:
+      - generic [ref=e19]: Operativo
+      - link [ref=e20] [cursor=pointer]:
+        - /url: /m
+        - img [ref=e21]
+        - text: Oggi
+      - link [ref=e24] [cursor=pointer]:
+        - /url: /m/agenda
+        - img [ref=e25]
+        - text: Agenda
+      - link [ref=e27] [cursor=pointer]:
+        - /url: /m/assegnazioni
+        - img [ref=e28]
+        - text: Assegnazioni
+      - link [ref=e31] [cursor=pointer]:
+        - /url: /m/booking/new
+        - img [ref=e32]
+        - text: Nuovo booking
+      - link [ref=e34] [cursor=pointer]:
+        - /url: /m/timbra
+        - img [ref=e35]
+        - text: Timbratura
+      - link [ref=e38] [cursor=pointer]:
+        - /url: /m/ferie
+        - img [ref=e39]
+        - text: Ferie
+      - link [ref=e44] [cursor=pointer]:
+        - /url: /m/notifiche
+        - img [ref=e45]
+        - text: Notifiche
+      - generic [ref=e48]: Business
+      - link [ref=e49] [cursor=pointer]:
+        - /url: /m/progetti
+        - img [ref=e50]
+        - text: Progetti
+      - link [ref=e52] [cursor=pointer]:
+        - /url: /m/clienti
+        - img [ref=e53]
+        - text: Clienti
+      - link [ref=e57] [cursor=pointer]:
+        - /url: /m/quote
+        - img [ref=e58]
+        - text: Quotazioni
+      - link [ref=e61] [cursor=pointer]:
+        - /url: /m/finance
+        - img [ref=e62]
+        - text: Finance
+      - link [ref=e65] [cursor=pointer]:
+        - /url: /m/cerca
+        - img [ref=e66]
+        - text: Cerca
+      - generic [ref=e69]: Assistente
+      - link [ref=e70] [cursor=pointer]:
+        - /url: /m/copilot
+        - img [ref=e71]
+        - text: Copilot AI
+    - link [ref=e74] [cursor=pointer]:
+      - /url: /prefer-desktop?next=/dashboard
+      - img [ref=e75]
+      - text: Versione desktop
+    - link [ref=e77] [cursor=pointer]:
+      - /url: /auth/logout
+      - img [ref=e78]
+      - text: Esci
+  - main [ref=e81]:
+    - generic [ref=e82]:
+      - button "Settimana precedente" [ref=e83] [cursor=pointer]
+      - generic [ref=e85]: 01/06 – 07/06
+      - button "Settimana successiva" [ref=e86] [cursor=pointer]
+    - button "Oggi" [ref=e88] [cursor=pointer]
+    - generic [ref=e90]: Nessun impegno questa settimana.

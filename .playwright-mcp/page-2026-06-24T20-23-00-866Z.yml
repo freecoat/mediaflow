@@ -1,0 +1,271 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Main
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Records
+          - link "Clients" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clients
+          - link "Projects" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Projects
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operations
+          - link "Planning" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Planning
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Work hours" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Work hours
+        - generic [ref=e55]:
+          - generic [ref=e56]: Quotes
+          - link "Price List" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Price List
+          - link "Quotes" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotes
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finance
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "SAL — Avanzamento" [ref=e76] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=e78]
+            - generic [ref=e81]: SAL — Avanzamento
+          - link "Invoicing" [ref=e82] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e84]
+            - generic [ref=e86]: Invoicing
+          - link "Cashflow & Forecast" [ref=e87] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e89]
+            - generic [ref=e92]: Cashflow & Forecast
+          - link "YoY Reports + Export" [ref=e93] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e95]
+            - generic [ref=e98]: YoY Reports + Export
+          - link "Suppliers" [ref=e99] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e101]
+            - generic [ref=e104]: Suppliers
+          - link "Overhead costs" [ref=e105] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e107]
+            - generic [ref=e110]: Overhead costs
+        - generic [ref=e111]:
+          - generic [ref=e112]: Media
+          - link "Asset Library" [ref=e113] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e115]
+            - generic [ref=e117]: Asset Library
+          - link "Filesystem scan" [ref=e118] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e120]
+            - generic [ref=e124]: Filesystem scan
+          - link "Asset In/Out" [ref=e125] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e127]
+            - generic [ref=e132]: Asset In/Out
+          - link "Physical Assets" [ref=e133] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e135]
+            - generic [ref=e137]: Physical Assets
+          - link "Delivery Specs" [ref=e138] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e140]
+            - generic [ref=e145]: Delivery Specs
+          - link "Import → Quote" [ref=e146] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e148]
+            - generic [ref=e151]: Import → Quote
+          - link "Storage" [ref=e152] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=e154]
+            - generic [ref=e158]: Storage
+          - link "KDM/DKDM" [ref=e159] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=e161]
+            - generic [ref=e164]: KDM/DKDM
+        - generic [ref=e165]:
+          - generic [ref=e166]: Platform
+          - link "Tenants" [ref=e167] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e169]
+            - generic [ref=e173]: Tenants
+        - generic [ref=e174]:
+          - generic [ref=e175]: Configuration
+          - link "Departments" [ref=e176] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e178]
+            - generic [ref=e182]: Departments
+          - link "Settings" [ref=e183] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e185]
+            - generic [ref=e188]: Settings
+        - generic [ref=e189]:
+          - generic [ref=e190]: Help
+          - link "Manual" [ref=e191] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e193]
+            - generic [ref=e195]: Manual
+        - generic [ref=e196]:
+          - generic [ref=e197]: Administration
+          - link "Users" [ref=e198] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e200]
+            - generic [ref=e203]: Users
+          - link "Roles & Permissions" [ref=e204] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e206]
+            - generic [ref=e209]: Roles & Permissions
+          - link "Trash" [ref=e210] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e212]
+            - generic [ref=e215]: Trash
+          - link "Audit log" [ref=e216] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e218]
+            - generic [ref=e221]: Audit log
+      - link "Logout" [ref=e223] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e225]
+        - generic [ref=e228]: Logout
+    - generic [ref=e229]:
+      - banner [ref=e230]:
+        - generic [ref=e231]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e232] [cursor=pointer]:
+            - img [ref=e233]
+          - generic [ref=e236]: Richieste KDM/DKDM
+        - generic [ref=e237]:
+          - button "+ New request" [ref=e238] [cursor=pointer]:
+            - text: +
+            - generic [ref=e239]: New request
+          - button "Open theme palette" [ref=e241] [cursor=pointer]:
+            - img [ref=e243]
+          - button "Ingrandisci visualizzazione" [ref=e250] [cursor=pointer]:
+            - img [ref=e252]
+          - button "🇬🇧" [ref=e256] [cursor=pointer]:
+            - generic [ref=e257]: 🇬🇧
+          - button "8" [ref=e258] [cursor=pointer]:
+            - img [ref=e260]
+            - generic [ref=e263]: "8"
+          - generic "admin@mediaflow.it" [ref=e264]:
+            - generic [ref=e265]: Admin MediaFlow
+            - generic [ref=e266]: admin
+            - link "Logout" [ref=e267] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e268]
+      - main [ref=e271]:
+        - generic [ref=e273]:
+          - button "Requests" [ref=e274] [cursor=pointer]
+          - button "Archive" [ref=e275] [cursor=pointer]
+          - button "Cinemas/Servers" [ref=e276] [cursor=pointer]
+          - button "DCP CPLs" [ref=e277] [cursor=pointer]
+        - generic [ref=e279]:
+          - generic [ref=e280]:
+            - generic [ref=e281]:
+              - img [ref=e282]
+              - generic [ref=e285]: "Generate public link for client request:"
+            - generic [ref=e286]:
+              - generic [ref=e287]:
+                - generic [ref=e288]: Link name
+                - textbox "e.g. Arcadia Roma" [ref=e289]
+              - generic [ref=e290]:
+                - generic [ref=e291]: Project
+                - button "— nessuno — ▾" [ref=e293] [cursor=pointer]
+              - generic [ref=e294]:
+                - generic [ref=e295]: Duration
+                - button "30 gg ▾" [ref=e297] [cursor=pointer]
+              - generic [ref=e298]:
+                - generic [ref=e299]: Prefilled title
+                - textbox "opzionale" [ref=e300]
+              - button "Generate link & copy" [ref=e301] [cursor=pointer]
+              - button "Active links" [ref=e302] [cursor=pointer]
+          - generic [ref=e303]:
+            - generic [ref=e304]:
+              - generic [ref=e305]: Search
+              - textbox "title, CPL…" [ref=e306]
+            - generic [ref=e307]:
+              - generic [ref=e308]: Status
+              - combobox [ref=e309] [cursor=pointer]:
+                - option "All" [selected]
+                - option "Ricevuta"
+                - option "Abbinata"
+                - option "Chiavi..."
+                - option "Generata"
+                - option "Consegnata"
+                - option "Confermata"
+                - option "Rejected"
+                - option "Expired"
+            - generic [ref=e310]:
+              - generic [ref=e311]: Type
+              - combobox [ref=e312] [cursor=pointer]:
+                - option "All" [selected]
+                - option "KDM"
+                - option "DKDM"
+            - button "Reset" [ref=e314] [cursor=pointer]
+          - table [ref=e316]:
+            - rowgroup [ref=e317]:
+              - row "Status Type Film/CPL Window Match Actions" [ref=e318]:
+                - columnheader [ref=e319]:
+                  - checkbox [ref=e320]
+                - columnheader "Status" [ref=e321]
+                - columnheader "Type" [ref=e322]
+                - columnheader "Film/CPL" [ref=e323]
+                - columnheader "Window" [ref=e324]
+                - columnheader "Match" [ref=e325]
+                - columnheader "Actions" [ref=e326]
+                - columnheader [ref=e327]
+            - rowgroup [ref=e328]:
+              - row "Loading..." [ref=e329]:
+                - cell "Loading..." [ref=e330]
+        - text: ▾ ▾ ▾ ▾ ▾ ▾ ▾
+  - button "Apri Claqo Bot" [ref=e331] [cursor=pointer]:
+    - img "Claqo bot" [ref=e332]
+  - dialog "Copilot AI" [ref=e333]:
+    - generic [ref=e334]:
+      - img "Claqo bot" [ref=e336]
+      - heading "Copilot" [level=3] [ref=e337]
+      - generic [ref=e338]: —
+      - button "Nuova conversazione" [ref=e339] [cursor=pointer]:
+        - img [ref=e340]
+      - button "Chiudi" [ref=e341] [cursor=pointer]:
+        - img [ref=e342]
+    - generic [ref=e345]:
+      - generic [ref=e346]: "Storia:"
+      - button "(new) ▾" [ref=e348] [cursor=pointer]
+    - generic [ref=e351]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e352] [cursor=pointer]:
+        - img [ref=e353]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e355]
+      - button "Send" [ref=e356] [cursor=pointer]
+  - generic [ref=e357]:
+    - generic [ref=e358]:
+      - generic [ref=e359]: 🔔 Notifiche
+      - generic [ref=e360]:
+        - button "✓ Tutte lette" [ref=e361] [cursor=pointer]
+        - button "✕" [ref=e362] [cursor=pointer]
+    - generic [ref=e364]: Loading…
+  - text: ▾ ▾

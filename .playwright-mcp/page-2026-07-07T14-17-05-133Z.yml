@@ -1,0 +1,236 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - complementary [ref=f3e3]:
+      - generic "Info versione" [ref=f3e4] [cursor=pointer]:
+        - generic [ref=f3e5]: claqo
+      - navigation [ref=f3e6]:
+        - generic [ref=f3e7]:
+          - generic [ref=f3e8]: Principale
+          - link "Dashboard" [ref=f3e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=f3e11]
+            - generic [ref=f3e16]: Dashboard
+        - generic [ref=f3e17]:
+          - generic [ref=f3e18]: Anagrafica
+          - link "Clienti" [ref=f3e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=f3e21]
+            - generic [ref=f3e25]: Clienti
+          - link "Progetti" [ref=f3e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=f3e28]
+            - generic [ref=f3e33]: Progetti
+          - link "Acquisizioni" [ref=f3e34] [cursor=pointer]:
+            - /url: /acquisitions
+            - img [ref=f3e36]
+            - generic [ref=f3e40]: Acquisizioni
+          - link "Calendario" [ref=f3e41] [cursor=pointer]:
+            - /url: /calendar
+            - img [ref=f3e43]
+            - generic [ref=f3e45]: Calendario
+          - link "Email" [ref=f3e46] [cursor=pointer]:
+            - /url: /mail
+            - img [ref=f3e48]
+            - generic [ref=f3e51]: Email
+        - generic [ref=f3e52]:
+          - generic [ref=f3e53]: Operativo
+          - link "Pianificazione" [ref=f3e54] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=f3e56]
+            - generic [ref=f3e58]: Pianificazione
+          - link "Team" [ref=f3e59] [cursor=pointer]:
+            - /url: /team
+            - img [ref=f3e61]
+            - generic [ref=f3e66]: Team
+          - link "Ore lavoro" [ref=f3e67] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=f3e69]
+            - generic [ref=f3e72]: Ore lavoro
+        - generic [ref=f3e73]:
+          - generic [ref=f3e74]: Preventivi
+          - link "Listino Prezzi" [ref=f3e75] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=f3e77]
+            - generic [ref=f3e80]: Listino Prezzi
+          - link "Quotazioni" [ref=f3e81] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=f3e83]
+            - generic [ref=f3e86]: Quotazioni
+        - generic [ref=f3e87]:
+          - generic [ref=f3e88]: Finanza
+          - link "Cost Report" [ref=f3e89] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=f3e91]
+            - generic [ref=f3e93]: Cost Report
+          - link "SAL — Avanzamento" [ref=f3e94] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=f3e96]
+            - generic [ref=f3e99]: SAL — Avanzamento
+          - link "Fatturazione" [ref=f3e100] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=f3e102]
+            - generic [ref=f3e104]: Fatturazione
+          - link "Cashflow & Forecast" [ref=f3e105] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=f3e107]
+            - generic [ref=f3e110]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=f3e111] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=f3e113]
+            - generic [ref=f3e116]: Report YoY + Export
+          - link "Fornitori" [ref=f3e117] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=f3e119]
+            - generic [ref=f3e122]: Fornitori
+          - link "Spese aziendali" [ref=f3e123] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=f3e125]
+            - generic [ref=f3e128]: Spese aziendali
+        - generic [ref=f3e129]:
+          - generic [ref=f3e130]: Media
+          - link "Asset Library" [ref=f3e131] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=f3e133]
+            - generic [ref=f3e135]: Asset Library
+          - link "Scan filesystem" [ref=f3e136] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=f3e138]
+            - generic [ref=f3e142]: Scan filesystem
+          - link "In/Out Asset" [ref=f3e143] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=f3e145]
+            - generic [ref=f3e150]: In/Out Asset
+          - link "Asset Fisici" [ref=f3e151] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=f3e153]
+            - generic [ref=f3e155]: Asset Fisici
+          - link "Capitolati" [ref=f3e156] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=f3e158]
+            - generic [ref=f3e163]: Capitolati
+          - link "Import → Quote" [ref=f3e164] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=f3e166]
+            - generic [ref=f3e169]: Import → Quote
+          - link "Storage" [ref=f3e170] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=f3e172]
+            - generic [ref=f3e176]: Storage
+          - link "KDM/DKDM" [ref=f3e177] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=f3e179]
+            - generic [ref=f3e182]: KDM/DKDM
+        - generic [ref=f3e183]:
+          - generic [ref=f3e184]: Platform
+          - link "Tenants" [ref=f3e185] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=f3e187]
+            - generic [ref=f3e191]: Tenants
+        - generic [ref=f3e192]:
+          - generic [ref=f3e193]: Configurazione
+          - link "Reparti" [ref=f3e194] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=f3e196]
+            - generic [ref=f3e200]: Reparti
+          - link "Impostazioni" [ref=f3e201] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=f3e203]
+            - generic [ref=f3e206]: Impostazioni
+        - generic [ref=f3e207]:
+          - generic [ref=f3e208]: Aiuto
+          - link "Manuale" [ref=f3e209] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=f3e211]
+            - generic [ref=f3e213]: Manuale
+        - generic [ref=f3e214]:
+          - generic [ref=f3e215]: Amministrazione
+          - link "Utenti" [ref=f3e216] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=f3e218]
+            - generic [ref=f3e221]: Utenti
+          - link "Ruoli & Permessi" [ref=f3e222] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=f3e224]
+            - generic [ref=f3e227]: Ruoli & Permessi
+          - link "Cestino" [ref=f3e228] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=f3e230]
+            - generic [ref=f3e233]: Cestino
+          - link "Audit log" [ref=f3e234] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=f3e236]
+            - generic [ref=f3e239]: Audit log
+      - link "Logout" [ref=f3e241] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=f3e243]
+        - generic [ref=f3e246]: Logout
+    - generic [ref=f3e247]:
+      - banner [ref=f3e248]:
+        - generic [ref=f3e249]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=f3e250] [cursor=pointer]:
+            - img [ref=f3e251]
+          - generic [ref=f3e254]: Pipeline Commerciale
+        - generic [ref=f3e255]:
+          - button "+ Nuova trattativa" [ref=f3e256] [cursor=pointer]
+          - button "Apri palette tema" [ref=f3e258] [cursor=pointer]:
+            - img [ref=f3e260]
+          - button "Ingrandisci visualizzazione" [ref=f3e267] [cursor=pointer]:
+            - img [ref=f3e269]
+          - button "🇮🇹" [ref=f3e273] [cursor=pointer]:
+            - generic [ref=f3e274]: 🇮🇹
+          - button "8" [ref=f3e275] [cursor=pointer]:
+            - img [ref=f3e277]
+            - generic [ref=f3e280]: "8"
+          - generic "admin@mediaflow.it" [ref=f3e281]:
+            - generic [ref=f3e282]: Admin MediaFlow
+            - generic [ref=f3e283]: admin
+            - link "Logout" [ref=f3e284] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=f3e285]
+      - main [ref=f3e288]:
+        - generic [ref=f3e290]:
+          - generic [ref=f3e291]: Potenziale pesato
+          - generic [ref=f3e292]: —
+          - generic [ref=f3e293]: —
+        - generic [ref=f3e294]:
+          - generic [ref=f3e295]: Agenda — prossimi 30 gg
+          - generic [ref=f3e297]: Caricamento…
+        - generic [ref=f3e298]:
+          - button "— tutti — ▾" [ref=f3e300] [cursor=pointer]
+          - button "— tutti — ▾" [ref=f3e302] [cursor=pointer]
+          - textbox "Cerca…" [ref=f3e303]
+        - generic [ref=f3e304]:
+          - button "Kanban" [ref=f3e305] [cursor=pointer]
+          - button "Tabella" [ref=f3e306] [cursor=pointer]
+        - generic [ref=f3e307]: ▾
+        - text: ▾ ▾
+  - button "Apri Claqo Bot" [ref=f3e308] [cursor=pointer]:
+    - img "Claqo bot" [ref=f3e309]
+  - dialog "Copilot AI" [ref=f3e310]:
+    - generic [ref=f3e311]:
+      - img "Claqo bot" [ref=f3e313]
+      - heading "Copilot" [level=3] [ref=f3e314]
+      - generic [ref=f3e315]: —
+      - button "Nuova conversazione" [ref=f3e316] [cursor=pointer]:
+        - img [ref=f3e317]
+      - button "Chiudi" [ref=f3e318] [cursor=pointer]:
+        - img [ref=f3e319]
+    - generic [ref=f3e322]:
+      - generic [ref=f3e323]: "Storia:"
+      - button "(nuova) ▾" [ref=f3e325] [cursor=pointer]
+    - generic [ref=f3e328]:
+      - button "📥" [ref=f3e329] [cursor=pointer]
+      - button "🔎" [ref=f3e330] [cursor=pointer]
+    - generic [ref=f3e331]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=f3e332] [cursor=pointer]:
+        - img [ref=f3e333]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=f3e335]
+      - button "Invia" [ref=f3e336] [cursor=pointer]
+  - generic [ref=f3e337]:
+    - generic [ref=f3e338]:
+      - generic [ref=f3e339]: 🔔 Notifiche
+      - generic [ref=f3e340]:
+        - button "✓ Tutte lette" [ref=f3e341] [cursor=pointer]
+        - button "✕" [ref=f3e342] [cursor=pointer]
+    - generic [ref=f3e344]: Caricamento…
+  - text: ▾ ▾

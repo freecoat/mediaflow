@@ -1,0 +1,968 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Principale
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Anagrafica
+          - link "Clienti" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clienti
+          - link "Progetti" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Progetti
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operativo
+          - link "Pianificazione" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Pianificazione
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Ore lavoro" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Ore lavoro
+        - generic [ref=e55]:
+          - generic [ref=e56]: Preventivi
+          - link "Listino Prezzi" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Listino Prezzi
+          - link "Quotazioni" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotazioni
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finanza
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "Fatturazione" [ref=e76] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e78]
+            - generic [ref=e80]: Fatturazione
+          - link "Cashflow & Forecast" [ref=e81] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e83]
+            - generic [ref=e86]: Cashflow & Forecast
+          - link "Report YoY + Export" [ref=e87] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e89]
+            - generic [ref=e92]: Report YoY + Export
+          - link "Fornitori" [ref=e93] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e95]
+            - generic [ref=e98]: Fornitori
+          - link "Spese aziendali" [ref=e99] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e101]
+            - generic [ref=e104]: Spese aziendali
+        - generic [ref=e105]:
+          - generic [ref=e106]: Media
+          - link "Asset Library" [ref=e107] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e109]
+            - generic [ref=e111]: Asset Library
+          - link "Scan filesystem" [ref=e112] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e114]
+            - generic [ref=e118]: Scan filesystem
+          - link "In/Out Asset" [ref=e119] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e121]
+            - generic [ref=e126]: In/Out Asset
+          - link "Asset Fisici" [ref=e127] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e129]
+            - generic [ref=e131]: Asset Fisici
+          - link "Capitolati" [ref=e132] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e134]
+            - generic [ref=e139]: Capitolati
+          - link "Import → Quote" [ref=e140] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e142]
+            - generic [ref=e145]: Import → Quote
+        - generic [ref=e146]:
+          - generic [ref=e147]: Platform
+          - link "Tenants" [ref=e148] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e150]
+            - generic [ref=e154]: Tenants
+        - generic [ref=e155]:
+          - generic [ref=e156]: Configurazione
+          - link "Reparti" [ref=e157] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e159]
+            - generic [ref=e163]: Reparti
+          - link "Impostazioni" [ref=e164] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e166]
+            - generic [ref=e169]: Impostazioni
+        - generic [ref=e170]:
+          - generic [ref=e171]: Aiuto
+          - link "Manuale" [ref=e172] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e174]
+            - generic [ref=e176]: Manuale
+        - generic [ref=e177]:
+          - generic [ref=e178]: Amministrazione
+          - link "Utenti" [ref=e179] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e181]
+            - generic [ref=e184]: Utenti
+          - link "Ruoli & Permessi" [ref=e185] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e187]
+            - generic [ref=e190]: Ruoli & Permessi
+          - link "Cestino" [ref=e191] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e193]
+            - generic [ref=e196]: Cestino
+          - link "Audit log" [ref=e197] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e199]
+            - generic [ref=e202]: Audit log
+      - link "Logout" [ref=e204] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e206]
+        - generic [ref=e209]: Logout
+    - generic [ref=e210]:
+      - banner [ref=e211]:
+        - generic [ref=e212]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e213] [cursor=pointer]:
+            - img [ref=e214]
+          - generic [ref=e217]: Manuale d'uso
+        - generic [ref=e218]:
+          - button "Apri palette tema" [ref=e220] [cursor=pointer]:
+            - img [ref=e222]
+          - button "Ingrandisci visualizzazione" [ref=e229] [cursor=pointer]:
+            - img [ref=e231]
+          - button "🇮🇹" [ref=e235] [cursor=pointer]:
+            - generic [ref=e236]: 🇮🇹
+          - button "4" [ref=e237] [cursor=pointer]:
+            - img [ref=e239]
+            - generic [ref=e242]: "4"
+          - generic "admin@mediaflow.it" [ref=e243]:
+            - generic [ref=e244]: Admin MediaFlow
+            - generic [ref=e245]: admin
+            - link "Logout" [ref=e246] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e247]
+      - main [ref=e250]:
+        - generic [ref=e251]:
+          - complementary [ref=e252]:
+            - heading "Indice" [level=3] [ref=e253]
+            - searchbox "🔍 Cerca…" [ref=e254]
+            - link "Introduzione" [ref=e255] [cursor=pointer]:
+              - /url: "#intro"
+            - link "Concetti chiave" [ref=e256] [cursor=pointer]:
+              - /url: "#concetti"
+            - link "Cliente · Progetto · Job" [ref=e257] [cursor=pointer]:
+              - /url: "#concetti-cliente"
+            - link "Quote e versioning" [ref=e258] [cursor=pointer]:
+              - /url: "#concetti-quote"
+            - link "Booking e Assignment" [ref=e259] [cursor=pointer]:
+              - /url: "#concetti-booking"
+            - link "Listino e Reparti" [ref=e260] [cursor=pointer]:
+              - /url: "#concetti-listino"
+            - link "Pianificazione" [ref=e261] [cursor=pointer]:
+              - /url: "#planning"
+            - link "Timeline" [ref=e262] [cursor=pointer]:
+              - /url: "#planning-timeline"
+            - link "Multi-select e drag" [ref=e263] [cursor=pointer]:
+              - /url: "#planning-multi"
+            - link "Split pausa pranzo" [ref=e264] [cursor=pointer]:
+              - /url: "#planning-split"
+            - link "Conflitti e ferie" [ref=e265] [cursor=pointer]:
+              - /url: "#planning-conflict"
+            - link "Quotazioni" [ref=e266] [cursor=pointer]:
+              - /url: "#quote"
+            - link "Versioning A/B/C" [ref=e267] [cursor=pointer]:
+              - /url: "#quote-versioning"
+            - link "Conversione in Job" [ref=e268] [cursor=pointer]:
+              - /url: "#quote-conversion"
+            - link "Cost Report" [ref=e269] [cursor=pointer]:
+              - /url: "#cost-report"
+            - link "Asset Library" [ref=e270] [cursor=pointer]:
+              - /url: "#dam"
+            - link "AI Copilot" [ref=e271] [cursor=pointer]:
+              - /url: "#copilot"
+            - link "Capitolati → Quote" [ref=e272] [cursor=pointer]:
+              - /url: "#capitolati"
+            - link "Spedizioni" [ref=e273] [cursor=pointer]:
+              - /url: "#spedizioni"
+            - link "Asset · FS scan · Cross-check" [ref=e274] [cursor=pointer]:
+              - /url: "#assets-extra"
+            - link "Filesystem scan" [ref=e275] [cursor=pointer]:
+              - /url: "#assets-fs"
+            - link "Cross-check web" [ref=e276] [cursor=pointer]:
+              - /url: "#assets-crosscheck"
+            - link "Portale Cliente" [ref=e277] [cursor=pointer]:
+              - /url: "#portale-cliente"
+            - link "Multi-tenant" [ref=e278] [cursor=pointer]:
+              - /url: "#multitenant"
+            - link "Concetti chiave" [ref=e279] [cursor=pointer]:
+              - /url: "#mt-overview"
+            - link "Console super-admin" [ref=e280] [cursor=pointer]:
+              - /url: "#mt-platform"
+            - link "Login + subdomain" [ref=e281] [cursor=pointer]:
+              - /url: "#mt-login"
+            - link "Amministrazione" [ref=e282] [cursor=pointer]:
+              - /url: "#admin"
+            - link "Utenti, ruoli, permessi" [ref=e283] [cursor=pointer]:
+              - /url: "#admin-utenti"
+            - link "Cestino e ripristino" [ref=e284] [cursor=pointer]:
+              - /url: "#admin-cestino"
+            - link "Export/Import dati" [ref=e285] [cursor=pointer]:
+              - /url: "#admin-data"
+            - link "Scorciatoie tastiera" [ref=e286] [cursor=pointer]:
+              - /url: "#shortcuts"
+            - link "FAQ e troubleshooting" [ref=e287] [cursor=pointer]:
+              - /url: "#faq"
+          - article [ref=e288]:
+            - generic [ref=e289]:
+              - heading "Manuale d'uso Claqo" [level=1] [ref=e290]
+              - paragraph [ref=e291]:
+                - text: Claqo è una piattaforma di gestione per case di post-produzione audiovisiva, con un assistente AI integrato come
+                - strong [ref=e292]: co-pilota
+                - text: . Coordina il lavoro dalla quotazione iniziale fino al cost report finale.
+              - heading "Filosofia" [level=2] [ref=e293]
+              - list [ref=e294]:
+                - listitem [ref=e295]:
+                  - strong [ref=e296]: AI propone, utente dispone.
+                  - text: Ogni mutazione automatizzata richiede una conferma esplicita. Niente azioni "magiche" non tracciate.
+                - listitem [ref=e297]:
+                  - strong [ref=e298]: Funziona anche senza AI.
+                  - text: "Il copilota è un acceleratore, non un requisito: se non configuri provider AI, Claqo resta pienamente operativo."
+                - listitem [ref=e299]:
+                  - strong [ref=e300]: Listino modulare.
+                  - text: "Il listino non è uno standard rigido: ogni casa di post ha il suo, e il sistema si adatta."
+              - heading "Come è strutturata l'interfaccia" [level=2] [ref=e301]
+              - list [ref=e302]:
+                - listitem [ref=e303]:
+                  - strong [ref=e304]: Sidebar sinistra
+                  - text: ": navigazione tra le sezioni. Si può collassare con il tasto in alto a sinistra (Ctrl+B). In modalità collassata, hover su un'icona per 1 secondo mostra il nome."
+                - listitem [ref=e305]:
+                  - strong [ref=e306]: Topbar
+                  - text: ": titolo della pagina + azioni contestuali + campanella notifiche + nome utente."
+                - listitem [ref=e307]:
+                  - strong [ref=e308]: Copilot
+                  - text: ": pulsante 💬 fisso in basso a destra. Apre un drawer laterale con l'assistente AI. Vedi"
+                  - link "AI Copilot" [ref=e309] [cursor=pointer]:
+                    - /url: "#copilot"
+                  - text: .
+            - generic [ref=e310]:
+              - heading "Concetti chiave" [level=2] [ref=e311]
+              - paragraph [ref=e312]: La gerarchia delle entità è il cuore di Claqo. Capire come si compongono evita confusione su cosa appare dove.
+              - heading "Cliente · Progetto · Job" [level=3] [ref=e313]
+              - list [ref=e314]:
+                - listitem [ref=e315]:
+                  - strong [ref=e316]: Cliente
+                  - text: — l'azienda committente (es. una distribuzione, una produzione). Sezione
+                  - link "Clienti" [ref=e317] [cursor=pointer]:
+                    - /url: /clients
+                  - text: .
+                - listitem [ref=e318]:
+                  - strong [ref=e319]: Progetto
+                  - text: — un'opera audiovisiva commissionata da un cliente (es. "Il film X stagione 1"). Un cliente può avere più progetti. Sezione
+                  - link "Progetti" [ref=e320] [cursor=pointer]:
+                    - /url: /projects
+                  - text: .
+                - listitem [ref=e321]:
+                  - strong [ref=e322]: Quotazione
+                  - text: (Quote) — una proposta economica per un progetto. Un progetto può avere più quote (versioni A/B/C, revisioni). Quando una è approvata, si converte in
+                  - emphasis [ref=e323]: Job
+                  - text: .
+                - listitem [ref=e324]:
+                  - strong [ref=e325]: Job
+                  - text: — il lavoro effettivo da eseguire, con righe di costo (JobCostLine) ognuna riferita a una voce del listino. Da qui nascono i
+                  - emphasis [ref=e326]: Booking
+                  - text: di pianificazione.
+              - heading "Quote e versioning" [level=3] [ref=e327]
+              - paragraph [ref=e328]: "Una quotazione contiene righe di prezzo (con quantità, unità, prezzo unitario) e produce un PDF. Il versioning permette di proporre più alternative al cliente:"
+              - list [ref=e329]:
+                - listitem [ref=e330]: Sconto pacchetto applicabile a tutto il documento
+                - listitem [ref=e331]: IVA configurabile
+                - listitem [ref=e332]:
+                  - text: "3 livelli prezzo per voce:"
+                  - emphasis [ref=e333]: List
+                  - text: ","
+                  - emphasis [ref=e334]: Average
+                  - text: ","
+                  - emphasis [ref=e335]: Low
+                - listitem [ref=e336]: Hardcosts (costi vivi non scontabili)
+              - heading "Booking e Assignment core" [level=3] [ref=e337]:
+                - text: Booking e Assignment
+                - generic [ref=e338]: core
+              - paragraph [ref=e339]:
+                - text: Un
+                - strong [ref=e340]: Booking
+                - text: è una prenotazione di lavoro su una o più
+                - strong [ref=e341]: risorse
+                - text: (persone, sale, attrezzature) per una
+                - emphasis [ref=e342]: finestra temporale
+                - text: . Tecnicamente un booking ha una "envelope" (start/end totale) e
+                - emphasis [ref=e343]: N assignment
+                - text: ":"
+              - list [ref=e344]:
+                - listitem [ref=e345]:
+                  - text: Un
+                  - strong [ref=e346]: Assignment
+                  - text: = una risorsa + start + end specifico
+                - listitem [ref=e347]:
+                  - text: Un booking
+                  - strong [ref=e348]: multi-risorsa
+                  - text: ha più assignment, una per risorsa coinvolta
+                - listitem [ref=e349]:
+                  - text: Un booking
+                  - strong [ref=e350]: splittato
+                  - text: (es. pausa pranzo) ha più assignment
+                  - emphasis [ref=e351]: sulla stessa risorsa
+                  - text: ", con orari diversi nella stessa giornata"
+              - blockquote [ref=e352]:
+                - paragraph [ref=e353]:
+                  - text: Quando sposti un assignment splittato sulla timeline, gli altri segmenti dello
+                  - emphasis [ref=e354]: stesso
+                  - text: booking sulla
+                  - emphasis [ref=e355]: stessa
+                  - text: risorsa si spostano in blocco automaticamente (split-pause unit drag).
+              - heading "Listino e Reparti" [level=3] [ref=e356]
+              - list [ref=e357]:
+                - listitem [ref=e358]:
+                  - strong [ref=e359]: Reparto
+                  - text: (Department) — unità di responsabilità trasversale (DI/Video, VFX, Audio, Commercial). Ogni risorsa e ogni voce listino appartiene a un reparto.
+                - listitem [ref=e360]:
+                  - strong [ref=e361]: Voce listino
+                  - text: (PriceItem) — un servizio prezzato (es. "Color grading 1 ora", "Mix 5.1 a giornata"). Ha 3 livelli prezzo, unità di misura, descrizione, e
+                  - emphasis [ref=e362]: keywords
+                  - text: per il matching AI.
+                - listitem [ref=e363]:
+                  - strong [ref=e364]: Risorsa
+                  - text: — può essere persona interna, freelance, sala, attrezzatura, software, veicolo.
+            - generic [ref=e365]:
+              - heading "Pianificazione" [level=2] [ref=e366]
+              - paragraph [ref=e367]:
+                - text: La pagina
+                - link "Pianificazione" [ref=e368] [cursor=pointer]:
+                  - /url: /planning
+                - text: "ha tre viste:"
+                - strong [ref=e369]: Lista
+                - text: ","
+                - strong [ref=e370]: Timeline
+                - text: ","
+                - strong [ref=e371]: Calendario
+                - text: . La Timeline è quella più interattiva.
+              - heading "Timeline" [level=3] [ref=e372]
+              - paragraph [ref=e373]: "Vista orizzontale tipo Gantt: risorse in colonna sinistra, tempo in alto. Ogni booking è una \"barra\" colorata. Modalità di raggruppamento:"
+              - list [ref=e374]:
+                - listitem [ref=e375]:
+                  - strong [ref=e376]: Per risorsa
+                  - text: (default) — gruppo per reparto, foglie risorsa
+                - listitem [ref=e377]:
+                  - strong [ref=e378]: Per progetto
+                  - text: — gruppo per progetto, foglie job
+              - paragraph [ref=e379]: Background colorato per ferie/malattia/festività/timbrature. Heatmap di occupazione sotto il nome di ogni risorsa.
+              - heading "Multi-select e drag" [level=3] [ref=e380]
+              - list [ref=e381]:
+                - listitem [ref=e382]:
+                  - strong [ref=e383]: Selezione singola
+                  - text: ": click su un booking"
+                - listitem [ref=e384]:
+                  - strong [ref=e385]: Multi-selezione
+                  - text: ": Shift+click oppure Ctrl+click su più booking"
+                - listitem [ref=e386]:
+                  - strong [ref=e387]: Sticky multi
+                  - generic [ref=e388]: α.42
+                  - text: — click su un booking già selezionato preserva la multi (utile prima del drag)
+                - listitem [ref=e389]:
+                  - strong [ref=e390]: Modalità area
+                  - text: ": tasto S oppure pulsante 📦 Area → trascina un riquadro per selezionare tutti i booking dentro"
+                - listitem [ref=e391]:
+                  - strong [ref=e392]: Drag
+                  - text: ": trascina un booking per spostarlo. Su multi-selezione, il drag sposta TUTTI i booking selezionati dello stesso delta (multi-move atomico)"
+                - listitem [ref=e393]:
+                  - strong [ref=e394]: Resize
+                  - text: ": trascina i bordi laterali per cambiare la durata"
+                - listitem [ref=e395]:
+                  - strong [ref=e396]: Cross-resource
+                  - text: ": trascina su un'altra riga risorsa → menu Sposta/Duplica"
+                - listitem [ref=e397]:
+                  - strong [ref=e398]: Alt+drag
+                  - text: ": duplica anziché spostare"
+              - heading "Split pausa pranzo" [level=3] [ref=e399]
+              - paragraph [ref=e400]: "Per spezzare un booking in due segmenti (es. mattina + pomeriggio con pausa), apri il booking in dettaglio → \"Split\". Indica l'orario della pausa. I due segmenti restano linkati: spostarne uno sposta anche l'altro."
+              - heading "Conflitti e ferie" [level=3] [ref=e401]
+              - list [ref=e402]:
+                - listitem [ref=e403]:
+                  - strong [ref=e404]: Conflitto orario
+                  - text: ": due booking sulla stessa risorsa con orari sovrapposti. La timeline li evidenzia in rosso. Le modifiche che generano conflitto vengono"
+                  - strong [ref=e405]: bloccate server-side
+                  - text: .
+                - listitem [ref=e406]:
+                  - strong [ref=e407]: Ferie/malattia
+                  - text: ": hard block. Non è possibile prenotare una risorsa nei suoi giorni di indisponibilità."
+                - listitem [ref=e408]:
+                  - strong [ref=e409]: Festività
+                  - text: ": soft block. Si può prenotare ma scatta workflow di approvazione straordinario con maggiorazione festiva."
+                - listitem [ref=e410]:
+                  - strong [ref=e411]: Cross-department
+                  - text: ": se assegni una risorsa di un reparto diverso da quello del task, viene mostrato un badge ⚠ e una conferma esplicita."
+            - generic [ref=e412]:
+              - heading "Quotazioni" [level=2] [ref=e413]
+              - paragraph [ref=e414]:
+                - text: Le quotazioni vivono dentro un progetto. Si crea da
+                - link "Quotazioni" [ref=e415] [cursor=pointer]:
+                  - /url: /quotes
+                - text: oppure dalla scheda progetto.
+              - heading "Versioning A/B/C" [level=3] [ref=e416]
+              - paragraph [ref=e417]:
+                - text: Una quotazione può avere più
+                - emphasis [ref=e418]: versioni
+                - text: per gestire revisioni con il cliente. Auto-numerazione
+                - code [ref=e419]: "Q-{anno}-NNN"
+                - text: . Drag&drop dal listino direttamente nelle righe della quote.
+              - heading "Conversione in Job" [level=3] [ref=e420]
+              - paragraph [ref=e421]: Quando il cliente approva una quotazione, click "Converti in Job" → si crea automaticamente un Job con le righe di costo derivate dalla quote. Da quel momento le ore lavorate vengono tracciate via Booking → Cost Report.
+            - generic [ref=e422]:
+              - heading "Cost Report" [level=2] [ref=e423]
+              - paragraph [ref=e424]:
+                - text: Pagina
+                - link "Cost Report" [ref=e425] [cursor=pointer]:
+                  - /url: /cost-report
+                - text: ". Per ogni job mostra:"
+              - list [ref=e426]:
+                - listitem [ref=e427]:
+                  - strong [ref=e428]: Quotato
+                  - text: — quanto è stato proposto al cliente (dalla quote convertita)
+                - listitem [ref=e429]:
+                  - strong [ref=e430]: Maturato
+                  - text: — quanto è effettivamente stato eseguito (somma delle ore dei booking
+                  - emphasis [ref=e431]: done
+                  - text: )
+                - listitem [ref=e432]:
+                  - strong [ref=e433]: Stimato
+                  - text: — proiezione finale = maturato + stima del residuo
+              - blockquote [ref=e434]:
+                - paragraph [ref=e435]:
+                  - text: Il maturato deriva dai
+                  - emphasis [ref=e436]: Booking
+                  - text: messi a stato "done" (segmenti completati). Il Timesheet dello staff è binario separato in
+                  - link "Ore lavoro" [ref=e437] [cursor=pointer]:
+                    - /url: /hr
+                  - text: ed è gestito da HR, non da Cost Report.
+            - generic [ref=e438]:
+              - heading "Asset Library" [level=2] [ref=e439]
+              - paragraph [ref=e440]:
+                - text: Pagina
+                - link "Asset Library" [ref=e441] [cursor=pointer]:
+                  - /url: /dam
+                - text: . DAM (Digital Asset Management) per progetto. Upload file, organizzazione in cartelle, anteprime.
+              - paragraph [ref=e442]:
+                - generic [ref=e443]: in evoluzione
+                - text: Integrazione con storage esterno e portali consegne è prevista nelle fasi successive.
+            - generic [ref=e444]:
+              - heading "AI Copilot beta" [level=2] [ref=e445]:
+                - text: AI Copilot
+                - generic [ref=e446]: beta
+              - paragraph [ref=e447]:
+                - text: Il pulsante 💬 in basso a destra (FAB) apre un drawer laterale con l'assistente AI. È
+                - emphasis [ref=e448]: context-aware
+                - text: ": rileva da URL su che entità stai lavorando (cliente, progetto, quote, job)."
+              - heading "Configurazione" [level=3] [ref=e449]
+              - paragraph [ref=e450]:
+                - text: "Per attivarlo:"
+                - link "Impostazioni" [ref=e451] [cursor=pointer]:
+                  - /url: /settings
+                - text: "→ tab \"🤖 AI\". Provider supportati:"
+              - list [ref=e452]:
+                - listitem [ref=e453]:
+                  - strong [ref=e454]: Claude
+                  - text: (Anthropic) — Opus / Sonnet / Haiku
+                - listitem [ref=e455]:
+                  - strong [ref=e456]: OpenAI
+                  - text: — GPT-4o / o1 / o3-mini
+                - listitem [ref=e457]:
+                  - strong [ref=e458]: Gemini
+                  - text: — Flash / Pro
+                - listitem [ref=e459]:
+                  - strong [ref=e460]: Perplexity
+                  - text: — Sonar
+                - listitem [ref=e461]:
+                  - strong [ref=e462]: Ollama
+                  - text: (locale)
+              - paragraph [ref=e463]: Inserisci l'API key per ogni provider che vuoi usare, salva, scegli il modello, "Test connessione", e attiva uno come provider corrente. Le key sono cifrate (Fernet) con chiave dedicata.
+              - heading "Cosa può fare" [level=3] [ref=e464]
+              - paragraph [ref=e465]:
+                - text: Il copilota può proporre
+                - strong [ref=e466]: azioni
+                - text: "(mai eseguite senza la tua conferma). Capability disponibili:"
+              - list [ref=e467]:
+                - listitem [ref=e468]: Creare cliente, progetto, quotazione (con righe), riga di quote, voce listino, risorsa, booking
+                - listitem [ref=e469]: Aggiornare metadata di progetto
+                - listitem [ref=e470]: Cercare nel listino esistente PRIMA di proporre voci nuove (regola search-first)
+                - listitem [ref=e471]: Web search (read-only, via Tavily) per arricchire dati cliente
+              - heading "Pattern AI propone, utente dispone" [level=3] [ref=e472]
+              - paragraph [ref=e473]:
+                - text: Per ogni azione proposta, vedrai una
+                - strong [ref=e474]: card di conferma
+                - text: nel drawer con riassunto leggibile + pulsanti "Applica" / "Rifiuta". L'azione viene eseguita solo dopo il click su "Applica". Tutte le azioni (proposte, applicate, rifiutate, fallite) sono tracciate in tabella
+                - code [ref=e475]: ai_actions
+                - text: per audit.
+            - generic [ref=e476]:
+              - heading "Capitolati → Quote bozza α.95" [level=2] [ref=e477]:
+                - text: Capitolati → Quote bozza
+                - generic [ref=e478]: α.95
+              - paragraph [ref=e479]: "Carica un capitolato (PDF/Word/Excel) del cliente, l'AI estrae le voci di lavorazione e propone il matching col listino interno. Output: quote bozza con N righe linkate ai PriceItem corretti, da revisionare e inviare al cliente."
+              - heading "Wizard 3-step (/delivery-templates/import)" [level=3] [ref=e480]:
+                - text: Wizard 3-step (
+                - link "/delivery-templates/import" [ref=e481] [cursor=pointer]:
+                  - /url: /delivery-templates/import
+                - text: )
+              - list [ref=e482]:
+                - listitem [ref=e483]:
+                  - strong [ref=e484]: Upload
+                  - text: ": carica capitolato (max 30k caratteri). Hint opzionale (es. \"documentario 52 min\"). Toggle \"Estrai blocchi DeliveryTemplate\" per salvare anche i 8 blocchi tecnici (video/audio/text/head/textless/naming/archive/metadata)."
+                - listitem [ref=e485]:
+                  - strong [ref=e486]: Preview matching
+                  - text: ": tabella editable con voci AI + match listino + badge confidence (high/medium/low). Override qty/unit/prezzo/sezione per riga. Checkbox per includere o no."
+                - listitem [ref=e487]:
+                  - strong [ref=e488]: Genera Quote bozza
+                  - text: ": scegli progetto target + titolo + scadenza → crea"
+                  - code [ref=e489]: Quote.draft
+                  - text: + N QuoteLine linkate ai
+                  - code [ref=e490]: price_item_id
+                  - text: . Numero auto Q-YYYY-NNN.
+              - paragraph [ref=e491]:
+                - text: Capitolati di riferimento in
+                - code [ref=e492]: docs/capitolati_esempio/
+                - text: "(17 documenti reali: A24, Netflix, Sky, RAI, Beta Film, ecc.)."
+            - generic [ref=e493]:
+              - heading "Spedizioni asset fisici/digitali α.93–α.94" [level=2] [ref=e494]:
+                - text: Spedizioni asset fisici/digitali
+                - generic [ref=e495]: α.93–α.94
+              - paragraph [ref=e496]:
+                - text: Tracciamento spedizioni con costo vettore, payer, ricarico cliente, auto-fatturazione. Pagina
+                - link "/assets/inout" [ref=e497] [cursor=pointer]:
+                  - /url: /assets/inout
+                - text: → tab
+                - strong [ref=e498]: 🚚 Spedizioni
+                - text: .
+              - heading "Concetti chiave" [level=3] [ref=e499]
+              - list [ref=e500]:
+                - listitem [ref=e501]:
+                  - strong [ref=e502]: IngestBatch
+                  - text: ": raggruppa N AssetMovement (collo digitale o fisico) con 1 DDT, 1 vettore, 1 costo. Codice auto BATCH-YYYY-NNN."
+                - listitem [ref=e503]:
+                  - strong [ref=e504]: shipping_payer
+                  - text: "(chi paga):"
+                  - list [ref=e505]:
+                    - listitem [ref=e506]:
+                      - code [ref=e507]: internal
+                      - text: — costo nostro, no riaddebito (entra solo in cost report del progetto)
+                    - listitem [ref=e508]:
+                      - code [ref=e509]: client_direct
+                      - text: — cliente paga direttamente al vettore (zero costo nostro, audit only)
+                    - listitem [ref=e510]:
+                      - code [ref=e511]: charged_to_client
+                      - text: — anticipiamo, riaddebitiamo via JCL Spedizioni
+                - listitem [ref=e512]:
+                  - strong [ref=e513]: pickup_mode
+                  - text: ":"
+                  - code [ref=e514]: we_ship
+                  - text: /
+                  - code [ref=e515]: client_carrier_pickup
+                  - text: /
+                  - code [ref=e516]: client_in_person
+              - heading "Ricarico al cliente" [level=3] [ref=e517]
+              - paragraph [ref=e518]:
+                - text: Se
+                - code [ref=e519]: charged_to_client
+                - text: + progetto valido → auto-crea
+                - strong [ref=e520]: Lavorazione "Spedizione standard"
+                - text: "sul primo Job attivo:"
+                - code [ref=e521]: unit_price = shipping_cost × (1 + Project.shipping_markup_pct / 100)
+                - text: . Default markup 15%, configurabile per progetto. Lavorazione linkata al
+                - code [ref=e522]: PriceItem "Spedizione standard"
+                - text: (auto-creato in categoria "Spedizioni"). Entra nel prossimo BillingBatch trasmesso → riga fattura cliente.
+              - heading "Modal \"Nuova spedizione\"" [level=3] [ref=e523]
+              - paragraph [ref=e524]:
+                - text: Topbar
+                - code [ref=e525]: /assets/inout
+                - text: → bottone
+                - strong [ref=e526]: 🚚 Nuova spedizione
+                - text: ". Form: direzione (ingest/outgest), vettore + tracking + costo, pickup mode, payer, progetto (visibile solo se charged_to_client), asset selector multi-natura (fisici + digitali). Submit → 1 batch + N movimenti + eventuale JCL ricarico."
+              - heading "Tab Spedizioni" [level=3] [ref=e527]
+              - paragraph [ref=e528]: Lista IngestBatch con totali costo vettori + totale riaddebitato cliente (incl. markup). Filtri direzione/payer/has_cost. Click su JCL apre cost-report del Job.
+            - generic [ref=e529]:
+              - heading "Asset · FS scan · Cross-check" [level=2] [ref=e530]
+              - heading "Filesystem scan α.96" [level=3] [ref=e531]:
+                - text: Filesystem scan
+                - generic [ref=e532]: α.96
+              - paragraph [ref=e533]: Scansiona cartelle filesystem esterne (NAS, disco cliente montato), classifica file per tipo asset, importa selezionati come Asset DAM SENZA copiare il file (file_path punta al path originale).
+              - paragraph [ref=e534]:
+                - text: Pagina
+                - link "/dam/fs-scan" [ref=e535] [cursor=pointer]:
+                  - /url: /dam/fs-scan
+                - text: ". Per sicurezza il path deve essere in whitelist:"
+                - code [ref=e536]: Tenant.fs_scan_allowed_paths
+                - text: (lista assoluti). Da configurare via API
+                - code [ref=e537]: PUT /settings/api/tenant
+                - text: o Copilot AI.
+              - paragraph [ref=e538]:
+                - text: "Esempio whitelist Mac:"
+                - code [ref=e539]: "[\"/Volumes/StorageA\", \"/Users/frico/Desktop\"]"
+                - text: .
+              - paragraph [ref=e540]: "Workflow: scan path → tabella file classificati per tipo (video/audio/image/document/other) + filtro/search → selezione checkbox → \"Importa selezionati\" → Asset DAM registrati col path originale."
+              - heading "Cross-check web α.96" [level=3] [ref=e541]:
+                - text: Cross-check web
+                - generic [ref=e542]: α.96
+              - paragraph [ref=e543]: Verifica dati progetto/cliente DB vs informazioni pubbliche (IMDB, BoxOfficeMojo, Variety, MyMovies per progetti; Cerved, LinkedIn, news per clienti).
+              - list [ref=e544]:
+                - listitem [ref=e545]:
+                  - text: "Progetti:"
+                  - code [ref=e546]: "/projects/{id}"
+                  - text: → bottone topbar
+                  - strong [ref=e547]: 🔍 Cross-check
+                  - text: . Modal con lista differenze (current vs suggested + confidence + rationale) + external_info (premi, distribuzione, box_office).
+                - listitem [ref=e548]:
+                  - text: "Clienti:"
+                  - code [ref=e549]: /clients
+                  - text: modal cliente → bottone
+                  - strong [ref=e550]: 🔍 Cross-check
+                  - text: . Idem per dati aziendali.
+              - paragraph [ref=e551]: "Strategia AI cascata: native web search (Anthropic) → Tavily → knowledge-only. NO DB write — solo preview, l'utente decide cosa applicare (workflow approval enrichment)."
+            - generic [ref=e552]:
+              - heading "Portale Cliente α.97" [level=2] [ref=e553]:
+                - text: Portale Cliente
+                - generic [ref=e554]: α.97
+              - paragraph [ref=e555]:
+                - text: Portale separato dove il cliente può vedere progetti, milestone, asset consegnati e (futuro) storico fatture. Auth via magic-link (token 64-hex, expires default 7gg). Cliente vede SOLO progetti del proprio
+                - code [ref=e556]: client_id
+                - text: .
+              - heading "Creazione access (admin)" [level=3] [ref=e557]
+              - paragraph [ref=e558]: "Da CLI o via API:"
+              - generic [ref=e559]: "POST /portal/api/access form: client_id=42, email=\"referente@cliente.it\", full_name=\"Mario Rossi\" [, project_scope_json=\"[12,15]\"] # opt: solo questi progetti [, expires_days=7]"
+              - paragraph [ref=e560]:
+                - text: Response include
+                - code [ref=e561]: magic_link
+                - text: da inviare al cliente (oggi manuale, futuro email auto).
+              - heading "Esperienza cliente" [level=3] [ref=e562]
+              - paragraph [ref=e563]:
+                - text: Apre il link →
+                - code [ref=e564]: /portal/
+                - text: dashboard con lista progetti → click su progetto → scheda con info tecniche + milestone + tabella materiali consegnati (DAM filtrato) con bottone Scarica. Layout pulito separato dal pannello admin (no sidebar, no copilot, palette minimale).
+              - paragraph [ref=e565]:
+                - text: "Revoca:"
+                - code [ref=e566]: "POST /portal/api/access/{id}/revoke"
+                - text: → token invalidato.
+              - paragraph [ref=e567]:
+                - strong [ref=e568]: Fase B aperta
+                - text: ": gate"
+                - code [ref=e569]: "/dam/download/{id}"
+                - text: per portal_token (oggi accessibile via cookie portale), storico fatture, ticket leggero, notifiche email.
+            - generic [ref=e570]:
+              - heading "Multi-tenant α.101–α.104" [level=2] [ref=e571]:
+                - text: Multi-tenant
+                - generic [ref=e572]: α.101–α.104
+              - heading "Concetti chiave" [level=3] [ref=e573]
+              - paragraph [ref=e574]: "Claqo supporta più aziende clienti (tenant) sulla stessa installazione. Ogni tenant ha dati isolati: clienti, progetti, listino, utenti, asset, fatture."
+              - list [ref=e575]:
+                - listitem [ref=e576]:
+                  - strong [ref=e577]: Tenant resolution
+                  - text: ": dal subdomain ("
+                  - code [ref=e578]: acme.Claqo.it
+                  - text: ), header
+                  - code [ref=e579]: X-Tenant-Slug
+                  - text: ", query"
+                  - code [ref=e580]: "?tenant=acme"
+                  - text: ", o JWT del cookie. Fallback tenant Default (id=1)."
+                - listitem [ref=e581]:
+                  - strong [ref=e582]: Email scoped per tenant
+                  - text: ": lo stesso indirizzo email può esistere su tenant diversi come user separati. UniqueConstraint composito"
+                  - code [ref=e583]: (tenant_id, email)
+                  - text: .
+                - listitem [ref=e584]:
+                  - strong [ref=e585]: Cross-tenant gate
+                  - text: ": JWT del cookie include"
+                  - code [ref=e586]: tid
+                  - text: . Se l'utente apre una request con tenant resolved diverso dal proprio tid → user invalidato, redirect a login. Impedisce token reuse cross-tenant.
+                - listitem [ref=e587]:
+                  - strong [ref=e588]: Uploads isolati
+                  - text: ": cartelle"
+                  - code [ref=e589]: "uploads/t{tenant_id}/assets/"
+                  - text: per asset DAM caricati. Path assoluti su file legacy restano leggibili.
+              - heading "Console super-admin α.104" [level=3] [ref=e590]:
+                - text: Console super-admin
+                - generic [ref=e591]: α.104
+              - paragraph [ref=e592]:
+                - text: Visibile solo a user con
+                - code [ref=e593]: is_platform_admin=True
+                - text: "di tenant Default. Path:"
+                - link "/platform/tenants" [ref=e594] [cursor=pointer]:
+                  - /url: /platform/tenants
+                - text: . Bypass tenant scope → vede tutti i tenant.
+              - paragraph [ref=e595]: "Operazioni:"
+              - list [ref=e596]:
+                - listitem [ref=e597]:
+                  - strong [ref=e598]: Lista tenant
+                  - text: ": tabella con KPI users/progetti/clienti"
+                - listitem [ref=e599]:
+                  - strong [ref=e600]: Crea tenant
+                  - text: ": form slug + nome + admin email/nome/password. Crea Tenant + admin User + 4 departments default + cartella"
+                  - code [ref=e601]: "uploads/t{id}/"
+                  - text: isolata. Listino vuoto.
+                - listitem [ref=e602]:
+                  - strong [ref=e603]: Edit tenant
+                  - text: ": rinomina slug, ragione sociale, email contatto."
+                - listitem [ref=e604]:
+                  - strong [ref=e605]: Sospendi/riattiva tenant
+                  - text: ":"
+                  - code [ref=e606]: is_active=False
+                  - text: blocca login (tenant Default non revocabile).
+                - listitem [ref=e607]:
+                  - strong [ref=e608]: Aggiungi admin user a un tenant
+                  - text: ": modal Users del tenant → form email + nome + password."
+              - paragraph [ref=e609]:
+                - text: "In alternativa CLI:"
+                - code [ref=e610]: python scripts/create_tenant.py --slug acme --name "Acme Post" --admin-email admin@acme.it --admin-name "Acme Admin"
+                - text: .
+              - heading "Login multi-tenant" [level=3] [ref=e611]
+              - paragraph [ref=e612]: "Tre modalità (in dev):"
+              - list [ref=e613]:
+                - listitem [ref=e614]:
+                  - strong [ref=e615]: Subdomain
+                  - text: "(prod, quando DNS pronto):"
+                  - code [ref=e616]: http://acme.Claqo.it/auth/login
+                - listitem [ref=e617]:
+                  - strong [ref=e618]: lvh.me
+                  - text: "(dev, no DNS setup richiesto):"
+                  - code [ref=e619]: http://acme.lvh.me:8000/auth/login
+                  - text: (risolve a 127.0.0.1)
+                - listitem [ref=e620]:
+                  - strong [ref=e621]: Query param
+                  - text: "(fallback):"
+                  - code [ref=e622]: http://localhost:8000/auth/login?tenant=acme
+              - paragraph [ref=e623]:
+                - text: Login emette JWT con
+                - code [ref=e624]: tid=N
+                - text: . Il middleware
+                - code [ref=e625]: tenant_resolver
+                - text: setta
+                - code [ref=e626]: contextvars.ContextVar
+                - text: ad ogni request, e ogni router filtra le query per
+                - code [ref=e627]: current_tenant_id()
+                - text: .
+              - paragraph [ref=e628]:
+                - strong [ref=e629]: Test isolation
+                - text: ":"
+                - code [ref=e630]: python scripts/test_multitenant.py
+                - text: (richiede server in esecuzione + tenant
+                - code [ref=e631]: acme
+                - text: creato).
+            - generic [ref=e632]:
+              - heading "Amministrazione" [level=2] [ref=e633]
+              - heading "Utenti, ruoli, permessi" [level=3] [ref=e634]
+              - list [ref=e635]:
+                - listitem [ref=e636]:
+                  - link "Utenti" [ref=e637] [cursor=pointer]:
+                    - /url: /admin/users
+                  - text: — creazione/disattivazione utenti, reset password, assegnazione ruolo
+                - listitem [ref=e638]:
+                  - link "Ruoli e permessi" [ref=e639] [cursor=pointer]:
+                    - /url: /admin/roles
+                  - text: — i ruoli base (admin/manager/staff/viewer) sono estendibili con permessi configurabili (es.
+                  - code [ref=e640]: view_finance
+                  - text: ","
+                  - code [ref=e641]: edit_pricelist
+                  - text: ","
+                  - code [ref=e642]: assign_resources
+                  - text: )
+              - heading "Cestino e ripristino" [level=3] [ref=e643]
+              - paragraph [ref=e644]:
+                - link "Cestino" [ref=e645] [cursor=pointer]:
+                  - /url: /admin/cestino
+                - text: . Le entità cancellate (Quote, Project, Booking, ecc.) finiscono qui (soft-delete) e sono ripristinabili. Retention automatica configurabile. Gli auto-numero/progressivi non si ricicliano (rimangono univoci anche con record cestinati).
+              - heading "Export/Import dati α.34" [level=3] [ref=e646]:
+                - text: Export/Import dati
+                - generic [ref=e647]: α.34
+              - paragraph [ref=e648]:
+                - link "Impostazioni" [ref=e649] [cursor=pointer]:
+                  - /url: /settings
+                - text: "→ tab \"Dati\" (solo admin). Export ZIP completo:"
+              - list [ref=e650]:
+                - listitem [ref=e651]: Database SQLite
+                - listitem [ref=e652]: Excel multi-sheet (listino, quotazioni)
+                - listitem [ref=e653]: Memorie del copilot (path mangled cross-OS per portabilità)
+                - listitem [ref=e654]:
+                  - text: "Opt-in:"
+                  - code [ref=e655]: .env
+                  - text: ", uploads, trash"
+                - listitem [ref=e656]: Cifratura AES-256 con password (apribile anche da 7zip/WinZip)
+              - paragraph [ref=e657]:
+                - text: "Restore da ZIP: check di major version, swap atomico DB con backup automatico ("
+                - code [ref=e658]: "Claqo.db.backup-{timestamp}"
+                - text: ), rollback su errore. Utile per sincronizzare PC ↔ Mac o per backup/restore.
+            - generic [ref=e659]:
+              - heading "Scorciatoie tastiera" [level=2] [ref=e660]
+              - table [ref=e661]:
+                - rowgroup [ref=e662]:
+                  - row "Tasto Contesto Azione" [ref=e663]:
+                    - columnheader "Tasto" [ref=e664]
+                    - columnheader "Contesto" [ref=e665]
+                    - columnheader "Azione" [ref=e666]
+                - rowgroup [ref=e667]:
+                  - row "Ctrl+B Globale Toggle sidebar collassata/espansa" [ref=e668]:
+                    - cell "Ctrl+B" [ref=e669]
+                    - cell "Globale" [ref=e670]
+                    - cell "Toggle sidebar collassata/espansa" [ref=e671]
+                  - row "Ctrl+Z Pianificazione Annulla l'ultima azione (move, delete, multi-move)" [ref=e672]:
+                    - cell "Ctrl+Z" [ref=e673]
+                    - cell "Pianificazione" [ref=e674]
+                    - cell "Annulla l'ultima azione (move, delete, multi-move)" [ref=e675]
+                  - row "Ctrl+Y / Ctrl+Shift+Z Pianificazione Ripeti azione annullata" [ref=e676]:
+                    - cell "Ctrl+Y / Ctrl+Shift+Z" [ref=e677]
+                    - cell "Pianificazione" [ref=e678]
+                    - cell "Ripeti azione annullata" [ref=e679]
+                  - row "Delete / Backspace Pianificazione Cancella i booking selezionati" [ref=e680]:
+                    - cell "Delete / Backspace" [ref=e681]
+                    - cell "Pianificazione" [ref=e682]
+                    - cell "Cancella i booking selezionati" [ref=e683]
+                  - row "S Pianificazione → Timeline Attiva modalità area (rubber-band selezione)" [ref=e684]:
+                    - cell "S" [ref=e685]
+                    - cell "Pianificazione → Timeline" [ref=e686]
+                    - cell "Attiva modalità area (rubber-band selezione)" [ref=e687]
+                  - row "Esc Modali / Drawer Chiudi senza salvare" [ref=e688]:
+                    - cell "Esc" [ref=e689]
+                    - cell "Modali / Drawer" [ref=e690]
+                    - cell "Chiudi senza salvare" [ref=e691]
+                  - row "Shift+drag Pianificazione → Timeline Crea nuovo booking" [ref=e692]:
+                    - cell "Shift+drag" [ref=e693]
+                    - cell "Pianificazione → Timeline" [ref=e694]
+                    - cell "Crea nuovo booking" [ref=e695]
+                  - row "Shift+click Pianificazione → Timeline Multi-selezione" [ref=e696]:
+                    - cell "Shift+click" [ref=e697]
+                    - cell "Pianificazione → Timeline" [ref=e698]
+                    - cell "Multi-selezione" [ref=e699]
+                  - row "Ctrl+click Pianificazione → Timeline Toggle item nella selezione" [ref=e700]:
+                    - cell "Ctrl+click" [ref=e701]
+                    - cell "Pianificazione → Timeline" [ref=e702]
+                    - cell "Toggle item nella selezione" [ref=e703]
+                  - row "Alt+drag Pianificazione → Timeline Duplica anziché spostare" [ref=e704]:
+                    - cell "Alt+drag" [ref=e705]
+                    - cell "Pianificazione → Timeline" [ref=e706]
+                    - cell "Duplica anziché spostare" [ref=e707]
+            - generic [ref=e708]:
+              - heading "FAQ e troubleshooting" [level=2] [ref=e709]
+              - heading "Il bold dei nomi operatore non si vede sulla timeline" [level=3] [ref=e710]
+              - paragraph [ref=e711]: Risolto in v3.5.0-alpha.41+. Se ancora compare il problema, forza un hard-refresh del browser (Ctrl+Shift+R) per scaricare CSS/JS aggiornati.
+              - heading "Multi-move spara conflitti che non capisco" [level=3] [ref=e712]
+              - paragraph [ref=e713]:
+                - text: Risolto in v3.5.0-alpha.42 (multi-move atomico). Se vedi un conflitto, è ora
+                - strong [ref=e714]: reale
+                - text: ": il toast indica precisamente quale assignment è in conflitto con quale altro, e su che risorsa."
+              - heading "Ho cancellato un booking per sbaglio" [level=3] [ref=e715]
+              - paragraph [ref=e716]:
+                - text: "Premi subito Ctrl+Z. Se è passato troppo tempo o hai chiuso la pagina:"
+                - link "Cestino" [ref=e717] [cursor=pointer]:
+                  - /url: /admin/cestino
+                - text: → ripristina.
+              - heading "Cos'è la differenza tra Booking e Timesheet?" [level=3] [ref=e718]
+              - paragraph [ref=e719]:
+                - text: Il
+                - strong [ref=e720]: Booking
+                - text: è la prenotazione pianificata di una risorsa (parte del cost report). Il
+                - strong [ref=e721]: Timesheet
+                - text: "(in HR) è il rendiconto delle ore effettivamente lavorate dallo staff. Sono due binari separati: il maturato del cost report viene dai booking"
+                - emphasis [ref=e722]: done
+                - text: ", non dal timesheet."
+              - heading "Come configuro un nuovo modello AI dopo che il vendor lo rilascia?" [level=3] [ref=e723]
+              - paragraph [ref=e724]:
+                - link "Impostazioni" [ref=e725] [cursor=pointer]:
+                  - /url: /settings
+                - text: "→ tab \"🤖 AI\" → seleziona provider → dropdown modello. La lista è sincronizzata con i nomi correnti. Se manca, scrivilo manualmente nel campo: viene salvato e usato finché non lo cambi."
+              - heading "L'AI inventa date passate o duplica voci" [level=3] [ref=e726]
+              - paragraph [ref=e727]: "Non dovrebbe (system prompt esplicito su questo punto). Se succede:"
+              - list [ref=e728]:
+                - listitem [ref=e729]: "\"Rifiuta\" la card di conferma (l'azione non viene applicata)"
+                - listitem [ref=e730]: Riformula la richiesta più stringente (es. "usa la data odierna")
+                - listitem [ref=e731]: Se persiste, prova un modello più capace (Opus invece di Haiku)
+              - heading "Backup automatici?" [level=3] [ref=e732]
+              - paragraph [ref=e733]:
+                - text: "Non ci sono ancora backup schedulati automatici. Per backup manuale:"
+                - link "Impostazioni" [ref=e734] [cursor=pointer]:
+                  - /url: /settings
+                - text: → tab "Dati" → "Scarica ZIP completo" con password.
+              - heading "La timeline si blocca/freeze in Chrome con molti booking" [level=3] [ref=e735]
+              - paragraph [ref=e736]:
+                - text: "Diagnosi performance trace 7/5/2026: il colpevole è quasi sempre un'"
+                - strong [ref=e737]: estensione browser
+                - text: (Bitwarden, 1Password, LastPass, MetaMask, ecc.) che osserva le mutazioni del DOM. Vis-timeline crea/distrugge migliaia di nodi durante zoom/pan, e l'estensione esegue una scan a ogni mutazione → main thread saturo → freeze.
+              - paragraph [ref=e738]:
+                - strong [ref=e739]: Test diagnostico
+                - text: ": apri Chrome in modalità incognito (Cmd/Ctrl+Shift+N) e usa Claqo lì. Se in incognito funziona fluido → confermato problema estensione."
+              - paragraph [ref=e740]:
+                - strong [ref=e741]: Workaround
+                - text: ":"
+              - list [ref=e742]:
+                - listitem [ref=e743]:
+                  - text: Disattiva l'estensione su
+                  - code [ref=e744]: localhost
+                  - text: "(Bitwarden: Settings → Excluded Domains → aggiungi"
+                  - code [ref=e745]: localhost
+                  - text: )
+                - listitem [ref=e746]: Usa Firefox (i test mostrano performance migliori per la timeline)
+                - listitem [ref=e747]:
+                  - text: Usa
+                  - link "Pagina timeline standalone" [ref=e748] [cursor=pointer]:
+                    - /url: /planning/full
+                  - text: in finestra dedicata (riduce DOM extra di sidebar/topbar)
+                - listitem [ref=e749]: Disattiva la heatmap (📊 toolbar) se attivata
+              - paragraph [ref=e750]:
+                - text: Claqo include attributi
+                - code [ref=e751]: data-bwignore
+                - text: /
+                - code [ref=e752]: data-lpignore
+                - text: /
+                - code [ref=e753]: autocomplete="off"
+                - text: su contenitori timeline per chiedere alle estensioni di non scansionarli, ma non tutte le rispettano.
+  - button "Apri Claqo Bot" [ref=e754] [cursor=pointer]:
+    - img "Claqo bot" [ref=e755]
+  - dialog "Copilot AI" [ref=e756]:
+    - generic [ref=e757]:
+      - img "Claqo bot" [ref=e759]
+      - heading "Copilot" [level=3] [ref=e760]
+      - generic [ref=e761]: —
+      - button "Nuova conversazione" [ref=e762] [cursor=pointer]:
+        - img [ref=e763]
+      - button "Chiudi" [ref=e764] [cursor=pointer]:
+        - img [ref=e765]
+    - generic [ref=e768]:
+      - generic [ref=e769]: "Storia:"
+      - button "(nuova) ▾" [ref=e771] [cursor=pointer]
+    - generic [ref=e774]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e775] [cursor=pointer]:
+        - img [ref=e776]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e778]
+      - button "Invia" [ref=e779] [cursor=pointer]
+  - generic [ref=e780]:
+    - generic [ref=e781]:
+      - generic [ref=e782]: 🔔 Notifiche
+      - generic [ref=e783]:
+        - button "✓ Tutte lette" [ref=e784] [cursor=pointer]
+        - button "✕" [ref=e785] [cursor=pointer]
+    - generic [ref=e787]: Caricamento…
+  - text: ▾ ▾

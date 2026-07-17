@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>Claqo mascot — default</title>
+  <rect width="200" height="200" rx="44" fill="#D85A30"/>
+  <polygon points="28,82 172,82 188,30 42,42" fill="#1A1A1A"/>
+  <polygon points="58,82 76,82 86,38 68,42" fill="#FFFFFF"/>
+  <polygon points="98,82 116,82 126,34 108,38" fill="#FFFFFF"/>
+  <polygon points="138,82 156,82 166,30 148,34" fill="#FFFFFF"/>
+  <rect x="28" y="82" width="144" height="98" rx="10" fill="#FAECE7"/>
+  <circle cx="74" cy="124" r="14" fill="#1A1A1A"/>
+  <circle cx="126" cy="124" r="14" fill="#1A1A1A"/>
+  <circle cx="78" cy="120" r="4" fill="#FFFFFF"/>
+  <circle cx="130" cy="120" r="4" fill="#FFFFFF"/>
+  <circle cx="56" cy="150" r="4" fill="#D85A30" opacity="0.5"/>
+  <circle cx="144" cy="150" r="4" fill="#D85A30" opacity="0.5"/>
+  <path d="M 86 158 Q 100 168 114 158" stroke="#1A1A1A" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+</svg>

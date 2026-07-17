@@ -1,0 +1,50 @@
+- generic [active] [ref=e1]:
+  - heading "🔑 DCP key request (KDM / DKDM)" [level=2] [ref=e2]
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - text: Key type
+      - button "KDM (cinema) ▾" [ref=e6] [cursor=pointer]
+    - generic [ref=e7]:
+      - text: Film title
+      - textbox "Film title" [ref=e8]:
+        - /placeholder: es. QUEER_FTR_IT-XX_EN_51_2K_20240901
+        - text: SMOKE_TEST
+    - generic [ref=e9]:
+      - text: DCP CPL UUID (optional — helps automatic matching)
+      - textbox "DCP CPL UUID (optional — helps automatic matching)" [ref=e10]:
+        - /placeholder: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    - generic [ref=e11]:
+      - text: Unlock FROM (date+time)
+      - generic [ref=e12]:
+        - textbox "Unlock FROM (date+time)" [ref=e13]
+        - textbox [ref=e14]
+    - generic [ref=e15]:
+      - text: Unlock TO (date+time)
+      - generic [ref=e16]:
+        - textbox "Unlock TO (date+time)" [ref=e17]
+        - textbox [ref=e18]
+    - generic [ref=e19]:
+      - text: Server certificate (.pem) (optional)
+      - button "Server certificate (.pem) (optional)" [ref=e20]
+    - group "Contacts" [ref=e21]:
+      - generic [ref=e22]: Contacts
+      - generic [ref=e23]:
+        - text: Recipient cinema / lab — name
+        - textbox "Recipient cinema / lab — name" [ref=e24]
+      - generic [ref=e25]:
+        - text: Recipient cinema / lab — email
+        - textbox "Recipient cinema / lab — email" [ref=e26]:
+          - /placeholder: proiettore@cinema.it
+      - generic [ref=e27]:
+        - text: Lab email (optional)
+        - textbox "Lab email (optional)" [ref=e28]
+      - generic [ref=e29]:
+        - text: Production — contact name
+        - textbox "Production — contact name" [ref=e30]
+      - generic [ref=e31]:
+        - text: Production — contact email
+        - textbox "Production — contact email" [ref=e32]
+    - generic [ref=e33]:
+      - text: Notes
+      - textbox "Notes" [ref=e34]
+    - button "Send request" [ref=e35] [cursor=pointer]

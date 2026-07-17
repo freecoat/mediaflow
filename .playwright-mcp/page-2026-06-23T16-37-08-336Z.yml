@@ -1,0 +1,691 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic "Info versione" [ref=e4] [cursor=pointer]:
+        - generic [ref=e5]: claqo
+      - navigation [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: Main
+          - link "Dashboard" [ref=e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=e11]
+            - generic [ref=e16]: Dashboard
+        - generic [ref=e17]:
+          - generic [ref=e18]: Records
+          - link "Clients" [ref=e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=e21]
+            - generic [ref=e25]: Clients
+          - link "Projects" [ref=e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=e28]
+            - generic [ref=e33]: Projects
+        - generic [ref=e34]:
+          - generic [ref=e35]: Operations
+          - link "Planning" [ref=e36] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=e38]
+            - generic [ref=e40]: Planning
+          - link "Team" [ref=e41] [cursor=pointer]:
+            - /url: /team
+            - img [ref=e43]
+            - generic [ref=e48]: Team
+          - link "Work hours" [ref=e49] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=e51]
+            - generic [ref=e54]: Work hours
+        - generic [ref=e55]:
+          - generic [ref=e56]: Quotes
+          - link "Price List" [ref=e57] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=e59]
+            - generic [ref=e62]: Price List
+          - link "Quotes" [ref=e63] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=e65]
+            - generic [ref=e68]: Quotes
+        - generic [ref=e69]:
+          - generic [ref=e70]: Finance
+          - link "Cost Report" [ref=e71] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=e73]
+            - generic [ref=e75]: Cost Report
+          - link "SAL — Avanzamento" [ref=e76] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=e78]
+            - generic [ref=e81]: SAL — Avanzamento
+          - link "Invoicing" [ref=e82] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=e84]
+            - generic [ref=e86]: Invoicing
+          - link "Cashflow & Forecast" [ref=e87] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=e89]
+            - generic [ref=e92]: Cashflow & Forecast
+          - link "YoY Reports + Export" [ref=e93] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=e95]
+            - generic [ref=e98]: YoY Reports + Export
+          - link "Suppliers" [ref=e99] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=e101]
+            - generic [ref=e104]: Suppliers
+          - link "Overhead costs" [ref=e105] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=e107]
+            - generic [ref=e110]: Overhead costs
+        - generic [ref=e111]:
+          - generic [ref=e112]: Media
+          - link "Asset Library" [ref=e113] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=e115]
+            - generic [ref=e117]: Asset Library
+          - link "Filesystem scan" [ref=e118] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=e120]
+            - generic [ref=e124]: Filesystem scan
+          - link "Asset In/Out" [ref=e125] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=e127]
+            - generic [ref=e132]: Asset In/Out
+          - link "Physical Assets" [ref=e133] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=e135]
+            - generic [ref=e137]: Physical Assets
+          - link "Delivery Specs" [ref=e138] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=e140]
+            - generic [ref=e145]: Delivery Specs
+          - link "Import → Quote" [ref=e146] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=e148]
+            - generic [ref=e151]: Import → Quote
+          - link "Storage" [ref=e152] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=e154]
+            - generic [ref=e158]: Storage
+          - link "KDM/DKDM" [ref=e159] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=e161]
+            - generic [ref=e164]: KDM/DKDM
+        - generic [ref=e165]:
+          - generic [ref=e166]: Platform
+          - link "Tenants" [ref=e167] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=e169]
+            - generic [ref=e173]: Tenants
+        - generic [ref=e174]:
+          - generic [ref=e175]: Configuration
+          - link "Departments" [ref=e176] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=e178]
+            - generic [ref=e182]: Departments
+          - link "Settings" [ref=e183] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=e185]
+            - generic [ref=e188]: Settings
+        - generic [ref=e189]:
+          - generic [ref=e190]: Help
+          - link "Manual" [ref=e191] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=e193]
+            - generic [ref=e195]: Manual
+        - generic [ref=e196]:
+          - generic [ref=e197]: Administration
+          - link "Users" [ref=e198] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=e200]
+            - generic [ref=e203]: Users
+          - link "Roles & Permissions" [ref=e204] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=e206]
+            - generic [ref=e209]: Roles & Permissions
+          - link "Trash" [ref=e210] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=e212]
+            - generic [ref=e215]: Trash
+          - link "Audit log" [ref=e216] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=e218]
+            - generic [ref=e221]: Audit log
+      - link "Logout" [ref=e223] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=e225]
+        - generic [ref=e228]: Logout
+    - generic [ref=e229]:
+      - banner [ref=e230]:
+        - generic [ref=e231]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=e232] [cursor=pointer]:
+            - img [ref=e233]
+          - generic [ref=e236]: Capitolati di consegna
+        - generic [ref=e237]:
+          - button "🔍 Cerca items" [ref=e238] [cursor=pointer]
+          - button "⚖ Diff template" [ref=e239] [cursor=pointer]
+          - button "📦 Esporta ZIP" [ref=e240] [cursor=pointer]: 📦 Esporta ZIP
+          - button "📥 Importa ZIP" [ref=e241] [cursor=pointer]
+          - button "+ Nuovo capitolato" [ref=e242] [cursor=pointer]
+          - button "Importa capitolato" [ref=e243] [cursor=pointer]:
+            - img [ref=e244]
+            - text: Importa capitolato
+          - button "Open theme palette" [ref=e248] [cursor=pointer]:
+            - img [ref=e250]
+          - button "Ingrandisci visualizzazione" [ref=e257] [cursor=pointer]:
+            - img [ref=e259]
+          - button "🇬🇧" [ref=e263] [cursor=pointer]:
+            - generic [ref=e264]: 🇬🇧
+          - button "8" [ref=e265] [cursor=pointer]:
+            - img [ref=e267]
+            - generic [ref=e270]: "8"
+          - generic "admin@mediaflow.it" [ref=e271]:
+            - generic [ref=e272]: Admin MediaFlow
+            - generic [ref=e273]: admin
+            - link "Logout" [ref=e274] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=e275]
+      - main [ref=e278]:
+        - generic [ref=e280]:
+          - generic [ref=e281]:
+            - generic [ref=e282]: Template
+            - generic [ref=e283]: 15 attivi
+          - generic [ref=e284]:
+            - generic [ref=e285]: DeliveryItem totali
+            - generic [ref=e286]: "212"
+          - generic [ref=e287]:
+            - generic [ref=e288]: Top package
+            - generic [ref=e289]:
+              - generic [ref=e290]:
+                - strong [ref=e291]: DCP SMPTE
+                - text: "7"
+              - generic [ref=e292]:
+                - strong [ref=e293]: DCP Interop
+                - text: "7"
+              - generic [ref=e294]:
+                - strong [ref=e295]: IMF App 2
+                - text: "1"
+          - generic [ref=e296]:
+            - generic [ref=e297]: Top resolution
+            - generic [ref=e298]:
+              - generic [ref=e299]:
+                - strong [ref=e300]: HD 1080p
+                - text: "49"
+              - generic [ref=e301]:
+                - strong [ref=e302]: UHD 3840
+                - text: "40"
+              - generic [ref=e303]:
+                - strong [ref=e304]: 4K DCI Full
+                - text: "9"
+              - generic [ref=e305]:
+                - strong [ref=e306]: 2K DCI Scope
+                - text: "8"
+              - generic [ref=e307]:
+                - strong [ref=e308]: SD PAL 576i/p
+                - text: "5"
+        - generic [ref=e309]:
+          - generic [ref=e310]:
+            - generic [ref=e311]: Template di consegna
+            - generic [ref=e312]:
+              - searchbox "Cerca code/nome…" [ref=e313]
+              - button "Tutti broadcaster ▾" [ref=e315] [cursor=pointer]
+              - generic [ref=e316] [cursor=pointer]:
+                - checkbox "Mostra inattivi" [ref=e317]
+                - text: Mostra inattivi
+              - generic [ref=e318]: 15 template
+          - table [ref=e320]:
+            - rowgroup [ref=e321]:
+              - row "Seleziona tutti i visibili Code ⇅ Name ⇅ Issuer ⇅ Version ⇅ Items ⇅ Blocks ⇅ AI ⇅ Actions ⇅" [ref=e322]:
+                - columnheader "Seleziona tutti i visibili" [ref=e323]:
+                  - checkbox "Seleziona tutti i visibili" [ref=e324]
+                - columnheader "Code ⇅" [ref=e325] [cursor=pointer]
+                - columnheader "Name ⇅" [ref=e326] [cursor=pointer]
+                - columnheader "Issuer ⇅" [ref=e327] [cursor=pointer]
+                - columnheader "Version ⇅" [ref=e328] [cursor=pointer]
+                - columnheader "Items ⇅" [ref=e329] [cursor=pointer]
+                - columnheader "Blocks ⇅" [ref=e330] [cursor=pointer]
+                - columnheader "AI ⇅" [ref=e331] [cursor=pointer]
+                - columnheader "Actions ⇅" [ref=e332] [cursor=pointer]
+            - rowgroup [ref=e333]:
+              - row "A24-DELIVERY A24 Distribution Delivery Schedule A24 1.0 20 8/8 — video, audio, text, head, textless, naming, archive, metadata AI 88% 👁 ✏️ ⬇ 📋 🗑" [ref=e334]:
+                - cell [ref=e335]:
+                  - checkbox [ref=e336]
+                - cell "A24-DELIVERY" [ref=e337]
+                - cell "A24 Distribution Delivery Schedule" [ref=e338]
+                - cell "A24" [ref=e339]
+                - cell "1.0" [ref=e340]
+                - cell "20" [ref=e341]
+                - cell "8/8 — video, audio, text, head, textless, naming, archive, metadata" [ref=e342]
+                - cell "AI 88%" [ref=e343]:
+                  - generic [ref=e344]: AI 88%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e345]:
+                  - button "👁" [ref=e346] [cursor=pointer]
+                  - button "✏️" [ref=e347] [cursor=pointer]
+                  - link "⬇" [ref=e348] [cursor=pointer]:
+                    - /url: /delivery-templates/api/13/export-json
+                  - button "📋" [ref=e349] [cursor=pointer]
+                  - button "🗑" [ref=e350] [cursor=pointer]
+              - row "FREMANTLE-DCP-ITA-THEATRICAL Fremantle Theatrical DCP Italian Release 2022 Fremantle 1.0 35 8/8 — video, audio, text, head, textless, naming, archive, metadata AI 82% 👁 ✏️ ⬇ 📋 🗑" [ref=e351]:
+                - cell [ref=e352]:
+                  - checkbox [ref=e353]
+                - cell "FREMANTLE-DCP-ITA-THEATRICAL" [ref=e354]
+                - cell "Fremantle Theatrical DCP Italian Release 2022" [ref=e355]
+                - cell "Fremantle" [ref=e356]
+                - cell "1.0" [ref=e357]
+                - cell "35" [ref=e358]
+                - cell "8/8 — video, audio, text, head, textless, naming, archive, metadata" [ref=e359]
+                - cell "AI 82%" [ref=e360]:
+                  - generic [ref=e361]: AI 82%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e362]:
+                  - button "👁" [ref=e363] [cursor=pointer]
+                  - button "✏️" [ref=e364] [cursor=pointer]
+                  - link "⬇" [ref=e365] [cursor=pointer]:
+                    - /url: /delivery-templates/api/4/export-json
+                  - button "📋" [ref=e366] [cursor=pointer]
+                  - button "🗑" [ref=e367] [cursor=pointer]
+              - row "GTM-DELIVERY GTM Technical Metadata Delivery Cheat Sheet GTM (Content Acquisitions) 1.0 3 7/8 — video, audio, text, head, textless, naming, metadata AI 62% 👁 ✏️ ⬇ 📋 🗑" [ref=e368]:
+                - cell [ref=e369]:
+                  - checkbox [ref=e370]
+                - cell "GTM-DELIVERY" [ref=e371]
+                - cell "GTM Technical Metadata Delivery Cheat Sheet" [ref=e372]
+                - cell "GTM (Content Acquisitions)" [ref=e373]
+                - cell "1.0" [ref=e374]
+                - cell "3" [ref=e375]
+                - cell "7/8 — video, audio, text, head, textless, naming, metadata" [ref=e376]
+                - cell "AI 62%" [ref=e377]:
+                  - generic [ref=e378]: AI 62%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e379]:
+                  - button "👁" [ref=e380] [cursor=pointer]
+                  - button "✏️" [ref=e381] [cursor=pointer]
+                  - link "⬇" [ref=e382] [cursor=pointer]:
+                    - /url: /delivery-templates/api/3/export-json
+                  - button "📋" [ref=e383] [cursor=pointer]
+                  - button "🗑" [ref=e384] [cursor=pointer]
+              - row "EXAMPLE-THEATRICAL Esempio — Theatrical Feature 4K Dolby Vision Generico 1.0 0 8/8 — video, audio, text, head, textless, naming, archive, metadata manuale 👁 ✏️ ⬇ 📋 🗑" [ref=e385]:
+                - cell [ref=e386]:
+                  - checkbox [ref=e387]
+                - cell "EXAMPLE-THEATRICAL" [ref=e388]
+                - cell "Esempio — Theatrical Feature 4K Dolby Vision" [ref=e389]
+                - cell "Generico" [ref=e390]
+                - cell "1.0" [ref=e391]
+                - cell "0" [ref=e392]
+                - cell "8/8 — video, audio, text, head, textless, naming, archive, metadata" [ref=e393]
+                - cell "manuale" [ref=e394]
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e395]:
+                  - button "👁" [ref=e396] [cursor=pointer]
+                  - button "✏️" [ref=e397] [cursor=pointer]
+                  - link "⬇" [ref=e398] [cursor=pointer]:
+                    - /url: /delivery-templates/api/1/export-json
+                  - button "📋" [ref=e399] [cursor=pointer]
+                  - button "🗑" [ref=e400] [cursor=pointer]
+              - row "MUBI-FEATURE-DELIVERY MUBI Feature Film Delivery Schedule MUBI 1.0 25 8/8 — video, audio, text, head, textless, naming, archive, metadata AI 82% 👁 ✏️ ⬇ 📋 🗑" [ref=e401]:
+                - cell [ref=e402]:
+                  - checkbox [ref=e403]
+                - cell "MUBI-FEATURE-DELIVERY" [ref=e404]
+                - cell "MUBI Feature Film Delivery Schedule" [ref=e405]
+                - cell "MUBI" [ref=e406]
+                - cell "1.0" [ref=e407]
+                - cell "25" [ref=e408]
+                - cell "8/8 — video, audio, text, head, textless, naming, archive, metadata" [ref=e409]
+                - cell "AI 82%" [ref=e410]:
+                  - generic [ref=e411]: AI 82%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e412]:
+                  - button "👁" [ref=e413] [cursor=pointer]
+                  - button "✏️" [ref=e414] [cursor=pointer]
+                  - link "⬇" [ref=e415] [cursor=pointer]:
+                    - /url: /delivery-templates/api/5/export-json
+                  - button "📋" [ref=e416] [cursor=pointer]
+                  - button "🗑" [ref=e417] [cursor=pointer]
+              - row "NBCUNI-AUDIO-51 NBCUniversal Audio Delivery 5.1 NBCUniversal 1.0 17 3/8 — audio, naming, metadata AI 91% 👁 ✏️ ⬇ 📋 🗑" [ref=e418]:
+                - cell [ref=e419]:
+                  - checkbox [ref=e420]
+                - cell "NBCUNI-AUDIO-51" [ref=e421]
+                - cell "NBCUniversal Audio Delivery 5.1" [ref=e422]
+                - cell "NBCUniversal" [ref=e423]
+                - cell "1.0" [ref=e424]
+                - cell "17" [ref=e425]
+                - cell "3/8 — audio, naming, metadata" [ref=e426]
+                - cell "AI 91%" [ref=e427]:
+                  - generic [ref=e428]: AI 91%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e429]:
+                  - button "👁" [ref=e430] [cursor=pointer]
+                  - button "✏️" [ref=e431] [cursor=pointer]
+                  - link "⬇" [ref=e432] [cursor=pointer]:
+                    - /url: /delivery-templates/api/6/export-json
+                  - button "📋" [ref=e433] [cursor=pointer]
+                  - button "🗑" [ref=e434] [cursor=pointer]
+              - row "NBCU-LONGFORM-UHD-HDR10 NBCUniversal Longform UHD HDR-10 Master NBCUniversal 1.0 0 5/8 — video, audio, text, naming, metadata AI 70% 👁 ✏️ ⬇ 📋 🗑" [ref=e435]:
+                - cell [ref=e436]:
+                  - checkbox [ref=e437]
+                - cell "NBCU-LONGFORM-UHD-HDR10" [ref=e438]
+                - cell "NBCUniversal Longform UHD HDR-10 Master" [ref=e439]
+                - cell "NBCUniversal" [ref=e440]
+                - cell "1.0" [ref=e441]
+                - cell "0" [ref=e442]
+                - cell "5/8 — video, audio, text, naming, metadata" [ref=e443]
+                - cell "AI 70%" [ref=e444]:
+                  - generic [ref=e445]: AI 70%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e446]:
+                  - button "👁" [ref=e447] [cursor=pointer]
+                  - button "✏️" [ref=e448] [cursor=pointer]
+                  - link "⬇" [ref=e449] [cursor=pointer]:
+                    - /url: /delivery-templates/api/15/export-json
+                  - button "📋" [ref=e450] [cursor=pointer]
+                  - button "🗑" [ref=e451] [cursor=pointer]
+              - row "NBCU-LONGFORM-UHD NBCUniversal Longform Delivery Metadata Template NBCUniversal (NBCU) 1.0 7 7/8 — video, audio, text, head, textless, naming, metadata AI 62% 👁 ✏️ ⬇ 📋 🗑" [ref=e452]:
+                - cell [ref=e453]:
+                  - checkbox [ref=e454]
+                - cell "NBCU-LONGFORM-UHD" [ref=e455]
+                - cell "NBCUniversal Longform Delivery Metadata Template" [ref=e456]
+                - cell "NBCUniversal (NBCU)" [ref=e457]
+                - cell "1.0" [ref=e458]
+                - cell "7" [ref=e459]
+                - cell "7/8 — video, audio, text, head, textless, naming, metadata" [ref=e460]
+                - cell "AI 62%" [ref=e461]:
+                  - generic [ref=e462]: AI 62%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e463]:
+                  - button "👁" [ref=e464] [cursor=pointer]
+                  - button "✏️" [ref=e465] [cursor=pointer]
+                  - link "⬇" [ref=e466] [cursor=pointer]:
+                    - /url: /delivery-templates/api/9/export-json
+                  - button "📋" [ref=e467] [cursor=pointer]
+                  - button "🗑" [ref=e468] [cursor=pointer]
+              - row "NBCU-TECHOPS-LONGFORM-2.8 NBCUniversal TechOps Inbound Specifications Longform v2.8 NBCUniversal (Network/Cable/Peacock/SkyShowtime/International) 1.0 10 6/8 — video, audio, text, head, naming, metadata AI 72% 👁 ✏️ ⬇ 📋 🗑" [ref=e469]:
+                - cell [ref=e470]:
+                  - checkbox [ref=e471]
+                - cell "NBCU-TECHOPS-LONGFORM-2.8" [ref=e472]
+                - cell "NBCUniversal TechOps Inbound Specifications Longform v2.8" [ref=e473]
+                - cell "NBCUniversal (Network/Cable/Peacock/SkyShowtime/International)" [ref=e474]
+                - cell "1.0" [ref=e475]
+                - cell "10" [ref=e476]
+                - cell "6/8 — video, audio, text, head, naming, metadata" [ref=e477]
+                - cell "AI 72%" [ref=e478]:
+                  - generic [ref=e479]: AI 72%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e480]:
+                  - button "👁" [ref=e481] [cursor=pointer]
+                  - button "✏️" [ref=e482] [cursor=pointer]
+                  - link "⬇" [ref=e483] [cursor=pointer]:
+                    - /url: /delivery-templates/api/8/export-json
+                  - button "📋" [ref=e484] [cursor=pointer]
+                  - button "🗑" [ref=e485] [cursor=pointer]
+              - row "PARAMOUNT-SCRIPTED-2023 Paramount Scripted Episode Delivery 2023 Paramount 1.0 0 7/8 — video, audio, text, textless, naming, archive, metadata AI 72% 👁 ✏️ ⬇ 📋 🗑" [ref=e486]:
+                - cell [ref=e487]:
+                  - checkbox [ref=e488]
+                - cell "PARAMOUNT-SCRIPTED-2023" [ref=e489]
+                - cell "Paramount Scripted Episode Delivery 2023" [ref=e490]
+                - cell "Paramount" [ref=e491]
+                - cell "1.0" [ref=e492]
+                - cell "0" [ref=e493]
+                - cell "7/8 — video, audio, text, textless, naming, archive, metadata" [ref=e494]
+                - cell "AI 72%" [ref=e495]:
+                  - generic [ref=e496]: AI 72%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e497]:
+                  - button "👁" [ref=e498] [cursor=pointer]
+                  - button "✏️" [ref=e499] [cursor=pointer]
+                  - link "⬇" [ref=e500] [cursor=pointer]:
+                    - /url: /delivery-templates/api/18/export-json
+                  - button "📋" [ref=e501] [cursor=pointer]
+                  - button "🗑" [ref=e502] [cursor=pointer]
+              - row "PERSONAL-PRESETS Capitolato Personale Personale 1.0 0 0/8 — manuale 👁 ✏️ ⬇ 📋 🗑" [ref=e503]:
+                - cell [ref=e504]:
+                  - checkbox [ref=e505]
+                - cell "PERSONAL-PRESETS" [ref=e506]
+                - cell "Capitolato Personale" [ref=e507]
+                - cell "Personale" [ref=e508]
+                - cell "1.0" [ref=e509]
+                - cell "0" [ref=e510]
+                - cell "0/8 —" [ref=e511]
+                - cell "manuale" [ref=e512]
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e513]:
+                  - button "👁" [ref=e514] [cursor=pointer]
+                  - button "✏️" [ref=e515] [cursor=pointer]
+                  - link "⬇" [ref=e516] [cursor=pointer]:
+                    - /url: /delivery-templates/api/16/export-json
+                  - button "📋" [ref=e517] [cursor=pointer]
+                  - button "🗑" [ref=e518] [cursor=pointer]
+              - row "PIPERFILM-DELIVERY PiperFilm Delivery Specification – Theatrical / Home Video / International PiperFilm 1.0 31 8/8 — video, audio, text, head, textless, naming, archive, metadata AI 82% 👁 ✏️ ⬇ 📋 🗑" [ref=e519]:
+                - cell [ref=e520]:
+                  - checkbox [ref=e521]
+                - cell "PIPERFILM-DELIVERY" [ref=e522]
+                - cell "PiperFilm Delivery Specification – Theatrical / Home Video / International" [ref=e523]
+                - cell "PiperFilm" [ref=e524]
+                - cell "1.0" [ref=e525]
+                - cell "31" [ref=e526]
+                - cell "8/8 — video, audio, text, head, textless, naming, archive, metadata" [ref=e527]
+                - cell "AI 82%" [ref=e528]:
+                  - generic [ref=e529]: AI 82%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e530]:
+                  - button "👁" [ref=e531] [cursor=pointer]
+                  - button "✏️" [ref=e532] [cursor=pointer]
+                  - link "⬇" [ref=e533] [cursor=pointer]:
+                    - /url: /delivery-templates/api/14/export-json
+                  - button "📋" [ref=e534] [cursor=pointer]
+                  - button "🗑" [ref=e535] [cursor=pointer]
+              - row "RAI-SDHDUHD-1.4 RAI Specifiche Tecniche SD/HD/3D/UHD v1.4 RAI Radiotelevisione Italiana 1.0 24 6/8 — video, audio, text, head, naming, metadata AI 82% 👁 ✏️ ⬇ 📋 🗑" [ref=e536]:
+                - cell [ref=e537]:
+                  - checkbox [ref=e538]
+                - cell "RAI-SDHDUHD-1.4" [ref=e539]
+                - cell "RAI Specifiche Tecniche SD/HD/3D/UHD v1.4" [ref=e540]
+                - cell "RAI Radiotelevisione Italiana" [ref=e541]
+                - cell "1.0" [ref=e542]
+                - cell "24" [ref=e543]
+                - cell "6/8 — video, audio, text, head, naming, metadata" [ref=e544]
+                - cell "AI 82%" [ref=e545]:
+                  - generic [ref=e546]: AI 82%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e547]:
+                  - button "👁" [ref=e548] [cursor=pointer]
+                  - button "✏️" [ref=e549] [cursor=pointer]
+                  - link "⬇" [ref=e550] [cursor=pointer]:
+                    - /url: /delivery-templates/api/2/export-json
+                  - button "📋" [ref=e551] [cursor=pointer]
+                  - button "🗑" [ref=e552] [cursor=pointer]
+              - row "SKY-ITA-AV-DELIVERY Sky Italia Specifiche Tecniche Consegna Audio/Video Sky Italia 1.0 7 5/8 — video, audio, text, textless, metadata AI 88% 👁 ✏️ ⬇ 📋 🗑" [ref=e553]:
+                - cell [ref=e554]:
+                  - checkbox [ref=e555]
+                - cell "SKY-ITA-AV-DELIVERY" [ref=e556]
+                - cell "Sky Italia Specifiche Tecniche Consegna Audio/Video" [ref=e557]
+                - cell "Sky Italia" [ref=e558]
+                - cell "1.0" [ref=e559]
+                - cell "7" [ref=e560]
+                - cell "5/8 — video, audio, text, textless, metadata" [ref=e561]
+                - cell "AI 88%" [ref=e562]:
+                  - generic [ref=e563]: AI 88%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e564]:
+                  - button "👁" [ref=e565] [cursor=pointer]
+                  - button "✏️" [ref=e566] [cursor=pointer]
+                  - link "⬇" [ref=e567] [cursor=pointer]:
+                    - /url: /delivery-templates/api/7/export-json
+                  - button "📋" [ref=e568] [cursor=pointer]
+                  - button "🗑" [ref=e569] [cursor=pointer]
+              - row "VISION-DIST-IT Vision Distribution Delivery Specs (Theatrical + Platform + Export) Vision Distribution 1.0 29 8/8 — video, audio, text, head, textless, naming, archive, metadata AI 82% 👁 ✏️ ⬇ 📋 🗑" [ref=e570]:
+                - cell [ref=e571]:
+                  - checkbox [ref=e572]
+                - cell "VISION-DIST-IT" [ref=e573]
+                - cell "Vision Distribution Delivery Specs (Theatrical + Platform + Export)" [ref=e574]
+                - cell "Vision Distribution" [ref=e575]
+                - cell "1.0" [ref=e576]
+                - cell "29" [ref=e577]
+                - cell "8/8 — video, audio, text, head, textless, naming, archive, metadata" [ref=e578]
+                - cell "AI 82%" [ref=e579]:
+                  - generic [ref=e580]: AI 82%
+                - cell "👁 ✏️ ⬇ 📋 🗑" [ref=e581]:
+                  - button "👁" [ref=e582] [cursor=pointer]
+                  - button "✏️" [ref=e583] [cursor=pointer]
+                  - link "⬇" [ref=e584] [cursor=pointer]:
+                    - /url: /delivery-templates/api/12/export-json
+                  - button "📋" [ref=e585] [cursor=pointer]
+                  - button "🗑" [ref=e586] [cursor=pointer]
+        - generic [ref=e587]:
+          - generic [ref=e588]:
+            - generic [ref=e589]: 📚 Corpus capitolati di riferimento
+            - generic [ref=e590]: 15 file · 12 parsati · 3 non parsati
+          - generic [ref=e591]:
+            - text: File presenti in
+            - code [ref=e592]: docs/capitolati_esempio/
+            - text: (17 capitolati reali — Netflix/Sky/RAI/A24/etc). Click "✨ Parse" per analizzare con AI e salvare come template.
+          - table [ref=e594]:
+            - rowgroup [ref=e595]:
+              - row "File Size Extension Status Template Action" [ref=e596]:
+                - columnheader "File" [ref=e597]
+                - columnheader "Size" [ref=e598]
+                - columnheader "Extension" [ref=e599]
+                - columnheader "Status" [ref=e600]
+                - columnheader "Template" [ref=e601]
+                - columnheader "Action" [ref=e602]
+            - rowgroup [ref=e603]:
+              - row "1639654026780_Specifiche_Tecniche_ProdottiTelevisivi… 728 KB pdf ✓ Parsato RAI Radiotelevisione Italiana · RAI Specifiche Tec —" [ref=e604]:
+                - cell "1639654026780_Specifiche_Tecniche_ProdottiTelevisivi…" [ref=e605]
+                - cell "728 KB" [ref=e606]
+                - cell "pdf" [ref=e607]
+                - cell "✓ Parsato" [ref=e608]
+                - cell "RAI Radiotelevisione Italiana · RAI Specifiche Tec" [ref=e609]:
+                  - link "RAI Radiotelevisione Italiana · RAI Specifiche Tec" [ref=e610] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e611]
+              - row "A24 Delivery Schedule_QUEER_Dolby Vision and Atmos -… 2.1 MB docx ✓ Parsato A24 · A24 Distribution Delivery Schedule —" [ref=e612]:
+                - cell "A24 Delivery Schedule_QUEER_Dolby Vision and Atmos -…" [ref=e613]
+                - cell "2.1 MB" [ref=e614]
+                - cell "docx" [ref=e615]
+                - cell "✓ Parsato" [ref=e616]
+                - cell "A24 · A24 Distribution Delivery Schedule" [ref=e617]:
+                  - link "A24 · A24 Distribution Delivery Schedule" [ref=e618] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e619]
+              - row "BETA FILM_DELIVERY MASTER.pdf 955 KB pdf ⏳ Non parsato — ✨ Parse" [ref=e620]:
+                - cell "BETA FILM_DELIVERY MASTER.pdf" [ref=e621]
+                - cell "955 KB" [ref=e622]
+                - cell "pdf" [ref=e623]
+                - cell "⏳ Non parsato" [ref=e624]
+                - cell "—" [ref=e625]
+                - cell "✨ Parse" [ref=e626]:
+                  - button "✨ Parse" [ref=e627] [cursor=pointer]
+              - row "CA_Tech_Meta_Cheat_Sheet.docx 20 KB docx ✓ Parsato GTM (Content Acquisitions) · GTM Technical Metadat —" [ref=e628]:
+                - cell "CA_Tech_Meta_Cheat_Sheet.docx" [ref=e629]
+                - cell "20 KB" [ref=e630]
+                - cell "docx" [ref=e631]
+                - cell "✓ Parsato" [ref=e632]
+                - cell "GTM (Content Acquisitions) · GTM Technical Metadat" [ref=e633]:
+                  - link "GTM (Content Acquisitions) · GTM Technical Metadat" [ref=e634] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e635]
+              - row "FREMANTLE_DCP Deliverables Supplimental.docx 197 KB docx ✓ Parsato Fremantle · Fremantle Theatrical DCP Italian Relea —" [ref=e636]:
+                - cell "FREMANTLE_DCP Deliverables Supplimental.docx" [ref=e637]
+                - cell "197 KB" [ref=e638]
+                - cell "docx" [ref=e639]
+                - cell "✓ Parsato" [ref=e640]
+                - cell "Fremantle · Fremantle Theatrical DCP Italian Relea" [ref=e641]:
+                  - link "Fremantle · Fremantle Theatrical DCP Italian Relea" [ref=e642] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e643]
+              - row "IRDA_PIPERFILM Allegato Materiali definitivo - integ… 188 KB pdf ✓ Parsato PiperFilm · PiperFilm Delivery Specification – The —" [ref=e644]:
+                - cell "IRDA_PIPERFILM Allegato Materiali definitivo - integ…" [ref=e645]
+                - cell "188 KB" [ref=e646]
+                - cell "pdf" [ref=e647]
+                - cell "✓ Parsato" [ref=e648]
+                - cell "PiperFilm · PiperFilm Delivery Specification – The" [ref=e649]:
+                  - link "PiperFilm · PiperFilm Delivery Specification – The" [ref=e650] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e651]
+              - row "MUBI_QUEER - EXHIBIT C Delivery Schedule.pdf 184 KB pdf ✓ Parsato MUBI · MUBI Feature Film Delivery Schedule —" [ref=e652]:
+                - cell "MUBI_QUEER - EXHIBIT C Delivery Schedule.pdf" [ref=e653]
+                - cell "184 KB" [ref=e654]
+                - cell "pdf" [ref=e655]
+                - cell "✓ Parsato" [ref=e656]
+                - cell "MUBI · MUBI Feature Film Delivery Schedule" [ref=e657]:
+                  - link "MUBI · MUBI Feature Film Delivery Schedule" [ref=e658] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e659]
+              - row "SKY 5.1 Audio Requirments[48].docx 33 KB docx ✓ Parsato NBCUniversal · NBCUniversal Audio Delivery 5.1 —" [ref=e660]:
+                - cell "SKY 5.1 Audio Requirments[48].docx" [ref=e661]
+                - cell "33 KB" [ref=e662]
+                - cell "docx" [ref=e663]
+                - cell "✓ Parsato" [ref=e664]
+                - cell "NBCUniversal · NBCUniversal Audio Delivery 5.1" [ref=e665]:
+                  - link "NBCUniversal · NBCUniversal Audio Delivery 5.1" [ref=e666] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e667]
+              - row "Specifiche_Tecniche_ITA_SkyOriginal.pdf 606 KB pdf ✓ Parsato Sky Italia · Sky Italia Specifiche Tecniche Conseg —" [ref=e668]:
+                - cell "Specifiche_Tecniche_ITA_SkyOriginal.pdf" [ref=e669]
+                - cell "606 KB" [ref=e670]
+                - cell "pdf" [ref=e671]
+                - cell "✓ Parsato" [ref=e672]
+                - cell "Sky Italia · Sky Italia Specifiche Tecniche Conseg" [ref=e673]:
+                  - link "Sky Italia · Sky Italia Specifiche Tecniche Conseg" [ref=e674] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e675]
+              - row "V 2.8 - TechOps Specifications for Longform Content … 1.4 MB pdf ✓ Parsato NBCUniversal (Network/Cable/Peacock/SkyShowtime/In —" [ref=e676]:
+                - cell "V 2.8 - TechOps Specifications for Longform Content …" [ref=e677]
+                - cell "1.4 MB" [ref=e678]
+                - cell "pdf" [ref=e679]
+                - cell "✓ Parsato" [ref=e680]
+                - cell "NBCUniversal (Network/Cable/Peacock/SkyShowtime/In" [ref=e681]:
+                  - link "NBCUniversal (Network/Cable/Peacock/SkyShowtime/In" [ref=e682] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e683]
+              - row "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Templat… 1.2 MB xlsx ✓ Parsato NBCUniversal (NBCU) · NBCUniversal Longform Delive —" [ref=e684]:
+                - cell "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Templat…" [ref=e685]
+                - cell "1.2 MB" [ref=e686]
+                - cell "xlsx" [ref=e687]
+                - cell "✓ Parsato" [ref=e688]
+                - cell "NBCUniversal (NBCU) · NBCUniversal Longform Delive" [ref=e689]:
+                  - link "NBCUniversal (NBCU) · NBCUniversal Longform Delive" [ref=e690] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e691]
+              - row "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Templat… 1018 KB xlsx ✓ Parsato NBCUniversal · NBCUniversal Longform UHD HDR-10 Ma —" [ref=e692]:
+                - cell "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Templat…" [ref=e693]
+                - cell "1018 KB" [ref=e694]
+                - cell "xlsx" [ref=e695]
+                - cell "✓ Parsato" [ref=e696]
+                - cell "NBCUniversal · NBCUniversal Longform UHD HDR-10 Ma" [ref=e697]:
+                  - link "NBCUniversal · NBCUniversal Longform UHD HDR-10 Ma" [ref=e698] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e699]
+              - row "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Templat… 1017 KB xlsx ⏳ Non parsato — ✨ Parse" [ref=e700]:
+                - cell "V1.3_TechOps_Broadcast_Cable_Studio_Metadata_Templat…" [ref=e701]
+                - cell "1017 KB" [ref=e702]
+                - cell "xlsx" [ref=e703]
+                - cell "⏳ Non parsato" [ref=e704]
+                - cell "—" [ref=e705]
+                - cell "✨ Parse" [ref=e706]:
+                  - button "✨ Parse" [ref=e707] [cursor=pointer]
+              - row "Veterans_SALES AGENT DELIVERY SCHEDULE 090622 RL 110… 90 KB doc ⏳ Non parsato — ✨ Parse" [ref=e708]:
+                - cell "Veterans_SALES AGENT DELIVERY SCHEDULE 090622 RL 110…" [ref=e709]
+                - cell "90 KB" [ref=e710]
+                - cell "doc" [ref=e711]
+                - cell "⏳ Non parsato" [ref=e712]
+                - cell "—" [ref=e713]
+                - cell "✨ Parse" [ref=e714]:
+                  - button "✨ Parse" [ref=e715] [cursor=pointer]
+              - row "VISION - ALLEGATO A – MATERIALI DEL FILM E SPECIFICH… 216 KB docx ✓ Parsato Vision Distribution · Vision Distribution Delivery —" [ref=e716]:
+                - cell "VISION - ALLEGATO A – MATERIALI DEL FILM E SPECIFICH…" [ref=e717]
+                - cell "216 KB" [ref=e718]
+                - cell "docx" [ref=e719]
+                - cell "✓ Parsato" [ref=e720]
+                - cell "Vision Distribution · Vision Distribution Delivery" [ref=e721]:
+                  - link "Vision Distribution · Vision Distribution Delivery" [ref=e722] [cursor=pointer]:
+                    - /url: "#"
+                - cell "—" [ref=e723]
+  - button "Apri Claqo Bot" [ref=e724] [cursor=pointer]:
+    - img "Claqo bot" [ref=e725]
+  - dialog "Copilot AI" [ref=e726]:
+    - generic [ref=e727]:
+      - img "Claqo bot" [ref=e729]
+      - heading "Copilot" [level=3] [ref=e730]
+      - generic [ref=e731]: —
+      - button "Nuova conversazione" [ref=e732] [cursor=pointer]:
+        - img [ref=e733]
+      - button "Chiudi" [ref=e734] [cursor=pointer]:
+        - img [ref=e735]
+    - generic [ref=e738]:
+      - generic [ref=e739]: "Storia:"
+      - button "(new) ▾" [ref=e741] [cursor=pointer]
+    - generic [ref=e744]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=e745] [cursor=pointer]:
+        - img [ref=e746]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=e748]
+      - button "Send" [ref=e749] [cursor=pointer]
+  - generic [ref=e750]:
+    - generic [ref=e751]:
+      - generic [ref=e752]: 🔔 Notifiche
+      - generic [ref=e753]:
+        - button "✓ Tutte lette" [ref=e754] [cursor=pointer]
+        - button "✕" [ref=e755] [cursor=pointer]
+    - generic [ref=e757]: Loading…
+  - text: ▾ ▾

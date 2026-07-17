@@ -1,0 +1,124 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - button "Menu" [ref=e3] [cursor=pointer]:
+      - img [ref=e4]
+    - generic [ref=e5]: Nuovo booking
+    - link "Cerca" [ref=e6] [cursor=pointer]:
+      - /url: /m/cerca
+      - img [ref=e7]
+    - link "Notifiche" [ref=e10] [cursor=pointer]:
+      - /url: /m/notifiche
+      - img [ref=e11]
+  - complementary [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]: Claqo
+      - generic [ref=e17]: Admin MediaFlow
+    - navigation [ref=e18]:
+      - generic [ref=e19]: Operativo
+      - link [ref=e20] [cursor=pointer]:
+        - /url: /m
+        - img [ref=e21]
+        - text: Oggi
+      - link [ref=e24] [cursor=pointer]:
+        - /url: /m/agenda
+        - img [ref=e25]
+        - text: Agenda
+      - link [ref=e27] [cursor=pointer]:
+        - /url: /m/assegnazioni
+        - img [ref=e28]
+        - text: Assegnazioni
+      - link [ref=e31] [cursor=pointer]:
+        - /url: /m/booking/new
+        - img [ref=e32]
+        - text: Nuovo booking
+      - link [ref=e34] [cursor=pointer]:
+        - /url: /m/timbra
+        - img [ref=e35]
+        - text: Timbratura
+      - link [ref=e38] [cursor=pointer]:
+        - /url: /m/ferie
+        - img [ref=e39]
+        - text: Ferie
+      - link [ref=e44] [cursor=pointer]:
+        - /url: /m/notifiche
+        - img [ref=e45]
+        - text: Notifiche
+      - generic [ref=e48]: Business
+      - link [ref=e49] [cursor=pointer]:
+        - /url: /m/progetti
+        - img [ref=e50]
+        - text: Progetti
+      - link [ref=e52] [cursor=pointer]:
+        - /url: /m/clienti
+        - img [ref=e53]
+        - text: Clienti
+      - link [ref=e57] [cursor=pointer]:
+        - /url: /m/quote
+        - img [ref=e58]
+        - text: Quotazioni
+      - link [ref=e61] [cursor=pointer]:
+        - /url: /m/finance
+        - img [ref=e62]
+        - text: Finance
+      - link [ref=e65] [cursor=pointer]:
+        - /url: /m/cerca
+        - img [ref=e66]
+        - text: Cerca
+      - generic [ref=e69]: Assistente
+      - link [ref=e70] [cursor=pointer]:
+        - /url: /m/copilot
+        - img [ref=e71]
+        - text: Copilot AI
+    - link [ref=e74] [cursor=pointer]:
+      - /url: /prefer-desktop?next=/dashboard
+      - img [ref=e75]
+      - text: Versione desktop
+    - link [ref=e77] [cursor=pointer]:
+      - /url: /auth/logout
+      - img [ref=e78]
+      - text: Esci
+  - main [ref=e81]:
+    - link "Indietro" [ref=e82] [cursor=pointer]:
+      - /url: /m/assegnazioni
+      - img [ref=e83]
+      - text: Indietro
+    - generic [ref=e85]:
+      - generic [ref=e86]:
+        - generic [ref=e87]: Tipo
+        - combobox "Tipo" [ref=e88]:
+          - option "Progetto" [selected]
+          - option "Manutenzione interna"
+          - option "Ricerca interna"
+          - option "Formazione interna"
+      - generic [ref=e89]:
+        - generic [ref=e90]: Job
+        - combobox "Job" [ref=e91]:
+          - option "— scegli job —" [selected]
+          - option "GLO-J007 — Gomorra - Le Origini"
+      - generic [ref=e92]:
+        - generic [ref=e93]: Lavorazione (JCL)
+        - combobox "Lavorazione (JCL)" [ref=e94]:
+          - option "— scegli prima il job —" [selected]
+      - generic [ref=e95]:
+        - generic [ref=e96]: Risorse
+        - generic [ref=e98]: — caricamento… —
+      - generic [ref=e99]:
+        - generic [ref=e100]: Data
+        - textbox "Data" [ref=e101]: 2026-06-03
+      - generic [ref=e102]:
+        - generic [ref=e103]:
+          - generic [ref=e104]: Inizio
+          - textbox "Inizio" [ref=e105]: 09:00
+        - generic [ref=e106]:
+          - generic [ref=e107]: Fine
+          - textbox "Fine" [ref=e108]: 18:00
+      - generic [ref=e109]:
+        - generic [ref=e110]: Stato
+        - combobox "Stato" [ref=e111]:
+          - option "Tentativo" [selected]
+          - option "Confermato"
+      - generic [ref=e112]:
+        - generic [ref=e113]: Note
+        - textbox "Note" [ref=e114]:
+          - /placeholder: opzionale
+      - button "Crea booking" [ref=e115] [cursor=pointer]

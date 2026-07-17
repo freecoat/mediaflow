@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <title>Variant C — stripe</title>
+  <rect width="200" height="200" rx="44" fill="#FAECE7"/>
+  <g fill="#D85A30">
+    <polygon points="40,160 70,30 90,30 60,160"/>
+    <polygon points="90,160 120,30 140,30 110,160"/>
+    <polygon points="140,160 170,30 160,30 130,160" opacity="0.5"/>
+  </g>
+</svg>

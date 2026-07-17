@@ -1,0 +1,562 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - complementary [ref=f2e3]:
+      - generic "Info versione" [ref=f2e4] [cursor=pointer]:
+        - generic [ref=f2e5]: claqo
+      - navigation [ref=f2e6]:
+        - generic [ref=f2e7]:
+          - generic [ref=f2e8]: Main
+          - link "Dashboard" [ref=f2e9] [cursor=pointer]:
+            - /url: /dashboard
+            - img [ref=f2e11]
+            - generic [ref=f2e16]: Dashboard
+        - generic [ref=f2e17]:
+          - generic [ref=f2e18]: Records
+          - link "Clients" [ref=f2e19] [cursor=pointer]:
+            - /url: /clients
+            - img [ref=f2e21]
+            - generic [ref=f2e25]: Clients
+          - link "Projects" [ref=f2e26] [cursor=pointer]:
+            - /url: /projects
+            - img [ref=f2e28]
+            - generic [ref=f2e33]: Projects
+          - link "Acquisitions" [ref=f2e34] [cursor=pointer]:
+            - /url: /acquisitions
+            - img [ref=f2e36]
+            - generic [ref=f2e40]: Acquisitions
+          - link "Calendar" [ref=f2e41] [cursor=pointer]:
+            - /url: /calendar
+            - img [ref=f2e43]
+            - generic [ref=f2e45]: Calendar
+        - generic [ref=f2e46]:
+          - generic [ref=f2e47]: Operations
+          - link "Planning" [ref=f2e48] [cursor=pointer]:
+            - /url: /planning
+            - img [ref=f2e50]
+            - generic [ref=f2e52]: Planning
+          - link "Team" [ref=f2e53] [cursor=pointer]:
+            - /url: /team
+            - img [ref=f2e55]
+            - generic [ref=f2e60]: Team
+          - link "Work hours" [ref=f2e61] [cursor=pointer]:
+            - /url: /hr
+            - img [ref=f2e63]
+            - generic [ref=f2e66]: Work hours
+        - generic [ref=f2e67]:
+          - generic [ref=f2e68]: Quotes
+          - link "Price List" [ref=f2e69] [cursor=pointer]:
+            - /url: /pricelist
+            - img [ref=f2e71]
+            - generic [ref=f2e74]: Price List
+          - link "Quotes" [ref=f2e75] [cursor=pointer]:
+            - /url: /quotes
+            - img [ref=f2e77]
+            - generic [ref=f2e80]: Quotes
+        - generic [ref=f2e81]:
+          - generic [ref=f2e82]: Finance
+          - link "Cost Report" [ref=f2e83] [cursor=pointer]:
+            - /url: /cost-report
+            - img [ref=f2e85]
+            - generic [ref=f2e87]: Cost Report
+          - link "SAL — Avanzamento" [ref=f2e88] [cursor=pointer]:
+            - /url: /finance/sal
+            - img [ref=f2e90]
+            - generic [ref=f2e93]: SAL — Avanzamento
+          - link "Invoicing" [ref=f2e94] [cursor=pointer]:
+            - /url: /finance
+            - img [ref=f2e96]
+            - generic [ref=f2e98]: Invoicing
+          - link "Cashflow & Forecast" [ref=f2e99] [cursor=pointer]:
+            - /url: /finance/cashflow
+            - img [ref=f2e101]
+            - generic [ref=f2e104]: Cashflow & Forecast
+          - link "YoY Reports + Export" [ref=f2e105] [cursor=pointer]:
+            - /url: /finance/reports
+            - img [ref=f2e107]
+            - generic [ref=f2e110]: YoY Reports + Export
+          - link "Suppliers" [ref=f2e111] [cursor=pointer]:
+            - /url: /suppliers
+            - img [ref=f2e113]
+            - generic [ref=f2e116]: Suppliers
+          - link "Overhead costs" [ref=f2e117] [cursor=pointer]:
+            - /url: /overhead/
+            - img [ref=f2e119]
+            - generic [ref=f2e122]: Overhead costs
+        - generic [ref=f2e123]:
+          - generic [ref=f2e124]: Media
+          - link "Asset Library" [ref=f2e125] [cursor=pointer]:
+            - /url: /dam
+            - img [ref=f2e127]
+            - generic [ref=f2e129]: Asset Library
+          - link "Filesystem scan" [ref=f2e130] [cursor=pointer]:
+            - /url: /dam/fs-scan
+            - img [ref=f2e132]
+            - generic [ref=f2e136]: Filesystem scan
+          - link "Asset In/Out" [ref=f2e137] [cursor=pointer]:
+            - /url: /physical-assets/inout
+            - img [ref=f2e139]
+            - generic [ref=f2e144]: Asset In/Out
+          - link "Physical Assets" [ref=f2e145] [cursor=pointer]:
+            - /url: /physical-assets
+            - img [ref=f2e147]
+            - generic [ref=f2e149]: Physical Assets
+          - link "Delivery Specs" [ref=f2e150] [cursor=pointer]:
+            - /url: /delivery-templates
+            - img [ref=f2e152]
+            - generic [ref=f2e157]: Delivery Specs
+          - link "Import → Quote" [ref=f2e158] [cursor=pointer]:
+            - /url: /delivery-templates/import
+            - img [ref=f2e160]
+            - generic [ref=f2e163]: Import → Quote
+          - link "Storage" [ref=f2e164] [cursor=pointer]:
+            - /url: /storage
+            - img [ref=f2e166]
+            - generic [ref=f2e170]: Storage
+          - link "KDM/DKDM" [ref=f2e171] [cursor=pointer]:
+            - /url: /kdm
+            - img [ref=f2e173]
+            - generic [ref=f2e176]: KDM/DKDM
+        - generic [ref=f2e177]:
+          - generic [ref=f2e178]: Platform
+          - link "Tenants" [ref=f2e179] [cursor=pointer]:
+            - /url: /platform/tenants
+            - img [ref=f2e181]
+            - generic [ref=f2e185]: Tenants
+        - generic [ref=f2e186]:
+          - generic [ref=f2e187]: Configuration
+          - link "Departments" [ref=f2e188] [cursor=pointer]:
+            - /url: /departments
+            - img [ref=f2e190]
+            - generic [ref=f2e194]: Departments
+          - link "Settings" [ref=f2e195] [cursor=pointer]:
+            - /url: /settings
+            - img [ref=f2e197]
+            - generic [ref=f2e200]: Settings
+        - generic [ref=f2e201]:
+          - generic [ref=f2e202]: Help
+          - link "Manual" [ref=f2e203] [cursor=pointer]:
+            - /url: /manuale
+            - img [ref=f2e205]
+            - generic [ref=f2e207]: Manual
+        - generic [ref=f2e208]:
+          - generic [ref=f2e209]: Administration
+          - link "Users" [ref=f2e210] [cursor=pointer]:
+            - /url: /admin/users
+            - img [ref=f2e212]
+            - generic [ref=f2e215]: Users
+          - link "Roles & Permissions" [ref=f2e216] [cursor=pointer]:
+            - /url: /admin/roles
+            - img [ref=f2e218]
+            - generic [ref=f2e221]: Roles & Permissions
+          - link "Trash" [ref=f2e222] [cursor=pointer]:
+            - /url: /admin/cestino
+            - img [ref=f2e224]
+            - generic [ref=f2e227]: Trash
+          - link "Audit log" [ref=f2e228] [cursor=pointer]:
+            - /url: /admin/audit-log
+            - img [ref=f2e230]
+            - generic [ref=f2e233]: Audit log
+      - link "Logout" [ref=f2e235] [cursor=pointer]:
+        - /url: /auth/logout
+        - img [ref=f2e237]
+        - generic [ref=f2e240]: Logout
+    - generic [ref=f2e241]:
+      - banner [ref=f2e242]:
+        - generic [ref=f2e243]:
+          - button "Mostra/nascondi menu (Ctrl+B)" [ref=f2e244] [cursor=pointer]:
+            - img [ref=f2e245]
+          - generic [ref=f2e248]: Projects
+        - generic [ref=f2e249]:
+          - button "+ New project" [ref=f2e250] [cursor=pointer]
+          - button "Open theme palette" [ref=f2e252] [cursor=pointer]:
+            - img [ref=f2e254]
+          - button "Ingrandisci visualizzazione" [ref=f2e261] [cursor=pointer]:
+            - img [ref=f2e263]
+          - button "🇬🇧" [ref=f2e267] [cursor=pointer]:
+            - generic [ref=f2e268]: 🇬🇧
+          - button "8" [ref=f2e269] [cursor=pointer]:
+            - img [ref=f2e271]
+            - generic [ref=f2e274]: "8"
+          - generic "admin@mediaflow.it" [ref=f2e275]:
+            - generic [ref=f2e276]: Admin MediaFlow
+            - generic [ref=f2e277]: admin
+            - link "Logout" [ref=f2e278] [cursor=pointer]:
+              - /url: /auth/logout
+              - img [ref=f2e279]
+      - main [ref=f2e282]:
+        - generic [ref=f2e283]:
+          - generic [ref=f2e284]:
+            - generic [ref=f2e285]: 🔍
+            - textbox "Search project…" [ref=f2e286]
+          - button "Tutti gli stati ▾" [ref=f2e288] [cursor=pointer]
+          - button "Tutti i clienti ▾" [ref=f2e290] [cursor=pointer]
+          - button "Tutti i tipi ▾" [ref=f2e292] [cursor=pointer]
+        - table [ref=f2e295]:
+          - rowgroup [ref=f2e296]:
+            - row "Code ⇅ Title ⇅ Client ⇅ Type ⇅ Duration ⇅ Delivery ⇅ Quote / Job ⇅ Status ⇅ ⇅" [ref=f2e297]:
+              - columnheader "Code ⇅" [ref=f2e298] [cursor=pointer]
+              - columnheader "Title ⇅" [ref=f2e299] [cursor=pointer]
+              - columnheader "Client ⇅" [ref=f2e300] [cursor=pointer]
+              - columnheader "Type ⇅" [ref=f2e301] [cursor=pointer]
+              - columnheader "Duration ⇅" [ref=f2e302] [cursor=pointer]
+              - columnheader "Delivery ⇅" [ref=f2e303] [cursor=pointer]
+              - columnheader "Quote / Job ⇅" [ref=f2e304] [cursor=pointer]
+              - columnheader "Status ⇅" [ref=f2e305] [cursor=pointer]
+              - columnheader "⇅" [ref=f2e306] [cursor=pointer]
+          - rowgroup [ref=f2e307]:
+            - row "TST-52190b89 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e308] [cursor=pointer]:
+              - cell "TST-52190b89" [ref=f2e309]
+              - cell "Test Project Banner" [ref=f2e310]
+              - cell "fandango" [ref=f2e311]
+              - cell "—" [ref=f2e312]
+              - cell "—" [ref=f2e313]
+              - cell "—" [ref=f2e314]
+              - cell "0 quote · 0 job" [ref=f2e315]
+              - cell "prospect" [ref=f2e316]:
+                - generic [ref=f2e317]: prospect
+              - cell "Apri → 🗑" [ref=f2e318]:
+                - button "Apri →" [ref=f2e319]
+                - button "🗑" [ref=f2e320]
+            - row "TST-d036d63e Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e321] [cursor=pointer]:
+              - cell "TST-d036d63e" [ref=f2e322]
+              - cell "Test Project Banner" [ref=f2e323]
+              - cell "fandango" [ref=f2e324]
+              - cell "—" [ref=f2e325]
+              - cell "—" [ref=f2e326]
+              - cell "—" [ref=f2e327]
+              - cell "0 quote · 0 job" [ref=f2e328]
+              - cell "prospect" [ref=f2e329]:
+                - generic [ref=f2e330]: prospect
+              - cell "Apri → 🗑" [ref=f2e331]:
+                - button "Apri →" [ref=f2e332]
+                - button "🗑" [ref=f2e333]
+            - row "TST-ebb66ffb Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e334] [cursor=pointer]:
+              - cell "TST-ebb66ffb" [ref=f2e335]
+              - cell "Test Project Banner" [ref=f2e336]
+              - cell "fandango" [ref=f2e337]
+              - cell "—" [ref=f2e338]
+              - cell "—" [ref=f2e339]
+              - cell "—" [ref=f2e340]
+              - cell "0 quote · 0 job" [ref=f2e341]
+              - cell "prospect" [ref=f2e342]:
+                - generic [ref=f2e343]: prospect
+              - cell "Apri → 🗑" [ref=f2e344]:
+                - button "Apri →" [ref=f2e345]
+                - button "🗑" [ref=f2e346]
+            - row "TST-f2b4cfbd Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e347] [cursor=pointer]:
+              - cell "TST-f2b4cfbd" [ref=f2e348]
+              - cell "Test Project Banner" [ref=f2e349]
+              - cell "fandango" [ref=f2e350]
+              - cell "—" [ref=f2e351]
+              - cell "—" [ref=f2e352]
+              - cell "—" [ref=f2e353]
+              - cell "0 quote · 0 job" [ref=f2e354]
+              - cell "prospect" [ref=f2e355]:
+                - generic [ref=f2e356]: prospect
+              - cell "Apri → 🗑" [ref=f2e357]:
+                - button "Apri →" [ref=f2e358]
+                - button "🗑" [ref=f2e359]
+            - row "TST-6f816dcd Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e360] [cursor=pointer]:
+              - cell "TST-6f816dcd" [ref=f2e361]
+              - cell "Test Project Banner" [ref=f2e362]
+              - cell "fandango" [ref=f2e363]
+              - cell "—" [ref=f2e364]
+              - cell "—" [ref=f2e365]
+              - cell "—" [ref=f2e366]
+              - cell "0 quote · 0 job" [ref=f2e367]
+              - cell "prospect" [ref=f2e368]:
+                - generic [ref=f2e369]: prospect
+              - cell "Apri → 🗑" [ref=f2e370]:
+                - button "Apri →" [ref=f2e371]
+                - button "🗑" [ref=f2e372]
+            - row "TST-46f3ec1f Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e373] [cursor=pointer]:
+              - cell "TST-46f3ec1f" [ref=f2e374]
+              - cell "Test Project Banner" [ref=f2e375]
+              - cell "fandango" [ref=f2e376]
+              - cell "—" [ref=f2e377]
+              - cell "—" [ref=f2e378]
+              - cell "—" [ref=f2e379]
+              - cell "0 quote · 0 job" [ref=f2e380]
+              - cell "prospect" [ref=f2e381]:
+                - generic [ref=f2e382]: prospect
+              - cell "Apri → 🗑" [ref=f2e383]:
+                - button "Apri →" [ref=f2e384]
+                - button "🗑" [ref=f2e385]
+            - row "TST-9ec6116a Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e386] [cursor=pointer]:
+              - cell "TST-9ec6116a" [ref=f2e387]
+              - cell "Test Project Banner" [ref=f2e388]
+              - cell "fandango" [ref=f2e389]
+              - cell "—" [ref=f2e390]
+              - cell "—" [ref=f2e391]
+              - cell "—" [ref=f2e392]
+              - cell "0 quote · 0 job" [ref=f2e393]
+              - cell "prospect" [ref=f2e394]:
+                - generic [ref=f2e395]: prospect
+              - cell "Apri → 🗑" [ref=f2e396]:
+                - button "Apri →" [ref=f2e397]
+                - button "🗑" [ref=f2e398]
+            - row "TST-6f58340b Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e399] [cursor=pointer]:
+              - cell "TST-6f58340b" [ref=f2e400]
+              - cell "Test Project Banner" [ref=f2e401]
+              - cell "fandango" [ref=f2e402]
+              - cell "—" [ref=f2e403]
+              - cell "—" [ref=f2e404]
+              - cell "—" [ref=f2e405]
+              - cell "0 quote · 0 job" [ref=f2e406]
+              - cell "prospect" [ref=f2e407]:
+                - generic [ref=f2e408]: prospect
+              - cell "Apri → 🗑" [ref=f2e409]:
+                - button "Apri →" [ref=f2e410]
+                - button "🗑" [ref=f2e411]
+            - row "TST-d6fc9d2a Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e412] [cursor=pointer]:
+              - cell "TST-d6fc9d2a" [ref=f2e413]
+              - cell "Test Project Banner" [ref=f2e414]
+              - cell "fandango" [ref=f2e415]
+              - cell "—" [ref=f2e416]
+              - cell "—" [ref=f2e417]
+              - cell "—" [ref=f2e418]
+              - cell "0 quote · 0 job" [ref=f2e419]
+              - cell "prospect" [ref=f2e420]:
+                - generic [ref=f2e421]: prospect
+              - cell "Apri → 🗑" [ref=f2e422]:
+                - button "Apri →" [ref=f2e423]
+                - button "🗑" [ref=f2e424]
+            - row "TST-d560aee1 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e425] [cursor=pointer]:
+              - cell "TST-d560aee1" [ref=f2e426]
+              - cell "Test Project Banner" [ref=f2e427]
+              - cell "fandango" [ref=f2e428]
+              - cell "—" [ref=f2e429]
+              - cell "—" [ref=f2e430]
+              - cell "—" [ref=f2e431]
+              - cell "0 quote · 0 job" [ref=f2e432]
+              - cell "prospect" [ref=f2e433]:
+                - generic [ref=f2e434]: prospect
+              - cell "Apri → 🗑" [ref=f2e435]:
+                - button "Apri →" [ref=f2e436]
+                - button "🗑" [ref=f2e437]
+            - row "TST-cf4bd9ae Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e438] [cursor=pointer]:
+              - cell "TST-cf4bd9ae" [ref=f2e439]
+              - cell "Test Project Banner" [ref=f2e440]
+              - cell "fandango" [ref=f2e441]
+              - cell "—" [ref=f2e442]
+              - cell "—" [ref=f2e443]
+              - cell "—" [ref=f2e444]
+              - cell "0 quote · 0 job" [ref=f2e445]
+              - cell "prospect" [ref=f2e446]:
+                - generic [ref=f2e447]: prospect
+              - cell "Apri → 🗑" [ref=f2e448]:
+                - button "Apri →" [ref=f2e449]
+                - button "🗑" [ref=f2e450]
+            - row "TST-a7e5bbe4 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e451] [cursor=pointer]:
+              - cell "TST-a7e5bbe4" [ref=f2e452]
+              - cell "Test Project Banner" [ref=f2e453]
+              - cell "fandango" [ref=f2e454]
+              - cell "—" [ref=f2e455]
+              - cell "—" [ref=f2e456]
+              - cell "—" [ref=f2e457]
+              - cell "0 quote · 0 job" [ref=f2e458]
+              - cell "prospect" [ref=f2e459]:
+                - generic [ref=f2e460]: prospect
+              - cell "Apri → 🗑" [ref=f2e461]:
+                - button "Apri →" [ref=f2e462]
+                - button "🗑" [ref=f2e463]
+            - row "TST-3a81a779 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e464] [cursor=pointer]:
+              - cell "TST-3a81a779" [ref=f2e465]
+              - cell "Test Project Banner" [ref=f2e466]
+              - cell "fandango" [ref=f2e467]
+              - cell "—" [ref=f2e468]
+              - cell "—" [ref=f2e469]
+              - cell "—" [ref=f2e470]
+              - cell "0 quote · 0 job" [ref=f2e471]
+              - cell "prospect" [ref=f2e472]:
+                - generic [ref=f2e473]: prospect
+              - cell "Apri → 🗑" [ref=f2e474]:
+                - button "Apri →" [ref=f2e475]
+                - button "🗑" [ref=f2e476]
+            - row "TST-ffba9f34 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e477] [cursor=pointer]:
+              - cell "TST-ffba9f34" [ref=f2e478]
+              - cell "Test Project Banner" [ref=f2e479]
+              - cell "fandango" [ref=f2e480]
+              - cell "—" [ref=f2e481]
+              - cell "—" [ref=f2e482]
+              - cell "—" [ref=f2e483]
+              - cell "0 quote · 0 job" [ref=f2e484]
+              - cell "prospect" [ref=f2e485]:
+                - generic [ref=f2e486]: prospect
+              - cell "Apri → 🗑" [ref=f2e487]:
+                - button "Apri →" [ref=f2e488]
+                - button "🗑" [ref=f2e489]
+            - row "TST-47bc70fc Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e490] [cursor=pointer]:
+              - cell "TST-47bc70fc" [ref=f2e491]
+              - cell "Test Project Banner" [ref=f2e492]
+              - cell "fandango" [ref=f2e493]
+              - cell "—" [ref=f2e494]
+              - cell "—" [ref=f2e495]
+              - cell "—" [ref=f2e496]
+              - cell "0 quote · 0 job" [ref=f2e497]
+              - cell "prospect" [ref=f2e498]:
+                - generic [ref=f2e499]: prospect
+              - cell "Apri → 🗑" [ref=f2e500]:
+                - button "Apri →" [ref=f2e501]
+                - button "🗑" [ref=f2e502]
+            - row "TST-7b24d044 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e503] [cursor=pointer]:
+              - cell "TST-7b24d044" [ref=f2e504]
+              - cell "Test Project Banner" [ref=f2e505]
+              - cell "fandango" [ref=f2e506]
+              - cell "—" [ref=f2e507]
+              - cell "—" [ref=f2e508]
+              - cell "—" [ref=f2e509]
+              - cell "0 quote · 0 job" [ref=f2e510]
+              - cell "prospect" [ref=f2e511]:
+                - generic [ref=f2e512]: prospect
+              - cell "Apri → 🗑" [ref=f2e513]:
+                - button "Apri →" [ref=f2e514]
+                - button "🗑" [ref=f2e515]
+            - row "TST-ae5a430a Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e516] [cursor=pointer]:
+              - cell "TST-ae5a430a" [ref=f2e517]
+              - cell "Test Project Banner" [ref=f2e518]
+              - cell "fandango" [ref=f2e519]
+              - cell "—" [ref=f2e520]
+              - cell "—" [ref=f2e521]
+              - cell "—" [ref=f2e522]
+              - cell "0 quote · 0 job" [ref=f2e523]
+              - cell "prospect" [ref=f2e524]:
+                - generic [ref=f2e525]: prospect
+              - cell "Apri → 🗑" [ref=f2e526]:
+                - button "Apri →" [ref=f2e527]
+                - button "🗑" [ref=f2e528]
+            - row "TST-d2227f11 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e529] [cursor=pointer]:
+              - cell "TST-d2227f11" [ref=f2e530]
+              - cell "Test Project Banner" [ref=f2e531]
+              - cell "fandango" [ref=f2e532]
+              - cell "—" [ref=f2e533]
+              - cell "—" [ref=f2e534]
+              - cell "—" [ref=f2e535]
+              - cell "0 quote · 0 job" [ref=f2e536]
+              - cell "prospect" [ref=f2e537]:
+                - generic [ref=f2e538]: prospect
+              - cell "Apri → 🗑" [ref=f2e539]:
+                - button "Apri →" [ref=f2e540]
+                - button "🗑" [ref=f2e541]
+            - row "TST-17539784 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e542] [cursor=pointer]:
+              - cell "TST-17539784" [ref=f2e543]
+              - cell "Test Project Banner" [ref=f2e544]
+              - cell "fandango" [ref=f2e545]
+              - cell "—" [ref=f2e546]
+              - cell "—" [ref=f2e547]
+              - cell "—" [ref=f2e548]
+              - cell "0 quote · 0 job" [ref=f2e549]
+              - cell "prospect" [ref=f2e550]:
+                - generic [ref=f2e551]: prospect
+              - cell "Apri → 🗑" [ref=f2e552]:
+                - button "Apri →" [ref=f2e553]
+                - button "🗑" [ref=f2e554]
+            - row "TST-56b5ee1a Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e555] [cursor=pointer]:
+              - cell "TST-56b5ee1a" [ref=f2e556]
+              - cell "Test Project Banner" [ref=f2e557]
+              - cell "fandango" [ref=f2e558]
+              - cell "—" [ref=f2e559]
+              - cell "—" [ref=f2e560]
+              - cell "—" [ref=f2e561]
+              - cell "0 quote · 0 job" [ref=f2e562]
+              - cell "prospect" [ref=f2e563]:
+                - generic [ref=f2e564]: prospect
+              - cell "Apri → 🗑" [ref=f2e565]:
+                - button "Apri →" [ref=f2e566]
+                - button "🗑" [ref=f2e567]
+            - row "TST-858760d9 Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e568] [cursor=pointer]:
+              - cell "TST-858760d9" [ref=f2e569]
+              - cell "Test Project Banner" [ref=f2e570]
+              - cell "fandango" [ref=f2e571]
+              - cell "—" [ref=f2e572]
+              - cell "—" [ref=f2e573]
+              - cell "—" [ref=f2e574]
+              - cell "0 quote · 0 job" [ref=f2e575]
+              - cell "prospect" [ref=f2e576]:
+                - generic [ref=f2e577]: prospect
+              - cell "Apri → 🗑" [ref=f2e578]:
+                - button "Apri →" [ref=f2e579]
+                - button "🗑" [ref=f2e580]
+            - row "TST-5fb4f8ea Test Project Banner fandango — — — 0 quote · 0 job prospect Apri → 🗑" [ref=f2e581] [cursor=pointer]:
+              - cell "TST-5fb4f8ea" [ref=f2e582]
+              - cell "Test Project Banner" [ref=f2e583]
+              - cell "fandango" [ref=f2e584]
+              - cell "—" [ref=f2e585]
+              - cell "—" [ref=f2e586]
+              - cell "—" [ref=f2e587]
+              - cell "0 quote · 0 job" [ref=f2e588]
+              - cell "prospect" [ref=f2e589]:
+                - generic [ref=f2e590]: prospect
+              - cell "Apri → 🗑" [ref=f2e591]:
+                - button "Apri →" [ref=f2e592]
+                - button "🗑" [ref=f2e593]
+            - row "C&C26SbmTV CRIMINI & CUCINE fandango Serie TV 50' — 1 quote · 0 job prospect Apri → 🗑" [ref=f2e594] [cursor=pointer]:
+              - cell "C&C26SbmTV" [ref=f2e595]
+              - cell "CRIMINI & CUCINE" [ref=f2e596]
+              - cell "fandango" [ref=f2e597]
+              - cell "Serie TV" [ref=f2e598]
+              - cell "50'" [ref=f2e599]
+              - cell "—" [ref=f2e600]
+              - cell "1 quote · 0 job" [ref=f2e601]
+              - cell "prospect" [ref=f2e602]:
+                - generic [ref=f2e603]: prospect
+              - cell "Apri → 🗑" [ref=f2e604]:
+                - button "Apri →" [ref=f2e605]
+                - button "🗑" [ref=f2e606]
+            - row "DNMHMP Dove non mi hai mai portata Picomedia Lungometraggio 100' 28/02/2027 0 quote · 0 job prospect Apri → 🗑" [ref=f2e607] [cursor=pointer]:
+              - cell "DNMHMP" [ref=f2e608]
+              - cell "Dove non mi hai mai portata" [ref=f2e609]
+              - cell "Picomedia" [ref=f2e610]
+              - cell "Lungometraggio" [ref=f2e611]
+              - cell "100'" [ref=f2e612]
+              - cell "28/02/2027" [ref=f2e613]
+              - cell "0 quote · 0 job" [ref=f2e614]
+              - cell "prospect" [ref=f2e615]:
+                - generic [ref=f2e616]: prospect
+              - cell "Apri → 🗑" [ref=f2e617]:
+                - button "Apri →" [ref=f2e618]
+                - button "🗑" [ref=f2e619]
+            - row "GLO Gomorra - Le Origini Cattleya Serie TV 50' — 5 quote · 1 job prospect Apri → 🗑" [ref=f2e620] [cursor=pointer]:
+              - cell "GLO" [ref=f2e621]
+              - cell "Gomorra - Le Origini" [ref=f2e622]
+              - cell "Cattleya" [ref=f2e623]
+              - cell "Serie TV" [ref=f2e624]
+              - cell "50'" [ref=f2e625]
+              - cell "—" [ref=f2e626]
+              - cell "5 quote · 1 job" [ref=f2e627]
+              - cell "prospect" [ref=f2e628]:
+                - generic [ref=f2e629]: prospect
+              - cell "Apri → 🗑" [ref=f2e630]:
+                - button "Apri →" [ref=f2e631]
+                - button "🗑" [ref=f2e632]
+        - text: ▾ ▾
+  - button "Apri Claqo Bot" [ref=f2e633] [cursor=pointer]:
+    - img "Claqo bot" [ref=f2e634]
+  - dialog "Copilot AI" [ref=f2e635]:
+    - generic [ref=f2e636]:
+      - img "Claqo bot" [ref=f2e638]
+      - heading "Copilot" [level=3] [ref=f2e639]
+      - generic [ref=f2e640]: —
+      - button "Nuova conversazione" [ref=f2e641] [cursor=pointer]:
+        - img [ref=f2e642]
+      - button "Chiudi" [ref=f2e643] [cursor=pointer]:
+        - img [ref=f2e644]
+    - generic [ref=f2e647]:
+      - generic [ref=f2e648]: "Storia:"
+      - button "(new) ▾" [ref=f2e650] [cursor=pointer]
+    - generic [ref=f2e653]:
+      - button "📥" [ref=f2e654] [cursor=pointer]
+      - button "🔎" [ref=f2e655] [cursor=pointer]
+    - generic [ref=f2e656]:
+      - button "Allega documento (PDF/DOCX/TXT/MD/immagine, max 20MB)" [ref=f2e657] [cursor=pointer]:
+        - img [ref=f2e658]
+      - textbox "Scrivi qui (Enter = a capo, Ctrl/⌘+Enter = invia, 📎 per allegare)" [ref=f2e660]
+      - button "Send" [ref=f2e661] [cursor=pointer]
+  - generic [ref=f2e662]:
+    - generic [ref=f2e663]:
+      - generic [ref=f2e664]: 🔔 Notifiche
+      - generic [ref=f2e665]:
+        - button "✓ Tutte lette" [ref=f2e666] [cursor=pointer]
+        - button "✕" [ref=f2e667] [cursor=pointer]
+    - generic [ref=f2e669]: Loading…
+  - text: ▾ ▾

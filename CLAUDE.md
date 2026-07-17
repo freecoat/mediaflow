@@ -212,7 +212,7 @@ Da verificare/sistemare:
 
 ---
 
-*Ultimo aggiornamento: 27 aprile 2026 sera tardi — v3.4.4: AI search-first nel listino + scenario C (`propose_new_item_and_line`), `propose_quote_line` accetta `price_item_id`, voci listino nel context AI, system prompt con regola SEARCH-FIRST. v3.4.3: card copilot human-readable + toggle JSON. v3.4.2: quick wins copilot + categoria libera per riga in quote.*
+*Ultimo aggiornamento: 10 luglio 2026 — v3.5.0-alpha.172.244: fix sync calendario (maxResults 250→2500 + paginazione per non troncare eventi), fix visualizzazione email (/mail con card thread a due righe: soggetto+data / mittente+snippet), aggiunti scope gmail.readonly e gmail.compose negli scope Google OAuth predefiniti, auto-migrazione colonne mancanti (claqo_calendar_id su user_oauth_tokens, sync_state/external_event_id/external_calendar_id/last_synced_at/sync_error su calendar_events). Bug fix: @INBOX mostra TUTTE le conversazioni senza filtro label (il parametro labelIds=INBOX è corretto per l'API Gmail).*
 
 ## graphify
 

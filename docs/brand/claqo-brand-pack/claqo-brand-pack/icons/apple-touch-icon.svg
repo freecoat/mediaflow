@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <title>Claqo apple touch icon</title>
+  <rect width="180" height="180" rx="40" fill="#D85A30"/>
+  <polygon points="25,74 155,74 169,27 38,38" fill="#1A1A1A"/>
+  <polygon points="52,74 68,74 77,34 60,38" fill="#FFFFFF"/>
+  <polygon points="88,74 104,74 113,30 96,34" fill="#FFFFFF"/>
+  <polygon points="124,74 140,74 149,27 132,30" fill="#FFFFFF"/>
+  <rect x="25" y="74" width="130" height="88" rx="9" fill="#FAECE7"/>
+  <circle cx="67" cy="112" r="12" fill="#1A1A1A"/>
+  <circle cx="113" cy="112" r="12" fill="#1A1A1A"/>
+  <circle cx="71" cy="108" r="3.5" fill="#FFFFFF"/>
+  <circle cx="117" cy="108" r="3.5" fill="#FFFFFF"/>
+  <path d="M 77 142 Q 90 152 103 142" stroke="#1A1A1A" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+</svg>

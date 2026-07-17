@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Claqo app icon 64</title>
+  <rect width="64" height="64" rx="14" fill="#D85A30"/>
+  <polygon points="9,28 56,28 60,10 14,13" fill="#1A1A1A"/>
+  <polygon points="19,28 25,28 28,12 22,14" fill="#FFFFFF"/>
+  <polygon points="32,28 38,28 41,11 35,13" fill="#FFFFFF"/>
+  <polygon points="45,28 51,28 54,10 48,12" fill="#FFFFFF"/>
+  <rect x="9" y="28" width="46" height="32" rx="3" fill="#FAECE7"/>
+  <circle cx="23" cy="42" r="4.5" fill="#1A1A1A"/>
+  <circle cx="41" cy="42" r="4.5" fill="#1A1A1A"/>
+  <path d="M 28 52 Q 32 55 36 52" stroke="#1A1A1A" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+</svg>
