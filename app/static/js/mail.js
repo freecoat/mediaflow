@@ -15,6 +15,10 @@ let _mailRefreshTimer = null;
 let _mailStandalone = false;       // true nella finestra pop-out /mail/compose
 let _mailCollapsed = new Set();     // full-name dei nodi etichetta collassati
 let _mailContactsCache = [];        // rubrica (People) cache per tab Rubrica
+let _mailFullScope = false;         // scope pieno Gmail attivo? (elimina-definitivo/svuota-cestino)
+let _mailCurrentIds = [];           // id di tutti i thread caricati in vista (per select-all)
+let _mailCtxTarget = [];            // id thread su cui agisce il context menu
+let _mailDragIds = [];              // id thread trascinati (drag&drop → etichetta)
 
 // Icone SVG inline (16px, stroke=currentColor). Gmail-like, sostituiscono le emoji.
 const _MAIL_ICONS = {
@@ -28,6 +32,7 @@ async function mfMailInit() {
   const st = await (await fetch('/mail/api/status')).json().catch(function () { return {connected: false}; });
   _mailConnected = !!st.connected;
   _mailAccount = st.account_email || null;
+  _mailFullScope = !!st.mail_full;
   if (!_mailConnected) {
     const box = document.getElementById('mail-reading');
     if (box) box.innerHTML = '<div class="mail-cta"><p>' + mfT('mail.notConnected') +
@@ -175,7 +180,8 @@ function mfMailRenderLabelTree(node, depth, badge) {
           '<button class="mail-lb-act" data-lb-del="' + escapeHtml(n.id) + '" data-lb-full="' + escapeHtml(n.full) + '" title="' + escapeHtml(mfT('mail.deleteLabel')) + '">🗑</button>' +
         '</span>'
       : '';
-    let html = '<div class="mail-lb-row" style="padding-left:' + (depth * 14) + 'px">' +
+    const dropAttr = n.id ? ' data-lb-drop="' + escapeHtml(n.id) + '"' : '';
+    let html = '<div class="mail-lb-row" style="padding-left:' + (depth * 14) + 'px"' + dropAttr + '>' +
       caret + linkOpen + escapeHtml(n.name) + (n.id ? badge(n.id) : '') + linkClose + actions + '</div>';
     if (hasKids && !collapsed) html += mfMailRenderLabelTree(n, depth + 1, badge);
     return html;
@@ -277,7 +283,11 @@ function mfMailRunAdvSearch() {
 }
 
 async function mfMailLoadThreads(reset) {
-  if (reset) { _mailNextPage = null; _mailSel.clear(); mfMailSyncActionbar(); }
+  if (reset) {
+    _mailNextPage = null; _mailSel.clear(); mfMailSyncActionbar();
+    const selall = document.getElementById('mail-selall');
+    if (selall) { selall.checked = false; selall.indeterminate = false; }
+  }
   const box = document.getElementById('mail-thread-list');
   if (!box) return;
   const q = (document.getElementById('mail-search') || {}).value || '';
@@ -286,6 +296,7 @@ async function mfMailLoadThreads(reset) {
   if (_mailNextPage) params.set('page_token', _mailNextPage);
   try {
     const d = await (await fetch('/mail/api/threads?' + params.toString())).json();
+    _mailCurrentIds = (reset ? [] : _mailCurrentIds).concat((d.threads || []).map(function (t) { return t.id; }));
     const rows = (d.threads || []).map(function (t) {
       // Oggetto e anteprima sono cose diverse: l'oggetto viene dagli header,
       // lo snippet è il corpo. Mai usare il secondo al posto del primo.
@@ -299,7 +310,7 @@ async function mfMailLoadThreads(reset) {
       const sel = _mailSel.has(t.id) ? ' checked' : '';
       const starOn = t.starred ? ' mail-star-on' : '';
       const count = (t.msg_count && t.msg_count > 1) ? ' <span class="mail-row-count">' + t.msg_count + '</span>' : '';
-      return '<div class="mail-thread-row' + unread + '" data-thread="' + id + '">' +
+      return '<div class="mail-thread-row' + unread + '" data-thread="' + id + '" draggable="true">' +
         '<input type="checkbox" class="mail-sel" data-sel="' + id + '"' + sel + '>' +
         '<button class="mail-star' + starOn + '" data-mail-star="' + id + '" title="' + escapeHtml(mfT('mail.star')) + '">' + mfMailIcon('star') + '</button>' +
         '<div class="mail-row-main">' +
@@ -367,6 +378,13 @@ function mfMailSyncActionbar() {
       _mailLabels.filter(function (l) { return l.type === 'user'; }).map(function (l) {
         return '<option value="' + escapeHtml(l.id) + '">' + escapeHtml(l.name) + '</option>';
       }).join('');
+  }
+  const selall = document.getElementById('mail-selall');
+  if (selall) {
+    const total = _mailCurrentIds.length;
+    const selCount = _mailCurrentIds.filter(function (id) { return _mailSel.has(id); }).length;
+    selall.checked = total > 0 && selCount === total;
+    selall.indeterminate = selCount > 0 && selCount < total;
   }
 }
 
@@ -872,6 +890,15 @@ async function mfMailSaveSignature() {
 }
 
 document.addEventListener('change', function (ev) {
+  if (ev.target.id === 'mail-selall') {
+    if (ev.target.checked) { _mailCurrentIds.forEach(function (id) { _mailSel.add(id); }); }
+    else { _mailCurrentIds.forEach(function (id) { _mailSel.delete(id); }); }
+    document.querySelectorAll('.mail-sel').forEach(function (cb) {
+      cb.checked = _mailSel.has(cb.getAttribute('data-sel'));
+    });
+    mfMailSyncActionbar();
+    return;
+  }
   const cb = ev.target.closest && ev.target.closest('[data-sel]');
   if (cb) {
     const id = cb.getAttribute('data-sel');
@@ -1040,3 +1067,146 @@ function mailMobileView(view) {
   if (back) back.style.display = (view === 'read') ? 'inline-flex' : 'none';
   if (labelsBtn) labelsBtn.style.display = (view === 'read') ? 'none' : 'inline-flex';
 }
+
+// ── Context menu tasto destro (Gmail-like) — α.172.263 ─────────────────────
+function mfMailCloseContextMenu() {
+  const el = document.getElementById('mail-ctxmenu');
+  if (el) { el.style.display = 'none'; el.innerHTML = ''; }
+  _mailCtxTarget = [];
+}
+
+function mfMailContextMenuItems(threadId) {
+  // Stato letto/stella della riga sotto cursore per decidere le label toggle.
+  const row = document.querySelector('.mail-thread-row[data-thread="' +
+    (window.CSS && CSS.escape ? CSS.escape(threadId) : threadId) + '"]');
+  const isUnread = !!(row && row.classList.contains('mail-unread'));
+  const isStarred = !!(row && row.querySelector('.mail-star-on'));
+  return [
+    {action: 'archive', label: mfT('mail.archive')},
+    {action: 'trash', label: mfT('mail.trash')},
+    {action: isUnread ? 'read' : 'unread', label: isUnread ? mfT('mail.markRead') : mfT('mail.markUnread')},
+    {action: isStarred ? 'unstar' : 'star', label: mfT('mail.star')},
+    {action: 'spam', label: mfT('mail.spam')},
+  ];
+}
+
+function mfMailOpenContextMenu(ev, threadId) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  _mailCtxTarget = _mailSel.has(threadId) ? [..._mailSel] : [threadId];
+  const menu = document.getElementById('mail-ctxmenu');
+  if (!menu) return;
+  const items = mfMailContextMenuItems(threadId);
+  const basicHtml = items.map(function (it) {
+    return '<div class="mail-ctxmenu-item" data-ctx-action="' + it.action + '">' + escapeHtml(it.label) + '</div>';
+  }).join('');
+  const userLabels = _mailLabels.filter(function (l) { return l.type === 'user'; });
+  const subItems = userLabels.map(function (l) {
+    return '<div class="mail-ctxmenu-item" data-ctx-action="move" data-ctx-label="' + escapeHtml(l.id) + '">' + escapeHtml(l.name) + '</div>';
+  }).join('') || '<div class="mail-ctxmenu-item mail-ctxmenu-disabled">' + escapeHtml(mfT('contact.none')) + '</div>';
+  const submenuHtml = '<div class="mail-ctxmenu-item mail-ctxmenu-sub">' +
+    escapeHtml(mfT('mail.moveToLabel')) + ' <span class="mail-ctxmenu-sub-caret">▸</span>' +
+    '<div class="mail-ctxmenu-submenu">' + subItems + '</div></div>';
+  const gatedClass = _mailFullScope ? 'mail-ctxmenu-item' : 'mail-ctxmenu-item mail-ctxmenu-disabled';
+  const gatedTitle = _mailFullScope ? '' : ' title="' + escapeHtml(mfT('mail.needMailFull')) + '"';
+  let gatedHtml = '<div class="mail-ctxmenu-sep"></div>' +
+    '<div class="' + gatedClass + '" data-ctx-gated="delete_forever"' + gatedTitle + '>' +
+    escapeHtml(mfT('mail.deleteForever')) + '</div>';
+  if (_mailLabel === 'TRASH') {
+    gatedHtml += '<div class="' + gatedClass + '" data-ctx-gated="empty_trash"' + gatedTitle + '>' +
+      escapeHtml(mfT('mail.emptyTrash')) + '</div>';
+  }
+  menu.innerHTML = basicHtml + submenuHtml + gatedHtml;
+  menu.style.display = 'block';
+  const x = Math.min(ev.clientX, window.innerWidth - 240);
+  const y = Math.min(ev.clientY, window.innerHeight - 260);
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+document.addEventListener('contextmenu', function (ev) {
+  const row = ev.target.closest && ev.target.closest('.mail-thread-row');
+  if (!row) return;
+  mfMailOpenContextMenu(ev, row.getAttribute('data-thread'));
+});
+
+document.addEventListener('click', function (ev) {
+  // Voci gated (elimina definitivo / svuota cestino): scope + doppio confirm.
+  const gated = ev.target.closest && ev.target.closest('[data-ctx-gated]');
+  if (gated) {
+    if (!_mailFullScope) { window.location.href = '/settings'; mfMailCloseContextMenu(); return; }
+    const kind = gated.getAttribute('data-ctx-gated');
+    const n = _mailCtxTarget.length || 1;
+    if (kind === 'delete_forever') {
+      const msg = mfT('mail.confirmDeleteForever').replace('{n}', n);
+      if (window.confirm(msg) && window.confirm(msg)) {
+        mfMailAction('delete_forever', null, _mailCtxTarget);
+      }
+    } else if (kind === 'empty_trash') {
+      const msg = mfT('mail.confirmEmptyTrash');
+      if (window.confirm(msg) && window.confirm(msg)) {
+        fetch('/mail/api/trash/empty', {method: 'POST'})
+          .then(function (r) { return r.json(); })
+          .then(function () { if (window.toast) toast(mfT('mail.actionOk'), 'success'); mfMailLoadThreads(true); })
+          .catch(function () { if (window.toast) toast(mfT('email.error'), 'error'); });
+      }
+    }
+    mfMailCloseContextMenu();
+    return;
+  }
+  const item = ev.target.closest && ev.target.closest('[data-ctx-action]');
+  if (item) {
+    // Il contenitore "sposta in etichetta" e' solo l'anchor del submenu, non un'azione.
+    if (item.classList.contains('mail-ctxmenu-sub') && !item.hasAttribute('data-ctx-label')) return;
+    const labelId = item.getAttribute('data-ctx-label');
+    mfMailAction(item.getAttribute('data-ctx-action'), labelId, _mailCtxTarget);
+    mfMailCloseContextMenu();
+    return;
+  }
+  if (!(ev.target.closest && ev.target.closest('#mail-ctxmenu'))) mfMailCloseContextMenu();
+});
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') mfMailCloseContextMenu();
+});
+
+document.addEventListener('scroll', function () { mfMailCloseContextMenu(); }, true);
+
+// ── Drag & drop righe → etichetta sidebar = sposta (α.172.263) ─────────────
+document.addEventListener('dragstart', function (ev) {
+  const row = ev.target.closest && ev.target.closest('.mail-thread-row');
+  if (!row) return;
+  const id = row.getAttribute('data-thread');
+  _mailDragIds = _mailSel.has(id) ? [..._mailSel] : [id];
+  row.classList.add('dragging');
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', id);
+});
+
+document.addEventListener('dragend', function (ev) {
+  const row = ev.target.closest && ev.target.closest('.mail-thread-row');
+  if (row) row.classList.remove('dragging');
+});
+
+document.addEventListener('dragover', function (ev) {
+  const drop = ev.target.closest && ev.target.closest('[data-lb-drop]');
+  if (!drop) return;
+  ev.preventDefault();
+  drop.classList.add('mail-lb-drop-hover');
+});
+
+document.addEventListener('dragleave', function (ev) {
+  const drop = ev.target.closest && ev.target.closest('[data-lb-drop]');
+  if (drop) drop.classList.remove('mail-lb-drop-hover');
+});
+
+document.addEventListener('drop', function (ev) {
+  const drop = ev.target.closest && ev.target.closest('[data-lb-drop]');
+  if (!drop) return;
+  ev.preventDefault();
+  drop.classList.remove('mail-lb-drop-hover');
+  const labelId = drop.getAttribute('data-lb-drop');
+  const ids = _mailDragIds.length ? _mailDragIds : [ev.dataTransfer.getData('text/plain')];
+  if (ids.length && ids[0]) mfMailAction('move', labelId, ids);
+  _mailDragIds = [];
+});

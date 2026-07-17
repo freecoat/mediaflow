@@ -96,6 +96,11 @@ GMAIL_SCOPES = (
 # owner/writer, senza concedere la gestione dei calendari stessi.
 CALENDAR_WRITE_SCOPES = "https://www.googleapis.com/auth/calendar.events"
 
+# Scope pieno Gmail (α.172.263): SOLO per elimina-definitivo/svuota-cestino.
+# gmail.modify (opt-in "email") non permette DELETE fisico su messaggi/thread —
+# richiede questo scope ampio, quindi mai nel bundle base, sempre opt-in esplicito.
+MAIL_FULL_SCOPES = "https://mail.google.com/"
+
 
 def _redirect_base_url() -> str:
     return os.getenv("OAUTH_REDIRECT_BASE_URL", "http://localhost:8000").rstrip("/")

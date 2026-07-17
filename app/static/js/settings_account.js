@@ -51,6 +51,14 @@ async function loadAccountSettings() {
             'data-i18n="settings.account.calendarWriteActive">Editing calendario ✓</span>'
           : ' <a class="btn btn-secondary btn-sm" href="/auth/oauth/google/start?scopes=calendar_write" ' +
             'data-i18n="settings.account.calendarWrite">Attiva editing calendario</a>';
+        // Opt-in gestione avanzata mail: scope pieno https://mail.google.com/
+        // (elimina-definitivo/svuota-cestino). gmail.modify non basta.
+        const hasMailFull = sc.indexOf('mail.google.com') !== -1;
+        actions += hasMailFull
+          ? ' <span class="badge badge-active" style="font-size:11px;" ' +
+            'data-i18n="settings.account.mailFullActive">Gestione avanzata mail ✓</span>'
+          : ' <a class="btn btn-secondary btn-sm" href="/auth/oauth/google/start?scopes=mail_full" ' +
+            'data-i18n="settings.account.mailFull">Attiva gestione avanzata mail</a>';
       }
     } else {
       const notCfgTitle = window.mfT ? mfT('settings.account.notConfigured') : 'client_id non configurato';

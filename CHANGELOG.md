@@ -1,5 +1,20 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.263 — Mail context-menu + drag&drop label + select-all + redesign contatti (17 lug 2026)
+
+**Contesto**: richiesta Matteo — menu tasto destro Gmail-like su `/mail` (con elimina definitivo/svuota cestino dietro nuovo scope opt-in), drag&drop email→etichetta, select-all, e restyle del modale "Nuovo contatto" con campo Note.
+
+**Scoperta in fase di analisi**: `apply_action`/`_ACTION_LABELS` in `gmail.py` avevano GIÀ tutti i verbi read/unread/star/unstar/archive/spam/move/label/unlabel (arrivati dal merge α.172.262) — il lavoro backend nuovo si è ridotto allo scope pieno per la cancellazione fisica.
+
+- **Nuovo scope opt-in `mail_full`** (`https://mail.google.com/`): `gmail.modify` non permette DELETE fisico su messaggi/thread. Bottone dedicato in `/settings`, mai nel bundle base, mai forzato — chi non lo attiva perde solo elimina-definitivo/svuota-cestino.
+- `has_mail_full_scope(row)` (pattern gemello di `has_calendar_write_scope`), `delete_thread_forever()`, `empty_trash()` in `gmail.py`. Router: `delete_forever` gated 403 su `POST /mail/api/threads/action`, nuovo `POST /mail/api/trash/empty` gated, `GET /mail/api/status` espone `mail_full`.
+- **Context menu tasto destro** (`mfMailOpenContextMenu` in `mail.js`): archivia/cestino/letto/non-letto/stella/spam + submenu "Sposta in etichetta ▸" (solo label utente) + voci gated (elimina definitivo/svuota cestino, disabilitate senza scope pieno, doppio `confirm()` nativo se attive — pattern delete evento calendario α.248).
+- **Drag&drop righe → etichetta sidebar** = sposta (add label + remove INBOX, riusa l'azione `move` già esistente).
+- **Select-all** in header lista, stato indeterminate su selezione parziale.
+- **Redesign modale contatti**: campi sezionati (Anagrafica/Azienda-ruolo/Contatti) + textarea Note. `Contact.notes` esisteva già (`models.py:4843`), nessuna migrazione — mancava solo il wiring UI (creazione E dettaglio, quest'ultimo non la mostrava affatto).
+
+**Test**: +25 unit (scope opt-in, gate 403, has_mail_full_scope, delete/empty_trash, notes round-trip). Suite verde. CSS mail co-locato nel `<style>` di `mail.html` (palette pagina); `.form-row` riusata in `main.css`.
+
 ## v3.5.0-alpha.172.262 — merge: `feat/mobile-responsive-email` → main (15 lug 2026)
 
 Merge a tre vie del ramo rimasto orfano dal 7 lug (`1eb7fdd`): 22 commit, 107 file, +5477 righe. 105 file auto-mergiati, **12 conflitti risolti a mano**.

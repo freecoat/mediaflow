@@ -41,11 +41,16 @@
       <button class="btn btn-sm" data-mail-action="trash" data-i18n="mail.trash">Cestino</button>
       <select id="mail-move-select" class="form-input mail-move-select"></select>
     </div>
+    <div class="mail-list-head">
+      <label class="mail-selall-label"><input type="checkbox" id="mail-selall"> <span data-i18n="mail.selectAll">Seleziona tutto</span></label>
+    </div>
     <div id="mail-thread-list" class="mail-thread-list"></div>
     <button id="mail-loadmore" class="btn btn-secondary btn-block mail-loadmore" onclick="mfMailLoadThreads(false)" data-i18n="mail.loadMore">Carica altro</button>
   </section>
   <section id="mail-reading" class="mail-reading"></section>
 </div>
+
+<div id="mail-ctxmenu" class="mail-ctxmenu" style="display:none;"></div>
 
 {% include "components/mail_compose.html" %}
 
@@ -230,6 +235,23 @@
   .mail-filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .mail-filter-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
   .mail-filter-actions-row select { width: auto; height: 30px; }
+  /* Context menu tasto destro (α.172.263) */
+  .mail-ctxmenu { position: fixed; z-index: 1000; min-width: 220px; background: var(--bg2, #1a1a1a); border: 1px solid var(--border2, #333); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.45); padding: 4px; font-size: 13px; }
+  .mail-ctxmenu-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; color: var(--text, #eee); white-space: nowrap; }
+  .mail-ctxmenu-item:hover { background: var(--bg3, #222); }
+  .mail-ctxmenu-item.mail-ctxmenu-disabled { color: var(--text3, #888); cursor: not-allowed; }
+  .mail-ctxmenu-item.mail-ctxmenu-disabled:hover { background: none; }
+  .mail-ctxmenu-sep { height: 1px; background: var(--border2, #333); margin: 4px 2px; }
+  .mail-ctxmenu-sub { position: relative; }
+  .mail-ctxmenu-sub-caret { margin-left: auto; color: var(--text3, #888); }
+  .mail-ctxmenu-submenu { position: absolute; left: 100%; top: 0; min-width: 200px; max-height: 260px; overflow-y: auto; background: var(--bg2, #1a1a1a); border: 1px solid var(--border2, #333); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.45); padding: 4px; display: none; }
+  .mail-ctxmenu-sub:hover .mail-ctxmenu-submenu, .mail-ctxmenu-sub.mail-ctxmenu-sub-open .mail-ctxmenu-submenu { display: block; }
+  /* Drag & drop righe → etichetta */
+  .mail-thread-row.dragging { opacity: .4; }
+  .mail-lb-row.mail-lb-drop-hover { background: var(--bg3, #222); outline: 2px dashed var(--accent, #6272f5); outline-offset: -2px; }
+  /* Select-all header */
+  .mail-list-head { display: flex; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--border2, #333); }
+  .mail-selall-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3, #888); cursor: pointer; }
   /* Nav foot: sync + impostazioni */
   .mail-nav-foot { margin-top: auto; display: flex; gap: 6px; padding-top: 10px; }
   .mail-nav-tool { flex: 1; background: var(--bg3, #222); border: 1px solid var(--border2, #333); border-radius: 6px; cursor: pointer; color: var(--text2, #ccc); font-size: 15px; padding: 6px; }

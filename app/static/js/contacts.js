@@ -83,6 +83,8 @@ async function mfContactOpenDetail(id) {
       '<div>' + escapeHtml(d.phone || '—') + '</div></div>' +
       '<div class="form-group"><label class="form-label">' + mfT('contact.client') + assocBtn('client') + '</label>' +
       '<div>' + clientBlock + '</div></div>' +
+      '<div class="form-group"><label class="form-label">' + mfT('contact.notes') + '</label>' +
+      '<div>' + escapeHtml(d.notes || '—') + '</div></div>' +
       '<div class="form-group"><label class="form-label">' + mfT('contact.acquisitions') + assocBtn('acquisition') + '</label><ul>' + acqRows + '</ul></div>' +
       '<div class="form-group"><label class="form-label">' + mfT('contact.projects') + assocBtn('project') + '</label><ul>' + projRows + '</ul></div>' +
       '<div class="form-group"><label class="form-label">' + mfT('contact.emailLinks') + '</label><ul>' + emailRows + '</ul></div>';
@@ -161,7 +163,7 @@ async function mfContactLink(cid, targetType, targetId, role) {
 async function mfContactSaveNew() {
   const fd = new FormData();
   const map = {name: 'cn-name', company_text: 'cn-company', email: 'cn-email',
-               phone: 'cn-phone', role: 'cn-role'};
+               phone: 'cn-phone', role: 'cn-role', notes: 'cn-notes'};
   Object.keys(map).forEach(function (k) {
     const el = document.getElementById(map[k]);
     if (el && el.value.trim()) fd.append(k, el.value.trim());

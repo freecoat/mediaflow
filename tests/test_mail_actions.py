@@ -27,6 +27,81 @@ def _connect(s):
     s.commit()
 
 
+def test_has_mail_full_scope_true_for_full_scope():
+    row = UserOAuthToken(user_id=1, provider="google",
+                         scopes="openid https://mail.google.com/")
+    assert gmail.has_mail_full_scope(row) is True
+
+
+def test_has_mail_full_scope_false_for_modify_only():
+    row = UserOAuthToken(user_id=1, provider="google",
+                         scopes="https://www.googleapis.com/auth/gmail.modify")
+    assert gmail.has_mail_full_scope(row) is False
+
+
+def test_has_mail_full_scope_false_when_no_row():
+    assert gmail.has_mail_full_scope(None) is False
+
+
+def test_has_mail_full_scope_false_when_no_scopes_attr():
+    row = UserOAuthToken(user_id=1, provider="google", scopes=None)
+    assert gmail.has_mail_full_scope(row) is False
+
+
+def test_delete_thread_forever_calls_delete(monkeypatch):
+    s = _session(); _connect(s)
+    calls = []
+    monkeypatch.setattr(gmail, "_gmail_request",
+                        lambda m, p, t, params=None, body=None: (calls.append((m, p)), {})[1])
+    assert gmail.delete_thread_forever(s, 1, "T1") is True
+    assert calls[0] == ("DELETE", "/threads/T1")
+
+
+def test_delete_thread_forever_false_on_error(monkeypatch):
+    s = _session(); _connect(s)
+
+    def boom(m, p, t, params=None, body=None):
+        raise RuntimeError("http 403")
+    monkeypatch.setattr(gmail, "_gmail_request", boom)
+    assert gmail.delete_thread_forever(s, 1, "T1") is False
+
+
+def test_empty_trash_deletes_all_trash_threads(monkeypatch):
+    s = _session(); _connect(s)
+    deleted_ids = []
+
+    def fake_list_threads(db, user_id, query=None, label_ids=None, page_token=None,
+                          max_results=25, enrich=True):
+        assert label_ids == "TRASH"
+        return {"threads": [{"id": "T1"}, {"id": "T2"}], "next_page_token": None}
+
+    def fake_delete(db, user_id, thread_id):
+        deleted_ids.append(thread_id)
+        return True
+
+    monkeypatch.setattr(gmail, "list_threads", fake_list_threads)
+    monkeypatch.setattr(gmail, "delete_thread_forever", fake_delete)
+    out = gmail.empty_trash(s, 1)
+    assert out == {"deleted": 2, "failed": 0}
+    assert deleted_ids == ["T1", "T2"]
+
+
+def test_empty_trash_counts_failures(monkeypatch):
+    s = _session(); _connect(s)
+
+    def fake_list_threads(db, user_id, query=None, label_ids=None, page_token=None,
+                          max_results=25, enrich=True):
+        return {"threads": [{"id": "T1"}, {"id": "T2"}], "next_page_token": None}
+
+    def fake_delete(db, user_id, thread_id):
+        return thread_id == "T1"
+
+    monkeypatch.setattr(gmail, "list_threads", fake_list_threads)
+    monkeypatch.setattr(gmail, "delete_thread_forever", fake_delete)
+    out = gmail.empty_trash(s, 1)
+    assert out == {"deleted": 1, "failed": 1}
+
+
 def test_modify_thread_sends_add_remove(monkeypatch):
     s = _session(); _connect(s)
     calls = []
