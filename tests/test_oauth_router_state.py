@@ -32,6 +32,23 @@ def test_start_with_email_scope_non_regredisce(client):
     assert "calendar.events" not in loc
 
 
+def test_start_with_mail_full_includes_extra_scope(client):
+    """?scopes=mail_full → opt-in scope pieno per elimina-definitivo (α.172.263)."""
+    c, _ = client
+    r = c.get("/auth/oauth/google/start?scopes=mail_full", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    loc = r.headers["location"]
+    assert "mail.google.com" in loc
+    assert "include_granted_scopes=true" in loc
+
+
+def test_start_without_scopes_param_excludes_mail_full(client):
+    c, _ = client
+    r = c.get("/auth/oauth/google/start", follow_redirects=False)
+    assert r.status_code in (302, 307)
+    assert "mail.google.com" not in r.headers["location"]
+
+
 def test_callback_rejects_bad_state(client):
     c, _ = client
     r = c.get("/auth/oauth/google/callback?code=x&state=forged.deadbeef",

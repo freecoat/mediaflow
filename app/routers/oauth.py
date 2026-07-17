@@ -54,7 +54,8 @@ async def oauth_start(provider: str, request: Request, scopes: Optional[str] = N
                       db: Session = Depends(get_db)):
     """Inizio flow OAuth: genera state CSRF + redirect a auth URL.
     Opt-in incrementali (in aggiunta al bundle base, mai al posto):
-    `scopes=email` → scope Gmail; `scopes=calendar_write` → editing eventi Google."""
+    `scopes=email` → scope Gmail; `scopes=calendar_write` → editing eventi Google;
+    `scopes=mail_full` → elimina-definitivo/svuota-cestino email."""
     user = current_user_optional(request)
     if not user:
         raise HTTPException(401, "Autenticazione richiesta")
@@ -71,6 +72,8 @@ async def oauth_start(provider: str, request: Request, scopes: Optional[str] = N
         extra = oauth.GMAIL_SCOPES
     elif provider == "google" and scopes == "calendar_write":
         extra = oauth.CALENDAR_WRITE_SCOPES
+    elif provider == "google" and scopes == "mail_full":
+        extra = oauth.MAIL_FULL_SCOPES
     state = oauth.make_oauth_state(user.id, provider)
     return RedirectResponse(oauth.authorization_url(provider, state, extra_scopes=extra))
 
