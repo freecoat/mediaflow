@@ -1,5 +1,9 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.264 — Fix badge "Email ✓" in /settings (17 lug 2026)
+
+Il badge "Email ✓" in `/settings` restava spento anche con Gmail collegato: `settings_account.js` controllava il solo letterale `gmail.readonly`, ma dal merge α.172.262 il bundle opt-in "email" (`GMAIL_SCOPES`) usa `gmail.modify` (+compose/settings.basic/contacts) — niente `readonly`. Ora `hasMail` riconosce `gmail.modify` (superset) **o** `gmail.readonly` (token legacy), coerente con `_GMAIL_READ_SCOPES` lato server (`mail.py`). Fix solo frontend, nessun impatto backend/test.
+
 ## v3.5.0-alpha.172.263 — Mail context-menu + drag&drop label + select-all + redesign contatti (17 lug 2026)
 
 **Contesto**: richiesta Matteo — menu tasto destro Gmail-like su `/mail` (con elimina definitivo/svuota cestino dietro nuovo scope opt-in), drag&drop email→etichetta, select-all, e restyle del modale "Nuovo contatto" con campo Note.

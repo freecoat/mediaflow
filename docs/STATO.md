@@ -8,7 +8,13 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.263** — 17 luglio 2026 — Mail context-menu + drag&drop label + select-all + redesign contatti
+**v3.5.0-alpha.172.264** — 17 luglio 2026 — Fix badge "Email ✓" /settings (scope gmail.modify)
+
+### α.172.264 ✅ (17 lug, ramo fix/settings-email-badge-scope)
+
+Badge "Email ✓" in /settings restava spento con Gmail collegato: `settings_account.js` controllava solo `gmail.readonly`, ma dal merge α.262 il bundle "email" usa `gmail.modify` (no readonly). Ora `hasMail` accetta `gmail.modify` (superset) o `gmail.readonly` (legacy), coerente con `_GMAIL_READ_SCOPES` server. Solo frontend.
+
+### α.172.263 ✅ (17 lug, ramo feat/mail-context-menu-contacts, Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-17-mail-context-menu-drag-select-contacts*)
 
 ### α.172.263 ✅ (17 lug, ramo feat/mail-context-menu-contacts, Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-17-mail-context-menu-drag-select-contacts*)
 

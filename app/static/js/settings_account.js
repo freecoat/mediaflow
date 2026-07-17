@@ -34,16 +34,19 @@ async function loadAccountSettings() {
         '<span data-i18n="settings.account.autoSync">Sync calendario automatico</span></label>' +
         '<button class="btn btn-danger btn-sm" onclick="disconnectAccount(\'' + escapeHtml(pid) + '\')" ' +
         'data-i18n="settings.account.disconnect">Scollega</button>';
-      // Opt-in email (Gmail): richiede scope gmail.readonly+compose in aggiunta.
+      // Opt-in email (Gmail): scope gmail.modify (o gmail.readonly legacy) in aggiunta.
       if (pid === 'google') {
-        const hasMail = (p.scopes || '').indexOf('gmail.readonly') !== -1;
+        const sc = p.scopes || '';
+        // gmail.modify e' superset di readonly: dal merge α.262 il bundle "email"
+        // usa modify (etichette/filtri/vacation), non piu' readonly. Accetta anche
+        // readonly per token legacy. Coerente con _GMAIL_READ_SCOPES lato server (mail.py).
+        const hasMail = sc.indexOf('gmail.modify') !== -1 || sc.indexOf('gmail.readonly') !== -1;
         actions += hasMail
           ? ' <span class="badge badge-active" style="font-size:11px;">Email ✓</span>'
           : ' <a class="btn btn-secondary btn-sm" href="/auth/oauth/google/start?scopes=email" ' +
             'data-i18n="mail.connect">Collega Gmail</a>';
         // Opt-in editing calendario: calendar.events in aggiunta. Riconosce anche
         // lo scope 'calendar' pieno (superset) che Google concede su alcuni account.
-        const sc = p.scopes || '';
         const hasCalWrite = sc.indexOf('calendar.events') !== -1 ||
                             sc.split(/\s+/).some(s => s.endsWith('/auth/calendar'));
         actions += hasCalWrite
