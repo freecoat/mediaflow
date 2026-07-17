@@ -1,5 +1,14 @@
 # MediaFlow — Changelog
 
+## v3.5.0-alpha.172.265 — Mail quick-fix UI: immagini, azioni thread, riga attiva (17 lug 2026)
+
+Fix post-smoke Matteo (3 bug UI, indipendenti dalla perf del proxy Gmail che resta da riarchitettare):
+- **Immagini caricate**: `_mailRenderBody` non blocca più le `<img>` remote (l'utente vuole vederle sulla propria casella). Iframe resta `sandbox="allow-same-origin"` senza `allow-scripts` — nessuna esecuzione del contenuto email. Rimosso bottone/handler "Mostra immagini" (non più serve).
+- **Una sola barra azioni per thread** (prima si ripeteva sopra E sotto in thread multi-messaggio) + **bottoni Archivia e Cestino** (mancavano in lettura). Reply/Reply-all sull'ultimo messaggio. Riusa il handler `data-mail-quick` esistente.
+- **Riga evidenziata**: il thread aperto resta evidenziato nella lista (`mail-thread-active`, `mfMailHighlightRow`, ripristinata dopo ogni re-render).
+
+**Noto, NON in questo fix** (architetturale, decisione strategica A/B in sospeso): multiselect→cestino lento (N chiamate Gmail sequenziali) e refresh lista lento (N+1 metadata per pagina). Richiedono batch API + cache/History sync.
+
 ## v3.5.0-alpha.172.264 — Fix badge "Email ✓" in /settings (17 lug 2026)
 
 Il badge "Email ✓" in `/settings` restava spento anche con Gmail collegato: `settings_account.js` controllava il solo letterale `gmail.readonly`, ma dal merge α.172.262 il bundle opt-in "email" (`GMAIL_SCOPES`) usa `gmail.modify` (+compose/settings.basic/contacts) — niente `readonly`. Ora `hasMail` riconosce `gmail.modify` (superset) **o** `gmail.readonly` (token legacy), coerente con `_GMAIL_READ_SCOPES` lato server (`mail.py`). Fix solo frontend, nessun impatto backend/test.
