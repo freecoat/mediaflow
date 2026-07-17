@@ -19,6 +19,7 @@ let _mailFullScope = false;         // scope pieno Gmail attivo? (elimina-defini
 let _mailCurrentIds = [];           // id di tutti i thread caricati in vista (per select-all)
 let _mailCtxTarget = [];            // id thread su cui agisce il context menu
 let _mailDragIds = [];              // id thread trascinati (drag&drop → etichetta)
+let _mailOpenId = null;             // thread attualmente aperto in lettura (riga evidenziata)
 
 // Icone SVG inline (16px, stroke=currentColor). Gmail-like, sostituiscono le emoji.
 const _MAIL_ICONS = {
@@ -324,6 +325,7 @@ async function mfMailLoadThreads(reset) {
         '</div></div>';
     }).join('');
     box.innerHTML = (reset ? '' : box.innerHTML) + (rows || (reset ? '<div class="muted">' + mfT('mail.empty') + '</div>' : ''));
+    mfMailHighlightRow(_mailOpenId);  // ripristina l'evidenza dopo il re-render
     _mailNextPage = d.next_page_token || null;
     const more = document.getElementById('mail-loadmore');
     if (more) more.style.display = _mailNextPage ? 'block' : 'none';
@@ -406,12 +408,12 @@ async function mfMailAction(action, labelId, ids) {
 }
 
 function _mailRenderBody(html) {
-  // corpo email in iframe sandboxed (no script). Immagini remote bloccate: si
-  // neutralizza src http(s) sostituendolo con data-blocked-src finché l'utente non clicca "Mostra immagini".
-  const blocked = (html || '').replace(/(<img\b[^>]*?)\ssrc=/gi, '$1 data-blocked-src=');
+  // corpo email in iframe sandboxed (no script, mai allow-scripts). Le immagini
+  // remote vengono caricate (l'utente vuole vederle sulla propria casella); il
+  // frame resta senza JS, quindi niente esecuzione del contenuto email.
   const doc = '<!doctype html><html><head><meta charset="utf-8">' +
     '<base target="_blank"><style>' + _MAIL_BODY_CSS + '</style></head><body>' +
-    blocked + '</body></html>';
+    (html || '') + '</body></html>';
   // & prima di ": in un attributo srcdoc "&amp;" si decodifica in "&", quindi
   // senza questo passaggio le entità del corpo email verrebbero mangiate.
   const attr = doc.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
@@ -427,7 +429,10 @@ async function mfMailOpenThread(threadId) {
   if (!box) return;
   try {
     const t = await (await fetch('/mail/api/thread/' + encodeURIComponent(threadId))).json();
-    box.innerHTML = (t.messages || []).map(function (m) {
+    const msgs = t.messages || [];
+    // Corpo di ogni messaggio, SENZA barra azioni per-messaggio (prima si ripeteva
+    // sopra e sotto in un thread multi-messaggio).
+    const msgsHtml = msgs.map(function (m) {
       const atts = (m.attachments || []).map(function (a) {
         return '<a class="mail-att" href="/mail/api/attachment/' + encodeURIComponent(m.id) + '/' +
           encodeURIComponent(a.id) + '?filename=' + encodeURIComponent(a.filename) +
@@ -437,22 +442,41 @@ async function mfMailOpenThread(threadId) {
       return '<div class="mail-msg"><div class="mail-msg-head"><b>' + escapeHtml(m.from) +
         '</b><span class="muted"> · ' + escapeHtml(m.date) + '</span><div>' + escapeHtml(m.subject) +
         '</div></div>' + _mailRenderBody(bodyHtml) +
-        ' <button class="btn btn-sm" data-mail-show-images>' + mfT('mail.showImages') + '</button>' +
-        '<div class="mail-atts">' + atts + '</div>' +
-        '<div class="mail-msg-actions">' +
-        '<button class="btn btn-sm" data-mail-reply="' + escapeHtml(m.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.reply') + '</button> ' +
-        '<button class="btn btn-sm" data-mail-replyall="' + escapeHtml(m.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.replyAll') + '</button> ' +
-        '<button class="btn btn-sm" data-mail-forward="' + escapeHtml(m.id) + '">' + mfT('mail.forward') + '</button>' +
-        '<button class="btn btn-sm mail-ai-btn" data-mail-aireply="' + escapeHtml(threadId) + '">✨ ' + mfT('mail.aiReply') + '</button> ' +
-        '<button class="btn btn-sm mail-ai-btn" data-mail-extract="' + escapeHtml(threadId) + '">📥 ' + mfT('mail.aiExtract') + '</button> ' +
-        '<button class="btn btn-sm" data-mail-assign="' + escapeHtml(threadId) + '">' + mfT('email.assign') + '</button> ' +
-        '<button class="btn btn-sm" data-mail-extract-contact="' + escapeHtml(threadId) + '">' + mfT('email.extractContact') + '</button>' +
-        '</div><div class="mail-contact-cands" id="mail-cands-' + escapeHtml(threadId) + '"></div></div>';
+        '<div class="mail-atts">' + atts + '</div></div>';
     }).join('') || '<div class="muted">' + mfT('mail.empty') + '</div>';
+    // Una sola barra azioni per l'intero thread; reply/replyAll sull'ULTIMO messaggio.
+    const last = msgs[msgs.length - 1];
+    const actionsHtml = last ? (
+      '<div class="mail-msg-actions mail-thread-actions">' +
+      '<button class="btn btn-sm btn-primary" data-mail-reply="' + escapeHtml(last.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.reply') + '</button> ' +
+      '<button class="btn btn-sm" data-mail-replyall="' + escapeHtml(last.id) + '" data-thread="' + escapeHtml(threadId) + '">' + mfT('mail.replyAll') + '</button> ' +
+      '<button class="btn btn-sm" data-mail-forward="' + escapeHtml(last.id) + '">' + mfT('mail.forward') + '</button> ' +
+      '<button class="btn btn-sm" data-mail-quick="archive" data-thread="' + escapeHtml(threadId) + '">' + mfMailIcon('archive') + ' ' + mfT('mail.archive') + '</button> ' +
+      '<button class="btn btn-sm" data-mail-quick="trash" data-thread="' + escapeHtml(threadId) + '">' + mfMailIcon('trash') + ' ' + mfT('mail.trash') + '</button> ' +
+      '<button class="btn btn-sm mail-ai-btn" data-mail-aireply="' + escapeHtml(threadId) + '">✨ ' + mfT('mail.aiReply') + '</button> ' +
+      '<button class="btn btn-sm mail-ai-btn" data-mail-extract="' + escapeHtml(threadId) + '">📥 ' + mfT('mail.aiExtract') + '</button> ' +
+      '<button class="btn btn-sm" data-mail-assign="' + escapeHtml(threadId) + '">' + mfT('email.assign') + '</button> ' +
+      '<button class="btn btn-sm" data-mail-extract-contact="' + escapeHtml(threadId) + '">' + mfT('email.extractContact') + '</button>' +
+      '</div><div class="mail-contact-cands" id="mail-cands-' + escapeHtml(threadId) + '"></div>'
+    ) : '';
+    box.innerHTML = msgsHtml + actionsHtml;
     // memorizza l'ultimo thread per reply/forward
     box._lastThread = t;
+    _mailOpenId = threadId;
+    mfMailHighlightRow(threadId);
     if (_mailPrefs.mark_read_on_open) mfMailMarkReadLocal(threadId);
   } catch (e) { box.innerHTML = '<div class="muted">' + mfT('mail.sendError') + '</div>'; }
+}
+
+// Evidenzia nella lista la riga del thread aperto (una sola alla volta).
+function mfMailHighlightRow(threadId) {
+  document.querySelectorAll('.mail-thread-row.mail-thread-active').forEach(function (r) {
+    r.classList.remove('mail-thread-active');
+  });
+  if (!threadId) return;
+  const row = document.querySelector('.mail-thread-row[data-thread="' +
+    (window.CSS && CSS.escape ? CSS.escape(threadId) : threadId) + '"]');
+  if (row) row.classList.add('mail-thread-active');
 }
 
 // Segna letto senza ricaricare tutta la lista: aggiorna solo la riga + backend.
@@ -965,12 +989,6 @@ document.addEventListener('click', function (ev) {
     const thr = box && box._lastThread;
     const m = thr && (thr.messages || []).find(function (x) { return x.id === fw.getAttribute('data-mail-forward'); });
     if (m) mfMailCompose({subject: 'Fwd: ' + (m.subject || ''), body: '\n\n---\n' + (m.body_text || '')});
-    return;
-  }
-  const imgBtn = t.closest && t.closest('[data-mail-show-images]');
-  if (imgBtn) {
-    const frame = imgBtn.parentElement.querySelector('.mail-body-frame');
-    if (frame) frame.setAttribute('srcdoc', frame.getAttribute('srcdoc').replace(/data-blocked-src=/gi, 'src='));
     return;
   }
   const asg = t.closest && t.closest('[data-mail-assign]');

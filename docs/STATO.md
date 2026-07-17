@@ -8,7 +8,15 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.264** — 17 luglio 2026 — Fix badge "Email ✓" /settings (scope gmail.modify)
+**v3.5.0-alpha.172.265** — 17 luglio 2026 — Mail quick-fix UI (immagini/azioni thread/riga attiva)
+
+### α.172.265 ✅ (17 lug, ramo fix/mail-quickwins) — fix post-smoke Matteo
+- Immagini email caricate (no più blocco `_mailRenderBody`; iframe resta senza allow-scripts). Barra azioni UNA per thread + Archivia/Cestino (prima ripetuta sopra/sotto, no trash). Riga lista evidenziata sul thread aperto (`mail-thread-active`).
+- **NON risolto (architetturale, decisione A/B in sospeso)**: multiselect→cestino lento (apply_action N sequenziale) + refresh lista lento (N+1 metadata). Serve batch API + cache/History sync.
+
+**Domanda strategica aperta** (Matteo): ripensare architettura mail. Thunderbird/Apple Mail NON integrabili da web app (no API esterna). Vero collo di bottiglia = proxy Gmail server-side (N+1). Opzioni: **A** perf nostro client (batch+cache+History) vs **B** reframe (triage leggero + deep-link al client vero, CRM/EmailLink/copilot come core). Io propendo B+pezzo di A. Da brainstormare prima di riscrivere.
+
+### α.172.264 ✅ (17 lug, ramo fix/settings-email-badge-scope)
 
 ### α.172.264 ✅ (17 lug, ramo fix/settings-email-badge-scope)
 
