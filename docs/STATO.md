@@ -8,7 +8,19 @@
 
 ## Versione corrente
 
-**v3.5.0-alpha.172.262** — 15 luglio 2026 — Merge `feat/mobile-responsive-email` → main (programma email+calendario fasi 2/3/4 + mobile responsive)
+**v3.5.0-alpha.172.263** — 17 luglio 2026 — Mail context-menu + drag&drop label + select-all + redesign contatti
+
+### α.172.263 ✅ (17 lug, ramo feat/mail-context-menu-contacts, Sonnet-plan/Opus-exec; spec+plan docs/superpowers/…/2026-07-17-mail-context-menu-drag-select-contacts*)
+
+Context menu tasto destro `/mail` (archivia/cestino/letto/stella/spam/sposta-in-etichetta▸), drag&drop righe→etichetta (=sposta), select-all header, nuovo scope opt-in `mail_full` per elimina-definitivo/svuota-cestino (gated 403 senza, doppio confirm), redesign modale "Nuovo contatto" con campo Note (`Contact.notes` già esistente, nessuna migrazione).
+
+**Scoperto durante l'analisi**: i verbi `apply_action` (read/unread/star/unstar/archive/spam/move/label/unlabel) erano già tutti presenti in `_ACTION_LABELS` dal merge α.172.262 — il gap reale era solo la cancellazione fisica (scope pieno `https://mail.google.com/`, `gmail.modify` non basta).
+
+**Nota**: `mail_full` è ampio (accesso totale mailbox) ma opt-in esplicito, mai nel bundle base. Chi non lo attiva perde SOLO elimina-definitivo/svuota-cestino.
+
+**Prossimo step**: **smoke Matteo** — reconnect Google, prova context menu/drag/select-all + "Attiva gestione avanzata mail" in Impostazioni → elimina-definitivo. Ramo `feat/mail-context-menu-contacts` NON mergiato, `main` NON pushato. Bug pre-esistente notato (fuori scope): badge "Email ✓" in /settings controlla `gmail.readonly` ma GMAIL_SCOPES dal merge α.262 usa `gmail.modify` → badge resta spento anche se Gmail connesso.
+
+### α.172.262 ✅ (merge del ramo orfano — 15 lug, su main)
 
 ### α.172.262 ✅ (merge del ramo orfano — 15 lug, su main)
 
