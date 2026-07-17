@@ -1137,6 +1137,9 @@ select.form-input option, select.form-select option, select option {
 }
 .form-textarea { resize: vertical; min-height: 80px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-section { margin-bottom: 16px; }
+.form-section:last-child { margin-bottom: 0; }
+.form-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted, #888); margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border, #333); }
 
 /* ── Number input: rimuovi spin buttons browser default ───────── */
 input[type="number"] {

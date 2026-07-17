@@ -36,6 +36,25 @@ def client(monkeypatch):
     main_mod.app.dependency_overrides.pop(get_db, None)
 
 
+def test_create_and_read_back_notes(client):
+    c, s = client
+    r = c.post("/contacts/api/create", data={"name": "Con Note", "notes": "Preferisce email al mattino"})
+    assert r.status_code == 200
+    cid = r.json()["id"]
+    d = c.get(f"/contacts/api/{cid}").json()
+    assert d["notes"] == "Preferisce email al mattino"
+
+
+def test_update_notes(client):
+    c, s = client
+    r = c.post("/contacts/api/create", data={"name": "Da Aggiornare"})
+    cid = r.json()["id"]
+    r2 = c.put(f"/contacts/api/{cid}", data={"notes": "Nuova nota"})
+    assert r2.status_code == 200
+    d = c.get(f"/contacts/api/{cid}").json()
+    assert d["notes"] == "Nuova nota"
+
+
 def test_list_returns_all_active_contacts_with_link_counts(client):
     c, s = client
     s.add(Contact(id=1, tenant_id=1, client_id=1, name="Mario Rossi"))
