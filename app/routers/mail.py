@@ -95,7 +95,8 @@ async def mail_status(request: Request, db: Session = Depends(get_db)):
     scopes = (token.scopes or "") if token else ""
     connected = bool(token and any(s in scopes for s in _GMAIL_READ_SCOPES))
     return {"connected": connected,
-            "account_email": token.account_email if (token and connected) else None}
+            "account_email": token.account_email if (token and connected) else None,
+            "mail_full": gmail.has_mail_full_scope(token)}
 
 
 @router.get("/mail/api/threads")
@@ -294,10 +295,34 @@ async def mail_ai_search(request: Request, db: Session = Depends(get_db), q: str
 async def mail_threads_action(request: Request, db: Session = Depends(get_db),
                               thread_ids: str = Form(...), action: str = Form(...),
                               label_id: Optional[str] = Form(None)):
-    """Azione (letto/stella/archivia/cestino/sposta/etichetta) su uno o più thread."""
+    """Azione (letto/stella/archivia/cestino/sposta/etichetta) su uno o più thread.
+    `delete_forever` è IRREVERSIBILE: gate su scope pieno (α.172.263)."""
     user = current_user(request)
     ids = [t.strip() for t in thread_ids.split(",") if t.strip()]
+    if action == "delete_forever":
+        token = get_token(db, user.id, "google")
+        if not gmail.has_mail_full_scope(token):
+            raise HTTPException(403, "Serve lo scope Gmail pieno: attiva la gestione "
+                                     "avanzata email in Impostazioni")
+        ok, failed = 0, 0
+        for tid in ids:
+            if gmail.delete_thread_forever(db, user.id, tid):
+                ok += 1
+            else:
+                failed += 1
+        return {"ok": ok, "failed": failed}
     return gmail.apply_action(db, user.id, ids, action, label_id=label_id)
+
+
+@router.post("/mail/api/trash/empty")
+async def mail_empty_trash(request: Request, db: Session = Depends(get_db)):
+    """Svuota cestino: IRREVERSIBILE. Gate su scope pieno (α.172.263)."""
+    user = current_user(request)
+    token = get_token(db, user.id, "google")
+    if not gmail.has_mail_full_scope(token):
+        raise HTTPException(403, "Serve lo scope Gmail pieno: attiva la gestione "
+                                 "avanzata email in Impostazioni")
+    return gmail.empty_trash(db, user.id)
 
 
 @router.get("/mail/api/signature")
