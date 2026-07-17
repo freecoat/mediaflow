@@ -27,6 +27,27 @@ def _connect(s):
     s.commit()
 
 
+def test_has_mail_full_scope_true_for_full_scope():
+    row = UserOAuthToken(user_id=1, provider="google",
+                         scopes="openid https://mail.google.com/")
+    assert gmail.has_mail_full_scope(row) is True
+
+
+def test_has_mail_full_scope_false_for_modify_only():
+    row = UserOAuthToken(user_id=1, provider="google",
+                         scopes="https://www.googleapis.com/auth/gmail.modify")
+    assert gmail.has_mail_full_scope(row) is False
+
+
+def test_has_mail_full_scope_false_when_no_row():
+    assert gmail.has_mail_full_scope(None) is False
+
+
+def test_has_mail_full_scope_false_when_no_scopes_attr():
+    row = UserOAuthToken(user_id=1, provider="google", scopes=None)
+    assert gmail.has_mail_full_scope(row) is False
+
+
 def test_modify_thread_sends_add_remove(monkeypatch):
     s = _session(); _connect(s)
     calls = []

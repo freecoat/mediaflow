@@ -459,6 +459,16 @@ def untrash_thread(db: Session, user_id: int, thread_id: str) -> bool:
     return _thread_simple(db, user_id, thread_id, "untrash")
 
 
+def has_mail_full_scope(row) -> bool:
+    """True se lo scope concesso copre l'accesso pieno Gmail (opt-in esplicito,
+    pattern gemello di has_calendar_write_scope in google_calendar.py). Serve per
+    delete_thread_forever/empty_trash: gmail.modify NON basta, Google richiede
+    https://mail.google.com/ per la cancellazione fisica."""
+    if not row or not row.scopes:
+        return False
+    return "https://mail.google.com/" in row.scopes
+
+
 # azione → (add_labels, remove_labels). label_id sostituisce il placeholder {LABEL}.
 _ACTION_LABELS = {
     "read": ([], ["UNREAD"]),
