@@ -1,0 +1,4 @@
+<resources>
+    <!-- Tema base: l'UI vera è definita in Compose (Theme.kt). -->
+    <style name="Theme.AtacRoma" parent="android:Theme.Material.NoActionBar" />
+</resources>

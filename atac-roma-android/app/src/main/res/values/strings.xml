@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">ATAC Roma Live</string>
+
+    <string name="tab_stops">Fermate</string>
+    <string name="tab_alerts">Interruzioni</string>
+
+    <string name="search_hint">Cerca fermata per nome…</string>
+    <string name="nearby">Fermate vicine</string>
+    <string name="loading_static">Scarico fermate e linee ATAC…</string>
+    <string name="no_stops">Nessuna fermata trovata</string>
+    <string name="no_departures">Nessun passaggio in tempo reale per questa fermata</string>
+    <string name="no_alerts">Nessuna interruzione segnalata</string>
+    <string name="refresh">Aggiorna</string>
+    <string name="now">In arrivo</string>
+    <string name="min_short">min</string>
+    <string name="direction_to">verso %1$s</string>
+    <string name="updated_at">Aggiornato alle %1$s</string>
+    <string name="error_generic">Errore di rete. Riprova.</string>
+    <string name="location_needed">Concedi la posizione per vedere le fermate vicine</string>
+    <string name="update_static">Aggiorna dati fermate/linee</string>
+</resources>
